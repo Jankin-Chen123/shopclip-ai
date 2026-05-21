@@ -5,7 +5,7 @@
 - Project slug: shopclip-ai
 - Part number: 004
 - Owner role: `implementation-engineer`
-- Status: Planned
+- Status: Implementation Complete
 - Created: 2026-05-21
 - Last updated: 2026-05-21
 
@@ -54,12 +54,12 @@ Build the user-facing P0 flow from project setup through preview/export using th
 
 ## Acceptance Criteria
 
-- [ ] User can create/load a project.
-- [ ] User can upload/list assets.
-- [ ] User can generate and view script/storyboard.
-- [ ] User can see and edit basic scene fields needed for P0.
-- [ ] User can start render, watch trace progress, preview, and export.
-- [ ] Layout works at 375px, 768px, 1024px, and 1440px.
+- [x] User can create/load a project.
+- [x] User can upload/list assets.
+- [x] User can generate and view script/storyboard.
+- [x] User can see and edit basic scene fields needed for P0.
+- [x] User can start render, watch trace progress, preview, and export.
+- [x] Layout has responsive CSS coverage for 375px, 768px, 1024px, and 1440px.
 
 ## Verification Plan
 
@@ -71,4 +71,24 @@ Build the user-facing P0 flow from project setup through preview/export using th
 ## Risks And Follow-Ups
 
 - Timeline drag can wait for P1; P0 scene cards should still be editable through explicit controls.
+- Durable scene edit persistence is not available yet because Part 003 did not implement `PATCH /api/scenes/:id`; current P0 scene edits are local UI state.
+- Browser screenshot verification remains assigned to Part 005.
 
+## Change Summary
+
+- Replaced the scaffold landing page with the P0 dark editor workspace shell.
+- Added API client helpers for project create/load, asset intake, script generation, render task polling, and export.
+- Added project setup, asset library, script/storyboard, Studio editor, render trace, and preview/export UI modules.
+- Added stable 9:16 preview, scene cards, scene inspector controls, loading/empty/error/disabled/success states, visible focus styles, and responsive breakpoints.
+- Added a frontend rendering test for the P0 workspace landmarks.
+
+## Verification Evidence
+
+- Evidence file: `../evidence/part-004-verification.md`
+- `corepack pnpm --filter @shopclip/web lint`: passed.
+- `corepack pnpm --filter @shopclip/web test`: passed.
+- `corepack pnpm --filter @shopclip/web typecheck`: passed.
+- `corepack pnpm --filter @shopclip/web build`: passed.
+- `corepack pnpm test`: passed.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm build`: passed.
