@@ -3,9 +3,11 @@ import { Download, Loader2, Play, RotateCw } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
+import type { AppCopy } from "../../app/i18n";
 import type { ExportResult } from "../../lib/api";
 
 interface RenderPanelProps {
+  copy: AppCopy["render"];
   disabled: boolean;
   error?: string;
   exportResult?: ExportResult;
@@ -32,6 +34,7 @@ const statusTone = (status?: string) => {
 };
 
 export const RenderPanel = ({
+  copy,
   disabled,
   error,
   exportResult,
@@ -44,13 +47,13 @@ export const RenderPanel = ({
   traceEvents,
 }: RenderPanelProps) => (
   <section className="panel render-panel" id="trace" aria-labelledby="trace-title">
-    <div className="panel-heading">
-      <div>
-        <p className="eyebrow">Step 05</p>
-        <h2 id="trace-title">Render trace</h2>
-      </div>
-      <StatusPill tone={statusTone(renderTask?.status)}>
-        {renderTask?.status ?? "Waiting"}
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">{copy.step}</p>
+          <h2 id="trace-title">{copy.title}</h2>
+        </div>
+        <StatusPill tone={statusTone(renderTask?.status)}>
+          {renderTask?.status ?? copy.waiting}
       </StatusPill>
     </div>
 
@@ -61,18 +64,18 @@ export const RenderPanel = ({
         onClick={onStartRender}
         variant="primary"
       >
-        Start render
+        {copy.startRender}
       </Button>
       <Button
         disabled={!renderTask || isRendering}
         icon={<RotateCw size={18} />}
         onClick={onRefreshRender}
       >
-        Refresh trace
+        {copy.refreshTrace}
       </Button>
     </div>
 
-    <div className="progress-shell" aria-label="Render progress">
+    <div className="progress-shell" aria-label={copy.progressLabel}>
       <span style={{ width: `${renderTask?.progress ?? 0}%` }} />
     </div>
 
@@ -85,10 +88,8 @@ export const RenderPanel = ({
     <ol className="trace-list">
       {traceEvents.length === 0 ? (
         <li className="empty-state">
-          <strong>No trace yet</strong>
-          <span>
-            Start render after storyboard generation to see queue, validation, and preview events.
-          </span>
+          <strong>{copy.noTrace}</strong>
+          <span>{copy.noTraceBody}</span>
         </li>
       ) : (
         traceEvents.map((event) => (
@@ -105,19 +106,19 @@ export const RenderPanel = ({
 
     <div className="preview-export" id="export" aria-labelledby="export-title">
       <div>
-        <p className="eyebrow">Step 06</p>
-        <h2 id="export-title">Preview and export</h2>
+        <p className="eyebrow">{copy.exportStep}</p>
+        <h2 id="export-title">{copy.exportTitle}</h2>
       </div>
       <div className="preview-box">
         {renderTask?.previewUrl ? (
           <>
-            <strong>Preview artifact</strong>
+            <strong>{copy.previewArtifact}</strong>
             <span>{renderTask.previewUrl}</span>
           </>
         ) : (
           <>
-            <strong>Preview unavailable</strong>
-            <span>Completed render output will appear here.</span>
+            <strong>{copy.previewUnavailable}</strong>
+            <span>{copy.previewUnavailableBody}</span>
           </>
         )}
       </div>
@@ -126,11 +127,11 @@ export const RenderPanel = ({
         icon={isExporting ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
         onClick={onExport}
       >
-        Export demo video
+        {copy.exportDemoVideo}
       </Button>
       {exportResult ? (
         <p className="fallback-note">
-          Export ready: <a href={exportResult.downloadUrl}>{exportResult.downloadUrl}</a>
+          {copy.exportReady} <a href={exportResult.downloadUrl}>{exportResult.downloadUrl}</a>
         </p>
       ) : null}
     </div>

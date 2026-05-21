@@ -18,6 +18,7 @@ import { RenderPanel } from "../features/render/RenderPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ScriptPanel } from "../features/script/ScriptPanel";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
+import { copy, isLanguage, type AppCopy, type Language } from "./i18n";
 import {
   addAsset,
   createProject,
@@ -51,6 +52,14 @@ const defaultAsset: CreateAssetInput = {
 
 type BusyState = "idle" | "project" | "asset" | "script" | "render" | "export";
 
+const getStoredLanguage = (): Language => {
+  if (typeof window === "undefined") {
+    return "en";
+  }
+  const storedLanguage = window.localStorage.getItem("shopclip-language");
+  return isLanguage(storedLanguage) ? storedLanguage : "en";
+};
+
 const pageFromHash = (): WorkspacePageId => {
   if (typeof window === "undefined") {
     return "project";
@@ -72,6 +81,7 @@ const pageFromHash = (): WorkspacePageId => {
 interface WorkspaceSwitcherProps {
   activePage: WorkspacePageId;
   assetsCount: number;
+  copy: AppCopy;
   dirtySceneCount: number;
   onPageChange: (page: WorkspacePageId) => void;
   pages: WorkspacePage[];
@@ -82,6 +92,7 @@ interface WorkspaceSwitcherProps {
 const WorkspaceSwitcher = ({
   activePage,
   assetsCount,
+  copy: text,
   dirtySceneCount,
   onPageChange,
   pages,
@@ -92,13 +103,14 @@ const WorkspaceSwitcher = ({
     {pages.map((page) => {
       const Icon = page.icon;
       const isActive = page.id === activePage;
+      const pageCopy = text.pages[page.id];
       const metric =
         page.id === "project"
-          ? "Brief and status"
+          ? text.pages.project.metric
           : page.id === "create"
-            ? `${assetsCount} assets`
+            ? text.pages.create.assetsMetric(assetsCount)
             : page.id === "studio"
-              ? `${sceneCount} scenes · ${dirtySceneCount} edited`
+              ? text.pages.studio.scenesMetric(sceneCount, dirtySceneCount)
               : renderStatus;
 
       return (
@@ -113,8 +125,8 @@ const WorkspaceSwitcher = ({
             <Icon size={20} />
           </span>
           <span>
-            <strong>{page.title}</strong>
-            <small>{page.description}</small>
+            <strong>{pageCopy.title}</strong>
+            <small>{pageCopy.description}</small>
           </span>
           <em>{metric}</em>
         </button>
@@ -123,7 +135,11 @@ const WorkspaceSwitcher = ({
   </section>
 );
 
-export const App = () => {
+interface AppProps {
+  initialLanguage?: Language;
+}
+
+export const App = ({ initialLanguage }: AppProps) => {
   const [activePage, setActivePage] = useState<WorkspacePageId>(() => pageFromHash());
   const [assetDraft, setAssetDraft] = useState<CreateAssetInput>(defaultAsset);
   const [brief, setBrief] = useState<ProjectBrief>(defaultBrief);
@@ -138,11 +154,14 @@ export const App = () => {
   const [script, setScript] = useState<ScriptResult>();
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
+  const [language, setLanguage] = useState<Language>(() => initialLanguage ?? getStoredLanguage());
+  const text = copy[language];
 
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
   const statusLabel = project
     ? `${project.productName} · ${project.status}`
-    : "Create or load a project";
+    : text.app.createOrLoadProject;
+  const renderStatus = renderTask?.status ?? text.app.notRendered;
 
   useEffect(() => {
     const handleHashChange = () => setActivePage(pageFromHash());
@@ -150,10 +169,23 @@ export const App = () => {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+    }
+  }, [language]);
+
   const handlePageChange = (page: WorkspacePageId) => {
     setActivePage(page);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `#${page}`);
+    }
+  };
+
+  const handleLanguageChange = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("shopclip-language", nextLanguage);
     }
   };
 
@@ -326,14 +358,22 @@ export const App = () => {
   };
 
   return (
-    <AppShell activePage={activePage} onPageChange={handlePageChange} statusLabel={statusLabel}>
+    <AppShell
+      activePage={activePage}
+      copy={text}
+      language={language}
+      onLanguageChange={handleLanguageChange}
+      onPageChange={handlePageChange}
+      statusLabel={statusLabel}
+    >
       <WorkspaceSwitcher
         activePage={activePage}
         assetsCount={project?.assets.length ?? 0}
+        copy={text}
         dirtySceneCount={dirtySceneIds.size}
         onPageChange={handlePageChange}
         pages={workspacePages}
-        renderStatus={renderTask?.status ?? "Not rendered"}
+        renderStatus={renderStatus}
         sceneCount={scenes.length}
       />
 
@@ -341,6 +381,7 @@ export const App = () => {
         {activePage === "project" ? (
           <ProjectSetup
             brief={brief}
+            copy={text.project}
             disabled={busyState !== "idle"}
             error={errors.project}
             isLoading={busyState === "project"}
@@ -358,6 +399,7 @@ export const App = () => {
             <AssetsPanel
               assetDraft={assetDraft}
               assets={project?.assets ?? []}
+              copy={text.assets}
               disabled={!project || busyState !== "idle"}
               error={errors.asset}
               isLoading={busyState === "asset"}
@@ -365,6 +407,7 @@ export const App = () => {
               onUploadAsset={handleUploadAsset}
             />
             <ScriptPanel
+              copy={text.script}
               disabled={!project || busyState !== "idle"}
               error={errors.script}
               fallbackProvider={fallbackProvider}
@@ -378,6 +421,7 @@ export const App = () => {
         {activePage === "studio" ? (
           <StudioWorkspace
             assets={project?.assets ?? []}
+            copy={text.studio}
             dirtySceneIds={dirtySceneIds}
             onSceneChange={handleSceneChange}
             onSceneSave={handleSceneSave}
@@ -389,6 +433,7 @@ export const App = () => {
 
         {activePage === "delivery" ? (
           <RenderPanel
+            copy={text.render}
             disabled={!project || scenes.length === 0 || busyState !== "idle"}
             error={errors.render ?? errors.export}
             exportResult={exportResult}

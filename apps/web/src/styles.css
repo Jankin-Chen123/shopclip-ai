@@ -117,7 +117,8 @@ a {
 .nav-list a,
 .button,
 .asset-row,
-.trace-list li {
+.trace-list li,
+.language-switcher {
   display: flex;
   align-items: center;
 }
@@ -170,7 +171,42 @@ a {
 .nav-list {
   display: grid;
   gap: 6px;
-  margin-top: 24px;
+  margin-top: 14px;
+}
+
+.language-switcher {
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px;
+  margin: 18px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(16, 16, 16, 0.72);
+}
+
+.language-switcher legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.language-switcher button {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.language-switcher button.active {
+  color: var(--text);
+  border-color: rgba(236, 72, 153, 0.38);
+  background: rgba(236, 72, 153, 0.16);
 }
 
 .nav-list a {

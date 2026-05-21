@@ -4,11 +4,13 @@ import { ImageUp, Loader2 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
+import type { AppCopy } from "../../app/i18n";
 import type { CreateAssetInput } from "../../lib/api";
 
 interface AssetsPanelProps {
   assetDraft: CreateAssetInput;
   assets: AssetMetadata[];
+  copy: AppCopy["assets"];
   disabled: boolean;
   error?: string;
   isLoading: boolean;
@@ -25,6 +27,7 @@ const splitTags = (value: string): string[] =>
 export const AssetsPanel = ({
   assetDraft,
   assets,
+  copy,
   disabled,
   error,
   isLoading,
@@ -46,27 +49,27 @@ export const AssetsPanel = ({
     <section className="panel" id="assets" aria-labelledby="assets-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Step 02</p>
-          <h2 id="assets-title">Asset library</h2>
+          <p className="eyebrow">{copy.step}</p>
+          <h2 id="assets-title">{copy.title}</h2>
         </div>
         <StatusPill tone={assets.length > 0 ? "success" : "warning"}>
-          {assets.length > 0 ? `${assets.length} ready` : "Empty"}
+          {assets.length > 0 ? copy.ready(assets.length) : copy.empty}
         </StatusPill>
       </div>
 
-      <div className="upload-zone" aria-label="Asset upload form">
+      <div className="upload-zone" aria-label={copy.uploadForm}>
         <ImageUp size={28} aria-hidden="true" />
         <div className="form-grid compact">
           <label>
-            Asset name
+            {copy.assetName}
             <input value={assetDraft.name} onChange={updateField("name")} />
           </label>
           <label>
-            MIME type
+            {copy.mimeType}
             <input value={assetDraft.mimeType} onChange={updateField("mimeType")} />
           </label>
           <label>
-            Size in bytes
+            {copy.sizeBytes}
             <input
               min={1}
               type="number"
@@ -75,7 +78,7 @@ export const AssetsPanel = ({
             />
           </label>
           <label>
-            Tags
+            {copy.tags}
             <input value={assetDraft.tags.join(", ")} onChange={updateField("tags")} />
           </label>
         </div>
@@ -84,7 +87,7 @@ export const AssetsPanel = ({
           icon={isLoading ? <Loader2 className="spin" size={18} /> : <ImageUp size={18} />}
           onClick={onUploadAsset}
         >
-          Upload metadata
+          {copy.uploadMetadata}
         </Button>
       </div>
 
@@ -97,8 +100,8 @@ export const AssetsPanel = ({
       <div className="asset-list" aria-live="polite">
         {assets.length === 0 ? (
           <div className="empty-state">
-            <strong>No assets yet</strong>
-            <span>Create a project, then upload at least one product image metadata record.</span>
+            <strong>{copy.emptyTitle}</strong>
+            <span>{copy.emptyBody}</span>
           </div>
         ) : (
           assets.map((asset) => (

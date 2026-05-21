@@ -10,13 +10,13 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import type { AppCopy, Language } from "../../app/i18n";
+import { languageNames } from "../../app/i18n";
+
 export type WorkspacePageId = "project" | "create" | "studio" | "delivery";
 
 export interface WorkspacePage {
   id: WorkspacePageId;
-  label: string;
-  title: string;
-  description: string;
   accent: string;
   icon: LucideIcon;
 }
@@ -24,33 +24,21 @@ export interface WorkspacePage {
 export const workspacePages: WorkspacePage[] = [
   {
     id: "project",
-    label: "Project",
-    title: "Project command center",
-    description: "Brief, project status, and demo readiness.",
     accent: "rose",
     icon: FolderKanban,
   },
   {
     id: "create",
-    label: "Create",
-    title: "Creative prep",
-    description: "Assets, script, and storyboard generation.",
     accent: "amber",
     icon: Sparkles,
   },
   {
     id: "studio",
-    label: "Studio",
-    title: "Generation studio",
-    description: "Scene preview, timeline cards, and inspector edits.",
     accent: "cyan",
     icon: Film,
   },
   {
     id: "delivery",
-    label: "Delivery",
-    title: "Delivery room",
-    description: "Render trace, preview artifact, and export.",
     accent: "green",
     icon: Download,
   },
@@ -59,19 +47,31 @@ export const workspacePages: WorkspacePage[] = [
 interface AppShellProps {
   activePage: WorkspacePageId;
   children: ReactNode;
+  copy: AppCopy;
+  language: Language;
   onPageChange: (page: WorkspacePageId) => void;
+  onLanguageChange: (language: Language) => void;
   statusLabel: string;
 }
 
-export const AppShell = ({ activePage, children, onPageChange, statusLabel }: AppShellProps) => {
+export const AppShell = ({
+  activePage,
+  children,
+  copy,
+  language,
+  onLanguageChange,
+  onPageChange,
+  statusLabel,
+}: AppShellProps) => {
   const activePageMeta: WorkspacePage =
     workspacePages.find((page) => page.id === activePage) ?? workspacePages[0]!;
+  const activePageCopy = copy.pages[activePageMeta.id];
   const ActiveIcon = activePageMeta.icon;
 
   return (
     <div className="workspace-shell">
       <a className="skip-link" href="#workspace-content">
-        Skip to workspace content
+        {copy.app.skipLink}
       </a>
       <aside className="sidebar" aria-label="Workspace navigation">
         <div className="brand">
@@ -80,12 +80,27 @@ export const AppShell = ({ activePage, children, onPageChange, statusLabel }: Ap
           </span>
           <div>
             <strong>ShopClip AI</strong>
-            <span>P0 workspace</span>
+            <span>{copy.app.workspaceBadge}</span>
           </div>
         </div>
+        <fieldset className="language-switcher" aria-label={copy.app.languageLabel}>
+          <legend>{copy.app.languageShortLabel}</legend>
+          {(["en", "zh"] as const).map((option) => (
+            <button
+              aria-pressed={language === option}
+              className={language === option ? "active" : undefined}
+              key={option}
+              onClick={() => onLanguageChange(option)}
+              type="button"
+            >
+              {languageNames[option]}
+            </button>
+          ))}
+        </fieldset>
         <nav className="nav-list">
           {workspacePages.map((item) => {
             const Icon = item.icon;
+            const itemCopy = copy.pages[item.id];
             const isActive = item.id === activePage;
             return (
               <a
@@ -100,8 +115,8 @@ export const AppShell = ({ activePage, children, onPageChange, statusLabel }: Ap
               >
                 <Icon size={18} aria-hidden="true" />
                 <span>
-                  <strong>{item.label}</strong>
-                  <small>{item.title}</small>
+                  <strong>{itemCopy.label}</strong>
+                  <small>{itemCopy.title}</small>
                 </span>
               </a>
             );
@@ -109,7 +124,7 @@ export const AppShell = ({ activePage, children, onPageChange, statusLabel }: Ap
         </nav>
         <div className="sidebar-footer">
           <Boxes size={18} aria-hidden="true" />
-          <span>P0 grouped into 4 pages</span>
+          <span>{copy.app.sidebarFooter}</span>
         </div>
       </aside>
 
@@ -120,9 +135,9 @@ export const AppShell = ({ activePage, children, onPageChange, statusLabel }: Ap
               <ActiveIcon size={24} />
             </div>
             <div>
-              <p className="eyebrow">P0 ecommerce video generation</p>
-              <h1>{activePageMeta.title}</h1>
-              <p>{activePageMeta.description}</p>
+              <p className="eyebrow">{copy.app.eyebrow}</p>
+              <h1>{activePageCopy.title}</h1>
+              <p>{activePageCopy.description}</p>
             </div>
           </div>
           <div className="topbar-status" aria-live="polite">

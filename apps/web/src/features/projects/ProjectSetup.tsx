@@ -4,10 +4,12 @@ import { FolderOpen, Loader2, Plus } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
+import type { AppCopy } from "../../app/i18n";
 import type { ProjectSnapshot } from "../../lib/api";
 
 interface ProjectSetupProps {
   brief: ProjectBrief;
+  copy: AppCopy["project"];
   disabled: boolean;
   error?: string;
   isLoading: boolean;
@@ -27,6 +29,7 @@ const splitSellingPoints = (value: string): string[] =>
 
 export const ProjectSetup = ({
   brief,
+  copy,
   disabled,
   error,
   isLoading,
@@ -56,51 +59,51 @@ export const ProjectSetup = ({
     <section className="panel project-panel" id="project" aria-labelledby="project-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Step 01</p>
-          <h2 id="project-title">Product setup</h2>
+          <p className="eyebrow">{copy.step}</p>
+          <h2 id="project-title">{copy.title}</h2>
         </div>
         <StatusPill tone={project ? "success" : "neutral"}>
-          {project ? "Project loaded" : "Draft"}
+          {project ? copy.loaded : copy.draft}
         </StatusPill>
       </div>
 
       <div className="form-grid">
         <label>
-          Project title
+          {copy.projectTitle}
           <input value={brief.title} onChange={updateField("title")} />
         </label>
         <label>
-          Product name
+          {copy.productName}
           <input value={brief.productName} onChange={updateField("productName")} />
         </label>
         <label>
-          Audience
+          {copy.audience}
           <input value={brief.audience} onChange={updateField("audience")} />
         </label>
         <label>
-          Creative tone
+          {copy.creativeTone}
           <input value={brief.tone} onChange={updateField("tone")} />
         </label>
         <label>
-          Visual style
+          {copy.visualStyle}
           <select value={brief.style} onChange={updateField("style")}>
-            <option value="fast desk demo">Fast desk demo</option>
-            <option value="premium product closeups">Premium product closeups</option>
-            <option value="ugc problem solution">UGC problem solution</option>
+            <option value="fast desk demo">{copy.styles.fastDeskDemo}</option>
+            <option value="premium product closeups">{copy.styles.premiumProductCloseups}</option>
+            <option value="ugc problem solution">{copy.styles.ugcProblemSolution}</option>
           </select>
         </label>
         <label>
-          Target duration
+          {copy.targetDuration}
           <select
             value={String(brief.targetDurationSeconds)}
             onChange={updateField("targetDurationSeconds")}
           >
-            <option value="12">12 seconds</option>
-            <option value="15">15 seconds</option>
+            <option value="12">{copy.durations.seconds(12)}</option>
+            <option value="15">{copy.durations.seconds(15)}</option>
           </select>
         </label>
         <label className="wide-field">
-          Selling points
+          {copy.sellingPoints}
           <textarea
             value={brief.sellingPoints.join("\n")}
             onChange={updateField("sellingPoints")}
@@ -122,15 +125,15 @@ export const ProjectSetup = ({
           onClick={onCreateProject}
           variant="primary"
         >
-          Create project
+          {copy.createProject}
         </Button>
         <div className="load-project">
           <label>
-            Existing project ID
+            {copy.existingProjectId}
             <input
               value={projectIdToLoad}
               onChange={(event) => onProjectIdToLoadChange(event.target.value)}
-              placeholder="Paste a project ID"
+              placeholder={copy.projectIdPlaceholder}
             />
           </label>
           <Button
@@ -138,7 +141,7 @@ export const ProjectSetup = ({
             icon={<FolderOpen size={18} />}
             onClick={onLoadProject}
           >
-            Load
+            {copy.load}
           </Button>
         </div>
       </div>
@@ -146,11 +149,11 @@ export const ProjectSetup = ({
       {project ? (
         <dl className="meta-list">
           <div>
-            <dt>Project ID</dt>
+            <dt>{copy.projectId}</dt>
             <dd>{project.id}</dd>
           </div>
           <div>
-            <dt>Status</dt>
+            <dt>{copy.status}</dt>
             <dd>{project.status}</dd>
           </div>
         </dl>

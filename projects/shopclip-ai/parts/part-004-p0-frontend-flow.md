@@ -81,10 +81,14 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - Added project setup, asset library, script/storyboard, Studio editor, render trace, and preview/export UI modules.
 - Added stable 9:16 preview, scene cards, scene inspector controls, loading/empty/error/disabled/success states, visible focus styles, and responsive breakpoints.
 - Added a frontend rendering test for the P0 workspace landmarks.
+- Added a persistent interface language setting with English and Chinese copy for the P0 workspace shell, navigation, page cards, form labels, buttons, and empty states.
 
 ## Verification Evidence
 
 - Evidence file: `../evidence/part-004-verification.md`
+- `corepack pnpm --filter @shopclip/web test`: passed on 2026-05-21 after adding the language selection test.
+- `corepack pnpm --filter @shopclip/web typecheck`: passed on 2026-05-21.
+- `corepack pnpm --filter @shopclip/web build`: passed on 2026-05-21.
 - `corepack pnpm --filter @shopclip/web lint`: passed.
 - `corepack pnpm --filter @shopclip/web test`: passed.
 - `corepack pnpm --filter @shopclip/web typecheck`: passed.

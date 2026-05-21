@@ -4,9 +4,11 @@ import { Clock3, Save, Video } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
+import type { AppCopy } from "../../app/i18n";
 
 interface StudioWorkspaceProps {
   assets: AssetMetadata[];
+  copy: AppCopy["studio"];
   dirtySceneIds: Set<string>;
   onSceneChange: (scene: StoryboardScene) => void;
   onSceneSave: (sceneId: string) => void;
@@ -17,6 +19,7 @@ interface StudioWorkspaceProps {
 
 export const StudioWorkspace = ({
   assets,
+  copy,
   dirtySceneIds,
   onSceneChange,
   onSceneSave,
@@ -44,18 +47,18 @@ export const StudioWorkspace = ({
     <section className="studio-panel" id="studio" aria-labelledby="studio-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Step 04</p>
-          <h2 id="studio-title">Studio editor</h2>
+          <p className="eyebrow">{copy.step}</p>
+          <h2 id="studio-title">{copy.title}</h2>
         </div>
         <StatusPill
           tone={dirtySceneIds.size > 0 ? "warning" : scenes.length ? "success" : "neutral"}
         >
-          {dirtySceneIds.size > 0 ? `${dirtySceneIds.size} unsaved` : "Stable"}
+          {dirtySceneIds.size > 0 ? copy.unsaved(dirtySceneIds.size) : copy.stable}
         </StatusPill>
       </div>
 
       <div className="studio-grid">
-        <div className="phone-preview" aria-label="9 by 16 preview">
+        <div className="phone-preview" aria-label={copy.previewLabel}>
           <div className="phone-frame">
             <span className="preview-time">
               <Clock3 size={14} aria-hidden="true" />
@@ -64,15 +67,15 @@ export const StudioWorkspace = ({
             <div className="preview-art">
               <Video size={42} aria-hidden="true" />
             </div>
-            <p>{selectedScene?.subtitle ?? "Generate a storyboard to preview scenes."}</p>
+            <p>{selectedScene?.subtitle ?? copy.emptyPreview}</p>
           </div>
         </div>
 
-        <div className="scene-track" aria-label="Scene timeline">
+        <div className="scene-track" aria-label={copy.timelineLabel}>
           {scenes.length === 0 ? (
             <div className="empty-state">
-              <strong>No scene cards</strong>
-              <span>Storyboard scenes will appear here with stable card dimensions.</span>
+              <strong>{copy.noSceneCards}</strong>
+              <span>{copy.noSceneCardsBody}</span>
             </div>
           ) : (
             scenes.map((scene) => (
@@ -82,7 +85,7 @@ export const StudioWorkspace = ({
                 onClick={() => onSelectedSceneChange(scene.id)}
                 type="button"
               >
-                <span>Scene {scene.order}</span>
+                <span>{copy.scene(scene.order)}</span>
                 <strong>{scene.subtitle}</strong>
                 <small>{scene.durationSeconds}s</small>
               </button>
@@ -90,17 +93,17 @@ export const StudioWorkspace = ({
           )}
         </div>
 
-        <aside className="inspector" aria-label="Scene inspector">
+        <aside className="inspector" aria-label={copy.inspectorLabel}>
           {selectedScene ? (
             <>
               <div className="inspector-heading">
-                <h3>Scene fields</h3>
+                <h3>{copy.fields}</h3>
                 <StatusPill tone={dirtySceneIds.has(selectedScene.id) ? "warning" : "success"}>
-                  {dirtySceneIds.has(selectedScene.id) ? "Edited" : selectedScene.status}
+                  {dirtySceneIds.has(selectedScene.id) ? copy.edited : selectedScene.status}
                 </StatusPill>
               </div>
               <label>
-                Duration
+                {copy.duration}
                 <input
                   min={1}
                   max={15}
@@ -110,7 +113,7 @@ export const StudioWorkspace = ({
                 />
               </label>
               <label>
-                Subtitle
+                {copy.subtitle}
                 <textarea
                   rows={3}
                   value={selectedScene.subtitle}
@@ -118,7 +121,7 @@ export const StudioWorkspace = ({
                 />
               </label>
               <label>
-                Voiceover
+                {copy.voiceover}
                 <textarea
                   rows={3}
                   value={selectedScene.voiceover}
@@ -126,7 +129,7 @@ export const StudioWorkspace = ({
                 />
               </label>
               <label>
-                Visual prompt
+                {copy.visualPrompt}
                 <textarea
                   rows={4}
                   value={selectedScene.visualPrompt}
@@ -134,12 +137,12 @@ export const StudioWorkspace = ({
                 />
               </label>
               <label>
-                Asset slot
+                {copy.assetSlot}
                 <select
                   value={selectedScene.assetId ?? "none"}
                   onChange={updateSelected("assetId")}
                 >
-                  <option value="none">No linked asset</option>
+                  <option value="none">{copy.noLinkedAsset}</option>
                   {assets.map((asset) => (
                     <option key={asset.id} value={asset.id}>
                       {asset.name}
@@ -152,13 +155,13 @@ export const StudioWorkspace = ({
                 icon={<Save size={18} />}
                 onClick={() => onSceneSave(selectedScene.id)}
               >
-                Save local edit
+                {copy.saveLocalEdit}
               </Button>
             </>
           ) : (
             <div className="empty-state">
-              <strong>No selected scene</strong>
-              <span>Generate the storyboard before editing scene fields.</span>
+              <strong>{copy.noSelectedScene}</strong>
+              <span>{copy.noSelectedSceneBody}</span>
             </div>
           )}
         </aside>

@@ -3,8 +3,10 @@ import { Loader2, WandSparkles } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
+import type { AppCopy } from "../../app/i18n";
 
 interface ScriptPanelProps {
+  copy: AppCopy["script"];
   disabled: boolean;
   error?: string;
   fallbackProvider?: string;
@@ -14,6 +16,7 @@ interface ScriptPanelProps {
 }
 
 export const ScriptPanel = ({
+  copy,
   disabled,
   error,
   fallbackProvider,
@@ -22,15 +25,15 @@ export const ScriptPanel = ({
   script,
 }: ScriptPanelProps) => (
   <section className="panel" id="script" aria-labelledby="script-title">
-    <div className="panel-heading">
-      <div>
-        <p className="eyebrow">Step 03</p>
-        <h2 id="script-title">Script and storyboard</h2>
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">{copy.step}</p>
+          <h2 id="script-title">{copy.title}</h2>
+        </div>
+        <StatusPill tone={script ? "success" : "neutral"}>
+          {script ? copy.sceneCount(script.scenes.length) : copy.notGenerated}
+        </StatusPill>
       </div>
-      <StatusPill tone={script ? "success" : "neutral"}>
-        {script ? `${script.scenes.length} scenes` : "Not generated"}
-      </StatusPill>
-    </div>
 
     <Button
       disabled={disabled || isLoading}
@@ -38,7 +41,7 @@ export const ScriptPanel = ({
       onClick={onGenerateScript}
       variant="primary"
     >
-      Generate storyboard
+      {copy.generate}
     </Button>
 
     {error ? (
@@ -50,11 +53,11 @@ export const ScriptPanel = ({
     {script ? (
       <div className="script-result">
         <div>
-          <span className="section-label">Hook</span>
+          <span className="section-label">{copy.hook}</span>
           <p>{script.hook}</p>
         </div>
         <div>
-          <span className="section-label">Narrative</span>
+          <span className="section-label">{copy.narrative}</span>
           <p>{script.narrative}</p>
         </div>
         <div className="constraint-list">
@@ -65,13 +68,13 @@ export const ScriptPanel = ({
           ))}
         </div>
         {fallbackProvider ? (
-          <p className="fallback-note">Generated with deterministic fallback: {fallbackProvider}</p>
+          <p className="fallback-note">{copy.fallback(fallbackProvider)}</p>
         ) : null}
       </div>
     ) : (
       <div className="empty-state">
-        <strong>Storyboard pending</strong>
-        <span>Generate after project setup so the Studio editor can open scene cards.</span>
+        <strong>{copy.emptyTitle}</strong>
+        <span>{copy.emptyBody}</span>
       </div>
     )}
   </section>
