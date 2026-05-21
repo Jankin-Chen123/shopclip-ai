@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import type { Express } from "express";
 import { createHealthPayload } from "@shopclip/shared";
+import { createP0Router } from "./modules/projects/router.js";
 
 export const createApp = (): Express => {
   const app = express();
@@ -16,6 +17,7 @@ export const createApp = (): Express => {
   app.get("/health", (_request, response) => {
     response.json(createHealthPayload("api"));
   });
+  app.use("/api", createP0Router());
 
   return app;
 };

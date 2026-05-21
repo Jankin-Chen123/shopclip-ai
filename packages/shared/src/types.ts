@@ -17,7 +17,7 @@ import type {
   StoryboardSceneSchema,
   TraceEventSchema,
   TraceEventStatusSchema,
-} from "./schemas";
+} from "./schemas.js";
 
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 export type AssetType = z.infer<typeof AssetTypeSchema>;

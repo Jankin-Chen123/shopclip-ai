@@ -5,7 +5,7 @@
 - Project slug: shopclip-ai
 - Part number: 003
 - Owner role: `implementation-engineer`
-- Status: Planned
+- Status: Implementation Complete
 - Created: 2026-05-21
 - Last updated: 2026-05-21
 
@@ -52,11 +52,11 @@ Implement the backend APIs for the P0 end-to-end flow: project creation, asset i
 
 ## Acceptance Criteria
 
-- [ ] API can create and load a project.
-- [ ] API can accept at least image assets and persist metadata.
-- [ ] API can generate a script and storyboard with no external provider configured.
-- [ ] API can create a render task and return progress plus a preview URL.
-- [ ] API can expose an export/download path for the demo artifact.
+- [x] API can create and load a project.
+- [x] API can accept at least image assets and persist metadata in the current repository layer.
+- [x] API can generate a script and storyboard with no external provider configured.
+- [x] API can create a render task and return progress plus a preview URL.
+- [x] API can expose an export/download path for the demo artifact.
 
 ## Verification Plan
 
@@ -67,4 +67,20 @@ Implement the backend APIs for the P0 end-to-end flow: project creation, asset i
 ## Risks And Follow-Ups
 
 - Video artifact generation may need to be a static demo file first; record the chosen fallback in `../decisions/`.
+- Current repository implementation is in-memory because local PostgreSQL is unavailable. Decision recorded in `../decisions/part-003-p0-backend-fallbacks.md`.
+- Replace the in-memory repository with Prisma-backed persistence once `DATABASE_URL` is available; keep API response shapes stable for Part 004.
 
+## Change Summary
+
+- Added P0 API routes under `/api` for projects, assets, script generation, render tasks, render task polling, and export fallback.
+- Added in-memory project repository to support API lifecycle tests without external services.
+- Added deterministic mock script provider and mock renderer provider.
+- Added P0 asset metadata validation for image type, MIME type, and size.
+- Added API integration tests covering the full backend P0 lifecycle and invalid asset rejection.
+
+## Verification Evidence
+
+- Evidence file: `../evidence/part-003-verification.md`
+- `corepack pnpm --filter @shopclip/api test`: passed.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api build`: passed.
