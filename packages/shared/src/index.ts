@@ -13,3 +13,6 @@ export const createHealthPayload = (service: ServiceName): HealthPayload => ({
   status: "ok",
   version: SHOPCLIP_VERSION,
 });
+
+export * from "./schemas";
+export type * from "./types";

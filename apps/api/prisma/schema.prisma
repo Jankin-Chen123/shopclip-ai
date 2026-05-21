@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  draft
+  ready
+  rendering
+  completed
+  failed
+}
+
+enum AssetType {
+  image
+  video
+  reference
+}
+
+enum AssetStatus {
+  uploaded
+  processing
+  ready
+  failed
+}
+
+enum SceneStatus {
+  draft
+  generated
+  edited
+  regenerating
+  failed
+}
+
+enum RenderTaskStatus {
+  queued
+  running
+  completed
+  failed
+  retrying
+}
+
+enum TraceEventStatus {
+  queued
+  running
+  completed
+  failed
+  retrying
+}
+
+model Project {
+  id                    String            @id @default(cuid())
+  title                 String
+  productName           String
+  audience              String
+  sellingPoints         String[]
+  tone                  String
+  style                 String
+  targetDurationSeconds Int               @default(15)
+  status                ProjectStatus     @default(draft)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  assets                Asset[]
+  scripts               Script[]
+  scenes                StoryboardScene[]
+  renderTasks           RenderTask[]
+  mockMetrics           MockMetric[]
+}
+
+model Asset {
+  id        String            @id @default(cuid())
+  projectId String
+  type      AssetType
+  status    AssetStatus       @default(uploaded)
+  url       String
+  name      String
+  mimeType  String?
+  sizeBytes Int?
+  tags      String[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slices    AssetSlice[]
+  scenes    StoryboardScene[]
+
+  @@index([projectId])
+}
+
+model AssetSlice {
+  id          String   @id @default(cuid())
+  assetId     String
+  label       String
+  startSecond Float?
+  endSecond   Float?
+  tags        String[]
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+}
+
+model Script {
+  id          String            @id @default(cuid())
+  projectId   String
+  hook        String
+  narrative   String
+  constraints String[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scenes      StoryboardScene[]
+
+  @@index([projectId])
+}
+
+model StoryboardScene {
+  id              String      @id @default(cuid())
+  projectId       String
+  scriptId        String?
+  assetId         String?
+  order           Int
+  durationSeconds Float
+  subtitle        String
+  voiceover       String
+  visualPrompt    String
+  status          SceneStatus @default(draft)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  script          Script?     @relation(fields: [scriptId], references: [id], onDelete: SetNull)
+  asset           Asset?      @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([scriptId])
+  @@index([assetId])
+}
+
+model RenderTask {
+  id           String           @id @default(cuid())
+  projectId    String
+  status       RenderTaskStatus @default(queued)
+  progress     Int              @default(0)
+  previewUrl   String?
+  exportUrl    String?
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  traceEvents  TraceEvent[]
+
+  @@index([projectId])
+}
+
+model TraceEvent {
+  id           String           @id @default(cuid())
+  renderTaskId String
+  status       TraceEventStatus
+  step         String
+  message      String
+  createdAt    DateTime         @default(now())
+  renderTask   RenderTask       @relation(fields: [renderTaskId], references: [id], onDelete: Cascade)
+
+  @@index([renderTaskId])
+}
+
+model MockMetric {
+  id             String   @id @default(cuid())
+  projectId      String
+  sceneId        String?
+  factor         String
+  expectedImpact String
+  value          Float
+  evidence       String
+  recommendation String
+  createdAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
