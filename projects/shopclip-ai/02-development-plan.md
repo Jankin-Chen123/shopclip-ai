@@ -1,0 +1,294 @@
+# ShopClip AI 开发计划
+
+> **给后续 Agent/执行者：**实现本计划时必须使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans`，按任务逐项执行。步骤使用 checkbox（`- [ ]`）追踪状态。
+
+**目标：**构建并部署 ShopClip AI，一个 React + Node.js + TypeScript + PostgreSQL 的电商带货短视频生成 Demo，先完成 P0，再完成全部 P1。
+
+**架构：**单仓库包含 `apps/web` 和 `apps/api`，共享类型放在 `packages/shared`，使用 Prisma 持久化，AI/TTS 使用真实 provider adapter + 确定性 fallback，部署到 Render。P0 先建立项目 -> 素材 -> 剧本/分镜 -> 渲染 trace -> 预览/导出闭环；P1 再加入素材检索、编辑 Agent、分镜重生成、媒体控制、重试增强和看板。
+
+**技术栈：**React、Vite、TypeScript、Node.js、Express 或 Fastify、Prisma、PostgreSQL、Vitest、Playwright、Render。
+
+---
+
+## 文档状态
+
+- 项目 slug：shopclip-ai
+- 基于需求：`projects/shopclip-ai/00-requirements.md`
+- 基于设计：`projects/shopclip-ai/01-design-spec.md`
+- 创建日期：2026-05-21
+- 最后更新：2026-05-21
+- 状态：Draft
+
+## 技术概览
+
+- 技术栈：React + TypeScript 前端，Node.js + TypeScript 后端，PostgreSQL + Prisma。
+- 架构：单仓库前后端分离，使用共享 contracts 和 provider adapters。
+- 关键依赖：React Router、TanStack Query、Prisma、Zod、multipart 上传中间件、Vitest、Playwright、Recharts 或自定义 SVG 图表、lucide-react。
+- 环境：本地开发、Render preview/production、mock AI fallback 模式、真实 provider 配置模式。
+- 部署目标：Render static site 部署 `apps/web`，Render web service 部署 `apps/api`，Render PostgreSQL 提供数据库。
+
+## 建议仓库结构
+
+```text
+apps/
+  web/
+    src/
+      app/
+      components/
+      features/
+        projects/
+        assets/
+        script/
+        studio/
+        render/
+        dashboard/
+      lib/
+      styles/
+  api/
+    prisma/
+      schema.prisma
+      seed.ts
+    src/
+      modules/
+        projects/
+        assets/
+        generation/
+        scenes/
+        render/
+        dashboard/
+      providers/
+        ai/
+        tts/
+        renderer/
+      shared/
+      server.ts
+packages/
+  shared/
+    src/
+      schemas.ts
+      types.ts
+projects/shopclip-ai/
+  00-requirements.md
+  01-design-spec.md
+  02-development-plan.md
+  parts/
+```
+
+## 开发原则
+
+- 遵循 `AGENTS.md`。
+- 编码前读取需求、设计规范、开发计划和当前 Part 文档。
+- P0 是第一交付门禁。Part 005 验证 P0 端到端链路前，不开始 P1 实现。
+- API contracts 放在共享 schemas 中，前后端复用。
+- Provider 凭证只放服务端环境变量。不要提交 API key、endpoint 或任何 secret。
+- 每个 Part 完成前必须在 Part 文档中记录验证证据。
+
+## Part 拆解
+
+| Part | 名称 | 负责角色 | 依赖 | 可并行 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 001 | 仓库脚手架与工具链 | `implementation-engineer` | 无 | 否 | Done |
+| 002 | 数据模型、API contracts 与 seeded demo | `implementation-engineer` | 001 | 否 | Planned |
+| 003 | P0 后端链路 | `implementation-engineer` | 002 | 否 | Planned |
+| 004 | P0 前端链路 | `implementation-engineer` | 002、003 contracts | 部分 | Planned |
+| 005 | P0 集成与浏览器验证 | `quality-security-engineer` | 003、004 | 否 | Planned |
+| 006 | P1 素材标签与检索 | `implementation-engineer` | 005 | 是 | Planned |
+| 007 | P1 分镜编辑、局部重生成与编辑 Agent | `implementation-engineer` | 005 | 是 | Planned |
+| 008 | P1 TTS、字幕、BGM、重试与 trace 强化 | `implementation-engineer` | 005 | 是 | Planned |
+| 009 | P1 Mock 数据看板 | `implementation-engineer` | 005 | 是 | Planned |
+| 010 | 部署、文档、安全复核与最终证据 | `delivery-ops-engineer` | 006、007、008、009 | 否 | Planned |
+
+## 依赖图
+
+```mermaid
+flowchart TD
+  P001["001 脚手架"] --> P002["002 数据 + Contracts"]
+  P002 --> P003["003 P0 后端"]
+  P002 --> P004["004 P0 前端"]
+  P003 --> P005["005 P0 集成"]
+  P004 --> P005
+  P005 --> P006["006 素材检索"]
+  P005 --> P007["007 编辑器 + Agent"]
+  P005 --> P008["008 媒体 + Trace"]
+  P005 --> P009["009 看板"]
+  P006 --> P010["010 部署 + 复核"]
+  P007 --> P010
+  P008 --> P010
+  P009 --> P010
+```
+
+## 集成计划
+
+- 集成顺序：脚手架 -> 数据库/contracts -> P0 后端 -> P0 前端 -> P0 E2E -> P1 模块 -> 最终部署。
+- 共享 contracts：Zod schemas 和 TypeScript types 放在 `packages/shared/src`。
+- 合并策略：P1 parts 尽量写在相互独立的 feature 目录和 API modules，减少冲突。
+- 冲突风险：Studio 编辑器 UI 会被媒体和 Agent 工作共同影响；Part 007 期间由一个人负责 `apps/web/src/features/studio`，Part 008 通过小型 props/contracts 接入。
+
+## 测试与验证策略
+
+- 单元测试：shared schema 解析、剧本 fallback 生成、分镜更新校验、检索排序、看板指标。
+- 集成测试：API 项目生命周期、渲染任务生命周期、重试路径、看板 endpoint。
+- E2E/浏览器测试：创建项目、上传 seeded asset、生成分镜、编辑分镜、渲染、预览/导出；Part 005 后，在 P1 各自 Part 中补充检索和看板检查。
+- 安全检查：确认 secret 不进入前端构建或文档；校验上传类型/大小；provider 环境变量只在服务端使用。
+- 人工验收：在 `projects/shopclip-ai/evidence/` 记录 P0 和最终 P1 演示证据。
+
+## 发布策略
+
+- 部署目标：Render static site、Render Node service、Render PostgreSQL。
+- 配置/secret：`DATABASE_URL`、AI provider API key、AI endpoint IDs、TTS config、mock mode flag、asset storage path。
+- 回滚：保留上一个 Render deploy；外部 API 失败时通过 mock mode 禁用真实 provider 调用。
+- 监控：第一版使用 API logs 和持久化 trace events；生产级可观测性属于 P2。
+
+## 开放风险
+
+| 风险 | Owner | 缓解 |
+| --- | --- | --- |
+| P1 范围在 P0 稳定前消耗过多时间 | `solution-architect` | Part 005 强制作为 P0 门禁 |
+| Provider API 延迟或额度影响 Demo | `implementation-engineer` | 使用确定性 fallback provider 和 seeded sample |
+| Render 文件系统持久化有限 | `delivery-ops-engineer` | 抽象 storage，Demo 使用 seeded assets，并记录生产存储升级方案 |
+| 分镜编辑器复杂度导致 UI 脆弱 | `quality-security-engineer` | 用浏览器测试覆盖核心编辑交互和稳定尺寸 |
+
+## Part 任务细节
+
+### Task 001：仓库脚手架与工具链
+
+**文件：**
+- 创建：`package.json`、`pnpm-workspace.yaml`、`tsconfig.base.json`、`.env.example`、`.gitignore`、`apps/web/*`、`apps/api/*`、`packages/shared/*`
+- 测试：初始 lint/typecheck/build 命令
+
+- [ ] 创建 workspace 和脚本：`dev`、`build`、`typecheck`、`test`、`lint`、`format`。
+- [ ] 在 `apps/web` 下创建 Vite React 应用。
+- [ ] 在 `apps/api` 下创建 Node API 应用。
+- [ ] 在 `packages/shared` 下创建共享包。
+- [ ] 添加 ESLint、Prettier、TypeScript 配置和基础 CI 脚本。
+- [ ] 运行 `pnpm install`、`pnpm typecheck`、`pnpm build`。
+
+### Task 002：数据模型、API contracts 与 Seed Demo
+
+**文件：**
+- 创建：`apps/api/prisma/schema.prisma`、`apps/api/prisma/seed.ts`
+- 创建：`packages/shared/src/schemas.ts`、`packages/shared/src/types.ts`
+- 修改：`apps/api/src/server.ts`
+- 测试：`apps/api/src/**/*.test.ts`、`packages/shared/src/**/*.test.ts`
+
+- [ ] 定义 Prisma models：Project、Asset、AssetSlice、Script、StoryboardScene、RenderTask、TraceEvent、MockMetric。
+- [ ] 定义 Zod schemas：project brief、asset metadata、script result、scene update、render task、trace event、dashboard response。
+- [ ] 添加一个面向评委的安全 seeded demo 商品和 mock assets。
+- [ ] 添加必填字段、时长约束、状态枚举和 dashboard response shape 测试。
+- [ ] 本地运行 migration 和 seed。
+
+### Task 003：P0 后端链路
+
+**文件：**
+- 创建：`apps/api/src/modules/projects/*`、`assets/*`、`generation/*`、`render/*`
+- 创建：`apps/api/src/providers/ai/*`、`providers/renderer/*`
+- 测试：API 集成测试
+
+- [ ] 实现项目创建/加载 endpoints。
+- [ ] 实现素材上传、类型/大小校验和本地存储抽象。
+- [ ] 实现剧本/分镜生成 provider interface 和确定性 fallback。
+- [ ] 实现渲染任务创建、trace event 持久化、进度轮询和 preview URL fallback。
+- [ ] 实现 Demo 产物 export/download endpoint 或静态路径。
+- [ ] 在不依赖前端的情况下测试完整 P0 API 生命周期。
+
+### Task 004：P0 前端链路
+
+**文件：**
+- 创建：`apps/web/src/features/projects`、`assets`、`script`、`studio`、`render`
+- 创建：`apps/web/src/components/layout`、`components/ui`、`lib/api.ts`
+- 测试：必要组件测试
+
+- [ ] 构建 app shell、侧边/顶部导航和深色编辑器设计 tokens。
+- [ ] 构建项目入口和商品设置流程。
+- [ ] 构建素材上传器和素材列表。
+- [ ] 构建剧本/分镜生成页面。
+- [ ] 构建 Studio 编辑器第一版：预览、分镜卡片、分镜属性面板、渲染 trace 面板。
+- [ ] 构建预览/导出页面。
+- [ ] 验证 375px、768px、1024px、1440px 响应式行为。
+
+### Task 005：P0 集成与浏览器验证
+
+**文件：**
+- 创建：`apps/web/e2e/p0-flow.spec.ts`
+- 创建证据：`projects/shopclip-ai/evidence/`
+- 修改：Part 005 完成记录
+
+- [ ] 启动本地 API 和 Web 应用。
+- [ ] 使用 Playwright 运行自动化 P0 浏览器流程。
+- [ ] 验证 P0 页面空状态、加载、错误、成功和可重试状态。
+- [ ] 采集项目设置、Studio、trace、预览/导出截图或浏览器证据。
+- [ ] 只有端到端预览/导出可用后，才能标记 P0 门禁通过。
+
+### Task 006：P1 素材标签与检索
+
+**文件：**
+- 创建/修改：`apps/api/src/modules/assets`、`apps/api/src/modules/retrieval`
+- 创建/修改：`apps/web/src/features/assets`
+- 测试：检索排序测试和浏览器搜索检查
+
+- [ ] 添加素材打标和切片元数据生成。
+- [ ] 添加本地 Demo 模式的确定性 embedding-like 向量评分。
+- [ ] 添加 `/api/assets/search` endpoint。
+- [ ] 添加素材搜索/筛选 UI 和自动召回到分镜素材位的能力。
+- [ ] 验证关键词、标签和向量风格检索样例。
+
+### Task 007：P1 分镜编辑、局部重生成与编辑 Agent
+
+**文件：**
+- 修改：`apps/web/src/features/studio`
+- 创建/修改：`apps/api/src/modules/scenes`、`apps/api/src/modules/generation`
+- 创建：`apps/api/src/providers/ai/editingAgentProvider.ts`
+- 测试：分镜更新和重生成测试、编辑器浏览器测试
+
+- [ ] 添加可靠的分镜字段编辑、dirty state 和保存校验。
+- [ ] 添加重排/删除控制，并提供键盘替代操作。
+- [ ] 添加单分镜重生成 endpoint 和 UI action。
+- [ ] 添加编辑 Agent 建议，支持解释、应用和忽略。
+- [ ] 验证局部重生成后其他分镜保持不变。
+
+### Task 008：P1 TTS、字幕、BGM、重试与 Trace 强化
+
+**文件：**
+- 创建/修改：`apps/api/src/providers/tts`、`apps/api/src/providers/renderer`
+- 修改：`apps/api/src/modules/render`
+- 修改：`apps/web/src/features/render`、`apps/web/src/features/studio`
+- 测试：重试生命周期和媒体选项测试
+
+- [ ] 添加 TTS provider adapter 和 mock fallback。
+- [ ] 添加字幕和 BGM 的分镜/项目级控制。
+- [ ] 为失败的渲染/生成步骤添加 retry action。
+- [ ] 强化 trace event 状态和时间戳。
+- [ ] 验证 mock mode 生成预览中能体现字幕和所选媒体设置。
+
+### Task 009：P1 Mock 数据看板
+
+**文件：**
+- 创建：`apps/api/src/modules/dashboard`
+- 创建：`apps/web/src/features/dashboard`
+- 测试：dashboard endpoint 和图表渲染测试
+
+- [ ] 添加 mock metric seed 和 dashboard endpoint。
+- [ ] 添加完播率、hook 强度、字幕清晰度、商品聚焦度汇总卡。
+- [ ] 添加漏斗图、bullet chart grid 和因子表。
+- [ ] 为图表添加可访问文本摘要。
+- [ ] 验证看板可以从项目预览页进入，并能处理空状态/错误状态。
+
+### Task 010：部署、文档、安全复核与最终证据
+
+**文件：**
+- 创建：`render.yaml`、`README.md`、部署文档、最终证据文件
+- 修改：`.env.example` 和必要项目文档
+- 测试：生产构建、smoke test、安全扫描/清单
+
+- [ ] 添加 Render blueprint 或服务配置说明。
+- [ ] 添加 README，包含项目故事、技术栈、启动方式、环境变量、目录结构、Demo 流程和已知 fallback。
+- [ ] 添加架构图引用和最终提交清单。
+- [ ] 运行 production build 和 smoke tests。
+- [ ] 针对部署 URL 运行浏览器验证。
+- [ ] 检查没有 secret 被提交或暴露在前端构建中。
+
+## 审批
+
+- 用户确认：No
+- 确认日期：
+- 备注：需求和设计确认后生成的开发计划草案。P0 必须在 P1 前完成；全部 P1 能力纳入最终目标。
