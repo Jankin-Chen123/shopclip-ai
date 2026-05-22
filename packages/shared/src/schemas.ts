@@ -62,6 +62,20 @@ export const AssetSliceSchema = z.object({
   tags: z.array(z.string().trim().min(1)).default([]),
 });
 
+export const AssetSearchResultSchema = z.object({
+  asset: AssetMetadataSchema,
+  slices: z.array(AssetSliceSchema).default([]),
+  score: z.number().min(0),
+  reasons: z.array(z.string().trim().min(1)).default([]),
+});
+
+export const AssetSearchResponseSchema = z.object({
+  projectId: z.string().trim().min(1),
+  query: z.string().default(""),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  results: z.array(AssetSearchResultSchema),
+});
+
 export const StoryboardSceneSchema = z.object({
   id: z.string().trim().min(1),
   projectId: z.string().trim().min(1),
@@ -111,6 +125,32 @@ export const SceneUpdateSchema = z
     message: "At least one scene field is required.",
   });
 
+export const EditingSuggestionSchema = z.object({
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  explanation: z.string().trim().min(1),
+  update: SceneUpdateSchema,
+});
+
+export const MediaSettingsSchema = z.object({
+  ttsVoice: z.enum(["clear-host", "warm-creator", "energetic-seller"]).default("clear-host"),
+  subtitleStyle: z
+    .enum(["clean-lower-third", "high-contrast", "creator-caption"])
+    .default("clean-lower-third"),
+  subtitlesEnabled: z.boolean().default(true),
+  bgmTrack: z.enum(["none", "creator-pop", "soft-lift", "tech-pulse"]).default("creator-pop"),
+});
+
+export const RenderRequestSchema = z.object({
+  mediaSettings: MediaSettingsSchema.default({
+    bgmTrack: "creator-pop",
+    subtitleStyle: "clean-lower-third",
+    subtitlesEnabled: true,
+    ttsVoice: "clear-host",
+  }),
+  simulateFailure: z.boolean().default(false),
+});
+
 export const RenderTaskSchema = z.object({
   id: z.string().trim().min(1),
   projectId: z.string().trim().min(1),
@@ -119,6 +159,8 @@ export const RenderTaskSchema = z.object({
   previewUrl: z.string().trim().min(1).optional(),
   exportUrl: z.string().trim().min(1).optional(),
   errorMessage: z.string().trim().min(1).optional(),
+  mediaSettings: MediaSettingsSchema.optional(),
+  retryOfRenderTaskId: z.string().trim().min(1).optional(),
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,
 });
@@ -129,6 +171,7 @@ export const TraceEventSchema = z.object({
   status: TraceEventStatusSchema,
   step: z.string().trim().min(1),
   message: z.string().trim().min(1),
+  retryOfTraceEventId: z.string().trim().min(1).optional(),
   createdAt: IsoDateTimeSchema,
 });
 

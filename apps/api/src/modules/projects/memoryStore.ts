@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
+  AssetSlice,
+  EditingSuggestion,
   Project,
   ProjectBrief,
   RenderTask,
+  SceneUpdate,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
@@ -11,6 +14,7 @@ import type {
 
 export interface ProjectSnapshot extends Project {
   assets: AssetMetadata[];
+  assetSlices: AssetSlice[];
   scripts: ScriptResult[];
   scenes: StoryboardScene[];
   renderTasks: RenderTask[];
@@ -31,6 +35,7 @@ export class MemoryProjectStore {
       createdAt: timestamp,
       updatedAt: timestamp,
       assets: [],
+      assetSlices: [],
       scripts: [],
       scenes: [],
       renderTasks: [],
@@ -47,6 +52,7 @@ export class MemoryProjectStore {
   addAsset(
     projectId: string,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
+    createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): AssetMetadata | undefined {
     const project = this.projects.get(projectId);
     if (!project) {
@@ -63,6 +69,13 @@ export class MemoryProjectStore {
     };
 
     project.assets.push(storedAsset);
+    project.assetSlices.push(
+      ...createSlices(storedAsset).map((slice) => ({
+        ...slice,
+        id: randomUUID(),
+        assetId: storedAsset.id,
+      })),
+    );
     project.updatedAt = timestamp;
     return storedAsset;
   }
@@ -120,7 +133,12 @@ export class MemoryProjectStore {
     }));
 
     project.renderTasks.push(storedRenderTask);
-    project.status = storedRenderTask.status === "completed" ? "completed" : "rendering";
+    project.status =
+      storedRenderTask.status === "completed"
+        ? "completed"
+        : storedRenderTask.status === "failed"
+          ? "failed"
+          : "rendering";
     project.updatedAt = timestamp;
     this.traceEvents.set(storedRenderTask.id, storedTraceEvents);
 
@@ -130,13 +148,112 @@ export class MemoryProjectStore {
     };
   }
 
+  updateScene(sceneId: string, update: SceneUpdate): StoryboardScene | undefined {
+    const match = this.findSceneProject(sceneId);
+    if (!match) {
+      return undefined;
+    }
+
+    const updatedScene: StoryboardScene = {
+      ...match.scene,
+      ...update,
+      assetId: update.assetId === null ? undefined : (update.assetId ?? match.scene.assetId),
+      status: update.status ?? "edited",
+    };
+
+    this.replaceScene(match.project, updatedScene);
+    match.project.updatedAt = now();
+    return updatedScene;
+  }
+
+  reorderScenes(projectId: string, sceneIds: string[]): StoryboardScene[] | undefined {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      return undefined;
+    }
+
+    if (
+      sceneIds.length !== project.scenes.length ||
+      sceneIds.some((sceneId) => !project.scenes.some((scene) => scene.id === sceneId))
+    ) {
+      return undefined;
+    }
+
+    const reordered = sceneIds.map((sceneId, index) => ({
+      ...project.scenes.find((scene) => scene.id === sceneId)!,
+      order: index + 1,
+    }));
+
+    project.scenes = reordered;
+    project.scripts = project.scripts.map((script) => ({
+      ...script,
+      scenes: reordered.filter((scene) =>
+        script.scenes.some((scriptScene) => scriptScene.id === scene.id),
+      ),
+    }));
+    project.updatedAt = now();
+    return reordered;
+  }
+
+  deleteScene(sceneId: string): StoryboardScene[] | undefined {
+    const match = this.findSceneProject(sceneId);
+    if (!match) {
+      return undefined;
+    }
+
+    const remainingScenes = match.project.scenes
+      .filter((scene) => scene.id !== sceneId)
+      .map((scene, index) => ({ ...scene, order: index + 1 }));
+
+    match.project.scenes = remainingScenes;
+    match.project.scripts = match.project.scripts.map((script) => ({
+      ...script,
+      scenes: script.scenes
+        .filter((scene) => scene.id !== sceneId)
+        .map((scene) => remainingScenes.find((remaining) => remaining.id === scene.id))
+        .filter((scene): scene is StoryboardScene => Boolean(scene)),
+    }));
+    match.project.updatedAt = now();
+    return remainingScenes;
+  }
+
+  getSceneContext(
+    sceneId: string,
+  ): { project: ProjectSnapshot; scene: StoryboardScene } | undefined {
+    return this.findSceneProject(sceneId);
+  }
+
+  appendTraceEvent(
+    traceKey: string,
+    event: Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">,
+  ): TraceEvent {
+    const storedTraceEvent: TraceEvent = {
+      ...event,
+      id: randomUUID(),
+      renderTaskId: traceKey,
+      createdAt: now(),
+    };
+
+    this.traceEvents.set(traceKey, [...(this.traceEvents.get(traceKey) ?? []), storedTraceEvent]);
+    return storedTraceEvent;
+  }
+
+  getStoredSuggestion(
+    sceneId: string,
+    suggestionId: string,
+    createSuggestions: () => EditingSuggestion[],
+  ): EditingSuggestion | undefined {
+    return createSuggestions().find((suggestion) => suggestion.id === suggestionId);
+  }
+
   getRenderTask(
     renderTaskId: string,
-  ): { renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined {
+  ): { project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined {
     for (const project of this.projects.values()) {
       const renderTask = project.renderTasks.find((candidate) => candidate.id === renderTaskId);
       if (renderTask) {
         return {
+          project,
           renderTask,
           traceEvents: this.traceEvents.get(renderTaskId) ?? [],
         };
@@ -144,5 +261,28 @@ export class MemoryProjectStore {
     }
 
     return undefined;
+  }
+
+  private findSceneProject(
+    sceneId: string,
+  ): { project: ProjectSnapshot; scene: StoryboardScene } | undefined {
+    for (const project of this.projects.values()) {
+      const scene = project.scenes.find((candidate) => candidate.id === sceneId);
+      if (scene) {
+        return { project, scene };
+      }
+    }
+
+    return undefined;
+  }
+
+  private replaceScene(project: ProjectSnapshot, updatedScene: StoryboardScene): void {
+    project.scenes = project.scenes.map((scene) =>
+      scene.id === updatedScene.id ? updatedScene : scene,
+    );
+    project.scripts = project.scripts.map((script) => ({
+      ...script,
+      scenes: script.scenes.map((scene) => (scene.id === updatedScene.id ? updatedScene : scene)),
+    }));
   }
 }

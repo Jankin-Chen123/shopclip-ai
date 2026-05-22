@@ -5,9 +5,9 @@
 - Project slug: shopclip-ai
 - Part number: 006
 - Owner role: `implementation-engineer`
-- Status: Planned
+- Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-21
+- Last updated: 2026-05-22
 
 ## Source Of Truth
 
@@ -45,10 +45,28 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 
 ## Acceptance Criteria
 
-- [ ] Uploaded/seeded assets receive tags and slice metadata.
-- [ ] Search supports keyword, tag, and vector-like scoring.
-- [ ] Scene editor can select recalled assets.
-- [ ] Tests cover retrieval ranking for at least three queries.
+- [x] Uploaded/seeded assets receive tags and slice metadata.
+- [x] Search supports keyword, tag, and vector-like scoring.
+- [x] Scene editor can select recalled assets.
+- [x] Tests cover retrieval ranking for at least three queries.
+
+## Completion Notes
+
+- Added deterministic asset tagging in `apps/api/src/modules/assets/tagging.ts`.
+- Added one slice per uploaded asset and returned slice metadata on project snapshots.
+- Added `/api/assets/search` with keyword, tag, and deterministic vector-like concept scoring.
+- Added front-end asset retrieval UI and "Use in selected scene" recall action.
+- Added browser evidence screenshots:
+  - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
+  - `projects/shopclip-ai/evidence/part-006-verification.md`
+
+## Verification Evidence
+
+- `corepack pnpm test`
+- `corepack pnpm typecheck`
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- `corepack pnpm --filter @shopclip/web test:e2e`
 
 ## Verification Plan
 
@@ -60,4 +78,3 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 ## Risks And Follow-Ups
 
 - Mock embedding must be clearly labeled in settings/demo notes.
-

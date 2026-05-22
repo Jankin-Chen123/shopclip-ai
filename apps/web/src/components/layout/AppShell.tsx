@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Boxes,
   Clapperboard,
   Download,
@@ -13,7 +14,7 @@ import {
 import type { AppCopy, Language } from "../../app/i18n";
 import { languageNames } from "../../app/i18n";
 
-export type WorkspacePageId = "project" | "create" | "studio" | "delivery";
+export type WorkspacePageId = "project" | "create" | "studio" | "delivery" | "dashboard";
 
 export interface WorkspacePage {
   id: WorkspacePageId;
@@ -41,6 +42,11 @@ export const workspacePages: WorkspacePage[] = [
     id: "delivery",
     accent: "green",
     icon: Download,
+  },
+  {
+    id: "dashboard",
+    accent: "blue",
+    icon: BarChart3,
   },
 ];
 

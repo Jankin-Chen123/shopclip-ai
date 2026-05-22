@@ -5,9 +5,9 @@
 - Project slug: shopclip-ai
 - Part number: 008
 - Owner role: `implementation-engineer`
-- Status: Planned
+- Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-21
+- Last updated: 2026-05-22
 
 ## Source Of Truth
 
@@ -46,11 +46,30 @@ Add P1 media controls and make generation failures recoverable and observable.
 
 ## Acceptance Criteria
 
-- [ ] User can select or preview TTS/subtitle/BGM settings.
-- [ ] Mock render visibly reflects subtitle and selected media state.
-- [ ] Failed render/generation step exposes retry.
-- [ ] Retry preserves previous successful project/storyboard data.
-- [ ] Trace entries include step, timestamp, status, message, and retry relationship when applicable.
+- [x] User can select or preview TTS/subtitle/BGM settings.
+- [x] Mock render visibly reflects subtitle and selected media state.
+- [x] Failed render/generation step exposes retry.
+- [x] Retry preserves previous successful project/storyboard data.
+- [x] Trace entries include step, timestamp, status, message, and retry relationship when applicable.
+
+## Completion Notes
+
+- Added shared media settings and render request contracts.
+- Added mock TTS provider and extended mock renderer with TTS, subtitle, BGM, failure, and retry trace events.
+- Added render retry endpoint: `POST /api/render-tasks/:renderTaskId/retry`.
+- Added Delivery UI controls for TTS voice, subtitle style, BGM track, subtitle toggle, forced failure, and retry.
+- Added browser evidence screenshots:
+  - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
+  - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
+  - `projects/shopclip-ai/evidence/part-008-verification.md`
+
+## Verification Evidence
+
+- `corepack pnpm test`
+- `corepack pnpm typecheck`
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- `corepack pnpm --filter @shopclip/web test:e2e`
 
 ## Verification Plan
 
@@ -62,4 +81,3 @@ Add P1 media controls and make generation failures recoverable and observable.
 ## Risks And Follow-Ups
 
 - Real TTS integration may be disabled for deployed demo if quota or latency is unsafe.
-

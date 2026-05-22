@@ -5,9 +5,9 @@
 - Project slug: shopclip-ai
 - Part number: 009
 - Owner role: `implementation-engineer`
-- Status: Planned
+- Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-21
+- Last updated: 2026-05-22
 
 ## Source Of Truth
 
@@ -44,11 +44,11 @@ Implement a lightweight mock performance dashboard that connects creative factor
 
 ## Acceptance Criteria
 
-- [ ] Dashboard loads for seeded and generated projects.
-- [ ] Summary cards show watch-through, hook strength, subtitle clarity, and product-focus score.
-- [ ] Funnel and bullet chart values are visible as text, not only color.
-- [ ] Factor table links factor, scene, expected impact, and suggested action.
-- [ ] Empty/error states are present.
+- [x] Dashboard loads for seeded and generated projects.
+- [x] Summary cards show watch-through, hook strength, subtitle clarity, and product-focus score.
+- [x] Funnel and bullet chart values are visible as text, not only color.
+- [x] Factor table links factor, scene, expected impact, and suggested action.
+- [x] Empty/error states are present.
 
 ## Verification Plan
 
@@ -60,4 +60,23 @@ Implement a lightweight mock performance dashboard that connects creative factor
 ## Risks And Follow-Ups
 
 - Keep chart density low so it supports the story instead of distracting from the editor.
+- Current metrics are deterministic mock analytics. Real commerce attribution remains out of scope
+  for this part and should be handled as a future provider/data integration.
 
+## Completion Notes
+
+- Added `/api/projects/:projectId/dashboard` backed by deterministic mock metrics and readable
+  factor recommendations.
+- Added the Dashboard workspace page with summary metric cards, visible funnel counts, bullet-style
+  metric bars, empty/error handling, and an accessible factor table.
+- Added API and browser coverage for the dashboard flow, including screenshot evidence at
+  `projects/shopclip-ai/evidence/p1-09-dashboard.png`.
+
+## Verification Evidence
+
+- `corepack pnpm test`: passed.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm build`: passed.
+- `corepack pnpm --filter @shopclip/web test:e2e`: passed, 4 browser tests.
+- Evidence file: `projects/shopclip-ai/evidence/part-009-verification.md`.

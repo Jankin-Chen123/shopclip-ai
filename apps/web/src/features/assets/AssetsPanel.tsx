@@ -1,11 +1,11 @@
 import type { ChangeEvent } from "react";
 import type { AssetMetadata } from "@shopclip/shared";
-import { ImageUp, Loader2 } from "lucide-react";
+import { ImageUp, Loader2, Search } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { AppCopy } from "../../app/i18n";
-import type { CreateAssetInput } from "../../lib/api";
+import type { AssetSearchResult, CreateAssetInput } from "../../lib/api";
 
 interface AssetsPanelProps {
   assetDraft: CreateAssetInput;
@@ -14,8 +14,14 @@ interface AssetsPanelProps {
   disabled: boolean;
   error?: string;
   isLoading: boolean;
+  isSearching: boolean;
   onAssetDraftChange: (asset: CreateAssetInput) => void;
+  onRecallAsset?: (assetId: string) => void;
+  onSearchAssets: () => void;
+  onSearchQueryChange: (query: string) => void;
   onUploadAsset: () => void;
+  searchQuery: string;
+  searchResults: AssetSearchResult[];
 }
 
 const splitTags = (value: string): string[] =>
@@ -31,8 +37,14 @@ export const AssetsPanel = ({
   disabled,
   error,
   isLoading,
+  isSearching,
   onAssetDraftChange,
+  onRecallAsset,
+  onSearchAssets,
+  onSearchQueryChange,
   onUploadAsset,
+  searchQuery,
+  searchResults,
 }: AssetsPanelProps) => {
   const updateField =
     (field: keyof CreateAssetInput) =>
@@ -119,6 +131,57 @@ export const AssetsPanel = ({
             </article>
           ))
         )}
+      </div>
+
+      <div className="asset-search" aria-label={copy.searchRegion}>
+        <div className="asset-search-controls">
+          <label>
+            {copy.searchLabel}
+            <input
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder={copy.searchPlaceholder}
+            />
+          </label>
+          <Button
+            disabled={disabled || isSearching}
+            icon={isSearching ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+            onClick={onSearchAssets}
+          >
+            {copy.search}
+          </Button>
+        </div>
+        <div className="search-results" aria-live="polite">
+          {searchResults.length === 0 ? (
+            <div className="empty-state compact-empty">
+              <strong>{copy.noResults}</strong>
+              <span>{copy.noResultsBody}</span>
+            </div>
+          ) : (
+            searchResults.map((result) => (
+              <article className="search-result-row" key={result.asset.id}>
+                <div>
+                  <h3>{result.asset.name}</h3>
+                  <p>{copy.score(result.score)}</p>
+                  <div className="constraint-list">
+                    {result.reasons.slice(0, 3).map((reason: string) => (
+                      <StatusPill key={reason} tone="info">
+                        {reason}
+                      </StatusPill>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  disabled={!onRecallAsset}
+                  icon={<ImageUp size={18} />}
+                  onClick={() => onRecallAsset?.(result.asset.id)}
+                >
+                  {copy.useInScene}
+                </Button>
+              </article>
+            ))
+          )}
+        </div>
       </div>
     </section>
   );

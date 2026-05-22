@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: shopclip-ai-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @shopclip/shared build && corepack pnpm --filter @shopclip/api build
+    startCommand: corepack pnpm --filter @shopclip/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        sync: false
+      - key: JSON_BODY_LIMIT
+        value: 1mb
+      - key: AI_PROVIDER_MODE
+        value: mock
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_TEXT_ENDPOINT_ID
+        sync: false
+      - key: AI_VIDEO_ENDPOINT_ID
+        sync: false
+      - key: TTS_PROVIDER_MODE
+        value: mock
+      - key: TTS_API_KEY
+        sync: false
+
+  - type: web
+    name: shopclip-ai-web
+    runtime: static
+    rootDir: .
+    buildCommand: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @shopclip/shared build && corepack pnpm --filter @shopclip/web build
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

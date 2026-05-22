@@ -124,6 +124,9 @@ describe("P0 backend lifecycle", () => {
     expect(render.body.traceEvents.map((event) => event.step)).toEqual([
       "render-queued",
       "storyboard-validated",
+      "tts-synthesized",
+      "subtitle-overlay-prepared",
+      "bgm-selected",
       "preview-created",
     ]);
 
@@ -133,7 +136,7 @@ describe("P0 backend lifecycle", () => {
     }>(baseUrl, `/api/render-tasks/${render.body.renderTask.id}`);
 
     expect(loadedRender.status).toBe(200);
-    expect(loadedRender.body.traceEvents).toHaveLength(3);
+    expect(loadedRender.body.traceEvents).toHaveLength(6);
 
     const exported = await request<{
       exportUrl: string;

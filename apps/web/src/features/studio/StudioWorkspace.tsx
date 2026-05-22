@@ -1,6 +1,16 @@
 import type { ChangeEvent } from "react";
-import type { AssetMetadata, StoryboardScene } from "@shopclip/shared";
-import { Clock3, Save, Video } from "lucide-react";
+import type { AssetMetadata, EditingSuggestion, StoryboardScene } from "@shopclip/shared";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Clock3,
+  Lightbulb,
+  Save,
+  Trash2,
+  Video,
+  WandSparkles,
+  X,
+} from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -10,24 +20,43 @@ interface StudioWorkspaceProps {
   assets: AssetMetadata[];
   copy: AppCopy["studio"];
   dirtySceneIds: Set<string>;
+  isBusy: boolean;
+  onApplySuggestion: (suggestionId: string) => void;
+  onDeleteScene: (sceneId: string) => void;
+  onDismissSuggestion: (suggestionId: string) => void;
+  onLoadSuggestions: (sceneId: string) => void;
+  onRegenerateScene: (sceneId: string) => void;
   onSceneChange: (scene: StoryboardScene) => void;
   onSceneSave: (sceneId: string) => void;
+  onSceneMove: (sceneId: string, direction: "earlier" | "later") => void;
   onSelectedSceneChange: (sceneId: string) => void;
   scenes: StoryboardScene[];
   selectedSceneId?: string;
+  suggestions: EditingSuggestion[];
 }
 
 export const StudioWorkspace = ({
   assets,
   copy,
   dirtySceneIds,
+  isBusy,
+  onApplySuggestion,
+  onDeleteScene,
+  onDismissSuggestion,
+  onLoadSuggestions,
+  onRegenerateScene,
   onSceneChange,
+  onSceneMove,
   onSceneSave,
   onSelectedSceneChange,
   scenes,
   selectedSceneId,
+  suggestions,
 }: StudioWorkspaceProps) => {
   const selectedScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
+  const selectedSceneIndex = selectedScene
+    ? scenes.findIndex((scene) => scene.id === selectedScene.id)
+    : -1;
 
   const updateSelected =
     (field: keyof StoryboardScene) =>
@@ -151,12 +180,89 @@ export const StudioWorkspace = ({
                 </select>
               </label>
               <Button
-                disabled={!dirtySceneIds.has(selectedScene.id)}
+                disabled={!dirtySceneIds.has(selectedScene.id) || isBusy}
                 icon={<Save size={18} />}
                 onClick={() => onSceneSave(selectedScene.id)}
               >
                 {copy.saveLocalEdit}
               </Button>
+              <div className="scene-action-grid">
+                <Button
+                  disabled={selectedSceneIndex <= 0 || isBusy}
+                  icon={<ArrowLeft size={18} />}
+                  onClick={() => onSceneMove(selectedScene.id, "earlier")}
+                >
+                  {copy.moveEarlier}
+                </Button>
+                <Button
+                  disabled={
+                    selectedSceneIndex === -1 || selectedSceneIndex >= scenes.length - 1 || isBusy
+                  }
+                  icon={<ArrowRight size={18} />}
+                  onClick={() => onSceneMove(selectedScene.id, "later")}
+                >
+                  {copy.moveLater}
+                </Button>
+                <Button
+                  disabled={isBusy}
+                  icon={<WandSparkles size={18} />}
+                  onClick={() => onRegenerateScene(selectedScene.id)}
+                >
+                  {copy.regenerateScene}
+                </Button>
+                <Button
+                  disabled={scenes.length <= 1 || isBusy}
+                  icon={<Trash2 size={18} />}
+                  onClick={() => onDeleteScene(selectedScene.id)}
+                  variant="danger"
+                >
+                  {copy.deleteScene}
+                </Button>
+              </div>
+              <div className="agent-panel">
+                <div className="inspector-heading">
+                  <h3>{copy.suggestions}</h3>
+                  <Button
+                    disabled={isBusy}
+                    icon={<Lightbulb size={18} />}
+                    onClick={() => onLoadSuggestions(selectedScene.id)}
+                  >
+                    {copy.loadSuggestions}
+                  </Button>
+                </div>
+                {suggestions.length === 0 ? (
+                  <div className="empty-state compact-empty">
+                    <strong>{copy.noSuggestions}</strong>
+                    <span>{copy.noSuggestionsBody}</span>
+                  </div>
+                ) : (
+                  suggestions.map((suggestion) => (
+                    <article className="suggestion-row" key={suggestion.id}>
+                      <div>
+                        <h4>{suggestion.title}</h4>
+                        <p>{suggestion.explanation}</p>
+                      </div>
+                      <div className="suggestion-actions">
+                        <Button
+                          disabled={isBusy}
+                          icon={<Lightbulb size={18} />}
+                          onClick={() => onApplySuggestion(suggestion.id)}
+                        >
+                          {copy.applySuggestion}
+                        </Button>
+                        <Button
+                          disabled={isBusy}
+                          icon={<X size={18} />}
+                          onClick={() => onDismissSuggestion(suggestion.id)}
+                          variant="ghost"
+                        >
+                          {copy.dismissSuggestion}
+                        </Button>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
             </>
           ) : (
             <div className="empty-state">
