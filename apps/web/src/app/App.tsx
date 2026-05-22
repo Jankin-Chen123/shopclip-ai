@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  DashboardResponse,
   ProjectBrief,
   RenderTask,
   ScriptResult,
@@ -14,6 +15,7 @@ import {
   type WorkspacePageId,
 } from "../components/layout/AppShell";
 import { AssetsPanel } from "../features/assets/AssetsPanel";
+import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { RenderPanel } from "../features/render/RenderPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ScriptPanel } from "../features/script/ScriptPanel";
@@ -21,14 +23,26 @@ import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import { copy, isLanguage, type AppCopy, type Language } from "./i18n";
 import {
   addAsset,
+  applySceneSuggestion,
   createProject,
+  deleteScene,
   exportProject,
   generateScript,
+  loadDashboard,
+  loadSceneSuggestions,
   loadProject,
   loadRenderTask,
+  regenerateScene,
+  reorderScenes,
+  retryRenderTask,
+  searchAssets,
   startRender,
+  updateScene,
+  type AssetSearchResult,
   type CreateAssetInput,
+  type EditingSuggestion,
   type ExportResult,
+  type MediaSettings,
   type ProjectSnapshot,
 } from "../lib/api";
 
@@ -50,7 +64,23 @@ const defaultAsset: CreateAssetInput = {
   tags: ["product", "desk", "hero"],
 };
 
-type BusyState = "idle" | "project" | "asset" | "script" | "render" | "export";
+const defaultMediaSettings: MediaSettings = {
+  bgmTrack: "creator-pop",
+  subtitleStyle: "clean-lower-third",
+  subtitlesEnabled: true,
+  ttsVoice: "clear-host",
+};
+
+type BusyState =
+  | "idle"
+  | "project"
+  | "asset"
+  | "search"
+  | "script"
+  | "scene"
+  | "render"
+  | "export"
+  | "dashboard";
 
 const getStoredLanguage = (): Language => {
   if (typeof window === "undefined") {
@@ -75,6 +105,9 @@ const pageFromHash = (): WorkspacePageId => {
   if (hash === "trace" || hash === "export" || hash === "delivery") {
     return "delivery";
   }
+  if (hash === "dashboard") {
+    return "dashboard";
+  }
   return "project";
 };
 
@@ -87,6 +120,7 @@ interface WorkspaceSwitcherProps {
   pages: WorkspacePage[];
   renderStatus: string;
   sceneCount: number;
+  dashboardStatus: string;
 }
 
 const WorkspaceSwitcher = ({
@@ -98,6 +132,7 @@ const WorkspaceSwitcher = ({
   pages,
   renderStatus,
   sceneCount,
+  dashboardStatus,
 }: WorkspaceSwitcherProps) => (
   <section className="page-switcher" aria-label="Workspace categories">
     {pages.map((page) => {
@@ -111,7 +146,9 @@ const WorkspaceSwitcher = ({
             ? text.pages.create.assetsMetric(assetsCount)
             : page.id === "studio"
               ? text.pages.studio.scenesMetric(sceneCount, dirtySceneCount)
-              : renderStatus;
+              : page.id === "dashboard"
+                ? dashboardStatus
+                : renderStatus;
 
       return (
         <button
@@ -142,12 +179,18 @@ interface AppProps {
 export const App = ({ initialLanguage }: AppProps) => {
   const [activePage, setActivePage] = useState<WorkspacePageId>(() => pageFromHash());
   const [assetDraft, setAssetDraft] = useState<CreateAssetInput>(defaultAsset);
+  const [assetSearchQuery, setAssetSearchQuery] = useState("desk stable creator table");
+  const [assetSearchResults, setAssetSearchResults] = useState<AssetSearchResult[]>([]);
   const [brief, setBrief] = useState<ProjectBrief>(defaultBrief);
   const [busyState, setBusyState] = useState<BusyState>("idle");
+  const [dashboard, setDashboard] = useState<DashboardResponse>();
   const [dirtySceneIds, setDirtySceneIds] = useState<Set<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [exportResult, setExportResult] = useState<ExportResult>();
   const [fallbackProvider, setFallbackProvider] = useState<string>();
+  const [forceRenderFailure, setForceRenderFailure] = useState(false);
+  const [editingSuggestions, setEditingSuggestions] = useState<EditingSuggestion[]>([]);
+  const [mediaSettings, setMediaSettings] = useState<MediaSettings>(defaultMediaSettings);
   const [project, setProject] = useState<ProjectSnapshot>();
   const [projectIdToLoad, setProjectIdToLoad] = useState("");
   const [renderTask, setRenderTask] = useState<RenderTask>();
@@ -159,7 +202,7 @@ export const App = ({ initialLanguage }: AppProps) => {
 
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
   const statusLabel = project
-    ? `${project.productName} · ${project.status}`
+    ? `${project.productName} / ${project.status}`
     : text.app.createOrLoadProject;
   const renderStatus = renderTask?.status ?? text.app.notRendered;
 
@@ -211,7 +254,10 @@ export const App = ({ initialLanguage }: AppProps) => {
       setScript(undefined);
       setRenderTask(undefined);
       setTraceEvents([]);
+      setDashboard(undefined);
       setExportResult(undefined);
+      setAssetSearchResults([]);
+      setEditingSuggestions([]);
       setSelectedSceneId(undefined);
       setDirtySceneIds(new Set());
     });
@@ -234,10 +280,67 @@ export const App = ({ initialLanguage }: AppProps) => {
       setScript(latestScript);
       setRenderTask(latestRender);
       setTraceEvents([]);
+      setDashboard(undefined);
       setExportResult(undefined);
+      setAssetSearchResults([]);
+      setEditingSuggestions([]);
       setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
       setDirtySceneIds(new Set());
     });
+
+  const replaceSceneInState = (updatedScene: StoryboardScene) => {
+    setScript((current) =>
+      current
+        ? {
+            ...current,
+            scenes: current.scenes.map((scene) =>
+              scene.id === updatedScene.id ? updatedScene : scene,
+            ),
+          }
+        : current,
+    );
+    setProject((current) =>
+      current
+        ? {
+            ...current,
+            scenes: current.scenes.map((scene) =>
+              scene.id === updatedScene.id ? updatedScene : scene,
+            ),
+            scripts: current.scripts.map((currentScript) => ({
+              ...currentScript,
+              scenes: currentScript.scenes.map((scene) =>
+                scene.id === updatedScene.id ? updatedScene : scene,
+              ),
+            })),
+          }
+        : current,
+    );
+  };
+
+  const replaceScenesInState = (updatedScenes: StoryboardScene[]) => {
+    setScript((current) =>
+      current
+        ? {
+            ...current,
+            scenes: updatedScenes,
+          }
+        : current,
+    );
+    setProject((current) =>
+      current
+        ? {
+            ...current,
+            scenes: updatedScenes,
+            scripts: current.scripts.map((currentScript) => ({
+              ...currentScript,
+              scenes: updatedScenes.filter((scene) =>
+                currentScript.scenes.some((scriptScene) => scriptScene.id === scene.id),
+              ),
+            })),
+          }
+        : current,
+    );
+  };
 
   const handleUploadAsset = () => {
     if (!project) {
@@ -258,6 +361,18 @@ export const App = ({ initialLanguage }: AppProps) => {
     });
   };
 
+  const handleSearchAssets = () => {
+    if (!project) {
+      setErrors((current) => ({ ...current, asset: "Create or load a project first." }));
+      return;
+    }
+
+    void runAction("asset", "search", async () => {
+      const response = await searchAssets(project.id, assetSearchQuery);
+      setAssetSearchResults(response.results);
+    });
+  };
+
   const handleGenerateScript = () => {
     if (!project) {
       setErrors((current) => ({ ...current, script: "Create or load a project first." }));
@@ -267,6 +382,7 @@ export const App = ({ initialLanguage }: AppProps) => {
     void runAction("script", "script", async () => {
       const generated = await generateScript(project.id);
       setFallbackProvider(generated.fallback.provider);
+      setDashboard(undefined);
       setScript(generated.script);
       setSelectedSceneId(generated.script.scenes[0]?.id);
       setDirtySceneIds(new Set());
@@ -284,35 +400,124 @@ export const App = ({ initialLanguage }: AppProps) => {
   };
 
   const handleSceneChange = (updatedScene: StoryboardScene) => {
-    setScript((current) =>
-      current
-        ? {
-            ...current,
-            scenes: current.scenes.map((scene) =>
-              scene.id === updatedScene.id ? updatedScene : scene,
-            ),
-          }
-        : current,
-    );
-    setProject((current) =>
-      current
-        ? {
-            ...current,
-            scenes: current.scenes.map((scene) =>
-              scene.id === updatedScene.id ? updatedScene : scene,
-            ),
-          }
-        : current,
-    );
+    replaceSceneInState(updatedScene);
     setDirtySceneIds((current) => new Set(current).add(updatedScene.id));
   };
 
   const handleSceneSave = (sceneId: string) => {
-    setDirtySceneIds((current) => {
-      const next = new Set(current);
-      next.delete(sceneId);
-      return next;
+    const scene = scenes.find((candidate) => candidate.id === sceneId);
+    if (!scene) {
+      return;
+    }
+
+    void runAction("studio", "scene", async () => {
+      const savedScene = await updateScene(sceneId, {
+        durationSeconds: scene.durationSeconds,
+        subtitle: scene.subtitle,
+        voiceover: scene.voiceover,
+        visualPrompt: scene.visualPrompt,
+        assetId: scene.assetId ?? null,
+        status: "edited",
+      });
+      replaceSceneInState(savedScene);
+      setDirtySceneIds((current) => {
+        const next = new Set(current);
+        next.delete(sceneId);
+        return next;
+      });
     });
+  };
+
+  const handleRecallAsset = (assetId: string) => {
+    const scene = scenes.find((candidate) => candidate.id === selectedSceneId);
+    if (!scene) {
+      return;
+    }
+
+    handleSceneChange({
+      ...scene,
+      assetId,
+      status: "edited",
+    });
+    handlePageChange("studio");
+  };
+
+  const handleSceneMove = (sceneId: string, direction: "earlier" | "later") => {
+    if (!project) {
+      return;
+    }
+
+    const currentIndex = scenes.findIndex((scene) => scene.id === sceneId);
+    const targetIndex = direction === "earlier" ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= scenes.length) {
+      return;
+    }
+
+    const sceneIds = scenes.map((scene) => scene.id);
+    const currentSceneId = sceneIds[currentIndex];
+    const targetSceneId = sceneIds[targetIndex];
+    if (!currentSceneId || !targetSceneId) {
+      return;
+    }
+    sceneIds[currentIndex] = targetSceneId;
+    sceneIds[targetIndex] = currentSceneId;
+
+    void runAction("studio", "scene", async () => {
+      const reordered = await reorderScenes(project.id, sceneIds);
+      replaceScenesInState(reordered);
+      setDirtySceneIds(new Set());
+    });
+  };
+
+  const handleDeleteScene = (sceneId: string) => {
+    void runAction("studio", "scene", async () => {
+      const updatedScenes = await deleteScene(sceneId);
+      replaceScenesInState(updatedScenes);
+      setSelectedSceneId(updatedScenes[0]?.id);
+      setDirtySceneIds(new Set());
+      setEditingSuggestions([]);
+    });
+  };
+
+  const handleRegenerateScene = (sceneId: string) => {
+    void runAction("studio", "scene", async () => {
+      const regenerated = await regenerateScene(sceneId);
+      replaceSceneInState(regenerated.scene);
+      setTraceEvents((current) => [...current, regenerated.traceEvent]);
+      setDirtySceneIds((current) => {
+        const next = new Set(current);
+        next.delete(sceneId);
+        return next;
+      });
+      setEditingSuggestions([]);
+    });
+  };
+
+  const handleLoadSuggestions = (sceneId: string) => {
+    void runAction("studio", "scene", async () => {
+      setEditingSuggestions(await loadSceneSuggestions(sceneId));
+    });
+  };
+
+  const handleApplySuggestion = (suggestionId: string) => {
+    if (!selectedSceneId) {
+      return;
+    }
+
+    void runAction("studio", "scene", async () => {
+      const applied = await applySceneSuggestion(selectedSceneId, suggestionId);
+      replaceSceneInState(applied.scene);
+      setTraceEvents((current) => [...current, applied.traceEvent]);
+      setEditingSuggestions((current) =>
+        current.filter((suggestion) => suggestion.id !== suggestionId),
+      );
+    });
+  };
+
+  const handleDismissSuggestion = (suggestionId: string) => {
+    setEditingSuggestions((current) =>
+      current.filter((suggestion) => suggestion.id !== suggestionId),
+    );
   };
 
   const handleStartRender = () => {
@@ -322,7 +527,37 @@ export const App = ({ initialLanguage }: AppProps) => {
     }
 
     void runAction("render", "render", async () => {
-      const render = await startRender(project.id);
+      const render = await startRender(project.id, {
+        mediaSettings,
+        simulateFailure: forceRenderFailure,
+      });
+      setDashboard(undefined);
+      setRenderTask(render.renderTask);
+      setTraceEvents(render.traceEvents);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              renderTasks: [...current.renderTasks, render.renderTask],
+              status: render.renderTask.status === "completed" ? "completed" : "rendering",
+            }
+          : current,
+      );
+    });
+  };
+
+  const handleRetryRender = () => {
+    if (!renderTask) {
+      return;
+    }
+
+    void runAction("render", "render", async () => {
+      const render = await retryRenderTask(renderTask.id, {
+        mediaSettings,
+        simulateFailure: false,
+      });
+      setDashboard(undefined);
+      setForceRenderFailure(false);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
       setProject((current) =>
@@ -357,6 +592,17 @@ export const App = ({ initialLanguage }: AppProps) => {
     });
   };
 
+  const handleLoadDashboard = () => {
+    if (!project) {
+      setErrors((current) => ({ ...current, dashboard: "Create or load a project first." }));
+      return;
+    }
+
+    void runAction("dashboard", "dashboard", async () => {
+      setDashboard(await loadDashboard(project.id));
+    });
+  };
+
   return (
     <AppShell
       activePage={activePage}
@@ -375,6 +621,7 @@ export const App = ({ initialLanguage }: AppProps) => {
         pages={workspacePages}
         renderStatus={renderStatus}
         sceneCount={scenes.length}
+        dashboardStatus={dashboard ? text.dashboard.ready : text.dashboard.waiting}
       />
 
       <div className={`workspace-grid workspace-page page-${activePage}`}>
@@ -403,8 +650,14 @@ export const App = ({ initialLanguage }: AppProps) => {
               disabled={!project || busyState !== "idle"}
               error={errors.asset}
               isLoading={busyState === "asset"}
+              isSearching={busyState === "search"}
               onAssetDraftChange={setAssetDraft}
+              onRecallAsset={selectedSceneId ? handleRecallAsset : undefined}
+              onSearchAssets={handleSearchAssets}
+              onSearchQueryChange={setAssetSearchQuery}
               onUploadAsset={handleUploadAsset}
+              searchQuery={assetSearchQuery}
+              searchResults={assetSearchResults}
             />
             <ScriptPanel
               copy={text.script}
@@ -423,11 +676,19 @@ export const App = ({ initialLanguage }: AppProps) => {
             assets={project?.assets ?? []}
             copy={text.studio}
             dirtySceneIds={dirtySceneIds}
+            isBusy={busyState === "scene"}
+            onApplySuggestion={handleApplySuggestion}
+            onDeleteScene={handleDeleteScene}
+            onDismissSuggestion={handleDismissSuggestion}
+            onLoadSuggestions={handleLoadSuggestions}
+            onRegenerateScene={handleRegenerateScene}
             onSceneChange={handleSceneChange}
+            onSceneMove={handleSceneMove}
             onSceneSave={handleSceneSave}
             onSelectedSceneChange={setSelectedSceneId}
             scenes={scenes}
             selectedSceneId={selectedSceneId}
+            suggestions={editingSuggestions}
           />
         ) : null}
 
@@ -437,13 +698,29 @@ export const App = ({ initialLanguage }: AppProps) => {
             disabled={!project || scenes.length === 0 || busyState !== "idle"}
             error={errors.render ?? errors.export}
             exportResult={exportResult}
+            forceRenderFailure={forceRenderFailure}
             isExporting={busyState === "export"}
             isRendering={busyState === "render"}
+            mediaSettings={mediaSettings}
+            onForceFailureChange={setForceRenderFailure}
             onExport={handleExport}
+            onMediaSettingsChange={setMediaSettings}
             onRefreshRender={handleRefreshRender}
+            onRetryRender={handleRetryRender}
             onStartRender={handleStartRender}
             renderTask={renderTask}
             traceEvents={traceEvents}
+          />
+        ) : null}
+
+        {activePage === "dashboard" ? (
+          <DashboardPanel
+            copy={text.dashboard}
+            dashboard={dashboard}
+            disabled={!project || busyState !== "idle"}
+            error={errors.dashboard}
+            isLoading={busyState === "dashboard"}
+            onLoadDashboard={handleLoadDashboard}
           />
         ) : null}
       </div>

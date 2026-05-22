@@ -1,9 +1,17 @@
 import type {
   AssetMetadata,
+  AssetSearchResponse,
+  AssetSearchResult,
+  AssetSlice,
+  DashboardResponse,
+  EditingSuggestion,
   AssetType,
+  MediaSettings,
   Project,
   ProjectBrief,
+  RenderRequest,
   RenderTask,
+  SceneUpdate,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
@@ -11,6 +19,7 @@ import type {
 
 export interface ProjectSnapshot extends Project {
   assets: AssetMetadata[];
+  assetSlices: AssetSlice[];
   scripts: ScriptResult[];
   scenes: StoryboardScene[];
   renderTasks: RenderTask[];
@@ -100,6 +109,22 @@ export const addAsset = async (
   return response.asset;
 };
 
+export const searchAssets = async (
+  projectId: string,
+  query: string,
+  tags: string[] = [],
+): Promise<AssetSearchResponse> => {
+  const params = new URLSearchParams({
+    projectId,
+    q: query,
+  });
+  if (tags.length > 0) {
+    params.set("tags", tags.join(","));
+  }
+
+  return requestJson(`/assets/search?${params.toString()}`);
+};
+
 export const generateScript = async (
   projectId: string,
 ): Promise<{ fallback: { used: boolean; provider: string }; script: ScriptResult }> =>
@@ -107,13 +132,99 @@ export const generateScript = async (
     method: "POST",
   });
 
-export const startRender = async (projectId: string): Promise<RenderSnapshot> =>
+export const startRender = async (
+  projectId: string,
+  request: RenderRequest = {
+    mediaSettings: {
+      bgmTrack: "creator-pop",
+      subtitleStyle: "clean-lower-third",
+      subtitlesEnabled: true,
+      ttsVoice: "clear-host",
+    },
+    simulateFailure: false,
+  },
+): Promise<RenderSnapshot> =>
   requestJson(`/projects/${projectId}/render`, {
     method: "POST",
+    body: JSON.stringify(request),
   });
 
 export const loadRenderTask = async (renderTaskId: string): Promise<RenderSnapshot> =>
   requestJson(`/render-tasks/${renderTaskId}`);
 
+export const retryRenderTask = async (
+  renderTaskId: string,
+  request: RenderRequest,
+): Promise<RenderSnapshot> =>
+  requestJson(`/render-tasks/${renderTaskId}/retry`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
 export const exportProject = async (projectId: string): Promise<ExportResult> =>
   requestJson(`/projects/${projectId}/export`);
+
+export const loadDashboard = async (projectId: string): Promise<DashboardResponse> =>
+  requestJson(`/projects/${projectId}/dashboard`);
+
+export const updateScene = async (
+  sceneId: string,
+  update: SceneUpdate,
+): Promise<StoryboardScene> => {
+  const response = await requestJson<{ scene: StoryboardScene }>(`/scenes/${sceneId}`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
+  return response.scene;
+};
+
+export const reorderScenes = async (
+  projectId: string,
+  sceneIds: string[],
+): Promise<StoryboardScene[]> => {
+  const response = await requestJson<{ scenes: StoryboardScene[] }>(
+    `/projects/${projectId}/scenes/reorder`,
+    {
+      method: "POST",
+      body: JSON.stringify({ sceneIds }),
+    },
+  );
+  return response.scenes;
+};
+
+export const deleteScene = async (sceneId: string): Promise<StoryboardScene[]> => {
+  const response = await requestJson<{ scenes: StoryboardScene[] }>(`/scenes/${sceneId}`, {
+    method: "DELETE",
+  });
+  return response.scenes;
+};
+
+export const regenerateScene = async (
+  sceneId: string,
+): Promise<{ scene: StoryboardScene; traceEvent: TraceEvent }> =>
+  requestJson(`/scenes/${sceneId}/regenerate`, {
+    method: "POST",
+  });
+
+export const loadSceneSuggestions = async (sceneId: string): Promise<EditingSuggestion[]> => {
+  const response = await requestJson<{ suggestions: EditingSuggestion[] }>(
+    `/scenes/${sceneId}/suggestions`,
+  );
+  return response.suggestions;
+};
+
+export const applySceneSuggestion = async (
+  sceneId: string,
+  suggestionId: string,
+): Promise<{ scene: StoryboardScene; traceEvent: TraceEvent }> =>
+  requestJson(`/scenes/${sceneId}/suggestions/${suggestionId}/apply`, {
+    method: "POST",
+  });
+
+export type {
+  AssetSearchResult,
+  DashboardResponse,
+  EditingSuggestion,
+  MediaSettings,
+  RenderRequest,
+};

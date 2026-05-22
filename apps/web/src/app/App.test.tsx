@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
 
@@ -8,13 +8,14 @@ describe("App", () => {
     expect(App).toBeTypeOf("function");
   });
 
-  it("renders the P0 workspace flow landmarks", () => {
+  it("renders the P1 workspace flow landmarks", () => {
     const markup = renderToStaticMarkup(<App />);
 
     expect(markup).toContain("Project command center");
     expect(markup).toContain("Creative prep");
     expect(markup).toContain("Generation studio");
     expect(markup).toContain("Delivery room");
+    expect(markup).toContain("Analytics dashboard");
     expect(markup).toContain("Product setup");
     expect(markup).not.toContain("Studio editor");
   });
@@ -26,6 +27,7 @@ describe("App", () => {
     expect(markup).toContain("创意准备");
     expect(markup).toContain("生成工作室");
     expect(markup).toContain("交付室");
+    expect(markup).toContain("数据仪表盘");
     expect(markup).toContain("产品设置");
     expect(markup).toContain("界面语言");
   });

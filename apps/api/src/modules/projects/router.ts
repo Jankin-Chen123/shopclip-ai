@@ -1,8 +1,20 @@
 import { Router } from "express";
 import type { Response } from "express";
-import { ProjectBriefSchema, ScriptResultSchema } from "@shopclip/shared";
+import {
+  ProjectBriefSchema,
+  RenderRequestSchema,
+  SceneUpdateSchema,
+  ScriptResultSchema,
+} from "@shopclip/shared";
 
+import { createAssetSlices, inferAssetTags } from "../assets/tagging.js";
 import { CreateAssetRequestSchema } from "../assets/validation.js";
+import { buildMockDashboard } from "../dashboard/mockDashboard.js";
+import { searchAssets } from "../retrieval/search.js";
+import {
+  generateEditingSuggestions,
+  regenerateSceneFallback,
+} from "../../providers/ai/editingAgentProvider.js";
 import { generateFallbackScript } from "../../providers/ai/mockScriptProvider.js";
 import { renderFallbackPreview } from "../../providers/renderer/mockRenderer.js";
 import { MemoryProjectStore } from "./memoryStore.js";
@@ -54,6 +66,16 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
     response.json({ project });
   });
 
+  router.get("/projects/:projectId/dashboard", (request, response) => {
+    const project = store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.json(buildMockDashboard(project));
+  });
+
   router.post("/projects/:projectId/assets", (request, response) => {
     const parsedAsset = CreateAssetRequestSchema.safeParse(request.body);
     if (!parsedAsset.success) {
@@ -61,16 +83,21 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
       return;
     }
 
-    const storedAsset = store.addAsset(request.params.projectId, {
-      type: parsedAsset.data.type,
-      status: "ready",
-      url:
-        parsedAsset.data.url ?? `/demo-assets/${request.params.projectId}/${parsedAsset.data.name}`,
-      name: parsedAsset.data.name,
-      mimeType: parsedAsset.data.mimeType,
-      sizeBytes: parsedAsset.data.sizeBytes,
-      tags: parsedAsset.data.tags,
-    });
+    const storedAsset = store.addAsset(
+      request.params.projectId,
+      {
+        type: parsedAsset.data.type,
+        status: "ready",
+        url:
+          parsedAsset.data.url ??
+          `/demo-assets/${request.params.projectId}/${parsedAsset.data.name}`,
+        name: parsedAsset.data.name,
+        mimeType: parsedAsset.data.mimeType,
+        sizeBytes: parsedAsset.data.sizeBytes,
+        tags: inferAssetTags(parsedAsset.data),
+      },
+      createAssetSlices,
+    );
 
     if (!storedAsset) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
@@ -78,6 +105,37 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
     }
 
     response.status(201).json({ asset: storedAsset });
+  });
+
+  router.get("/assets/search", (request, response) => {
+    const projectId =
+      typeof request.query.projectId === "string" ? request.query.projectId.trim() : "";
+    if (!projectId) {
+      sendInvalidRequest(response, "PROJECT_ID_REQUIRED", "projectId is required.");
+      return;
+    }
+
+    const project = store.getProject(projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const query = typeof request.query.q === "string" ? request.query.q : "";
+    const tags =
+      typeof request.query.tags === "string"
+        ? request.query.tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [];
+
+    response.json({
+      projectId,
+      query,
+      tags,
+      results: searchAssets(project, { query, tags }),
+    });
   });
 
   router.post("/projects/:projectId/generate-script", (request, response) => {
@@ -126,7 +184,13 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
       return;
     }
 
-    const renderResult = renderFallbackPreview(project);
+    const parsedRenderRequest = RenderRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRenderRequest.success) {
+      sendInvalidRequest(response, "INVALID_RENDER_REQUEST", "Render media settings are invalid.");
+      return;
+    }
+
+    const renderResult = renderFallbackPreview(project, parsedRenderRequest.data);
     const storedRender = store.addRenderTask(
       project.id,
       renderResult.renderTask,
@@ -147,7 +211,53 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
       return;
     }
 
-    response.json(renderTask);
+    response.json({
+      renderTask: renderTask.renderTask,
+      traceEvents: renderTask.traceEvents,
+    });
+  });
+
+  router.post("/render-tasks/:renderTaskId/retry", (request, response) => {
+    const previousRender = store.getRenderTask(request.params.renderTaskId);
+    if (!previousRender) {
+      sendNotFound(response, "RENDER_TASK_NOT_FOUND", "Render task was not found.");
+      return;
+    }
+
+    if (previousRender.renderTask.status !== "failed") {
+      sendInvalidRequest(
+        response,
+        "RENDER_NOT_RETRYABLE",
+        "Only failed render tasks can be retried.",
+      );
+      return;
+    }
+
+    const parsedRenderRequest = RenderRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRenderRequest.success) {
+      sendInvalidRequest(response, "INVALID_RENDER_REQUEST", "Render media settings are invalid.");
+      return;
+    }
+
+    const failedTrace = [...previousRender.traceEvents]
+      .reverse()
+      .find((event) => event.status === "failed");
+    const renderResult = renderFallbackPreview(previousRender.project, {
+      ...parsedRenderRequest.data,
+      retryOfRenderTaskId: previousRender.renderTask.id,
+      retryOfTraceEventId: failedTrace?.id,
+    });
+    const storedRender = store.addRenderTask(
+      previousRender.project.id,
+      renderResult.renderTask,
+      renderResult.traceEvents,
+    );
+    if (!storedRender) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.status(201).json(storedRender);
   });
 
   router.get("/projects/:projectId/export", (request, response) => {
@@ -179,6 +289,133 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
         used: true,
         provider: "mock-renderer",
       },
+    });
+  });
+
+  router.patch("/scenes/:sceneId", (request, response) => {
+    const parsedUpdate = SceneUpdateSchema.safeParse(request.body);
+    if (!parsedUpdate.success) {
+      sendInvalidRequest(response, "INVALID_SCENE_UPDATE", "Scene update fields are invalid.");
+      return;
+    }
+
+    const updatedScene = store.updateScene(request.params.sceneId, parsedUpdate.data);
+    if (!updatedScene) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    response.json({ scene: updatedScene });
+  });
+
+  router.post("/projects/:projectId/scenes/reorder", (request, response) => {
+    const sceneIds = Array.isArray(request.body?.sceneIds)
+      ? request.body.sceneIds.filter(
+          (sceneId: unknown): sceneId is string => typeof sceneId === "string",
+        )
+      : [];
+    if (sceneIds.length === 0) {
+      sendInvalidRequest(response, "INVALID_SCENE_ORDER", "sceneIds are required.");
+      return;
+    }
+
+    const scenes = store.reorderScenes(request.params.projectId, sceneIds);
+    if (!scenes) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCENE_ORDER",
+        "Scene order does not match project scenes.",
+      );
+      return;
+    }
+
+    response.json({ scenes });
+  });
+
+  router.delete("/scenes/:sceneId", (request, response) => {
+    const scenes = store.deleteScene(request.params.sceneId);
+    if (!scenes) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    response.json({ scenes });
+  });
+
+  router.post("/scenes/:sceneId/regenerate", (request, response) => {
+    const context = store.getSceneContext(request.params.sceneId);
+    if (!context) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    const regeneratedScene = regenerateSceneFallback(context.project, context.scene);
+    const storedScene = store.updateScene(context.scene.id, regeneratedScene);
+    if (!storedScene) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    const traceEvent = store.appendTraceEvent(`scene:${context.scene.id}`, {
+      status: "completed",
+      step: "scene-regenerated",
+      message: `Regenerated scene ${context.scene.order} with deterministic editing fallback.`,
+    });
+
+    response.json({
+      scene: storedScene,
+      traceEvent,
+    });
+  });
+
+  router.get("/scenes/:sceneId/suggestions", (request, response) => {
+    const context = store.getSceneContext(request.params.sceneId);
+    if (!context) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    response.json({
+      suggestions: generateEditingSuggestions(
+        context.project,
+        context.scene,
+        context.project.assets,
+      ),
+    });
+  });
+
+  router.post("/scenes/:sceneId/suggestions/:suggestionId/apply", (request, response) => {
+    const context = store.getSceneContext(request.params.sceneId);
+    if (!context) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    const suggestion = generateEditingSuggestions(
+      context.project,
+      context.scene,
+      context.project.assets,
+    ).find((candidate) => candidate.id === request.params.suggestionId);
+    if (!suggestion) {
+      sendNotFound(response, "SUGGESTION_NOT_FOUND", "Suggestion was not found.");
+      return;
+    }
+
+    const storedScene = store.updateScene(context.scene.id, suggestion.update);
+    if (!storedScene) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    const traceEvent = store.appendTraceEvent(`scene:${context.scene.id}`, {
+      status: "completed",
+      step: "agent-suggestion-applied",
+      message: `Applied editing suggestion ${suggestion.id}: ${suggestion.title}.`,
+    });
+
+    response.json({
+      scene: storedScene,
+      traceEvent,
     });
   });
 

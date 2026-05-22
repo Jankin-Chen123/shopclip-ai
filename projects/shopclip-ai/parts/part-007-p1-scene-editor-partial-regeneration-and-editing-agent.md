@@ -5,9 +5,9 @@
 - Project slug: shopclip-ai
 - Part number: 007
 - Owner role: `implementation-engineer`
-- Status: Planned
+- Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-21
+- Last updated: 2026-05-22
 
 ## Source Of Truth
 
@@ -44,11 +44,29 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 
 ## Acceptance Criteria
 
-- [ ] User can edit scene duration, subtitle, voiceover, visual style, and selected asset.
-- [ ] User can reorder and delete scenes without pointer-only interaction.
-- [ ] User can regenerate one scene while other scenes remain unchanged.
-- [ ] User can apply or dismiss at least one Agent suggestion.
-- [ ] Trace records scene regeneration and suggestion application.
+- [x] User can edit scene duration, subtitle, voiceover, visual style, and selected asset.
+- [x] User can reorder and delete scenes without pointer-only interaction.
+- [x] User can regenerate one scene while other scenes remain unchanged.
+- [x] User can apply or dismiss at least one Agent suggestion.
+- [x] Trace records scene regeneration and suggestion application.
+
+## Completion Notes
+
+- Added scene update, reorder, delete, single-scene regeneration, suggestion list, and suggestion apply endpoints.
+- Added deterministic editing Agent fallback provider with explainable suggestions.
+- Updated Studio UI with save, keyboard-accessible move buttons, delete, regenerate, suggestion apply, and suggestion dismiss actions.
+- Added trace events for scene regeneration and Agent suggestion application.
+- Added browser evidence screenshots:
+  - `projects/shopclip-ai/evidence/p1-07-scene-agent-regeneration.png`
+  - `projects/shopclip-ai/evidence/part-007-verification.md`
+
+## Verification Evidence
+
+- `corepack pnpm test`
+- `corepack pnpm typecheck`
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- `corepack pnpm --filter @shopclip/web test:e2e`
 
 ## Verification Plan
 
@@ -60,4 +78,3 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 ## Risks And Follow-Ups
 
 - Keep suggestion UI explainable; do not make opaque Agent decisions.
-

@@ -16,7 +16,7 @@
 - 基于需求：`projects/shopclip-ai/00-requirements.md`
 - 基于设计：`projects/shopclip-ai/01-design-spec.md`
 - 创建日期：2026-05-21
-- 最后更新：2026-05-21
+- 最后更新：2026-05-22
 - 状态：Draft
 
 ## 技术概览
@@ -85,18 +85,18 @@ projects/shopclip-ai/
 
 ## Part 拆解
 
-| Part | 名称 | 负责角色 | 依赖 | 可并行 | 状态 |
-| --- | --- | --- | --- | --- | --- |
-| 001 | 仓库脚手架与工具链 | `implementation-engineer` | 无 | 否 | Done |
-| 002 | 数据模型、API contracts 与 seeded demo | `implementation-engineer` | 001 | 否 | Planned |
-| 003 | P0 后端链路 | `implementation-engineer` | 002 | 否 | Planned |
-| 004 | P0 前端链路 | `implementation-engineer` | 002、003 contracts | 部分 | Planned |
-| 005 | P0 集成与浏览器验证 | `quality-security-engineer` | 003、004 | 否 | Planned |
-| 006 | P1 素材标签与检索 | `implementation-engineer` | 005 | 是 | Planned |
-| 007 | P1 分镜编辑、局部重生成与编辑 Agent | `implementation-engineer` | 005 | 是 | Planned |
-| 008 | P1 TTS、字幕、BGM、重试与 trace 强化 | `implementation-engineer` | 005 | 是 | Planned |
-| 009 | P1 Mock 数据看板 | `implementation-engineer` | 005 | 是 | Planned |
-| 010 | 部署、文档、安全复核与最终证据 | `delivery-ops-engineer` | 006、007、008、009 | 否 | Planned |
+| Part | 名称                                   | 负责角色                    | 依赖               | 可并行 | 状态    |
+| ---- | -------------------------------------- | --------------------------- | ------------------ | ------ | ------- |
+| 001  | 仓库脚手架与工具链                     | `implementation-engineer`   | 无                 | 否     | Done    |
+| 002  | 数据模型、API contracts 与 seeded demo | `implementation-engineer`   | 001                | 否     | Planned |
+| 003  | P0 后端链路                            | `implementation-engineer`   | 002                | 否     | Planned |
+| 004  | P0 前端链路                            | `implementation-engineer`   | 002、003 contracts | 部分   | Planned |
+| 005  | P0 集成与浏览器验证                    | `quality-security-engineer` | 003、004           | 否     | Planned |
+| 006  | P1 素材标签与检索                      | `implementation-engineer`   | 005                | 是     | Done    |
+| 007  | P1 分镜编辑、局部重生成与编辑 Agent    | `implementation-engineer`   | 005                | 是     | Done    |
+| 008  | P1 TTS、字幕、BGM、重试与 trace 强化   | `implementation-engineer`   | 005                | 是     | Done    |
+| 009  | P1 Mock 数据看板                       | `implementation-engineer`   | 005                | 是     | Done    |
+| 010  | 部署、文档、安全复核与最终证据         | `delivery-ops-engineer`     | 006、007、008、009 | 否     | Done    |
 
 ## 依赖图
 
@@ -141,18 +141,19 @@ flowchart TD
 
 ## 开放风险
 
-| 风险 | Owner | 缓解 |
-| --- | --- | --- |
-| P1 范围在 P0 稳定前消耗过多时间 | `solution-architect` | Part 005 强制作为 P0 门禁 |
-| Provider API 延迟或额度影响 Demo | `implementation-engineer` | 使用确定性 fallback provider 和 seeded sample |
-| Render 文件系统持久化有限 | `delivery-ops-engineer` | 抽象 storage，Demo 使用 seeded assets，并记录生产存储升级方案 |
-| 分镜编辑器复杂度导致 UI 脆弱 | `quality-security-engineer` | 用浏览器测试覆盖核心编辑交互和稳定尺寸 |
+| 风险                             | Owner                       | 缓解                                                          |
+| -------------------------------- | --------------------------- | ------------------------------------------------------------- |
+| P1 范围在 P0 稳定前消耗过多时间  | `solution-architect`        | Part 005 强制作为 P0 门禁                                     |
+| Provider API 延迟或额度影响 Demo | `implementation-engineer`   | 使用确定性 fallback provider 和 seeded sample                 |
+| Render 文件系统持久化有限        | `delivery-ops-engineer`     | 抽象 storage，Demo 使用 seeded assets，并记录生产存储升级方案 |
+| 分镜编辑器复杂度导致 UI 脆弱     | `quality-security-engineer` | 用浏览器测试覆盖核心编辑交互和稳定尺寸                        |
 
 ## Part 任务细节
 
 ### Task 001：仓库脚手架与工具链
 
 **文件：**
+
 - 创建：`package.json`、`pnpm-workspace.yaml`、`tsconfig.base.json`、`.env.example`、`.gitignore`、`apps/web/*`、`apps/api/*`、`packages/shared/*`
 - 测试：初始 lint/typecheck/build 命令
 
@@ -166,6 +167,7 @@ flowchart TD
 ### Task 002：数据模型、API contracts 与 Seed Demo
 
 **文件：**
+
 - 创建：`apps/api/prisma/schema.prisma`、`apps/api/prisma/seed.ts`
 - 创建：`packages/shared/src/schemas.ts`、`packages/shared/src/types.ts`
 - 修改：`apps/api/src/server.ts`
@@ -180,6 +182,7 @@ flowchart TD
 ### Task 003：P0 后端链路
 
 **文件：**
+
 - 创建：`apps/api/src/modules/projects/*`、`assets/*`、`generation/*`、`render/*`
 - 创建：`apps/api/src/providers/ai/*`、`providers/renderer/*`
 - 测试：API 集成测试
@@ -194,6 +197,7 @@ flowchart TD
 ### Task 004：P0 前端链路
 
 **文件：**
+
 - 创建：`apps/web/src/features/projects`、`assets`、`script`、`studio`、`render`
 - 创建：`apps/web/src/components/layout`、`components/ui`、`lib/api.ts`
 - 测试：必要组件测试
@@ -209,6 +213,7 @@ flowchart TD
 ### Task 005：P0 集成与浏览器验证
 
 **文件：**
+
 - 创建：`apps/web/e2e/p0-flow.spec.ts`
 - 创建证据：`projects/shopclip-ai/evidence/`
 - 修改：Part 005 完成记录
@@ -222,6 +227,7 @@ flowchart TD
 ### Task 006：P1 素材标签与检索
 
 **文件：**
+
 - 创建/修改：`apps/api/src/modules/assets`、`apps/api/src/modules/retrieval`
 - 创建/修改：`apps/web/src/features/assets`
 - 测试：检索排序测试和浏览器搜索检查
@@ -235,6 +241,7 @@ flowchart TD
 ### Task 007：P1 分镜编辑、局部重生成与编辑 Agent
 
 **文件：**
+
 - 修改：`apps/web/src/features/studio`
 - 创建/修改：`apps/api/src/modules/scenes`、`apps/api/src/modules/generation`
 - 创建：`apps/api/src/providers/ai/editingAgentProvider.ts`
@@ -249,6 +256,7 @@ flowchart TD
 ### Task 008：P1 TTS、字幕、BGM、重试与 Trace 强化
 
 **文件：**
+
 - 创建/修改：`apps/api/src/providers/tts`、`apps/api/src/providers/renderer`
 - 修改：`apps/api/src/modules/render`
 - 修改：`apps/web/src/features/render`、`apps/web/src/features/studio`
@@ -263,29 +271,31 @@ flowchart TD
 ### Task 009：P1 Mock 数据看板
 
 **文件：**
+
 - 创建：`apps/api/src/modules/dashboard`
 - 创建：`apps/web/src/features/dashboard`
 - 测试：dashboard endpoint 和图表渲染测试
 
-- [ ] 添加 mock metric seed 和 dashboard endpoint。
-- [ ] 添加完播率、hook 强度、字幕清晰度、商品聚焦度汇总卡。
-- [ ] 添加漏斗图、bullet chart grid 和因子表。
-- [ ] 为图表添加可访问文本摘要。
-- [ ] 验证看板可以从项目预览页进入，并能处理空状态/错误状态。
+- [x] 添加 mock metric seed 和 dashboard endpoint。
+- [x] 添加完播率、hook 强度、字幕清晰度、商品聚焦度汇总卡。
+- [x] 添加漏斗图、bullet chart grid 和因子表。
+- [x] 为图表添加可访问文本摘要。
+- [x] 验证看板可以从项目预览页进入，并能处理空状态/错误状态。
 
 ### Task 010：部署、文档、安全复核与最终证据
 
 **文件：**
+
 - 创建：`render.yaml`、`README.md`、部署文档、最终证据文件
 - 修改：`.env.example` 和必要项目文档
 - 测试：生产构建、smoke test、安全扫描/清单
 
-- [ ] 添加 Render blueprint 或服务配置说明。
-- [ ] 添加 README，包含项目故事、技术栈、启动方式、环境变量、目录结构、Demo 流程和已知 fallback。
-- [ ] 添加架构图引用和最终提交清单。
-- [ ] 运行 production build 和 smoke tests。
-- [ ] 针对部署 URL 运行浏览器验证。
-- [ ] 检查没有 secret 被提交或暴露在前端构建中。
+- [x] 添加 Render blueprint 或服务配置说明。
+- [x] 添加 README，包含项目故事、技术栈、启动方式、环境变量、目录结构、Demo 流程和已知 fallback。
+- [x] 添加架构图引用和最终提交清单。
+- [x] 运行 production build 和 smoke tests。
+- [x] 针对部署 URL 运行浏览器验证。
+- [x] 检查没有 secret 被提交或暴露在前端构建中。
 
 ## 审批
 
