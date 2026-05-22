@@ -1,119 +1,125 @@
-# ShopClip AI
+# ShopClip AI 🎬
 
-ShopClip AI is a React + Node.js demo workspace for ecommerce short-video generation. It turns a product brief and asset metadata into a storyboard, editable scenes, render trace, preview/export artifact, and mock performance dashboard.
+ShopClip AI 是一个面向电商商家的 AIGC 带货短视频生成 Demo 工作台。它把商品 brief、素材元数据和创意风格转成可编辑的脚本、分镜、渲染 trace、预览/导出产物和 mock 效果看板。
 
-The project is intentionally demo-stable: all P0 and P1 flows can run with deterministic mock providers, while the server-side provider boundaries leave room for real AI, TTS, video rendering, storage, and database integrations later.
+本仓库也是一个带 Agent 项目管理规则的全栈演示工作区：根目录 `AGENTS.md` 和 `.agents/` 定义了项目经理、产品文档、架构规划、实现、质量安全、交付运维等协作规则，方便后续 Agent 接手真实软件项目开发。
 
-## Current Scope
+## 当前状态 ✅
 
-- P0 end-to-end flow: project setup, asset metadata upload, storyboard generation, studio editing, render trace, preview, and export.
-- P1 flow: asset tagging/search, scene editing and local regeneration, Editing Agent suggestions, TTS/subtitle/BGM render settings, failed-render retry, and mock analytics dashboard.
-- Browser evidence lives under `projects/shopclip-ai/evidence/`.
+- P0 主链路已完成：创建项目、上传素材元数据、生成脚本/分镜、编辑分镜、渲染 trace、预览和导出。
+- P1 能力已完成：素材标签/检索、分镜编辑与局部重生成、Editing Agent 建议、TTS/字幕/BGM 设置、失败渲染重试、mock 数据看板。
+- 已提供 Render 部署配置：`render.yaml`。
+- 最新交付证据位于 `projects/shopclip-ai/evidence/`。
+- 最终交接记录：`projects/shopclip-ai/evidence/final-handoff.md`。
 
-## Latest Delivery Status
+## 技术栈 🧰
 
-- Tasks 06-10 are complete: P1 asset retrieval, scene editor/Editing Agent, media controls and retry, mock dashboard, Render deployment docs, and final security evidence.
-- Latest verification passed: `corepack pnpm test`, `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm build`, and `corepack pnpm --filter @shopclip/web test:e2e`.
-- Final handoff is documented in `projects/shopclip-ai/evidence/final-handoff.md`.
-- Work summary is maintained in `report.md`.
+| 层级       | 技术                                         |
+| ---------- | -------------------------------------------- |
+| 前端       | React 19、Vite、TypeScript、lucide-react     |
+| 后端       | Node.js、Express、TypeScript                 |
+| 契约       | `packages/shared` 中的 Zod schema 和共享类型 |
+| 测试       | Vitest、Playwright                           |
+| 包管理     | pnpm via Corepack                            |
+| 当前持久化 | 确定性 in-memory demo store                  |
+| 生产规划   | PostgreSQL + Prisma                          |
+| 部署       | Render Blueprint                             |
 
-## Tech Stack
-
-- Frontend: React 19, Vite, TypeScript, lucide-react
-- Backend: Node.js, Express, TypeScript
-- Contracts: shared Zod schemas and TypeScript types in `packages/shared`
-- Tests: Vitest and Playwright
-- Package manager: pnpm via Corepack
-- Current persistence: deterministic in-memory store
-- Planned production persistence: PostgreSQL + Prisma
-
-## Directory Structure
+## 目录结构 📁
 
 ```text
 apps/
-  api/          Express API, lifecycle endpoints, mock providers
-  web/          React workspace UI and Playwright E2E tests
+  api/          Express API、生命周期接口、mock providers
+  web/          React 工作台 UI 和 Playwright E2E
 packages/
-  shared/       Zod schemas, shared TypeScript types, health payloads
+  shared/       Zod schemas、共享 TypeScript 类型、健康检查 payload
 projects/
-  shopclip-ai/  Requirements, design, development plan, part docs, evidence
-render.yaml     Render Blueprint for API + static web services
+  shopclip-ai/  需求、设计、开发计划、Part 文档和验证证据
+.agents/        Agent 团队工作流、skills、plugins、本地私有 memory
+plugins/        项目级插件副本
+render.yaml     Render Blueprint：API 服务 + Web 静态站点
+report.md       最新任务汇报
 ```
 
-## Local Setup
+## 本地启动 🚀
+
+安装依赖：
 
 ```bash
 corepack enable
 corepack pnpm install
 ```
 
-Create a local environment file:
+创建本地环境变量文件：
 
 ```bash
 cp .env.example .env
 ```
 
-PowerShell:
+PowerShell：
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Start both apps:
+启动前后端：
 
 ```bash
 corepack pnpm dev
 ```
 
-Default URLs:
+默认地址：
 
-- Web: `http://localhost:5173/#project`
-- API health: `http://localhost:4000/health`
+- Web：`http://localhost:5173/#project`
+- API health：`http://localhost:4000/health`
 
-## Environment Variables
+## 环境变量 🔐
 
-| Variable               | Used by | Required               | Notes                                                                              |
-| ---------------------- | ------- | ---------------------- | ---------------------------------------------------------------------------------- |
-| `PORT`                 | API     | Local optional         | Render provides this automatically.                                                |
-| `CORS_ORIGIN`          | API     | Yes in production      | Comma-separated allowed web origins.                                               |
-| `JSON_BODY_LIMIT`      | API     | Optional               | Defaults to `1mb`.                                                                 |
-| `VITE_API_URL`         | Web     | Yes in production      | Public API base URL, for example `https://<api>.onrender.com/api`.                 |
-| `DATABASE_URL`         | API     | Future                 | Present for planned Prisma/PostgreSQL integration. Current demo uses memory store. |
-| `AI_PROVIDER_MODE`     | API     | Optional               | Use `mock` for deterministic demo mode.                                            |
-| `AI_API_KEY`           | API     | Only for real provider | Server-side secret. Do not expose to the web app.                                  |
-| `AI_TEXT_ENDPOINT_ID`  | API     | Only for real provider | Server-side provider config.                                                       |
-| `AI_VIDEO_ENDPOINT_ID` | API     | Only for real provider | Server-side provider config.                                                       |
-| `TTS_PROVIDER_MODE`    | API     | Optional               | Use `mock` for deterministic demo mode.                                            |
-| `TTS_API_KEY`          | API     | Only for real provider | Server-side secret.                                                                |
+| 变量                   | 使用方 | 是否必需             | 说明                                                       |
+| ---------------------- | ------ | -------------------- | ---------------------------------------------------------- |
+| `PORT`                 | API    | 本地可选             | Render 会自动注入。                                        |
+| `CORS_ORIGIN`          | API    | 生产必需             | 逗号分隔的 Web 允许来源。                                  |
+| `JSON_BODY_LIMIT`      | API    | 可选                 | 默认 `1mb`。                                               |
+| `VITE_API_URL`         | Web    | 生产必需             | 公共 API base URL，例如 `https://<api>.onrender.com/api`。 |
+| `DATABASE_URL`         | API    | 未来使用             | 当前 Demo 使用内存存储，后续接 PostgreSQL/Prisma。         |
+| `AI_PROVIDER_MODE`     | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
+| `AI_API_KEY`           | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
+| `AI_TEXT_ENDPOINT_ID`  | API    | 真实 provider 才需要 | 服务端 provider 配置。                                     |
+| `AI_VIDEO_ENDPOINT_ID` | API    | 真实 provider 才需要 | 服务端 provider 配置。                                     |
+| `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
+| `TTS_API_KEY`          | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
 
-## Demo Flow
+## Demo 流程 ✨
 
-1. Open `Project command center` and create a project.
-2. Open `Creative prep`, upload asset metadata, and generate the storyboard.
-3. Open `Generation studio`, edit scene fields, save edits, search assets, and apply an Editing Agent suggestion.
-4. Open `Delivery room`, choose TTS/subtitle/BGM settings, render, optionally simulate failure, retry, and export.
-5. Open `Analytics dashboard` and load mock performance metrics.
+1. 打开 `Project command center`，创建一个商品视频项目。
+2. 进入 `Creative prep`，录入商品 brief 并上传素材元数据。
+3. 生成脚本和分镜，进入 `Generation studio`。
+4. 编辑分镜字段、保存修改、搜索素材，并应用 Editing Agent 建议。
+5. 在 `Delivery room` 设置 TTS、字幕、BGM，启动渲染。
+6. 可模拟失败渲染并重试，查看 trace 和恢复路径。
+7. 导出 preview artifact。
+8. 打开 `Analytics dashboard`，查看 mock 效果指标。
 
-## API Summary
+## API 概览 🔌
 
-| Method  | Endpoint                                   | Purpose                           |
-| ------- | ------------------------------------------ | --------------------------------- |
-| `GET`   | `/health`                                  | Health check                      |
-| `POST`  | `/api/projects`                            | Create project                    |
-| `GET`   | `/api/projects/:projectId`                 | Load project snapshot             |
-| `POST`  | `/api/projects/:projectId/assets`          | Add asset metadata                |
-| `POST`  | `/api/projects/:projectId/generate-script` | Generate script and storyboard    |
-| `GET`   | `/api/assets/search`                       | Search tagged assets              |
-| `PATCH` | `/api/scenes/:sceneId`                     | Save scene edits                  |
-| `POST`  | `/api/scenes/:sceneId/regenerate`          | Regenerate one scene              |
-| `GET`   | `/api/scenes/:sceneId/suggestions`         | Load Editing Agent suggestions    |
-| `POST`  | `/api/projects/:projectId/render`          | Start mock render                 |
-| `GET`   | `/api/render-tasks/:renderTaskId`          | Load render task and trace        |
-| `POST`  | `/api/render-tasks/:renderTaskId/retry`    | Retry failed render               |
-| `GET`   | `/api/projects/:projectId/export`          | Export completed preview artifact |
-| `GET`   | `/api/projects/:projectId/dashboard`       | Load mock dashboard               |
+| Method  | Endpoint                                   | 用途                    |
+| ------- | ------------------------------------------ | ----------------------- |
+| `GET`   | `/health`                                  | 健康检查                |
+| `POST`  | `/api/projects`                            | 创建项目                |
+| `GET`   | `/api/projects/:projectId`                 | 加载项目快照            |
+| `POST`  | `/api/projects/:projectId/assets`          | 添加素材元数据          |
+| `POST`  | `/api/projects/:projectId/generate-script` | 生成脚本和分镜          |
+| `GET`   | `/api/assets/search`                       | 搜索带标签的素材        |
+| `PATCH` | `/api/scenes/:sceneId`                     | 保存分镜编辑            |
+| `POST`  | `/api/scenes/:sceneId/regenerate`          | 重生成单个分镜          |
+| `GET`   | `/api/scenes/:sceneId/suggestions`         | 获取 Editing Agent 建议 |
+| `POST`  | `/api/projects/:projectId/render`          | 启动 mock 渲染          |
+| `GET`   | `/api/render-tasks/:renderTaskId`          | 加载渲染任务和 trace    |
+| `POST`  | `/api/render-tasks/:renderTaskId/retry`    | 重试失败渲染            |
+| `GET`   | `/api/projects/:projectId/export`          | 导出完成的预览产物      |
+| `GET`   | `/api/projects/:projectId/dashboard`       | 加载 mock 数据看板      |
 
-## Architecture
+## 架构图 🧭
 
 ```mermaid
 flowchart TD
@@ -130,15 +136,15 @@ flowchart TD
   Dashboard --> Web
 ```
 
-## Fallback Behavior
+## Fallback 行为 🧯
 
-- Script/storyboard generation uses deterministic mock output.
-- Editing Agent suggestions are deterministic and explainable.
-- TTS, subtitle overlay, BGM, render artifacts, and dashboard metrics are mock metadata-backed outputs.
-- Failed render simulation is available in the UI and can be retried without losing project data.
-- Real provider keys must stay server-side. The browser never calls model or TTS providers directly.
+- 脚本和分镜生成使用确定性 mock 输出，适合现场演示和自动化测试。
+- Editing Agent 建议是可解释的确定性建议。
+- TTS、字幕、BGM、渲染产物和看板指标均为 metadata-backed mock 输出。
+- UI 支持失败渲染模拟和重试，不会丢失项目数据。
+- 真实 provider 密钥只能放在服务端环境变量中，浏览器不会直接调用模型或 TTS provider。
 
-## Verification
+## 验证命令 🧪
 
 ```bash
 corepack pnpm test
@@ -148,37 +154,65 @@ corepack pnpm build
 corepack pnpm --filter @shopclip/web test:e2e
 ```
 
-The latest local verification for Tasks 06-10 is recorded in `report.md` and in `projects/shopclip-ai/evidence/`.
+最近一次完整验证记录在 `report.md` 和 `projects/shopclip-ai/evidence/` 中。
 
-## Render Deployment
+## Render 部署 🌐
 
-This repository includes a Render Blueprint at `render.yaml` with:
+仓库已包含 `render.yaml`，定义了两个服务：
 
-- `shopclip-ai-api`: Node web service for `apps/api`
-- `shopclip-ai-web`: static site for `apps/web`
+- `shopclip-ai-api`：Node Web Service，运行 `apps/api`。
+- `shopclip-ai-web`：Static Site，构建 `apps/web`。
 
-Deployment steps:
+部署步骤：
 
-1. Push this repository to GitHub/GitLab/Bitbucket.
-2. In Render, create a new Blueprint from the repo and select `render.yaml`.
-3. Set `CORS_ORIGIN` on `shopclip-ai-api` to the final static site URL.
-4. Set `VITE_API_URL` on `shopclip-ai-web` to the final API URL plus `/api`.
-5. Keep `AI_PROVIDER_MODE=mock` and `TTS_PROVIDER_MODE=mock` unless real provider secrets are configured.
-6. Deploy and verify `/health`, then run the demo flow in the browser.
+1. 将仓库推送到 GitHub、GitLab 或 Bitbucket。
+2. 在 Render 中从该仓库创建 Blueprint，并选择 `render.yaml`。
+3. 把 `shopclip-ai-api` 的 `CORS_ORIGIN` 设置为最终 Web 静态站点 URL。
+4. 把 `shopclip-ai-web` 的 `VITE_API_URL` 设置为最终 API URL，并追加 `/api`。
+5. 没有真实 provider 前，保持 `AI_PROVIDER_MODE=mock` 和 `TTS_PROVIDER_MODE=mock`。
+6. 部署后先检查 `/health`，再在浏览器里跑完整 Demo 流程。
 
-The current repository state provides a documented deployment path and local browser evidence. A live Render URL still requires account-side Blueprint creation and environment variable entry.
+当前仓库提供可复现的部署路径和本地浏览器证据。公网 Render URL 仍需要在账号侧创建 Blueprint 并填写最终环境变量。
 
-## Security Notes
+## Agent 工作流 🤖
 
-- Do not commit real `.env` files, API keys, provider tokens, or database passwords.
-- `.env.example` contains placeholders only.
-- The Express API disables `X-Powered-By`, sets baseline browser security headers, uses explicit CORS origins, and limits JSON request bodies.
-- The React app only receives `VITE_API_URL`, which is public by design.
-- `.agents/memory/` is local private memory and is ignored by git.
+本仓库内置项目级 Agent 团队规则，核心入口是 `AGENTS.md`。
 
-## Project Documents
+主要角色：
 
-- Requirements: `projects/shopclip-ai/00-requirements.md`
-- Design spec: `projects/shopclip-ai/01-design-spec.md`
-- Development plan: `projects/shopclip-ai/02-development-plan.md`
-- Final handoff: `projects/shopclip-ai/evidence/final-handoff.md`
+- `product-docs-lead`：需求、范围、验收标准、README、发布说明和交接材料。
+- `solution-architect`：技术方案、模块边界、接口、数据流、任务拆解和集成节奏。
+- `implementation-engineer`：前端、后端、数据模型、业务逻辑、迁移和集成实现。
+- `quality-security-engineer`：测试策略、回归、验收、缺陷复现、代码审查和安全风险。
+- `delivery-ops-engineer`：CI/CD、部署、环境、监控、运行手册、发布和回滚。
+
+项目级能力：
+
+- `.agents/skills/`：Figma、UI/UX、Playwright、截图、安全、部署、OpenAI 文档、PDF、Notebook 等 skills。
+- `plugins/`：`superpowers` 和 `github` 项目级插件副本。
+- `.agents/memory/`：本地私有用户记忆，必须保持 git 忽略，不提交。
+- `projects/<project-slug>/`：每个真实项目的需求、设计、计划、Part 和证据目录。
+
+重要规则：
+
+- 开发前先读 `AGENTS.md`、需求、设计、开发计划和当前 Part 文档。
+- 需求、设计、开发计划未确认前，不直接进入正式代码开发，除非用户明确要求临时原型。
+- 每个 Part 完成后记录状态、变更摘要、验证证据、风险和后续事项。
+- 提交前检查 `.agents/memory/` 没有被 git 跟踪。
+
+## 安全说明 🛡️
+
+- 不要提交真实 `.env`、API key、provider token 或数据库密码。
+- `.env.example` 只能保存占位变量。
+- Express API 已禁用 `X-Powered-By`，设置基础浏览器安全响应头，使用显式 CORS origin，并限制 JSON body size。
+- React 前端只接收公开的 `VITE_API_URL`。
+- `.agents/memory/` 是用户本地私有记忆目录，必须保持忽略。
+
+## 项目文档 📚
+
+- 需求文档：`projects/shopclip-ai/00-requirements.md`
+- 设计规范：`projects/shopclip-ai/01-design-spec.md`
+- 开发计划：`projects/shopclip-ai/02-development-plan.md`
+- 交付证据：`projects/shopclip-ai/evidence/`
+- 最终交接：`projects/shopclip-ai/evidence/final-handoff.md`
+- 工作汇报：`report.md`
