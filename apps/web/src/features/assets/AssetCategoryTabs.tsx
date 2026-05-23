@@ -129,6 +129,10 @@ export const externalAssetMatchesCategory = (
     return asset.type === "video";
   }
 
+  if (category === "audio") {
+    return asset.type === "audio";
+  }
+
   return false;
 };
 

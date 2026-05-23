@@ -13,6 +13,7 @@ import type {
   InspirationAssetType,
   InspirationGenerateResponse,
   InspirationGenerateRequest,
+  InspirationMaterial,
   MediaSettings,
   Project,
   ProjectBrief,
@@ -168,15 +169,33 @@ export const generateInspirationMaterial = async (
   prompt: string,
   assetType: InspirationAssetType,
   apiConfig?: UserApiConfig,
+  options?: InspirationGenerateRequest["options"],
 ): Promise<InspirationGenerateResponse> =>
   requestJson("/inspiration/generate", {
     method: "POST",
     body: JSON.stringify({
       prompt,
       assetType,
+      options,
       apiConfig,
     }),
   });
+
+export const loadInspirationVideoTask = async (
+  taskId: string,
+  prompt: string,
+  apiConfig?: UserApiConfig,
+): Promise<InspirationMaterial> => {
+  const response = await requestJson<{ material: InspirationMaterial }>("/inspiration/video-task", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId,
+      prompt,
+      apiConfig,
+    }),
+  });
+  return response.material;
+};
 
 export const startRender = async (
   projectId: string,
@@ -277,6 +296,7 @@ export type {
   ExternalAssetSearchResponse,
   InspirationAssetType,
   InspirationGenerateResponse,
+  InspirationMaterial,
   MediaSettings,
   RenderRequest,
 };

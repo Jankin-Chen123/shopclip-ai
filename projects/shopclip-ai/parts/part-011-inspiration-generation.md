@@ -26,6 +26,7 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 - Volcengine Ark provider adapter with service-side environment variables.
 - Deterministic fallback output when provider mode is mock, misconfigured, or unavailable.
 - Frontend controls for text/image/video target selection, loading/error states, and result display.
+- Custom image/video generation parameters for count, ratio, and quality.
 - Environment variable placeholders and handoff evidence.
 
 ### Out Of Scope
@@ -60,7 +61,7 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 
 ## Risks And Follow-Ups
 
-- Fire-and-forget video task submission returns a processing material; production UX should add polling and retrieval once the final provider response shape is locked.
+- Video task submission now exposes a `taskId`, normalized `progress`, and frontend polling for final video URLs; provider-specific response parsing may still need tightening once the final Ark response shape is locked.
 - The provider path can be overridden with `ARK_VIDEO_GENERATION_PATH` if the Ark video API path changes.
 - Direct image file generation requires a dedicated image-generation endpoint/model; the provided Seed 2.0 Pro text endpoint cannot be used as the final image artifact generator.
 - Generated materials are not yet added to the Asset library; that can be a follow-up if users need to reuse output in Studio.
@@ -69,10 +70,12 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 
 - Added `InspirationGenerateRequestSchema` and `InspirationGenerateResponseSchema` in shared contracts.
 - Added `POST /api/inspiration/generate`.
+- Added `POST /api/inspiration/video-task` for backend-mediated video task polling.
 - Added `arkInspirationProvider` with Ark real-provider calls and deterministic fallback.
-- Completed `InspirationPanel` with prompt entry, text/image/video selection, loading state, error state, and material result cards.
+- Completed `InspirationPanel` with prompt entry, toolbar-based text/image/video selection, custom parameter controls, loading state, error state, cleaned-up material result cards, multi-image layout, automatic video task polling, and real-time progress display.
 - Added placeholder-only Ark environment variables to `.env.example` and README.
 
 ## Verification Evidence
 
 - Evidence file: `../evidence/2026-05-23-inspiration-generation.md`.
+- Evidence file: `../evidence/2026-05-24-inspiration-video-polling.md`.

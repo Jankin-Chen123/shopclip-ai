@@ -94,9 +94,10 @@ corepack pnpm dev
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
 | `TTS_API_KEY`          | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
-| `EXTERNAL_ASSET_PROVIDERS` | API | 可选              | 外部素材源列表；本地可用 `demo`，真实源可用 `pexels,pixabay`。 |
+| `EXTERNAL_ASSET_PROVIDERS` | API | 可选              | 服务端外部素材源列表；可用 `pexels,pixabay,freesound`。 |
 | `PEXELS_API_KEY`       | API    | Pexels 才需要        | 服务端 Pexels API key，不暴露给前端。                       |
 | `PIXABAY_API_KEY`      | API    | Pixabay 才需要       | 服务端 Pixabay API key，不暴露给前端。                      |
+| `FREESOUND_API_KEY`    | API    | Freesound 才需要     | 服务端 Freesound API key，用于音频素材搜索和高质量预览导入。 |
 
 ## Demo 流程 ✨
 

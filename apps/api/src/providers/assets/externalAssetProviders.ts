@@ -6,8 +6,9 @@ import type {
 
 export interface ExternalAssetSearchInput {
   query: string;
+  page?: number;
   perPage?: number;
-  type?: "image" | "video";
+  type?: "image" | "video" | "audio" | "script";
 }
 
 export interface ExternalAssetProvider {
@@ -19,7 +20,7 @@ type AnyRecord = Record<string, unknown>;
 
 const PEXELS_LICENSE_URL = "https://www.pexels.com/license/";
 const PIXABAY_LICENSE_URL = "https://pixabay.com/service/license-summary/";
-const DEMO_LICENSE_URL = "https://example.com/shopclip-demo-stock-license";
+const FREESOUND_SEARCH_URL = "https://freesound.org/apiv2/search/text/";
 
 const isRecord = (value: unknown): value is AnyRecord => typeof value === "object" && value !== null;
 
@@ -41,6 +42,22 @@ const tagsFromText = (value: unknown): string[] =>
     .filter(Boolean) ?? [];
 
 const createFallbackTitle = (prefix: string, id: string) => `${prefix} ${id}`;
+
+const licenseLabelFromUrl = (licenseUrl?: string): string => {
+  if (!licenseUrl) {
+    return "Freesound License";
+  }
+  if (licenseUrl.includes("/zero/")) {
+    return "Creative Commons 0";
+  }
+  if (licenseUrl.includes("/by-nc/")) {
+    return "Creative Commons Attribution NonCommercial";
+  }
+  if (licenseUrl.includes("/by/")) {
+    return "Creative Commons Attribution";
+  }
+  return "Freesound License";
+};
 
 export const normalizePexelsPhoto = (photo: AnyRecord): ExternalAssetResult => {
   const id = String(photo.id);
@@ -162,6 +179,40 @@ export const normalizePixabayVideo = (video: AnyRecord): ExternalAssetResult => 
   };
 };
 
+export const normalizeFreesoundSound = (sound: AnyRecord): ExternalAssetResult => {
+  const id = String(sound.id);
+  const previews = getRecord(sound.previews);
+  const previewUrl =
+    getString(previews?.["preview-hq-mp3"]) ??
+    getString(previews?.["preview-hq-ogg"]) ??
+    getString(previews?.["preview-lq-mp3"]) ??
+    getString(previews?.["preview-lq-ogg"]) ??
+    "";
+  const title = getString(sound.name) ?? createFallbackTitle("Freesound audio", id);
+  const username = getString(sound.username) ?? "Freesound creator";
+  const licenseUrl = getString(sound.license);
+
+  return {
+    id: `freesound:sound:${id}`,
+    source: "freesound",
+    externalId: id,
+    type: "audio",
+    title,
+    thumbnailUrl: "",
+    previewUrl,
+    downloadUrl: previewUrl,
+    externalUrl: getString(sound.url) ?? `https://freesound.org/s/${id}/`,
+    authorName: username,
+    authorUrl: `https://freesound.org/people/${encodeURIComponent(username)}/`,
+    licenseLabel: licenseLabelFromUrl(licenseUrl),
+    licenseUrl,
+    canUseCommercially: !licenseUrl?.includes("/by-nc/"),
+    requiresAttribution: Boolean(licenseUrl && !licenseUrl.includes("/zero/")),
+    tags: Array.isArray(sound.tags) ? sound.tags.filter((tag): tag is string => Boolean(getString(tag))) : [],
+    durationSeconds: getNumber(sound.duration),
+  };
+};
+
 const fetchJson = async (url: string, init?: RequestInit): Promise<unknown> => {
   const response = await fetch(url, init);
   if (!response.ok) {
@@ -171,12 +222,16 @@ const fetchJson = async (url: string, init?: RequestInit): Promise<unknown> => {
 };
 
 const filterValidResults = (results: ExternalAssetResult[]): ExternalAssetResult[] =>
-  results.filter((result) => result.previewUrl && result.thumbnailUrl);
+  results.filter(
+    (result) =>
+      result.previewUrl &&
+      (result.type === "video" || result.type === "audio" || result.thumbnailUrl),
+  );
 
 export const createPexelsProvider = (apiKey: string): ExternalAssetProvider => ({
   source: "pexels",
-  search: async ({ query, perPage = 8, type }) => {
-    if (!query.trim()) {
+  search: async ({ query, page = 1, perPage = 8, type }) => {
+    if (!query.trim() || type === "audio") {
       return [];
     }
 
@@ -186,7 +241,7 @@ export const createPexelsProvider = (apiKey: string): ExternalAssetProvider => (
 
     if (!type || type === "image") {
       const body = await fetchJson(
-        `https://api.pexels.com/v1/search?query=${encodedQuery}&per_page=${perPage}`,
+        `https://api.pexels.com/v1/search?query=${encodedQuery}&page=${page}&per_page=${perPage}`,
         { headers },
       );
       results.push(...getRecordArray(getRecord(body)?.photos).map(normalizePexelsPhoto));
@@ -194,7 +249,7 @@ export const createPexelsProvider = (apiKey: string): ExternalAssetProvider => (
 
     if (!type || type === "video") {
       const body = await fetchJson(
-        `https://api.pexels.com/videos/search?query=${encodedQuery}&per_page=${perPage}`,
+        `https://api.pexels.com/videos/search?query=${encodedQuery}&page=${page}&per_page=${perPage}`,
         { headers },
       );
       results.push(...getRecordArray(getRecord(body)?.videos).map(normalizePexelsVideo));
@@ -206,13 +261,14 @@ export const createPexelsProvider = (apiKey: string): ExternalAssetProvider => (
 
 export const createPixabayProvider = (apiKey: string): ExternalAssetProvider => ({
   source: "pixabay",
-  search: async ({ query, perPage = 8, type }) => {
-    if (!query.trim()) {
+  search: async ({ query, page = 1, perPage = 8, type }) => {
+    if (!query.trim() || type === "audio") {
       return [];
     }
 
     const params = new URLSearchParams({
       key: apiKey,
+      page: String(page),
       q: query,
       per_page: String(perPage),
       safesearch: "true",
@@ -235,67 +291,35 @@ export const createPixabayProvider = (apiKey: string): ExternalAssetProvider => 
   },
 });
 
-const demoPreview = (label: string, hue: string) =>
-  `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#101217"/><rect x="80" y="70" width="800" height="400" rx="28" fill="${hue}" opacity="0.28"/><circle cx="270" cy="220" r="74" fill="#22d3ee" opacity="0.42"/><rect x="390" y="170" width="250" height="150" rx="22" fill="#f8fafc" opacity="0.86"/><rect x="420" y="205" width="190" height="16" rx="8" fill="#111827" opacity="0.55"/><rect x="420" y="240" width="142" height="16" rx="8" fill="#111827" opacity="0.38"/><text x="100" y="455" fill="#f8fafc" font-family="Arial, sans-serif" font-size="42" font-weight="700">${label}</text></svg>`,
-  )}`;
-
-export const createDemoExternalAssetProvider = (): ExternalAssetProvider => ({
-  source: "demo",
-  search: async ({ query, perPage = 8, type }) => {
-    if (!query.trim()) {
+export const createFreesoundProvider = (apiKey: string): ExternalAssetProvider => ({
+  source: "freesound",
+  search: async ({ query, page = 1, perPage = 8, type }) => {
+    if (!query.trim() || (type && type !== "audio")) {
       return [];
     }
 
-    const queryTags = query
-      .split(/\s+/)
-      .map((tag) => tag.trim().toLowerCase())
-      .filter(Boolean);
-    const candidates: ExternalAssetResult[] = [
-      {
-        id: "demo:image:desk-packshot",
-        source: "demo",
-        externalId: "desk-packshot",
-        type: "image",
-        title: "Demo stock desk product packshot",
-        thumbnailUrl: demoPreview("Desk packshot", "#ec4899"),
-        previewUrl: demoPreview("Desk packshot", "#ec4899"),
-        downloadUrl: demoPreview("Desk packshot", "#ec4899"),
-        externalUrl: "https://example.com/shopclip-demo-stock/desk-packshot",
-        authorName: "ShopClip demo stock",
-        licenseLabel: "Demo stock license",
-        licenseUrl: DEMO_LICENSE_URL,
-        canUseCommercially: true,
-        requiresAttribution: false,
-        tags: ["desk", "product", "packshot", ...queryTags],
-        width: 960,
-        height: 540,
-      },
-      {
-        id: "demo:video:creator-broll",
-        source: "demo",
-        externalId: "creator-broll",
-        type: "video",
-        title: "Demo stock creator desk B-roll",
-        thumbnailUrl: demoPreview("Creator B-roll", "#22d3ee"),
-        previewUrl: demoPreview("Creator B-roll", "#22d3ee"),
-        downloadUrl: demoPreview("Creator B-roll", "#22d3ee"),
-        externalUrl: "https://example.com/shopclip-demo-stock/creator-broll",
-        authorName: "ShopClip demo stock",
-        licenseLabel: "Demo stock license",
-        licenseUrl: DEMO_LICENSE_URL,
-        canUseCommercially: true,
-        requiresAttribution: false,
-        tags: ["desk", "creator", "video", ...queryTags],
-        width: 960,
-        height: 540,
-        durationSeconds: 6,
-      },
-    ];
+    const params = new URLSearchParams({
+      query,
+      page: String(page),
+      page_size: String(perPage),
+      fields: [
+        "id",
+        "name",
+        "url",
+        "username",
+        "license",
+        "tags",
+        "duration",
+        "previews",
+      ].join(","),
+    });
+    const body = await fetchJson(`${FREESOUND_SEARCH_URL}?${params.toString()}`, {
+      headers: { Authorization: `Token ${apiKey}` },
+    });
 
-    return candidates
-      .filter((candidate) => !type || candidate.type === type)
-      .slice(0, Math.max(1, perPage));
+    return filterValidResults(
+      getRecordArray(getRecord(body)?.results).map(normalizeFreesoundSound),
+    );
   },
 });
 
@@ -312,6 +336,7 @@ export const createConfiguredExternalAssetProviders = (): ExternalAssetProvider[
   const providers: ExternalAssetProvider[] = [];
   const pexelsApiKey = process.env.PEXELS_API_KEY?.trim();
   const pixabayApiKey = process.env.PIXABAY_API_KEY?.trim();
+  const freesoundApiKey = process.env.FREESOUND_API_KEY?.trim();
 
   if (pexelsApiKey && (enabled.size === 0 || enabled.has("pexels"))) {
     providers.push(createPexelsProvider(pexelsApiKey));
@@ -319,11 +344,8 @@ export const createConfiguredExternalAssetProviders = (): ExternalAssetProvider[
   if (pixabayApiKey && (enabled.size === 0 || enabled.has("pixabay"))) {
     providers.push(createPixabayProvider(pixabayApiKey));
   }
-  if (enabled.has("demo")) {
-    providers.push(createDemoExternalAssetProvider());
-  }
-  if (enabled.size === 0 && !pexelsApiKey && !pixabayApiKey) {
-    providers.push(createDemoExternalAssetProvider());
+  if (freesoundApiKey && (enabled.size === 0 || enabled.has("freesound"))) {
+    providers.push(createFreesoundProvider(freesoundApiKey));
   }
 
   return providers;
@@ -340,14 +362,14 @@ export const createExternalAssetProvidersFromConfig = (
     }
 
     const apiKey = config.apiKey?.trim();
-    if (config.source === "demo") {
-      providers.push(createDemoExternalAssetProvider());
-    }
     if (config.source === "pexels" && apiKey) {
       providers.push(createPexelsProvider(apiKey));
     }
     if (config.source === "pixabay" && apiKey) {
       providers.push(createPixabayProvider(apiKey));
+    }
+    if (config.source === "freesound" && apiKey) {
+      providers.push(createFreesoundProvider(apiKey));
     }
   }
 

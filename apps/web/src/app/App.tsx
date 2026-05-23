@@ -15,7 +15,6 @@ import {
   type WorkspacePageId,
 } from "../components/layout/AppShell";
 import {
-  AssetCategoryTabs,
   assetMatchesCategory,
   externalAssetMatchesCategory,
   getAssetDraftDefaults,
@@ -60,6 +59,7 @@ import {
   type EditingSuggestion,
   type ExportResult,
   type ExternalAssetResult,
+  type ExternalAssetSearchResponse,
   type MediaSettings,
   type ProjectSnapshot,
   type StockProviderConfig,
@@ -82,6 +82,37 @@ const createDefaultAsset = (language: Language): CreateAssetInput => ({
   ...getAssetDraftDefaults("image", language),
   sizeBytes: defaultAssetSizeBytes,
 });
+
+export const createAssetInputFromFile = (
+  file: File,
+  language: Language,
+): CreateAssetInput => {
+  const lowerName = file.name.toLowerCase();
+  const inferredCategory: AssetCategory = file.type.startsWith("image/")
+    ? "image"
+    : file.type.startsWith("video/")
+      ? "video"
+      : file.type.startsWith("audio/")
+        ? "audio"
+        : file.type.startsWith("text/") || lowerName.endsWith(".txt") || lowerName.endsWith(".md")
+          ? "script"
+          : "script";
+  const defaults = getAssetDraftDefaults(inferredCategory, language);
+  const inferredMimeType =
+    file.type ||
+    (lowerName.endsWith(".md")
+      ? "text/markdown"
+      : lowerName.endsWith(".txt")
+        ? "text/plain"
+        : defaults.mimeType);
+
+  return {
+    ...defaults,
+    name: file.name || defaults.name,
+    mimeType: inferredMimeType,
+    sizeBytes: file.size > 0 ? file.size : defaultAssetSizeBytes,
+  };
+};
 
 const defaultMediaSettings: MediaSettings = {
   bgmTrack: "creator-pop",
@@ -252,10 +283,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         : activePage === "settings"
           ? "settings"
           : "create";
-  const statusLabel = project
-    ? `${project.productName} / ${project.status}`
-    : text.app.createOrLoadProject;
-
   useEffect(() => {
     const handleHashChange = () => setActivePage(pageFromHash());
     window.addEventListener("hashchange", handleHashChange);
@@ -488,18 +515,11 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       return;
     }
 
-    const defaults = getAssetDraftDefaults(activeAssetCategory, language);
-
     void runAction("asset", "asset", async () => {
       const targetProject = project ?? (await createDemoProjectForAssets());
       const importedAssets = await Promise.all(
         files.map((file) =>
-          addAsset(targetProject.id, {
-            ...defaults,
-            name: file.name || defaults.name,
-            mimeType: file.type || defaults.mimeType,
-            sizeBytes: file.size > 0 ? file.size : defaultAssetSizeBytes,
-          }),
+          addAsset(targetProject.id, createAssetInputFromFile(file, language)),
         ),
       );
 
@@ -529,18 +549,28 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const handleSearchExternalAssets = async (
     query: string,
-    type?: "image" | "video",
-  ): Promise<ExternalAssetResult[]> => {
+    type?: AssetCategory,
+    page = 1,
+    perPage = 12,
+  ): Promise<ExternalAssetSearchResponse> => {
+    const enabledProviders = stockProviderConfigs.filter(
+      (provider) => provider.enabled !== false && provider.apiKey?.trim(),
+    );
+    if (enabledProviders.length === 0) {
+      return { query, page, perPage, hasMore: false, externalResults: [] };
+    }
+
     setBusyState("search");
     setErrors((current) => ({ ...current, asset: undefined }));
     try {
       const response = await searchExternalStockAssets({
         query,
-        perPage: 12,
+        page,
+        perPage,
         type,
-        providers: stockProviderConfigs,
+        providers: enabledProviders,
       });
-      return response.externalResults;
+      return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Action failed.";
       setErrors((current) => ({ ...current, asset: message }));
@@ -810,16 +840,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       language={language}
       onPageChange={handlePageChange}
       onSectionChange={handleSectionChange}
-      statusLabel={statusLabel}
     >
       <div className={`workspace-grid workspace-page page-${activePage}`}>
         {activePage === "assets" ? (
           <section className="asset-workspace" aria-label={text.assets.title}>
-            <AssetCategoryTabs
-              activeCategory={activeAssetCategory}
-              language={language}
-              onCategoryChange={handleAssetCategoryChange}
-            />
             <AssetsPanel
               activeCategory={activeAssetCategory}
               assetDraft={assetDraft}
@@ -833,6 +857,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               isSearching={busyState === "search"}
               language={language}
               onAssetDraftChange={setAssetDraft}
+              onCategoryChange={handleAssetCategoryChange}
               onImportExternalAsset={handleImportExternalAsset}
               onImportFiles={handleImportFiles}
               onRecallAsset={selectedSceneId ? handleRecallAsset : undefined}

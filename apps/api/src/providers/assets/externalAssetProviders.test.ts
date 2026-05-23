@@ -5,8 +5,8 @@ import {
   normalizePexelsVideo,
   normalizePixabayImage,
   normalizePixabayVideo,
+  normalizeFreesoundSound,
   createConfiguredExternalAssetProviders,
-  createDemoExternalAssetProvider,
   createExternalAssetProvidersFromConfig,
 } from "./externalAssetProviders";
 
@@ -137,33 +137,55 @@ describe("external asset provider normalization", () => {
     });
   });
 
-  it("returns deterministic demo stock results for local experience checks", async () => {
-    const provider = createDemoExternalAssetProvider();
+  it("normalizes Freesound sound payloads with high-quality playable previews", () => {
+    const result = normalizeFreesoundSound({
+      id: 12345,
+      name: "Cash register button click",
+      url: "https://freesound.org/people/creator/sounds/12345/",
+      username: "Freesound Creator",
+      license: "https://creativecommons.org/publicdomain/zero/1.0/",
+      tags: ["click", "cash register"],
+      duration: 1.2,
+      previews: {
+        "preview-lq-mp3": "https://cdn.freesound.org/previews/12/12345-lq.mp3",
+        "preview-hq-mp3": "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+      },
+    });
 
-    const results = await provider.search({ query: "desk product", perPage: 4 });
-
-    expect(results.length).toBeGreaterThanOrEqual(2);
-    expect(results[0]).toMatchObject({
-      source: "demo",
+    expect(result).toMatchObject({
+      id: "freesound:sound:12345",
+      source: "freesound",
+      externalId: "12345",
+      type: "audio",
+      title: "Cash register button click",
+      thumbnailUrl: "",
+      previewUrl: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+      downloadUrl: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+      authorName: "Freesound Creator",
+      authorUrl: "https://freesound.org/people/Freesound%20Creator/",
+      licenseLabel: "Creative Commons 0",
       canUseCommercially: true,
       requiresAttribution: false,
+      tags: ["click", "cash register"],
+      durationSeconds: 1.2,
     });
-    expect(results.some((result) => result.type === "image")).toBe(true);
-    expect(results.some((result) => result.type === "video")).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("secret");
   });
 
-  it("enables the demo provider when no external provider keys are configured", () => {
+  it("does not create providers when no external provider keys are configured", () => {
     const previousProviders = process.env.EXTERNAL_ASSET_PROVIDERS;
     const previousPexels = process.env.PEXELS_API_KEY;
     const previousPixabay = process.env.PIXABAY_API_KEY;
+    const previousFreesound = process.env.FREESOUND_API_KEY;
     delete process.env.EXTERNAL_ASSET_PROVIDERS;
     delete process.env.PEXELS_API_KEY;
     delete process.env.PIXABAY_API_KEY;
+    delete process.env.FREESOUND_API_KEY;
 
     try {
-      expect(createConfiguredExternalAssetProviders().map((provider) => provider.source)).toEqual([
-        "demo",
-      ]);
+      expect(createConfiguredExternalAssetProviders().map((provider) => provider.source)).toEqual(
+        [],
+      );
     } finally {
       if (previousProviders === undefined) {
         delete process.env.EXTERNAL_ASSET_PROVIDERS;
@@ -180,18 +202,23 @@ describe("external asset provider normalization", () => {
       } else {
         process.env.PIXABAY_API_KEY = previousPixabay;
       }
+      if (previousFreesound === undefined) {
+        delete process.env.FREESOUND_API_KEY;
+      } else {
+        process.env.FREESOUND_API_KEY = previousFreesound;
+      }
     }
   });
 
   it("creates user-configured providers only when enabled and keyed", () => {
     const providers = createExternalAssetProvidersFromConfig([
-      { source: "demo", enabled: true },
       { source: "pexels", apiKey: "pexels-secret", enabled: true },
       { source: "pixabay", enabled: true },
       { source: "pixabay", apiKey: "pixabay-secret", enabled: false },
+      { source: "freesound", apiKey: "freesound-secret", enabled: true },
     ]);
 
-    expect(providers.map((provider) => provider.source)).toEqual(["demo", "pexels"]);
+    expect(providers.map((provider) => provider.source)).toEqual(["pexels", "freesound"]);
     expect(JSON.stringify(providers.map((provider) => provider.source))).not.toContain("secret");
   });
 });

@@ -121,10 +121,33 @@ describe("inspiration generation API", () => {
     expect(generated.body.materials[0]).toMatchObject({
       type: "video",
       status: "processing",
+      progress: 0,
     });
     if (generated.body.fallback.used) {
       expect(generated.body.materials[0].url).toBeUndefined();
     }
+  });
+
+  it("exposes video task polling through the API contract", async () => {
+    const polled = await request<{ material: { status: string; taskId?: string; url?: string } }>(
+      baseUrl,
+      "/api/inspiration/video-task",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          taskId: "cgt-test-video-task",
+          prompt: "Create a vertical product reveal video for a phone stand.",
+        }),
+      },
+    );
+
+    expect(polled.status).toBe(200);
+    expect(polled.body.material).toMatchObject({
+      status: "processing",
+      taskId: "cgt-test-video-task",
+      progress: 10,
+    });
+    expect(polled.body.material.url).toBeUndefined();
   });
 
   it("rejects incomplete inspiration prompts before provider calls", async () => {

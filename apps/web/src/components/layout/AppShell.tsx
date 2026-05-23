@@ -9,7 +9,6 @@ import {
   FolderKanban,
   Images,
   Lightbulb,
-  Plus,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -101,7 +100,6 @@ interface AppShellProps {
   language: Language;
   onPageChange: (page: WorkspacePageId) => void;
   onSectionChange: (section: WorkspaceSectionId) => void;
-  statusLabel: string;
 }
 
 export const AppShell = ({
@@ -112,7 +110,6 @@ export const AppShell = ({
   language,
   onPageChange,
   onSectionChange,
-  statusLabel,
 }: AppShellProps) => {
   const getSectionText = (section: WorkspaceSectionId) => {
     if (section === "assets") {
@@ -225,10 +222,6 @@ export const AppShell = ({
               <span>{getSectionText(activeSection).title}</span>
             </div>
           )}
-          <div className="topbar-status concept-top-cta" aria-live="polite">
-            <Plus size={18} aria-hidden="true" />
-            {statusLabel}
-          </div>
         </header>
         {activeSection === "create" ? (
           <nav className="creation-stepper" aria-label="Creation progress">

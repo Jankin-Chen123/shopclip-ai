@@ -71,15 +71,15 @@ export const AssetSearchResultSchema = z.object({
   reasons: z.array(z.string().trim().min(1)).default([]),
 });
 
-export const ExternalAssetProviderSchema = z.enum(["pexels", "pixabay", "demo"]);
+export const ExternalAssetProviderSchema = z.enum(["pexels", "pixabay", "freesound"]);
 
 export const ExternalAssetResultSchema = z.object({
   id: z.string().trim().min(1),
   source: ExternalAssetProviderSchema,
   externalId: z.string().trim().min(1),
-  type: z.enum(["image", "video"]),
+  type: z.enum(["image", "video", "audio"]),
   title: z.string().trim().min(1),
-  thumbnailUrl: z.string().trim().min(1),
+  thumbnailUrl: z.string().trim().default(""),
   previewUrl: z.string().trim().min(1),
   downloadUrl: z.string().trim().min(1).optional(),
   externalUrl: z.string().trim().min(1),
@@ -103,13 +103,17 @@ export const ExternalAssetProviderConfigSchema = z.object({
 
 export const ExternalAssetSearchRequestSchema = z.object({
   query: z.string().trim().min(1).max(300),
+  page: z.number().int().positive().max(200).default(1),
   perPage: z.number().int().positive().max(24).default(12),
-  type: z.enum(["image", "video"]).optional(),
+  type: z.enum(["image", "video", "audio", "script"]).optional(),
   providers: z.array(ExternalAssetProviderConfigSchema).max(8).default([]),
 });
 
 export const ExternalAssetSearchResponseSchema = z.object({
   query: z.string().trim().min(1),
+  page: z.number().int().positive().default(1),
+  perPage: z.number().int().positive().max(24).default(12),
+  hasMore: z.boolean().default(false),
   externalResults: z.array(ExternalAssetResultSchema).default([]),
 });
 
@@ -124,6 +128,23 @@ export const AssetSearchResponseSchema = z.object({
 export const InspirationGenerateRequestSchema = z.object({
   prompt: z.string().trim().min(2).max(2000),
   assetType: InspirationAssetTypeSchema,
+  options: z
+    .object({
+      image: z
+        .object({
+          count: z.number().int().min(1).max(4).default(1),
+          aspectRatio: z.enum(["auto", "1:1", "4:3", "3:4", "16:9", "9:16"]).default("auto"),
+          quality: z.enum(["standard", "hd", "2k"]).default("standard"),
+        })
+        .optional(),
+      video: z
+        .object({
+          aspectRatio: z.enum(["auto", "1:1", "16:9", "9:16"]).default("auto"),
+          quality: z.enum(["standard", "hd", "2k"]).default("standard"),
+        })
+        .optional(),
+    })
+    .optional(),
   apiConfig: z
     .object({
       general: z
@@ -161,6 +182,8 @@ export const InspirationMaterialSchema = z.object({
   content: z.string().trim().min(1),
   status: InspirationMaterialStatusSchema,
   url: z.string().trim().min(1).optional(),
+  taskId: z.string().trim().min(1).optional(),
+  progress: z.number().min(0).max(100).optional(),
   mimeType: z.string().trim().min(1).optional(),
 });
 
@@ -175,6 +198,16 @@ export const InspirationGenerateResponseSchema = z.object({
     reason: z.string().trim().min(1).optional(),
   }),
   materials: z.array(InspirationMaterialSchema).min(1),
+});
+
+export const InspirationVideoTaskRequestSchema = z.object({
+  taskId: z.string().trim().min(1),
+  prompt: z.string().trim().min(2).max(2000),
+  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
+});
+
+export const InspirationVideoTaskResponseSchema = z.object({
+  material: InspirationMaterialSchema,
 });
 
 export const StoryboardSceneSchema = z.object({

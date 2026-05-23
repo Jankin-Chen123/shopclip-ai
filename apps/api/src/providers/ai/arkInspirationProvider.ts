@@ -3,12 +3,33 @@ import type {
   InspirationGenerateRequest,
   InspirationGenerateResponse,
   InspirationMaterial,
+  InspirationVideoTaskRequest,
 } from "@shopclip/shared";
 
 const SEED_MODEL_NAME = "doubao-seed2.0-pro";
 const IMAGE_MODEL_NAME = "doubao-seedream";
 const SEEDANCE_MODEL_NAME = "doubao-seedance1.5-pro";
 const DEFAULT_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+
+const ARK_MODEL_ALIASES = new Map<string, string>([
+  ["doubao-seed-2.0-pro", "doubao-seed-2-0-pro-260215"],
+  ["doubao-seed-2.0-lite", "doubao-seed-2-0-lite-260428"],
+  ["doubao-seed-2.0-mini", "doubao-seed-2-0-mini-260428"],
+  ["doubao-seed-2-0-pro-260215", "doubao-seed-2-0-pro-260215"],
+  ["doubao-seed-2-0-lite-260428", "doubao-seed-2-0-lite-260428"],
+  ["doubao-seed-2-0-mini-260428", "doubao-seed-2-0-mini-260428"],
+  ["doubao-seedream-5.0", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-5.0-lite", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-4.5", "doubao-seedream-4-5-251128"],
+  ["doubao-seedream-4.0", "doubao-seedream-4-0-250828"],
+  ["doubao-seedream-5-0-260128", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-4-5-251128", "doubao-seedream-4-5-251128"],
+  ["doubao-seedream-4-0-250828", "doubao-seedream-4-0-250828"],
+  ["doubao-seedance-1.5-pro", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-2.0", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1.5-lite", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-5-pro-251215"],
+]);
 
 type ProviderConfig = {
   apiKey: string;
@@ -44,8 +65,42 @@ const hasUserConfigInput = (request: InspirationGenerateRequest) => {
   );
 };
 
-const getRequestModelName = (request: InspirationGenerateRequest) =>
-  getUserConfigForAssetType(request)?.model?.trim() || getDefaultModelName(request.assetType);
+const normalizeArkModel = (model: string) => {
+  const trimmedModel = model.trim();
+  return ARK_MODEL_ALIASES.get(trimmedModel.toLowerCase()) ?? trimmedModel;
+};
+
+const isArkProvider = (provider?: string) => {
+  const providerId = provider?.trim().toLowerCase();
+  return providerId === "volcengine-ark" || providerId === "ark" || providerId === "doubao";
+};
+
+const resolveArkModel = (
+  model: string,
+  assetType: InspirationAssetType,
+  provider?: string,
+) => {
+  const normalizedModel = normalizeArkModel(model);
+  return isArkProvider(provider) ? normalizedModel : model.trim();
+};
+
+const getRequestModelName = (request: InspirationGenerateRequest) => {
+  const userConfig = getUserConfigForAssetType(request);
+  const userModel = userConfig?.model?.trim();
+  return userModel
+    ? resolveArkModel(userModel, request.assetType, userConfig?.provider)
+    : getDefaultModelName(request.assetType);
+};
+
+const getEnvironmentModel = (assetType: InspirationAssetType) => {
+  if (assetType === "video") {
+    return process.env.AI_VIDEO_ENDPOINT_ID?.trim();
+  }
+  if (assetType === "image") {
+    return process.env.AI_IMAGE_ENDPOINT_ID?.trim();
+  }
+  return process.env.AI_TEXT_ENDPOINT_ID?.trim();
+};
 
 const createId = (prefix: string, seed: string) => {
   let hash = 0;
@@ -63,16 +118,15 @@ const normalizePromptTitle = (prompt: string) =>
     .replace(/[.。!！?？]$/, "");
 
 const createMockMaterial = (request: InspirationGenerateRequest): InspirationMaterial => {
-  const title = normalizePromptTitle(request.prompt);
   const id = createId("material", `${request.assetType}:${request.prompt}`);
 
   if (request.assetType === "text") {
     return {
       id,
       type: "text",
-      title: `${title} copy plan`,
+      title: "Copy plan",
       content: [
-        `Hook: ${title}`,
+        "Hook: Lead with a concrete customer moment.",
         "Angle: lead with a concrete buyer pain, then show the product resolving it in one move.",
         "CTA: keep the final line direct and shoppable.",
       ].join("\n"),
@@ -85,8 +139,8 @@ const createMockMaterial = (request: InspirationGenerateRequest): InspirationMat
     return {
       id,
       type: "image",
-      title: `${title} visual concept`,
-      content: `A polished ecommerce hero image prompt for: ${request.prompt}`,
+      title: "Visual concept",
+      content: "Generated image material.",
       status: "ready",
       mimeType: "image/png",
     };
@@ -95,21 +149,21 @@ const createMockMaterial = (request: InspirationGenerateRequest): InspirationMat
   return {
     id,
     type: "video",
-    title: `${title} motion concept`,
-    content: `A vertical 6-second product reveal video brief for: ${request.prompt}`,
+    title: "Motion concept",
+    content: "Video generation task submitted.",
     status: "processing",
+    progress: 0,
     mimeType: "video/mp4",
   };
 };
 
 const createFailedMaterial = (request: InspirationGenerateRequest): InspirationMaterial => {
-  const title = normalizePromptTitle(request.prompt);
   const id = createId("material", `failed:${request.assetType}:${request.prompt}`);
 
   return {
     id,
     type: request.assetType,
-    title: `${title} generation failed`,
+    title: "Generation failed",
     content:
       request.assetType === "image"
         ? "Image generation did not return a renderable image artifact."
@@ -117,6 +171,7 @@ const createFailedMaterial = (request: InspirationGenerateRequest): InspirationM
           ? "Video generation did not return a renderable video artifact or task."
           : "Text generation did not return usable content.",
     status: "failed",
+    progress: request.assetType === "video" ? 0 : undefined,
     mimeType:
       request.assetType === "image"
         ? "image/png"
@@ -148,7 +203,7 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
   if (userConfig?.apiKey?.trim() && userConfig.model?.trim() && userConfig.apiBaseUrl?.trim()) {
     return {
       apiKey: userConfig.apiKey.trim(),
-      model: userConfig.model.trim(),
+      model: resolveArkModel(userConfig.model, request.assetType, userConfig.provider),
       baseUrl: userConfig.apiBaseUrl.trim().replace(/\/$/, ""),
       provider: userConfig.provider?.trim() || "user-configured-provider",
     };
@@ -162,15 +217,7 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
     request.assetType === "image"
       ? (process.env.AI_IMAGE_API_KEY?.trim() ?? process.env.AI_API_KEY?.trim())
       : process.env.AI_API_KEY?.trim();
-  const model = (() => {
-    if (request.assetType === "video") {
-      return process.env.AI_VIDEO_ENDPOINT_ID?.trim();
-    }
-    if (request.assetType === "image") {
-      return process.env.AI_IMAGE_ENDPOINT_ID?.trim();
-    }
-    return process.env.AI_TEXT_ENDPOINT_ID?.trim();
-  })();
+  const model = getEnvironmentModel(request.assetType);
 
   if (!apiKey || !model) {
     return undefined;
@@ -218,35 +265,125 @@ const postArkJson = async (
   const responseBody = await parseJson(response);
 
   if (!response.ok) {
-    throw new Error(`Ark request failed with HTTP ${response.status}.`);
+    const error = isRecord(responseBody) && isRecord(responseBody.error) ? responseBody.error : undefined;
+    const errorCode = getString(error?.code);
+    if (errorCode === "InvalidEndpointOrModel.ModelIDAccessDisabled") {
+      throw new Error(
+        "Ark account cannot access this model by Model ID. Paste your custom Ark endpoint ID into Settings > Model for this generation type.",
+      );
+    }
+    const responseSummary = isRecord(responseBody)
+      ? ` ${JSON.stringify(responseBody).slice(0, 240)}`
+      : "";
+    throw new Error(`Ark request failed with HTTP ${response.status}.${responseSummary}`);
   }
 
   return responseBody;
+};
+
+const getArkJson = async (
+  path: string,
+  apiKey: string,
+  baseUrl: string,
+): Promise<unknown> => {
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+    },
+  });
+  const responseBody = await parseJson(response);
+
+  if (!response.ok) {
+    const responseSummary = isRecord(responseBody)
+      ? ` ${JSON.stringify(responseBody).slice(0, 240)}`
+      : "";
+    throw new Error(`Ark video task polling failed with HTTP ${response.status}.${responseSummary}`);
+  }
+
+  return responseBody;
+};
+
+const getResponsesApiText = (body: unknown) => {
+  if (!isRecord(body)) {
+    return undefined;
+  }
+
+  const outputText = getString(body.output_text);
+  if (outputText) {
+    return outputText;
+  }
+
+  const output = Array.isArray(body.output) ? body.output : [];
+  for (const item of output) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const content = Array.isArray(item.content) ? item.content : [];
+    for (const contentItem of content) {
+      if (!isRecord(contentItem)) {
+        continue;
+      }
+      const text = getString(contentItem.text);
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  return undefined;
 };
 
 const generateTextWithArk = async (
   request: InspirationGenerateRequest,
   config: ProviderConfig,
 ): Promise<InspirationMaterial> => {
-  const body = await postArkJson("/chat/completions", config.apiKey, config.baseUrl, {
-    model: config.model,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You create concise ecommerce short-video inspiration. Return practical copy, visual direction, and CTA.",
-      },
-      {
-        role: "user",
-        content: request.prompt,
-      },
-    ],
-    temperature: 0.7,
-  });
+  const body = isArkProvider(config.provider)
+    ? await postArkJson("/responses", config.apiKey, config.baseUrl, {
+        model: config.model,
+        input: [
+          {
+            role: "system",
+            content: [
+              {
+                type: "input_text",
+                text: "You create concise ecommerce short-video inspiration. Return practical copy, visual direction, and CTA.",
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: request.prompt,
+              },
+            ],
+          },
+        ],
+        temperature: 0.7,
+      })
+    : await postArkJson("/chat/completions", config.apiKey, config.baseUrl, {
+        model: config.model,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You create concise ecommerce short-video inspiration. Return practical copy, visual direction, and CTA.",
+          },
+          {
+            role: "user",
+            content: request.prompt,
+          },
+        ],
+        temperature: 0.7,
+      });
 
-  const firstChoice = isRecord(body) ? firstRecord(body.choices) : undefined;
+  const firstChoice = !isArkProvider(config.provider) && isRecord(body)
+    ? firstRecord(body.choices)
+    : undefined;
   const message = isRecord(firstChoice?.message) ? firstChoice.message : undefined;
   const content =
+    getResponsesApiText(body) ??
     getString(isRecord(message) ? message.content : undefined) ??
     getString(firstChoice?.text) ??
     "Generated ecommerce inspiration.";
@@ -254,42 +391,66 @@ const generateTextWithArk = async (
   return {
     id: createId("material", content),
     type: "text",
-    title: `${normalizePromptTitle(request.prompt)} copy plan`,
+    title: "Copy plan",
     content,
     status: "ready",
     mimeType: "text/plain",
   };
 };
 
+const imageSizeFromOptions = (request: InspirationGenerateRequest) => {
+  const aspectRatio = request.options?.image?.aspectRatio ?? "auto";
+  if (aspectRatio === "16:9") {
+    return "1344x768";
+  }
+  if (aspectRatio === "9:16") {
+    return "768x1344";
+  }
+  if (aspectRatio === "4:3") {
+    return "1152x864";
+  }
+  if (aspectRatio === "3:4") {
+    return "864x1152";
+  }
+  return process.env.ARK_IMAGE_SIZE ?? "1024x1024";
+};
+
 const generateImageWithArk = async (
   request: InspirationGenerateRequest,
   config: ProviderConfig,
-): Promise<InspirationMaterial> => {
+): Promise<InspirationMaterial[]> => {
+  const count = request.options?.image?.count ?? 1;
   const body = await postArkJson("/images/generations", config.apiKey, config.baseUrl, {
     model: config.model,
     prompt: request.prompt,
-    size: process.env.ARK_IMAGE_SIZE ?? "1024x1024",
+    size: imageSizeFromOptions(request),
+    n: count,
     response_format: "url",
   });
 
-  const data = isRecord(body) ? firstRecord(body.data) : undefined;
-  const url = getString(data?.url);
-  const b64Json = getString(data?.b64_json);
-  const imageUrl = url ?? (b64Json ? `data:image/png;base64,${b64Json}` : undefined);
+  const data = isRecord(body) && Array.isArray(body.data) ? body.data : [];
+  const imageUrls = data
+    .map((item) => {
+      const record = isRecord(item) ? item : undefined;
+      const url = getString(record?.url);
+      const b64Json = getString(record?.b64_json);
+      return url ?? (b64Json ? `data:image/png;base64,${b64Json}` : undefined);
+    })
+    .filter((url): url is string => Boolean(url));
 
-  if (!imageUrl) {
+  if (imageUrls.length === 0) {
     throw new Error("Ark image generation did not return an image URL or base64 payload.");
   }
 
-  return {
-    id: createId("material", `${request.prompt}:image`),
+  return imageUrls.map((imageUrl, index) => ({
+    id: createId("material", `${request.prompt}:image:${index}`),
     type: "image",
-    title: `${normalizePromptTitle(request.prompt)} visual concept`,
-    content: `Generated image material for: ${request.prompt}`,
+    title: imageUrls.length > 1 ? `Image ${index + 1}` : "Visual concept",
+    content: "Generated image material.",
     status: "ready",
     url: imageUrl,
     mimeType: "image/png",
-  };
+  }));
 };
 
 const generateVideoWithArk = async (
@@ -297,7 +458,7 @@ const generateVideoWithArk = async (
   config: ProviderConfig,
 ): Promise<InspirationMaterial> => {
   const videoPath = process.env.ARK_VIDEO_GENERATION_PATH ?? "/contents/generations/tasks";
-  const body = await postArkJson(videoPath, config.apiKey, config.baseUrl, {
+  const videoRequestBody: Record<string, unknown> = {
     model: config.model,
     content: [
       {
@@ -305,7 +466,15 @@ const generateVideoWithArk = async (
         text: request.prompt,
       },
     ],
-  });
+  };
+  const videoOptions = request.options?.video;
+  if (videoOptions?.aspectRatio && videoOptions.aspectRatio !== "auto") {
+    videoRequestBody.ratio = videoOptions.aspectRatio;
+  }
+  if (videoOptions?.quality && videoOptions.quality !== "standard") {
+    videoRequestBody.quality = videoOptions.quality;
+  }
+  const body = await postArkJson(videoPath, config.apiKey, config.baseUrl, videoRequestBody);
 
   const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
   const taskId =
@@ -317,11 +486,179 @@ const generateVideoWithArk = async (
   return {
     id: createId("material", taskId),
     type: "video",
-    title: `${normalizePromptTitle(request.prompt)} motion concept`,
-    content: `Video generation task submitted: ${taskId}`,
+    title: "Motion concept",
+    content: "Video generation task submitted.",
     status: "processing",
+    taskId,
+    progress: 0,
     mimeType: "video/mp4",
   };
+};
+
+const taskStatusFromBody = (body: unknown) => {
+  const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
+  const rawStatus =
+    (isRecord(body) ? getString(body.status) : undefined) ??
+    getString(data?.status) ??
+    getString(data?.state);
+  const normalizedStatus = rawStatus?.trim().toLowerCase();
+
+  if (!normalizedStatus) {
+    return "processing" as const;
+  }
+  if (["succeeded", "success", "completed", "ready", "done"].includes(normalizedStatus)) {
+    return "ready" as const;
+  }
+  if (["failed", "error", "cancelled", "canceled"].includes(normalizedStatus)) {
+    return "failed" as const;
+  }
+  return "processing" as const;
+};
+
+const collectVideoUrls = (value: unknown, urls: string[] = []): string[] => {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectVideoUrls(item, urls));
+    return urls;
+  }
+  if (!isRecord(value)) {
+    return urls;
+  }
+
+  Object.entries(value).forEach(([key, nestedValue]) => {
+    const lowerKey = key.toLowerCase();
+    if (
+      typeof nestedValue === "string" &&
+      nestedValue.trim() &&
+      (lowerKey.includes("url") || lowerKey.includes("video")) &&
+      /\.(mp4|webm|mov)(\?|#|$)/i.test(nestedValue)
+    ) {
+      urls.push(nestedValue);
+      return;
+    }
+    collectVideoUrls(nestedValue, urls);
+  });
+
+  return urls;
+};
+
+const clampProgress = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
+
+const progressFromValue = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return clampProgress(value <= 1 ? value * 100 : value);
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace("%", "").trim());
+    if (Number.isFinite(parsed)) {
+      return clampProgress(parsed <= 1 ? parsed * 100 : parsed);
+    }
+  }
+  return undefined;
+};
+
+const collectProgressValues = (value: unknown, progressValues: number[] = []): number[] => {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectProgressValues(item, progressValues));
+    return progressValues;
+  }
+  if (!isRecord(value)) {
+    return progressValues;
+  }
+
+  Object.entries(value).forEach(([key, nestedValue]) => {
+    const lowerKey = key.toLowerCase();
+    if (
+      lowerKey === "progress" ||
+      lowerKey === "percent" ||
+      lowerKey === "percentage" ||
+      lowerKey === "task_progress" ||
+      lowerKey === "taskprogress"
+    ) {
+      const progress = progressFromValue(nestedValue);
+      if (progress !== undefined) {
+        progressValues.push(progress);
+      }
+      return;
+    }
+    collectProgressValues(nestedValue, progressValues);
+  });
+
+  return progressValues;
+};
+
+const progressFromTaskBody = (
+  body: unknown,
+  status: InspirationMaterial["status"],
+  hasVideoUrl: boolean,
+) => {
+  if (hasVideoUrl || status === "ready") {
+    return 100;
+  }
+  if (status === "failed") {
+    return 0;
+  }
+  return collectProgressValues(body)[0] ?? 10;
+};
+
+export const loadInspirationVideoTask = async (
+  request: InspirationVideoTaskRequest,
+): Promise<InspirationMaterial> => {
+  const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
+  const generationLikeRequest: InspirationGenerateRequest = {
+    prompt: request.prompt,
+    assetType: "video",
+    apiConfig: request.apiConfig,
+  };
+  const config = getRequiredConfig(generationLikeRequest);
+
+  if (!config || (!hasUserConfigInput(generationLikeRequest) && !["ark", "doubao", "real"].includes(providerMode))) {
+    return {
+      id: createId("material", request.taskId),
+      type: "video",
+      title: "Motion concept",
+      content: "Video generation task submitted.",
+      status: "processing",
+      taskId: request.taskId,
+      progress: 10,
+      mimeType: "video/mp4",
+    };
+  }
+
+  try {
+    const videoPath = process.env.ARK_VIDEO_GENERATION_PATH ?? "/contents/generations/tasks";
+    const body = await getArkJson(`${videoPath}/${encodeURIComponent(request.taskId)}`, config.apiKey, config.baseUrl);
+    const status = taskStatusFromBody(body);
+    const videoUrl = collectVideoUrls(body)[0];
+    const materialStatus = videoUrl ? "ready" : status;
+
+    return {
+      id: createId("material", request.taskId),
+      type: "video",
+      title: "Motion concept",
+      content:
+        status === "ready"
+          ? "Video generation completed."
+          : status === "failed"
+            ? "Video generation failed."
+            : `Video generation task submitted: ${request.taskId}`,
+      status: materialStatus,
+      url: videoUrl,
+      taskId: request.taskId,
+      progress: progressFromTaskBody(body, materialStatus, Boolean(videoUrl)),
+      mimeType: "video/mp4",
+    };
+  } catch (error) {
+    return {
+      id: createId("material", request.taskId),
+      type: "video",
+      title: "Motion concept",
+      content: error instanceof Error ? error.message : "Video task polling failed.",
+      status: "failed",
+      taskId: request.taskId,
+      progress: 0,
+      mimeType: "video/mp4",
+    };
+  }
 };
 
 export const generateInspiration = async (
@@ -344,12 +681,12 @@ export const generateInspiration = async (
   }
 
   try {
-    const material =
+    const materials =
       request.assetType === "text"
-        ? await generateTextWithArk(request, config)
+        ? [await generateTextWithArk(request, config)]
         : request.assetType === "image"
           ? await generateImageWithArk(request, config)
-          : await generateVideoWithArk(request, config);
+          : [await generateVideoWithArk(request, config)];
 
     return {
       id: createId("inspiration", `${request.assetType}:${request.prompt}`),
@@ -360,7 +697,7 @@ export const generateInspiration = async (
       fallback: {
         used: false,
       },
-      materials: [material],
+      materials,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Ark provider error.";

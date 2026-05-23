@@ -74,3 +74,7 @@ Replace the left sidebar footer with a Settings entry and let users configure th
 ## Verification Evidence
 
 - Evidence file: `../evidence/2026-05-23-user-api-settings.md`.
+
+## Maintenance Notes
+
+- 2026-05-24: Fixed Ark 404 fallback caused by Settings sending display-name model presets as API `model` values. Settings now stores and displays user-provided versioned Ark model IDs such as `doubao-seed-2-0-pro-260215`, `doubao-seedream-5-0-260128`, and `doubao-seedance-1-5-pro-251215`; the frontend migrates legacy browser-stored display names into those IDs, and the backend keeps alias compatibility before provider calls. The model field is now one editable dropdown-backed input instead of a separate input plus preset select. Evidence: `../evidence/2026-05-24-ark-inspiration-model-routing-fix.md`.

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Part 013 adds third-party stock asset provider support for Pexels and Pixabay, plus a no-key `demo` provider for local delivery. The latest iteration adds Settings-based provider configuration and a dedicated external-search modal, so third-party results no longer distort the main asset grid layout.
+Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and Freesound. The latest iteration removes the Demo Stock/mock provider, adds Settings-based provider configuration, keeps third-party results in a dedicated external-search modal, changes provider results to card-based multi-select with a frontend-only one-click import queue, and adds infinite scroll plus full image/video/audio preview.
 
 ## Implementation Notes
 
@@ -14,66 +14,70 @@ Part 013 adds third-party stock asset provider support for Pexels and Pixabay, p
   - `ExternalAssetSearchResponseSchema`
   - `AssetSearchResponseSchema.externalResults`
 - Added provider adapters in `apps/api/src/providers/assets/externalAssetProviders.ts`.
-- Added Pexels and Pixabay normalization tests with fixed payloads.
+- Added Pexels, Pixabay, and Freesound normalization tests with fixed payloads.
 - Added API aggregation test using an injected external provider, avoiding live network calls.
-- Added deterministic demo stock results through `EXTERNAL_ASSET_PROVIDERS=demo`.
 - Added `POST /api/projects/:projectId/assets/import-external` to persist an external result as a project asset reference.
 - Added `POST /api/assets/external-search` to search user-selected provider configs sent from the browser.
-- Added Settings UI for Demo Stock, Pexels, and Pixabay provider configs. User-entered provider API keys are stored in browser localStorage for this deliverable demo.
-- Replaced inline external results with a dedicated modal that has its own search field, provider chips, loading/error/empty states, responsive cards, and import actions.
+- Added Settings UI for Pexels, Pixabay, and Freesound provider configs. User-entered provider API keys are stored in browser localStorage for this deliverable demo.
+- Added Freesound API v2 audio search normalization using high-quality preview URLs for browser playback; original file download remains a future OAuth-enabled enhancement.
+- Removed Demo Stock/mock provider support from shared schemas, backend provider creation, Settings defaults, and E2E flows.
+- Replaced inline external results with a dedicated modal that has its own search field, provider chips, loading/error/empty states, responsive cards, and bulk import actions.
+- Result cards now use larger 16:9 image previews, remove per-card import buttons, support click-to-select, and clamp long title/license text inside the card bounds.
+- The modal result area now scrolls internally for larger provider result sets, with a bottom action row showing selected count and one-click import.
+- External search now supports `page`, `perPage`, and `hasMore`; Pexels/Pixabay requests pass the page to their upstream APIs, and the modal appends the next page when the user scrolls near the bottom.
+- Styled the modal result scrollbar to match the app's cyan/pink dark UI treatment.
+- Added a preview dialog with full image/video display, complete title/author/license/dimension/tag metadata, source link, and select/deselect action.
+- Added audio-specific result cards and preview dialog playback controls with duration metadata for Freesound results.
+- The preview dialog now prefers the highest-quality provider media URL available (`downloadUrl`) over compressed preview/card URLs; Pexels maps this to `src.original` and Pixabay maps it to `largeImageURL`.
+- External result cards now use the same high-quality provider image URL helper, so grid images are no longer sourced from compressed thumbnails when a larger URL is available.
+- Video result cards now render provider cover images from `thumbnailUrl` and only fall back to the generic video icon if the provider did not return a cover image.
+- Video results with no provider cover, or a cover image that fails to load, now show a generated "No video cover" fallback image and remain selectable/searchable.
+- Search fields now render as one styled input shell with an embedded icon; the nested native input has no separate border/background.
+- One-click import currently queues selected assets in frontend state and shows confirmation only; production persistence is deferred until backend database/object-storage integration is ready.
 - Added a visible "Third-party stock" entry on the asset library page and enabled search from `/#assets` before a project is loaded.
-- Importing an external result now creates a default demo project automatically when the user starts from the asset page.
-- If no Pexels/Pixabay keys or `EXTERNAL_ASSET_PROVIDERS` are configured, the API now falls back to the demo stock provider instead of returning silent empty external results.
-- The front end now renders explicit no-result feedback inside the stock-search modal, so a provider/configuration issue is visible to the user.
+- If no user provider is configured, the modal now shows an explicit reminder and disables search instead of using mock results.
+- The front end now renders explicit no-result feedback inside the stock-search modal for configured providers that return no matches.
 - Rewrote the asset-library and Settings Chinese copy to remove mojibake in the third-party provider/search flow.
-- Added server-only environment variables to `.env.example`.
+- Added server-only environment variables, including `FREESOUND_API_KEY`, to `.env.example`.
 
 ## Verification Commands
 
 - `corepack pnpm --filter @shopclip/shared test`
   - Result before implementation: failed because `ExternalAssetResultSchema` did not exist.
-  - Result after implementation: passed, 9 tests.
+  - Result after implementation: passed, 11 tests.
 - `corepack pnpm --filter @shopclip/api test -- externalAssetProviders p1-flow`
   - Result before implementation: failed because provider module and `externalResults` did not exist.
-  - Result after implementation: passed, 24 tests.
+  - Result after implementation: passed, 28 tests.
 - `corepack pnpm test`
-  - Result: passed. Shared 10 tests, API 27 tests, Web 16 tests.
+  - Result: passed. Shared 11 tests, API 28 tests, Web 18 tests.
 - `corepack pnpm typecheck`
   - Result: passed.
 - `corepack pnpm lint`
   - Result: passed.
 - `corepack pnpm build`
   - Result: passed.
-- Browser E2E with API on `127.0.0.1:4301`, Web on `127.0.0.1:5179`, and default Demo Stock provider
-  - Command body: `playwright.cmd test --config apps/web/e2e/playwright.config.ts p1-external-assets.spec.ts --reporter=list --workers=1`
-  - Observed result: both tests printed `ok`; the command timed out during Windows dev-server teardown, so it did not return a clean zero exit in this environment.
-  - Flow: open Settings, verify "Add third-party library", open `/#assets`, search demo stock in the modal, import the selected result, and verify it appears in the asset grid.
+- Browser E2E with local API/Web dev servers and routed Pexels search response
+  - Command body: `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p1-external-assets.spec.ts`
+  - Result: passed, 5 tests.
+  - Flow: open Settings, verify "Add third-party library", add a Pexels key, open `/#assets`, search routed Pexels stock in the modal, verify card images use the high-resolution URL, open the preview dialog, verify metadata and high-resolution image URL usage, scroll to the bottom to load the next page, select two result cards, click "Import selected", and verify frontend-only queued confirmation.
+  - Video flow: switch to the Video tab, search routed video results, verify one result uses the provider cover image, verify another result without a provider cover uses the generated fallback image, and confirm the generic video placeholder is not shown for these cases.
+  - Audio flow: switch to the Audio tab, search routed Freesound results, verify the request type is `audio`, open a playable preview dialog, verify duration metadata, select the result card, and confirm frontend-only queued import feedback.
+  - No-provider flow: open `/#assets` with no stock provider config, open the modal, verify the reminder and disabled search button.
   - Screenshot evidence:
     - `projects/shopclip-ai/evidence/p1-13-external-provider-settings.png`
     - `projects/shopclip-ai/evidence/p1-13-external-search-modal.png`
+    - `projects/shopclip-ai/evidence/p1-13-external-no-provider.png`
     - `projects/shopclip-ai/evidence/p1-13-external-search-modal-zh.png`
     - `projects/shopclip-ai/evidence/p1-13-external-asset-import.png`
-- Browser E2E with API on `127.0.0.1:4100`, Web on `127.0.0.1:5180`, and `EXTERNAL_ASSET_PROVIDERS=demo`
-  - Command body: `node_modules/.bin/playwright.CMD test --config e2e/playwright.config.ts p1-external-assets.spec.ts`
-  - Flow: open `/#assets`, verify "Search external stock assets", search demo stock, import the selected result, and verify it appears in the asset grid.
-  - Result: passed, 1 test.
-  - Screenshot evidence: `projects/shopclip-ai/evidence/p1-13-external-asset-import.png`.
-- Browser E2E with API on `127.0.0.1:4100`, Web on `127.0.0.1:5180`, and no `EXTERNAL_ASSET_PROVIDERS` override
-  - Command body: `node_modules/.bin/playwright.CMD test --config e2e/playwright.config.ts p1-external-assets.spec.ts`
-  - Result: passed, 1 test; verified the default demo provider covers local setups without stock API keys.
-- Browser E2E Chinese copy/layout check
-  - Command body: `node_modules/.bin/playwright.CMD test --config e2e/playwright.config.ts p1-external-assets.spec.ts`
-  - Result: passed, 2 tests total; verified Chinese third-party result copy has no mojibake and results appear before the empty local asset state.
-  - Screenshot evidence: `projects/shopclip-ai/evidence/p1-13-external-asset-import-zh.png`.
 
 ## Security Notes
 
 - Provider API keys can be read from server-side environment variables or sent in a user-scoped search request from browser-local Settings.
 - Normalized provider results do not include API keys.
 - Front-end code stores user-entered stock provider keys in localStorage for this demo; production should use encrypted per-user secret storage.
-- Imported assets store source/license tags such as `source-demo` and normalized license labels.
+- Imported assets store source/license tags such as `source-pexels`/`source-freesound` and normalized license labels. Audio imports are stored as reference assets with `audio/mpeg` metadata for this schema version.
 
 ## Follow-Ups
 
 - Production storage can optionally download/cache selected third-party binaries into object storage instead of keeping only remote URLs.
-- Real provider rollout should review current Pexels/Pixabay license terms and API rate limits before enabling keys.
+- Real provider rollout should review current Pexels/Pixabay/Freesound license terms and API rate limits before enabling keys.

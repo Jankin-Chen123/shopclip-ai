@@ -1,10 +1,19 @@
-import type { AssetMetadata } from "@shopclip/shared";
+import type { AssetMetadata, ExternalAssetResult } from "@shopclip/shared";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { AssetCategoryTabs, assetMatchesCategory } from "../features/assets/AssetCategoryTabs";
+import {
+  AssetCategoryTabs,
+  assetMatchesCategory,
+  externalAssetMatchesCategory,
+} from "../features/assets/AssetCategoryTabs";
 import { AssetsPanel } from "../features/assets/AssetsPanel";
-import { App } from "./App";
+import {
+  SettingsPanel,
+  createDefaultApiConfig,
+  sanitizeApiConfig,
+} from "../features/settings/SettingsPanel";
+import { App, createAssetInputFromFile } from "./App";
 import { copy } from "./i18n";
 
 const makeAsset = (asset: Partial<AssetMetadata>): AssetMetadata => ({
@@ -45,7 +54,7 @@ describe("App", () => {
     expect(markup).toContain("creation-stepper");
     expect(markup).toContain("creation-shell");
     expect(markup).toContain("concept-project-panel");
-    expect(markup).toContain("concept-top-cta");
+    expect(markup).not.toContain("concept-top-cta");
     expect(markup).not.toContain("language-switcher");
     expect(markup).not.toContain("AI co-pilot");
     expect(markup).not.toContain("Quality radar");
@@ -53,6 +62,17 @@ describe("App", () => {
     expect(markup).not.toContain("creation-assistant");
     expect(markup).toContain("Step 01");
     expect(markup).toContain("creation-stepper-index\">05");
+  });
+
+  it("omits the top-right project CTA from asset, inspiration, and creation sections", () => {
+    const pages = ["assets", "inspiration", "project"] as const;
+
+    pages.forEach((page) => {
+      const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage={page} />);
+
+      expect(markup).not.toContain("concept-top-cta");
+      expect(markup).not.toContain("Create or load a project</div>");
+    });
   });
 
   it("renders the simplified workspace shell in Chinese mode", () => {
@@ -104,7 +124,7 @@ describe("App", () => {
       />,
     );
 
-    expect(markup).toContain("Import images");
+    expect(markup).toContain("Import assets");
     expect(markup).not.toContain("What do you want to create today?");
     expect(markup).not.toContain("Agent mode");
   });
@@ -146,12 +166,68 @@ describe("App", () => {
     expect(markup).toContain("asset-card-preview");
     expect(markup).not.toContain("asset-library-hero");
     expect(markup).not.toContain("Import and organize visual references for your scenes.");
-    expect(markup).toContain("Import images");
+    expect(markup).toContain("Import assets");
     expect(markup).toContain("Search image library");
     expect(markup).toContain("asset-grid");
     expect(markup).toContain("GlowGrip packshot");
     expect(markup).not.toContain("upload-zone");
     expect(markup).not.toContain("Size in bytes");
+  });
+
+  it("uses one import entry for every asset category", () => {
+    const markup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
+
+    expect(markup).toContain("导入素材");
+    expect(markup).not.toContain("导入图片");
+    expect(markup).not.toContain("导入视频");
+    expect(markup).not.toContain("导入音频");
+    expect(markup).not.toContain("导入剧本");
+  });
+
+  it("classifies uploaded files by MIME type and extension", () => {
+    const imageAsset = createAssetInputFromFile(
+      { name: "packshot.png", type: "image/png", size: 1000 } as File,
+      "en",
+    );
+    const videoAsset = createAssetInputFromFile(
+      { name: "demo.mp4", type: "video/mp4", size: 2000 } as File,
+      "en",
+    );
+    const audioAsset = createAssetInputFromFile(
+      { name: "voice.mp3", type: "audio/mpeg", size: 3000 } as File,
+      "en",
+    );
+    const scriptAsset = createAssetInputFromFile(
+      { name: "script.md", type: "", size: 4000 } as File,
+      "en",
+    );
+
+    expect(imageAsset).toMatchObject({ type: "image", name: "packshot.png", mimeType: "image/png" });
+    expect(videoAsset).toMatchObject({ type: "video", name: "demo.mp4", mimeType: "video/mp4" });
+    expect(audioAsset).toMatchObject({
+      type: "reference",
+      name: "voice.mp3",
+      mimeType: "audio/mpeg",
+    });
+    expect(scriptAsset).toMatchObject({
+      type: "reference",
+      name: "script.md",
+      mimeType: "text/markdown",
+    });
+    expect(audioAsset.tags).toContain("audio");
+    expect(scriptAsset.tags).toContain("script");
+  });
+
+  it("places asset type tabs below the asset search toolbar", () => {
+    const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="assets" />);
+
+    const searchPanelIndex = markup.indexOf("asset-search-panel");
+    const tabsIndex = markup.indexOf("asset-browser-tabs");
+    const externalEntryIndex = markup.indexOf("external-stock-entry");
+
+    expect(searchPanelIndex).toBeGreaterThan(-1);
+    expect(tabsIndex).toBeGreaterThan(searchPanelIndex);
+    expect(externalEntryIndex).toBeGreaterThan(tabsIndex);
   });
 
   it("renders the external stock search entry as a modal trigger", () => {
@@ -182,7 +258,7 @@ describe("App", () => {
         onUploadAsset={() => undefined}
         searchQuery="desk"
         searchResults={[]}
-        stockProviderConfigs={[{ source: "demo", enabled: true }]}
+        stockProviderConfigs={[{ source: "pexels", enabled: true, apiKey: "pexels-secret" }]}
       />,
     );
 
@@ -219,7 +295,7 @@ describe("App", () => {
         onUploadAsset={() => undefined}
         searchQuery="desk"
         searchResults={[]}
-        stockProviderConfigs={[{ source: "demo", enabled: true }]}
+        stockProviderConfigs={[{ source: "pexels", enabled: true, apiKey: "pexels-secret" }]}
       />,
     );
 
@@ -265,7 +341,7 @@ describe("App", () => {
         onUploadAsset={() => undefined}
         searchQuery="desk"
         searchResults={[]}
-        stockProviderConfigs={[{ source: "demo", enabled: true }]}
+        stockProviderConfigs={[]}
       />,
     );
 
@@ -277,12 +353,13 @@ describe("App", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="inspiration" />);
 
     expect(markup).toContain("What do you want to create today?");
-    expect(markup).toContain("Text");
     expect(markup).toContain("Image");
-    expect(markup).toContain("Video");
+    expect(markup).toContain("Custom");
+    expect(markup).not.toContain("Use skills");
+    expect(markup).not.toContain("Agent mode");
+    expect(markup).not.toContain("Auto</button>");
     expect(markup).toContain("Generate material");
-    expect(markup).toContain("Doubao-Seed-2.0-pro");
-    expect(markup).toContain("Doubao-Seedance-2.0");
+    expect(markup).not.toContain("Current routing");
   });
 
   it("renders user API settings with separate model configuration areas", () => {
@@ -294,12 +371,60 @@ describe("App", () => {
     expect(markup).toContain("Video generation model");
     expect(markup).toContain("API service address");
     expect(markup).toContain("Volcengine Ark");
-    expect(markup).toContain("Select or type a model");
-    expect(markup).toContain("Doubao-Seedream-5.0-lite");
+    expect(markup).toContain("Select a model or paste an endpoint ID");
+    expect(markup).toContain("model-combobox");
+    expect(markup).toContain("model-combobox-toggle");
+    expect(markup).toContain("model-option");
+    expect(markup).not.toContain("model-preset-select");
+    expect(markup).toContain("doubao-seed-2-0-pro-260215");
+    expect(markup).toContain("doubao-seed-2-0-lite-260428");
+    expect(markup).toContain("doubao-seed-2-0-mini-260428");
+    expect(markup).toContain("doubao-seedream-5-0-260128");
+    expect(markup).toContain("doubao-seedream-4-5-251128");
+    expect(markup).toContain("doubao-seedream-4-0-250828");
+    expect(markup).toContain("doubao-seedance-1-5-pro-251215");
     expect(markup).toContain("Third-party stock libraries");
     expect(markup).toContain("Add third-party library");
-    expect(markup).toContain("Demo Stock");
+    expect(markup).toContain("Pexels");
+    expect(markup).not.toContain("Demo Stock");
     expect(markup).not.toContain("P1 grouped into 5 pages");
+  });
+
+  it("renders Freesound as a configurable stock provider", () => {
+    const markup = renderToStaticMarkup(
+      <SettingsPanel
+        apiConfig={createDefaultApiConfig()}
+        language="en"
+        onApiConfigChange={() => undefined}
+        onLanguageChange={() => undefined}
+        onStockProviderConfigsChange={() => undefined}
+        stockProviderConfigs={[{ source: "freesound", enabled: true, apiKey: "freesound-key" }]}
+      />,
+    );
+
+    expect(markup).toContain("Freesound");
+    expect(markup).toContain("Search Freesound audio effects");
+  });
+
+  it("normalizes legacy Ark display-name models from stored settings into callable model ids", () => {
+    const normalized = sanitizeApiConfig({
+      general: {
+        provider: "volcengine-ark",
+        model: "Doubao-Seed-2.0-pro",
+      },
+      image: {
+        provider: "volcengine-ark",
+        model: "Doubao-Seedream-5.0-lite",
+      },
+      video: {
+        provider: "volcengine-ark",
+        model: "Doubao-Seedance-1.5-pro",
+      },
+    });
+
+    expect(normalized.general?.model).toBe("doubao-seed-2-0-pro-260215");
+    expect(normalized.image?.model).toBe("doubao-seedream-5-0-260128");
+    expect(normalized.video?.model).toBe("doubao-seedance-1-5-pro-251215");
   });
 
   it("renders only the supported asset library categories in English", () => {
@@ -341,5 +466,28 @@ describe("App", () => {
     expect(assetMatchesCategory(makeAsset({ mimeType: "audio/mpeg" }), "audio")).toBe(true);
     expect(assetMatchesCategory(makeAsset({ tags: ["剧本"] }), "script")).toBe(true);
     expect(assetMatchesCategory(makeAsset({ mimeType: "application/pdf" }), "script")).toBe(false);
+  });
+
+  it("classifies Freesound audio results into the audio category", () => {
+    const audioResult: ExternalAssetResult = {
+      id: "freesound:sound:12345",
+      source: "freesound",
+      externalId: "12345",
+      type: "audio",
+      title: "Cash register button click",
+      thumbnailUrl: "",
+      previewUrl: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+      downloadUrl: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+      externalUrl: "https://freesound.org/people/creator/sounds/12345/",
+      authorName: "Freesound Creator",
+      licenseLabel: "Creative Commons 0",
+      canUseCommercially: true,
+      requiresAttribution: false,
+      tags: ["click"],
+    };
+
+    expect(externalAssetMatchesCategory(audioResult, "audio")).toBe(true);
+    expect(externalAssetMatchesCategory(audioResult, "image")).toBe(false);
+    expect(externalAssetMatchesCategory(audioResult, "video")).toBe(false);
   });
 });

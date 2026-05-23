@@ -19,6 +19,8 @@ import type {
   InspirationGenerateResponseSchema,
   InspirationMaterialSchema,
   InspirationMaterialStatusSchema,
+  InspirationVideoTaskRequestSchema,
+  InspirationVideoTaskResponseSchema,
   MediaSettingsSchema,
   ProjectBriefSchema,
   ProjectSchema,
@@ -57,6 +59,8 @@ export type ExternalAssetSearchResponse = z.infer<typeof ExternalAssetSearchResp
 export type InspirationGenerateRequest = z.infer<typeof InspirationGenerateRequestSchema>;
 export type InspirationMaterial = z.infer<typeof InspirationMaterialSchema>;
 export type InspirationGenerateResponse = z.infer<typeof InspirationGenerateResponseSchema>;
+export type InspirationVideoTaskRequest = z.infer<typeof InspirationVideoTaskRequestSchema>;
+export type InspirationVideoTaskResponse = z.infer<typeof InspirationVideoTaskResponseSchema>;
 export type StoryboardScene = z.infer<typeof StoryboardSceneSchema>;
 export type ScriptResult = z.infer<typeof ScriptResultSchema>;
 export type SceneUpdate = z.infer<typeof SceneUpdateSchema>;

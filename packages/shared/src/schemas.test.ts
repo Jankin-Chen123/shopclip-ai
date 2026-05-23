@@ -231,13 +231,45 @@ describe("shared contract schemas", () => {
         externalId: "456",
         type: "image",
         title: "Product flat lay",
-        previewUrl: "https://cdn.pixabay.com/photo.jpg",
+        thumbnailUrl: "https://cdn.pixabay.com/preview.jpg",
         externalUrl: "https://pixabay.com/photos/product-456/",
         licenseLabel: "Pixabay Content License",
         canUseCommercially: true,
         requiresAttribution: false,
       }).success,
     ).toBe(false);
+  });
+
+  it("validates Freesound audio external asset results and search requests", () => {
+    expect(
+      ExternalAssetResultSchema.safeParse({
+        id: "freesound:sound:12345",
+        source: "freesound",
+        externalId: "12345",
+        type: "audio",
+        title: "Cash register button click",
+        thumbnailUrl: "",
+        previewUrl: "https://cdn.freesound.org/previews/12/12345_67890-hq.mp3",
+        downloadUrl: "https://cdn.freesound.org/previews/12/12345_67890-hq.mp3",
+        externalUrl: "https://freesound.org/people/creator/sounds/12345/",
+        authorName: "Freesound Creator",
+        authorUrl: "https://freesound.org/people/creator/",
+        licenseLabel: "Creative Commons 0",
+        licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+        canUseCommercially: true,
+        requiresAttribution: false,
+        tags: ["click", "cash register"],
+        durationSeconds: 1.2,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      ExternalAssetSearchRequestSchema.safeParse({
+        query: "button click",
+        type: "audio",
+        providers: [{ source: "freesound", apiKey: "freesound-secret", enabled: true }],
+      }).success,
+    ).toBe(true);
   });
 
   it("allows asset search responses to include external provider matches", () => {
@@ -274,7 +306,6 @@ describe("shared contract schemas", () => {
       query: "desk product",
       type: "image",
       providers: [
-        { source: "demo", enabled: true },
         { source: "pexels", apiKey: "pexels-secret", enabled: true },
         { source: "pixabay", enabled: false },
       ],
@@ -282,25 +313,29 @@ describe("shared contract schemas", () => {
 
     expect(parsed.success).toBe(true);
     if (parsed.success) {
+      expect(parsed.data.page).toBe(1);
       expect(parsed.data.perPage).toBe(12);
-      expect(parsed.data.providers.at(1)?.apiKey).toBe("pexels-secret");
+      expect(parsed.data.providers.at(0)?.apiKey).toBe("pexels-secret");
     }
 
     expect(
       ExternalAssetSearchResponseSchema.safeParse({
         query: "desk product",
+        page: 1,
+        perPage: 12,
+        hasMore: true,
         externalResults: [
           {
-            id: "demo:image:desk-packshot",
-            source: "demo",
+            id: "pexels:photo:desk-packshot",
+            source: "pexels",
             externalId: "desk-packshot",
             type: "image",
-            title: "Demo stock desk product packshot",
-            thumbnailUrl: "data:image/svg+xml,preview",
-            previewUrl: "data:image/svg+xml,preview",
-            externalUrl: "https://example.com",
-            authorName: "ShopClip demo stock",
-            licenseLabel: "Demo stock license",
+            title: "Desk stock product packshot",
+            thumbnailUrl: "https://images.pexels.com/photos/1/thumb.jpeg",
+            previewUrl: "https://images.pexels.com/photos/1/preview.jpeg",
+            externalUrl: "https://www.pexels.com/photo/1/",
+            authorName: "Pexels Creator",
+            licenseLabel: "Pexels License",
             canUseCommercially: true,
             requiresAttribution: false,
             tags: ["desk"],

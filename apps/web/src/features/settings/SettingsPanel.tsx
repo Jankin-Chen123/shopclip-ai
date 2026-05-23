@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Database, KeyRound, Languages, Plus, ServerCog, Trash2 } from "lucide-react";
+import type { FocusEvent, KeyboardEvent } from "react";
+import { ChevronDown, Database, KeyRound, Languages, Plus, ServerCog, Trash2 } from "lucide-react";
 
 import type { Language } from "../../app/i18n";
 import { languageNames } from "../../app/i18n";
@@ -23,6 +24,15 @@ interface ProviderPreset {
   models: Record<ApiConfigRole, string[]>;
 }
 
+interface ModelComboboxProps {
+  label: string;
+  models: string[];
+  onChange: (model: string) => void;
+  placeholder: string;
+  role: ApiConfigRole;
+  value: string;
+}
+
 const providerPresets: ProviderPreset[] = [
   {
     id: "volcengine-ark",
@@ -30,20 +40,17 @@ const providerPresets: ProviderPreset[] = [
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     models: {
       general: [
-        "Doubao-Seed-2.0-pro",
-        "Doubao-Seed-2.0-flash",
-        "Doubao-Seed-1.8-thinking",
-        "Doubao-Seed-1.8",
+        "doubao-seed-2-0-pro-260215",
+        "doubao-seed-2-0-lite-260428",
+        "doubao-seed-2-0-mini-260428",
       ],
       image: [
-        "Doubao-Seedream-5.0-lite",
-        "Doubao-Seedream-4.5",
-        "Doubao-Seedream-4.0",
+        "doubao-seedream-5-0-260128",
+        "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0-250828",
       ],
       video: [
-        "Doubao-Seedance-2.0",
-        "Doubao-Seedance-1.5-pro",
-        "Doubao-Seedance-1.5-lite",
+        "doubao-seedance-1-5-pro-251215",
       ],
     },
   },
@@ -71,21 +78,44 @@ const providerPresets: ProviderPreset[] = [
 
 const defaultProviderPreset = providerPresets[0]!;
 
+const arkModelAliases = new Map<string, string>([
+  ["doubao-seed-2.0-pro", "doubao-seed-2-0-pro-260215"],
+  ["doubao-seed-2-0-pro-260215", "doubao-seed-2-0-pro-260215"],
+  ["doubao-seed-2.0-lite", "doubao-seed-2-0-lite-260428"],
+  ["doubao-seed-2-0-lite-260428", "doubao-seed-2-0-lite-260428"],
+  ["doubao-seed-2.0-mini", "doubao-seed-2-0-mini-260428"],
+  ["doubao-seed-2-0-mini-260428", "doubao-seed-2-0-mini-260428"],
+  ["doubao-seedream-5.0", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-5.0-lite", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-5-0-lite", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-5-0-260128", "doubao-seedream-5-0-260128"],
+  ["doubao-seedream-4.5", "doubao-seedream-4-5-251128"],
+  ["doubao-seedream-4-5", "doubao-seedream-4-5-251128"],
+  ["doubao-seedream-4-5-251128", "doubao-seedream-4-5-251128"],
+  ["doubao-seedream-4.0", "doubao-seedream-4-0-250828"],
+  ["doubao-seedream-4-0-250828", "doubao-seedream-4-0-250828"],
+  ["doubao-seedance-1.5-pro", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1-5-pro", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-2.0", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-2-0", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1.5-lite", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1-5-lite", "doubao-seedance-1-5-pro-251215"],
+]);
+
+const normalizeApiModel = (model?: string) => {
+  const trimmedModel = model?.trim();
+  if (!trimmedModel) {
+    return undefined;
+  }
+  return arkModelAliases.get(trimmedModel.toLowerCase()) ?? trimmedModel;
+};
+
 const stockProviderPresets: Array<{
   source: StockProviderConfig["source"];
   label: string;
   description: Record<Language, string>;
-  requiresApiKey: boolean;
 }> = [
-  {
-    source: "demo",
-    label: "Demo Stock",
-    description: {
-      en: "Built-in sample stock library for local demos and acceptance checks.",
-      zh: "内置演示素材库，用于本地体验和验收检查。",
-    },
-    requiresApiKey: false,
-  },
   {
     source: "pexels",
     label: "Pexels",
@@ -93,7 +123,6 @@ const stockProviderPresets: Array<{
       en: "Search Pexels photos and videos with your own API key.",
       zh: "使用你的 API key 搜索 Pexels 图片和视频。",
     },
-    requiresApiKey: true,
   },
   {
     source: "pixabay",
@@ -102,7 +131,14 @@ const stockProviderPresets: Array<{
       en: "Search Pixabay images and videos with your own API key.",
       zh: "使用你的 API key 搜索 Pixabay 图片和视频。",
     },
-    requiresApiKey: true,
+  },
+  {
+    source: "freesound",
+    label: "Freesound",
+    description: {
+      en: "Search Freesound audio effects and music previews with your own API key.",
+      zh: "使用你的 API key 搜索 Freesound 音效和音乐预览素材。",
+    },
   },
 ];
 
@@ -157,7 +193,7 @@ const settingsCopy = {
     provider: "API provider",
     apiBaseUrl: "API service address",
     model: "Model",
-    modelPlaceholder: "Select or type a model",
+    modelPlaceholder: "Select a model or paste an endpoint ID",
     keyHelp: "API keys are stored in this browser and sent only with generation requests.",
     keyPlaceholder: "Paste API key",
     stockTitle: "Third-party stock libraries",
@@ -167,7 +203,6 @@ const settingsCopy = {
     stockProvider: "Stock site",
     stockApiKey: "Stock API key",
     stockApiKeyPlaceholder: "Paste provider API key",
-    stockDemoHelp: "Demo Stock does not require an API key.",
     enabled: "Enabled",
     remove: "Remove",
     configured: "Configured libraries",
@@ -180,7 +215,7 @@ const settingsCopy = {
     provider: "API 服务厂商",
     apiBaseUrl: "API 服务地址",
     model: "模型",
-    modelPlaceholder: "选择或手动输入模型",
+    modelPlaceholder: "选择模型或填写 Endpoint ID",
     keyHelp: "API key 仅保存在当前浏览器中，并只会在生成请求时发送。",
     keyPlaceholder: "填写 API key",
     stockTitle: "第三方素材库",
@@ -190,7 +225,6 @@ const settingsCopy = {
     stockProvider: "素材库网站",
     stockApiKey: "素材库 API key",
     stockApiKeyPlaceholder: "填写该素材库的 API key",
-    stockDemoHelp: "Demo Stock 不需要 API key。",
     enabled: "启用",
     remove: "移除",
     configured: "已添加素材库",
@@ -200,6 +234,80 @@ const settingsCopy = {
 
 const getPreset = (provider?: string) =>
   providerPresets.find((preset) => preset.id === provider) ?? defaultProviderPreset;
+
+const ModelCombobox = ({
+  label,
+  models,
+  onChange,
+  placeholder,
+  role,
+  value,
+}: ModelComboboxProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const listId = `${role}-model-options`;
+
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setIsOpen(false);
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      setIsOpen(true);
+    }
+    if (event.key === "Escape") {
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="model-picker" onBlur={handleBlur}>
+      <div className="model-combobox-shell">
+        <input
+          aria-controls={listId}
+          aria-expanded={isOpen}
+          aria-label={`${label} model`}
+          aria-haspopup="listbox"
+          className="model-combobox"
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          role="combobox"
+          value={value}
+        />
+        <button
+          aria-expanded={isOpen}
+          aria-label={`${label} model presets`}
+          className="model-combobox-toggle"
+          onClick={() => setIsOpen((current) => !current)}
+          type="button"
+        >
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="model-option-list" hidden={!isOpen} id={listId} role="listbox">
+        {models.map((model) => (
+          <button
+            aria-selected={value === model}
+            className="model-option"
+            key={model}
+            onClick={() => {
+              onChange(model);
+              setIsOpen(false);
+            }}
+            role="option"
+            type="button"
+          >
+            {model}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export const createDefaultApiConfig = (): UserApiConfig => ({
   general: {
@@ -221,16 +329,29 @@ export const createDefaultApiConfig = (): UserApiConfig => ({
 
 export const sanitizeApiConfig = (apiConfig: UserApiConfig): UserApiConfig => {
   const defaults = createDefaultApiConfig();
+  const defaultGeneral = defaults.general!;
+  const defaultImage = defaults.image!;
+  const defaultVideo = defaults.video!;
   return {
-    general: { ...defaults.general, ...apiConfig.general },
-    image: { ...defaults.image, ...apiConfig.image },
-    video: { ...defaults.video, ...apiConfig.video },
+    general: {
+      ...defaultGeneral,
+      ...apiConfig.general,
+      model: normalizeApiModel(apiConfig.general?.model) ?? defaultGeneral.model,
+    },
+    image: {
+      ...defaultImage,
+      ...apiConfig.image,
+      model: normalizeApiModel(apiConfig.image?.model) ?? defaultImage.model,
+    },
+    video: {
+      ...defaultVideo,
+      ...apiConfig.video,
+      model: normalizeApiModel(apiConfig.video?.model) ?? defaultVideo.model,
+    },
   };
 };
 
-export const createDefaultStockProviderConfigs = (): StockProviderConfig[] => [
-  { source: "demo", enabled: true },
-];
+export const createDefaultStockProviderConfigs = (): StockProviderConfig[] => [];
 
 export const sanitizeStockProviderConfigs = (
   configs: StockProviderConfig[] = [],
@@ -262,7 +383,6 @@ export const SettingsPanel = ({
   const [draftStockProvider, setDraftStockProvider] =
     useState<StockProviderConfig["source"]>("pexels");
   const [draftStockApiKey, setDraftStockApiKey] = useState("");
-  const draftStockPreset = getStockProviderPreset(draftStockProvider);
 
   const updateRole = (
     role: ApiConfigRole,
@@ -390,17 +510,14 @@ export const SettingsPanel = ({
 
               <label>
                 {text.model}
-                <input
-                  list={`${role}-model-presets`}
-                  onChange={(event) => updateRole(role, { model: event.target.value })}
+                <ModelCombobox
+                  label={roleText[role].title}
+                  models={models}
+                  onChange={(model) => updateRole(role, { model })}
                   placeholder={text.modelPlaceholder}
+                  role={role}
                   value={roleConfig.model ?? ""}
                 />
-                <datalist id={`${role}-model-presets`}>
-                  {models.map((model) => (
-                    <option key={model} value={model} />
-                  ))}
-                </datalist>
               </label>
 
               <label>
@@ -448,17 +565,19 @@ export const SettingsPanel = ({
             {text.stockApiKey}
             <input
               autoComplete="off"
-              disabled={!draftStockPreset.requiresApiKey}
               onChange={(event) => setDraftStockApiKey(event.target.value)}
-              placeholder={
-                draftStockPreset.requiresApiKey ? text.stockApiKeyPlaceholder : text.stockDemoHelp
-              }
+              placeholder={text.stockApiKeyPlaceholder}
               type="password"
               value={draftStockApiKey}
             />
           </label>
 
-          <button className="stock-provider-add-button" onClick={addStockProvider} type="button">
+          <button
+            className="stock-provider-add-button"
+            disabled={!draftStockApiKey.trim()}
+            onClick={addStockProvider}
+            type="button"
+          >
             <Plus size={18} aria-hidden="true" />
             {text.addStockLibrary}
           </button>
@@ -489,24 +608,20 @@ export const SettingsPanel = ({
                     <p>{preset.description[language]}</p>
                   </div>
 
-                  {preset.requiresApiKey ? (
-                    <label>
-                      {text.stockApiKey}
-                      <input
-                        autoComplete="off"
-                        onChange={(event) =>
-                          updateStockProvider(provider.source, {
-                            apiKey: event.target.value || undefined,
-                          })
-                        }
-                        placeholder={text.stockApiKeyPlaceholder}
-                        type="password"
-                        value={provider.apiKey ?? ""}
-                      />
-                    </label>
-                  ) : (
-                    <span className="stock-provider-demo-note">{text.stockDemoHelp}</span>
-                  )}
+                  <label>
+                    {text.stockApiKey}
+                    <input
+                      autoComplete="off"
+                      onChange={(event) =>
+                        updateStockProvider(provider.source, {
+                          apiKey: event.target.value || undefined,
+                        })
+                      }
+                      placeholder={text.stockApiKeyPlaceholder}
+                      type="password"
+                      value={provider.apiKey ?? ""}
+                    />
+                  </label>
 
                   <button
                     aria-label={`${text.remove} ${preset.label}`}

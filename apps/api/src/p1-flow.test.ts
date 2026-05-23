@@ -205,30 +205,28 @@ describe("P1 asset retrieval and scene editing", () => {
     ]);
   });
 
-  it("searches external assets from user-selected provider configs", async () => {
+  it("returns an empty external search response when no user provider is configured", async () => {
     const searched = await request<{
       query: string;
+      page: number;
+      perPage: number;
+      hasMore: boolean;
       externalResults: Array<{ source: string; title: string }>;
     }>(baseUrl, "/api/assets/external-search", {
       method: "POST",
       body: JSON.stringify({
         query: "desk product",
+        page: 2,
         perPage: 4,
         type: "image",
-        providers: [{ source: "demo", enabled: true }],
+        providers: [],
       }),
     });
 
     expect(searched.status).toBe(200);
     expect(searched.body.query).toBe("desk product");
-    expect(searched.body.externalResults).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          source: "demo",
-          title: "Demo stock desk product packshot",
-        }),
-      ]),
-    );
+    expect(searched.body).toMatchObject({ page: 2, perPage: 4, hasMore: false });
+    expect(searched.body.externalResults).toEqual([]);
     expect(JSON.stringify(searched.body)).not.toContain("apiKey");
   });
 
@@ -290,6 +288,60 @@ describe("P1 asset retrieval and scene editing", () => {
     );
     expect(loaded.body.project.assets).toContainEqual(
       expect.objectContaining({ id: imported.body.asset.id, name: "Desk setup B-roll" }),
+    );
+  });
+
+  it("imports a Freesound audio result into the project asset library as an audio reference", async () => {
+    const projectId = await createProject(baseUrl);
+
+    const imported = await request<{
+      asset: {
+        id: string;
+        name: string;
+        type: string;
+        url: string;
+        tags: string[];
+        mimeType?: string;
+      };
+    }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
+      method: "POST",
+      body: JSON.stringify({
+        id: "freesound:sound:12345",
+        source: "freesound",
+        externalId: "12345",
+        type: "audio",
+        title: "Cash register button click",
+        thumbnailUrl: "",
+        previewUrl: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+        downloadUrl: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+        externalUrl: "https://freesound.org/people/creator/sounds/12345/",
+        authorName: "Freesound Creator",
+        authorUrl: "https://freesound.org/people/creator/",
+        licenseLabel: "Creative Commons 0",
+        licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+        canUseCommercially: true,
+        requiresAttribution: false,
+        tags: ["click", "cash register"],
+        durationSeconds: 1.2,
+      }),
+    });
+
+    expect(imported.status).toBe(201);
+    expect(imported.body.asset).toMatchObject({
+      name: "Cash register button click",
+      type: "reference",
+      url: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
+      mimeType: "audio/mpeg",
+    });
+    expect(imported.body.asset.tags).toEqual(
+      expect.arrayContaining([
+        "audio",
+        "click",
+        "cash-register",
+        "external",
+        "source-freesound",
+        "license-creative-commons-0",
+      ]),
     );
   });
 

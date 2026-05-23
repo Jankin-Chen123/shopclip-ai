@@ -50,8 +50,11 @@ const normalizeTag = (value: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
-const mimeTypeForExternalAsset = (type: "image" | "video") =>
-  type === "video" ? "video/mp4" : "image/jpeg";
+const assetTypeForExternalAsset = (type: "image" | "video" | "audio") =>
+  type === "audio" ? "reference" : type;
+
+const mimeTypeForExternalAsset = (type: "image" | "video" | "audio") =>
+  type === "video" ? "video/mp4" : type === "audio" ? "audio/mpeg" : "image/jpeg";
 
 export interface P0RouterOptions {
   store?: MemoryProjectStore;
@@ -146,7 +149,7 @@ export const createP0Router = ({
     const storedAsset = store.addAsset(
       request.params.projectId,
       {
-        type: externalAsset.type,
+        type: assetTypeForExternalAsset(externalAsset.type),
         status: "ready",
         url: externalAsset.downloadUrl ?? externalAsset.previewUrl,
         name: externalAsset.title,
@@ -156,6 +159,7 @@ export const createP0Router = ({
           mimeType: mimeTypeForExternalAsset(externalAsset.type),
           tags: [
             ...externalAsset.tags,
+            ...(externalAsset.type === "audio" ? ["audio"] : []),
             "external",
             `source-${externalAsset.source}`,
             `external-id-${externalAsset.externalId}`,
@@ -222,15 +226,18 @@ export const createP0Router = ({
       return;
     }
 
-    const { query, perPage, providers, type } = parsedSearch.data;
+    const { query, page, perPage, providers, type } = parsedSearch.data;
     const providerInstances = createExternalAssetProvidersFromConfig(providers);
     const externalResults =
       providers.length > 0
-        ? await searchExternalAssets({ query, perPage, type }, providerInstances)
-        : await externalAssetSearch({ query, perPage, type });
+        ? await searchExternalAssets({ query, page, perPage, type }, providerInstances)
+        : [];
 
     response.json({
       query,
+      page,
+      perPage,
+      hasMore: externalResults.length >= perPage,
       externalResults,
     });
   });
