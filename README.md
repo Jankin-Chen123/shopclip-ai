@@ -84,10 +84,19 @@ corepack pnpm dev
 | `DATABASE_URL`         | API    | 未来使用             | 当前 Demo 使用内存存储，后续接 PostgreSQL/Prisma。         |
 | `AI_PROVIDER_MODE`     | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
 | `AI_API_KEY`           | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
+| `AI_IMAGE_API_KEY`     | API    | 图片生成可选         | 图片生成专用服务端密钥；未配置时回退使用 `AI_API_KEY`。     |
 | `AI_TEXT_ENDPOINT_ID`  | API    | 真实 provider 才需要 | 服务端 provider 配置。                                     |
+| `AI_IMAGE_ENDPOINT_ID` | API    | 图片生成才需要       | 服务端图像生成 endpoint/model，必须能调用图片生成接口。     |
+| `AI_IMAGE_MODEL_NAME`  | API    | 可选                 | 前端展示用图片模型名，不要填 endpoint ID。                 |
+| `ARK_IMAGE_SIZE`       | API    | 可选                 | 图片生成尺寸，默认 `1024x1024`。                           |
 | `AI_VIDEO_ENDPOINT_ID` | API    | 真实 provider 才需要 | 服务端 provider 配置。                                     |
+| `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
+| `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
 | `TTS_API_KEY`          | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
+| `EXTERNAL_ASSET_PROVIDERS` | API | 可选              | 外部素材源列表；本地可用 `demo`，真实源可用 `pexels,pixabay`。 |
+| `PEXELS_API_KEY`       | API    | Pexels 才需要        | 服务端 Pexels API key，不暴露给前端。                       |
+| `PIXABAY_API_KEY`      | API    | Pixabay 才需要       | 服务端 Pixabay API key，不暴露给前端。                      |
 
 ## Demo 流程 ✨
 
@@ -108,8 +117,9 @@ corepack pnpm dev
 | `POST`  | `/api/projects`                            | 创建项目                |
 | `GET`   | `/api/projects/:projectId`                 | 加载项目快照            |
 | `POST`  | `/api/projects/:projectId/assets`          | 添加素材元数据          |
+| `POST`  | `/api/projects/:projectId/assets/import-external` | 导入外部素材结果为项目素材 |
 | `POST`  | `/api/projects/:projectId/generate-script` | 生成脚本和分镜          |
-| `GET`   | `/api/assets/search`                       | 搜索带标签的素材        |
+| `GET`   | `/api/assets/search`                       | 搜索项目素材和可选外部素材 |
 | `PATCH` | `/api/scenes/:sceneId`                     | 保存分镜编辑            |
 | `POST`  | `/api/scenes/:sceneId/regenerate`          | 重生成单个分镜          |
 | `GET`   | `/api/scenes/:sceneId/suggestions`         | 获取 Editing Agent 建议 |

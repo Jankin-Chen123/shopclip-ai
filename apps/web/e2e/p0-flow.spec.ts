@@ -16,7 +16,6 @@ test.describe("P0 browser flow", () => {
   }) => {
     await page.goto("/#project");
 
-    await expect(page.getByRole("heading", { name: "Project command center" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Product setup" })).toBeVisible();
 
     await page.getByLabel("Existing project ID").fill(`missing-${Date.now()}`);
@@ -35,12 +34,20 @@ test.describe("P0 browser flow", () => {
       path: evidencePath("p0-01-project-created.png"),
     });
 
-    await page.getByRole("button", { name: /Creative prep/ }).click();
-    await expect(page.getByRole("heading", { name: "Asset library" })).toBeVisible();
-    await page.getByRole("button", { name: "Upload metadata" }).click();
-    await expect(page.getByText("GlowGrip packshot")).toBeVisible();
+    await page.getByRole("link", { name: /Asset library/ }).click();
+    await expect(page.getByRole("heading", { name: "Image library" })).toBeVisible();
+    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
+    await page.getByLabel("Local image files").setInputFiles({
+      name: "GlowGrip packshot.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("demo-image"),
+    });
+    await page.getByRole("button", { name: "Import selected" }).click();
+    await expect(page.getByText("GlowGrip packshot.png")).toBeVisible();
     await expect(page.getByText("ready", { exact: true })).toBeVisible();
 
+    await page.getByRole("link", { name: /Create/ }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await page.getByRole("button", { name: "Generate storyboard" }).click();
     await expect(page.getByText(/Generated with deterministic fallback/)).toBeVisible();
     await expect(page.getByText("4 scenes", { exact: true })).toBeVisible();
@@ -49,7 +56,7 @@ test.describe("P0 browser flow", () => {
       path: evidencePath("p0-02-assets-and-storyboard.png"),
     });
 
-    await page.getByRole("button", { name: /Generation studio/ }).click();
+    await page.getByRole("button", { name: "Studio" }).click();
     await expect(page.getByRole("heading", { name: "Studio editor" })).toBeVisible();
     await expect(page.getByLabel("9 by 16 preview")).toBeVisible();
     await page.getByLabel("Subtitle").fill("Fold it flat, then lock in a clean desk shot.");
@@ -61,7 +68,7 @@ test.describe("P0 browser flow", () => {
       path: evidencePath("p0-03-studio-edit.png"),
     });
 
-    await page.getByRole("button", { name: /Delivery room/ }).click();
+    await page.getByRole("button", { name: "Delivery" }).click();
     await expect(page.getByRole("heading", { name: "Render trace" })).toBeVisible();
     await page.getByRole("button", { name: "Start render" }).click();
     await expect(page.getByText("completed").first()).toBeVisible();

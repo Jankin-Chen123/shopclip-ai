@@ -139,6 +139,160 @@ describe("P1 asset retrieval and scene editing", () => {
     expect(vectorLike.body.results[0].reasons.join(" ")).toContain("vector-like");
   });
 
+  it("returns external provider results alongside local asset matches", async () => {
+    const externalResult = {
+      id: "pexels:video:321",
+      source: "pexels",
+      externalId: "321",
+      type: "video",
+      title: "Desk product B-roll",
+      thumbnailUrl: "https://images.pexels.com/videos/321/thumb.jpg",
+      previewUrl: "https://videos.pexels.com/video-files/321/preview.mp4",
+      downloadUrl: "https://videos.pexels.com/video-files/321/download.mp4",
+      externalUrl: "https://www.pexels.com/video/321/",
+      authorName: "Pexels Creator",
+      authorUrl: "https://www.pexels.com/@creator",
+      licenseLabel: "Pexels License",
+      licenseUrl: "https://www.pexels.com/license/",
+      canUseCommercially: true,
+      requiresAttribution: false,
+      tags: ["desk", "product"],
+      durationSeconds: 6,
+    } as const;
+
+    const providerApp = createApp({
+      externalAssetSearch: async ({ query }) => (query === "desk" ? [externalResult] : []),
+    });
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = providerApp.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const projectId = await createProject(baseUrl);
+    const created = await request<{ asset: { id: string } }>(
+      baseUrl,
+      `/api/projects/${projectId}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Desk packshot",
+          mimeType: "image/png",
+          sizeBytes: 180_000,
+          tags: ["desk"],
+        }),
+      },
+    );
+    expect(created.status).toBe(201);
+
+    const searched = await request<{
+      results: Array<{ asset: { name: string } }>;
+      externalResults: Array<{ source: string; title: string; previewUrl: string }>;
+    }>(baseUrl, `/api/assets/search?projectId=${projectId}&q=desk`);
+
+    expect(searched.status).toBe(200);
+    expect(searched.body.results[0].asset.name).toBe("Desk packshot");
+    expect(searched.body.externalResults).toMatchObject([
+      {
+        source: "pexels",
+        title: "Desk product B-roll",
+        previewUrl: "https://videos.pexels.com/video-files/321/preview.mp4",
+      },
+    ]);
+  });
+
+  it("searches external assets from user-selected provider configs", async () => {
+    const searched = await request<{
+      query: string;
+      externalResults: Array<{ source: string; title: string }>;
+    }>(baseUrl, "/api/assets/external-search", {
+      method: "POST",
+      body: JSON.stringify({
+        query: "desk product",
+        perPage: 4,
+        type: "image",
+        providers: [{ source: "demo", enabled: true }],
+      }),
+    });
+
+    expect(searched.status).toBe(200);
+    expect(searched.body.query).toBe("desk product");
+    expect(searched.body.externalResults).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "demo",
+          title: "Demo stock desk product packshot",
+        }),
+      ]),
+    );
+    expect(JSON.stringify(searched.body)).not.toContain("apiKey");
+  });
+
+  it("imports an external provider result into the project asset library", async () => {
+    const projectId = await createProject(baseUrl);
+
+    const imported = await request<{
+      asset: {
+        id: string;
+        name: string;
+        type: string;
+        url: string;
+        tags: string[];
+        mimeType?: string;
+      };
+    }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
+      method: "POST",
+      body: JSON.stringify({
+        id: "pexels:video:654",
+        source: "pexels",
+        externalId: "654",
+        type: "video",
+        title: "Desk setup B-roll",
+        thumbnailUrl: "https://images.pexels.com/videos/654/thumb.jpg",
+        previewUrl: "https://videos.pexels.com/video-files/654/preview.mp4",
+        downloadUrl: "https://videos.pexels.com/video-files/654/download.mp4",
+        externalUrl: "https://www.pexels.com/video/654/",
+        authorName: "Pexels Creator",
+        authorUrl: "https://www.pexels.com/@creator",
+        licenseLabel: "Pexels License",
+        licenseUrl: "https://www.pexels.com/license/",
+        canUseCommercially: true,
+        requiresAttribution: false,
+        tags: ["desk", "product"],
+        durationSeconds: 6,
+      }),
+    });
+
+    expect(imported.status).toBe(201);
+    expect(imported.body.asset).toMatchObject({
+      name: "Desk setup B-roll",
+      type: "video",
+      url: "https://videos.pexels.com/video-files/654/download.mp4",
+      mimeType: "video/mp4",
+    });
+    expect(imported.body.asset.tags).toEqual(
+      expect.arrayContaining([
+        "desk",
+        "product",
+        "external",
+        "source-pexels",
+        "license-pexels-license",
+      ]),
+    );
+
+    const loaded = await request<{ project: { assets: Array<{ id: string; name: string }> } }>(
+      baseUrl,
+      `/api/projects/${projectId}`,
+    );
+    expect(loaded.body.project.assets).toContainEqual(
+      expect.objectContaining({ id: imported.body.asset.id, name: "Desk setup B-roll" }),
+    );
+  });
+
   it("updates, reorders, deletes, regenerates scenes, and applies editing agent suggestions without changing unrelated scenes", async () => {
     const projectId = await createProject(baseUrl);
 

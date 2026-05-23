@@ -4,6 +4,8 @@ export const ProjectStatusSchema = z.enum(["draft", "ready", "rendering", "compl
 
 export const AssetTypeSchema = z.enum(["image", "video", "reference"]);
 export const AssetStatusSchema = z.enum(["uploaded", "processing", "ready", "failed"]);
+export const InspirationAssetTypeSchema = z.enum(["text", "image", "video"]);
+export const InspirationMaterialStatusSchema = z.enum(["ready", "processing", "failed"]);
 export const SceneStatusSchema = z.enum(["draft", "generated", "edited", "regenerating", "failed"]);
 export const RenderTaskStatusSchema = z.enum([
   "queued",
@@ -69,11 +71,110 @@ export const AssetSearchResultSchema = z.object({
   reasons: z.array(z.string().trim().min(1)).default([]),
 });
 
+export const ExternalAssetProviderSchema = z.enum(["pexels", "pixabay", "demo"]);
+
+export const ExternalAssetResultSchema = z.object({
+  id: z.string().trim().min(1),
+  source: ExternalAssetProviderSchema,
+  externalId: z.string().trim().min(1),
+  type: z.enum(["image", "video"]),
+  title: z.string().trim().min(1),
+  thumbnailUrl: z.string().trim().min(1),
+  previewUrl: z.string().trim().min(1),
+  downloadUrl: z.string().trim().min(1).optional(),
+  externalUrl: z.string().trim().min(1),
+  authorName: z.string().trim().min(1),
+  authorUrl: z.string().trim().min(1).optional(),
+  licenseLabel: z.string().trim().min(1),
+  licenseUrl: z.string().trim().min(1).optional(),
+  canUseCommercially: z.boolean(),
+  requiresAttribution: z.boolean(),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  durationSeconds: z.number().positive().optional(),
+});
+
+export const ExternalAssetProviderConfigSchema = z.object({
+  source: ExternalAssetProviderSchema,
+  apiKey: z.string().trim().min(1).max(4000).optional(),
+  enabled: z.boolean().default(true),
+});
+
+export const ExternalAssetSearchRequestSchema = z.object({
+  query: z.string().trim().min(1).max(300),
+  perPage: z.number().int().positive().max(24).default(12),
+  type: z.enum(["image", "video"]).optional(),
+  providers: z.array(ExternalAssetProviderConfigSchema).max(8).default([]),
+});
+
+export const ExternalAssetSearchResponseSchema = z.object({
+  query: z.string().trim().min(1),
+  externalResults: z.array(ExternalAssetResultSchema).default([]),
+});
+
 export const AssetSearchResponseSchema = z.object({
   projectId: z.string().trim().min(1),
   query: z.string().default(""),
   tags: z.array(z.string().trim().min(1)).default([]),
   results: z.array(AssetSearchResultSchema),
+  externalResults: z.array(ExternalAssetResultSchema).default([]),
+});
+
+export const InspirationGenerateRequestSchema = z.object({
+  prompt: z.string().trim().min(2).max(2000),
+  assetType: InspirationAssetTypeSchema,
+  apiConfig: z
+    .object({
+      general: z
+        .object({
+          provider: z.string().trim().min(1).max(120).optional(),
+          apiBaseUrl: z.string().trim().url().max(500).optional(),
+          model: z.string().trim().min(1).max(200).optional(),
+          apiKey: z.string().trim().min(1).max(4000).optional(),
+        })
+        .optional(),
+      image: z
+        .object({
+          provider: z.string().trim().min(1).max(120).optional(),
+          apiBaseUrl: z.string().trim().url().max(500).optional(),
+          model: z.string().trim().min(1).max(200).optional(),
+          apiKey: z.string().trim().min(1).max(4000).optional(),
+        })
+        .optional(),
+      video: z
+        .object({
+          provider: z.string().trim().min(1).max(120).optional(),
+          apiBaseUrl: z.string().trim().url().max(500).optional(),
+          model: z.string().trim().min(1).max(200).optional(),
+          apiKey: z.string().trim().min(1).max(4000).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+export const InspirationMaterialSchema = z.object({
+  id: z.string().trim().min(1),
+  type: InspirationAssetTypeSchema,
+  title: z.string().trim().min(1),
+  content: z.string().trim().min(1),
+  status: InspirationMaterialStatusSchema,
+  url: z.string().trim().min(1).optional(),
+  mimeType: z.string().trim().min(1).optional(),
+});
+
+export const InspirationGenerateResponseSchema = z.object({
+  id: z.string().trim().min(1),
+  prompt: z.string().trim().min(1),
+  assetType: InspirationAssetTypeSchema,
+  model: z.string().trim().min(1),
+  provider: z.string().trim().min(1),
+  fallback: z.object({
+    used: z.boolean(),
+    reason: z.string().trim().min(1).optional(),
+  }),
+  materials: z.array(InspirationMaterialSchema).min(1),
 });
 
 export const StoryboardSceneSchema = z.object({

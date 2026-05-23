@@ -15,11 +15,20 @@ test.describe("P1 dashboard flow", () => {
     await page.goto("/#project");
 
     await page.getByRole("button", { name: "Create project" }).click();
-    await page.getByRole("button", { name: /Creative prep/ }).click();
-    await page.getByRole("button", { name: "Upload metadata" }).click();
+    await expect(page.getByText("Project loaded")).toBeVisible();
+    await page.getByRole("link", { name: /Asset library/ }).click();
+    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
+    await page.getByLabel("Local image files").setInputFiles({
+      name: "GlowGrip packshot.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("demo-image"),
+    });
+    await page.getByRole("button", { name: "Import selected" }).click();
+    await page.getByRole("link", { name: /Create/ }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await page.getByRole("button", { name: "Generate storyboard" }).click();
 
-    await page.getByRole("button", { name: /Analytics dashboard/ }).click();
+    await page.getByRole("button", { name: "Dashboard" }).click();
     await page.getByRole("button", { name: "Load dashboard" }).click();
 
     await expect(page.getByRole("heading", { name: "Mock analytics" })).toBeVisible();

@@ -97,6 +97,8 @@ projects/shopclip-ai/
 | 008  | P1 TTS、字幕、BGM、重试与 trace 强化   | `implementation-engineer`   | 005                | 是     | Done    |
 | 009  | P1 Mock 数据看板                       | `implementation-engineer`   | 005                | 是     | Done    |
 | 010  | 部署、文档、安全复核与最终证据         | `delivery-ops-engineer`     | 006、007、008、009 | 否     | Done    |
+| 011  | 灵感分区多模态素材生成                 | `implementation-engineer`   | 010                | 否     | Done    |
+| 012  | 用户 API 设置与模型配置                | `implementation-engineer`   | 011                | 否     | Done    |
 
 ## 依赖图
 

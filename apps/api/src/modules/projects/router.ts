@@ -1,7 +1,9 @@
 import { Router } from "express";
 import type { Response } from "express";
 import {
+  ExternalAssetSearchRequestSchema,
   ProjectBriefSchema,
+  ExternalAssetResultSchema,
   RenderRequestSchema,
   SceneUpdateSchema,
   ScriptResultSchema,
@@ -11,6 +13,11 @@ import { createAssetSlices, inferAssetTags } from "../assets/tagging.js";
 import { CreateAssetRequestSchema } from "../assets/validation.js";
 import { buildMockDashboard } from "../dashboard/mockDashboard.js";
 import { searchAssets } from "../retrieval/search.js";
+import {
+  createExternalAssetProvidersFromConfig,
+  searchExternalAssets,
+} from "../../providers/assets/externalAssetProviders.js";
+import type { ExternalAssetSearchInput } from "../../providers/assets/externalAssetProviders.js";
 import {
   generateEditingSuggestions,
   regenerateSceneFallback,
@@ -37,7 +44,24 @@ const sendInvalidRequest = (response: Response, code: string, message: string) =
   });
 };
 
-export const createP0Router = (store = new MemoryProjectStore()): Router => {
+const normalizeTag = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+const mimeTypeForExternalAsset = (type: "image" | "video") =>
+  type === "video" ? "video/mp4" : "image/jpeg";
+
+export interface P0RouterOptions {
+  store?: MemoryProjectStore;
+  externalAssetSearch?: (input: ExternalAssetSearchInput) => Promise<unknown[]>;
+}
+
+export const createP0Router = ({
+  store = new MemoryProjectStore(),
+  externalAssetSearch = searchExternalAssets,
+}: P0RouterOptions = {}): Router => {
   const router = Router();
 
   router.post("/projects", (request, response) => {
@@ -107,7 +131,50 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
     response.status(201).json({ asset: storedAsset });
   });
 
-  router.get("/assets/search", (request, response) => {
+  router.post("/projects/:projectId/assets/import-external", (request, response) => {
+    const parsedExternalAsset = ExternalAssetResultSchema.safeParse(request.body);
+    if (!parsedExternalAsset.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_EXTERNAL_ASSET",
+        "External asset metadata failed validation.",
+      );
+      return;
+    }
+
+    const externalAsset = parsedExternalAsset.data;
+    const storedAsset = store.addAsset(
+      request.params.projectId,
+      {
+        type: externalAsset.type,
+        status: "ready",
+        url: externalAsset.downloadUrl ?? externalAsset.previewUrl,
+        name: externalAsset.title,
+        mimeType: mimeTypeForExternalAsset(externalAsset.type),
+        tags: inferAssetTags({
+          name: externalAsset.title,
+          mimeType: mimeTypeForExternalAsset(externalAsset.type),
+          tags: [
+            ...externalAsset.tags,
+            "external",
+            `source-${externalAsset.source}`,
+            `external-id-${externalAsset.externalId}`,
+            `license-${normalizeTag(externalAsset.licenseLabel)}`,
+          ],
+        }),
+      },
+      createAssetSlices,
+    );
+
+    if (!storedAsset) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.status(201).json({ asset: storedAsset });
+  });
+
+  router.get("/assets/search", async (request, response) => {
     const projectId =
       typeof request.query.projectId === "string" ? request.query.projectId.trim() : "";
     if (!projectId) {
@@ -130,11 +197,41 @@ export const createP0Router = (store = new MemoryProjectStore()): Router => {
             .filter(Boolean)
         : [];
 
+    const externalResults = await externalAssetSearch({
+      query,
+      perPage: 8,
+    });
+
     response.json({
       projectId,
       query,
       tags,
       results: searchAssets(project, { query, tags }),
+      externalResults,
+    });
+  });
+
+  router.post("/assets/external-search", async (request, response) => {
+    const parsedSearch = ExternalAssetSearchRequestSchema.safeParse(request.body);
+    if (!parsedSearch.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_EXTERNAL_ASSET_SEARCH",
+        "External asset search request failed validation.",
+      );
+      return;
+    }
+
+    const { query, perPage, providers, type } = parsedSearch.data;
+    const providerInstances = createExternalAssetProvidersFromConfig(providers);
+    const externalResults =
+      providers.length > 0
+        ? await searchExternalAssets({ query, perPage, type }, providerInstances)
+        : await externalAssetSearch({ query, perPage, type });
+
+    response.json({
+      query,
+      externalResults,
     });
   });
 

@@ -10,17 +10,32 @@ import type {
 
 import {
   AppShell,
-  workspacePages,
-  type WorkspacePage,
+  type CreationPageId,
+  type WorkspaceSectionId,
   type WorkspacePageId,
 } from "../components/layout/AppShell";
+import {
+  AssetCategoryTabs,
+  assetMatchesCategory,
+  externalAssetMatchesCategory,
+  getAssetDraftDefaults,
+  type AssetCategory,
+} from "../features/assets/AssetCategoryTabs";
 import { AssetsPanel } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
+import { InspirationPanel } from "../features/inspiration/InspirationPanel";
 import { RenderPanel } from "../features/render/RenderPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
+import {
+  createDefaultStockProviderConfigs,
+  createDefaultApiConfig,
+  sanitizeApiConfig,
+  sanitizeStockProviderConfigs,
+  SettingsPanel,
+} from "../features/settings/SettingsPanel";
 import { ScriptPanel } from "../features/script/ScriptPanel";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
-import { copy, isLanguage, type AppCopy, type Language } from "./i18n";
+import { copy, isLanguage, type Language } from "./i18n";
 import {
   addAsset,
   applySceneSuggestion,
@@ -28,6 +43,7 @@ import {
   deleteScene,
   exportProject,
   generateScript,
+  importExternalAsset,
   loadDashboard,
   loadSceneSuggestions,
   loadProject,
@@ -36,14 +52,18 @@ import {
   reorderScenes,
   retryRenderTask,
   searchAssets,
+  searchExternalStockAssets,
   startRender,
   updateScene,
   type AssetSearchResult,
   type CreateAssetInput,
   type EditingSuggestion,
   type ExportResult,
+  type ExternalAssetResult,
   type MediaSettings,
   type ProjectSnapshot,
+  type StockProviderConfig,
+  type UserApiConfig,
 } from "../lib/api";
 
 const defaultBrief: ProjectBrief = {
@@ -56,13 +76,12 @@ const defaultBrief: ProjectBrief = {
   targetDurationSeconds: 15,
 };
 
-const defaultAsset: CreateAssetInput = {
-  type: "image",
-  name: "GlowGrip packshot",
-  mimeType: "image/png",
-  sizeBytes: 220_000,
-  tags: ["product", "desk", "hero"],
-};
+const defaultAssetSizeBytes = 220_000;
+
+const createDefaultAsset = (language: Language): CreateAssetInput => ({
+  ...getAssetDraftDefaults("image", language),
+  sizeBytes: defaultAssetSizeBytes,
+});
 
 const defaultMediaSettings: MediaSettings = {
   bgmTrack: "creator-pop",
@@ -70,6 +89,17 @@ const defaultMediaSettings: MediaSettings = {
   subtitlesEnabled: true,
   ttsVoice: "clear-host",
 };
+
+const creationPageIds: CreationPageId[] = [
+  "project",
+  "create",
+  "studio",
+  "delivery",
+  "dashboard",
+];
+
+const isCreationPage = (page: WorkspacePageId): page is CreationPageId =>
+  creationPageIds.includes(page as CreationPageId);
 
 type BusyState =
   | "idle"
@@ -90,13 +120,54 @@ const getStoredLanguage = (): Language => {
   return isLanguage(storedLanguage) ? storedLanguage : "en";
 };
 
+const getStoredApiConfig = (): UserApiConfig => {
+  if (typeof window === "undefined") {
+    return createDefaultApiConfig();
+  }
+
+  try {
+    const storedConfig = window.localStorage.getItem("shopclip-api-config");
+    if (!storedConfig) {
+      return createDefaultApiConfig();
+    }
+    return sanitizeApiConfig(JSON.parse(storedConfig) as UserApiConfig);
+  } catch {
+    return createDefaultApiConfig();
+  }
+};
+
+const getStoredStockProviderConfigs = (): StockProviderConfig[] => {
+  if (typeof window === "undefined") {
+    return createDefaultStockProviderConfigs();
+  }
+
+  try {
+    const storedConfig = window.localStorage.getItem("shopclip-stock-provider-config");
+    if (!storedConfig) {
+      return createDefaultStockProviderConfigs();
+    }
+    return sanitizeStockProviderConfigs(JSON.parse(storedConfig) as StockProviderConfig[]);
+  } catch {
+    return createDefaultStockProviderConfigs();
+  }
+};
+
 const pageFromHash = (): WorkspacePageId => {
   if (typeof window === "undefined") {
     return "project";
   }
 
   const hash = window.location.hash.replace("#", "");
-  if (hash === "assets" || hash === "script" || hash === "create") {
+  if (hash === "assets") {
+    return "assets";
+  }
+  if (hash === "inspiration") {
+    return "inspiration";
+  }
+  if (hash === "settings") {
+    return "settings";
+  }
+  if (hash === "script" || hash === "create") {
     return "create";
   }
   if (hash === "studio") {
@@ -111,76 +182,30 @@ const pageFromHash = (): WorkspacePageId => {
   return "project";
 };
 
-interface WorkspaceSwitcherProps {
-  activePage: WorkspacePageId;
-  assetsCount: number;
-  copy: AppCopy;
-  dirtySceneCount: number;
-  onPageChange: (page: WorkspacePageId) => void;
-  pages: WorkspacePage[];
-  renderStatus: string;
-  sceneCount: number;
-  dashboardStatus: string;
-}
-
-const WorkspaceSwitcher = ({
-  activePage,
-  assetsCount,
-  copy: text,
-  dirtySceneCount,
-  onPageChange,
-  pages,
-  renderStatus,
-  sceneCount,
-  dashboardStatus,
-}: WorkspaceSwitcherProps) => (
-  <section className="page-switcher" aria-label="Workspace categories">
-    {pages.map((page) => {
-      const Icon = page.icon;
-      const isActive = page.id === activePage;
-      const pageCopy = text.pages[page.id];
-      const metric =
-        page.id === "project"
-          ? text.pages.project.metric
-          : page.id === "create"
-            ? text.pages.create.assetsMetric(assetsCount)
-            : page.id === "studio"
-              ? text.pages.studio.scenesMetric(sceneCount, dirtySceneCount)
-              : page.id === "dashboard"
-                ? dashboardStatus
-                : renderStatus;
-
-      return (
-        <button
-          aria-pressed={isActive}
-          className={`page-card page-card-${page.accent} ${isActive ? "active" : ""}`}
-          key={page.id}
-          onClick={() => onPageChange(page.id)}
-          type="button"
-        >
-          <span className="page-card-icon" aria-hidden="true">
-            <Icon size={20} />
-          </span>
-          <span>
-            <strong>{pageCopy.title}</strong>
-            <small>{pageCopy.description}</small>
-          </span>
-          <em>{metric}</em>
-        </button>
-      );
-    })}
-  </section>
-);
-
 interface AppProps {
   initialLanguage?: Language;
+  initialPage?: WorkspacePageId;
 }
 
-export const App = ({ initialLanguage }: AppProps) => {
-  const [activePage, setActivePage] = useState<WorkspacePageId>(() => pageFromHash());
-  const [assetDraft, setAssetDraft] = useState<CreateAssetInput>(defaultAsset);
+export const App = ({ initialLanguage, initialPage }: AppProps) => {
+  const [language, setLanguage] = useState<Language>(() => initialLanguage ?? getStoredLanguage());
+  const [activePage, setActivePage] = useState<WorkspacePageId>(
+    () => initialPage ?? pageFromHash(),
+  );
+  const [activeAssetCategory, setActiveAssetCategory] = useState<AssetCategory>("image");
+  const [apiConfig, setApiConfig] = useState<UserApiConfig>(() => getStoredApiConfig());
+  const [stockProviderConfigs, setStockProviderConfigs] = useState<StockProviderConfig[]>(() =>
+    getStoredStockProviderConfigs(),
+  );
+  const [assetDraft, setAssetDraft] = useState<CreateAssetInput>(() =>
+    createDefaultAsset(language),
+  );
   const [assetSearchQuery, setAssetSearchQuery] = useState("desk stable creator table");
+  const [hasAssetSearchRun, setHasAssetSearchRun] = useState(false);
   const [assetSearchResults, setAssetSearchResults] = useState<AssetSearchResult[]>([]);
+  const [externalAssetSearchResults, setExternalAssetSearchResults] = useState<
+    ExternalAssetResult[]
+  >([]);
   const [brief, setBrief] = useState<ProjectBrief>(defaultBrief);
   const [busyState, setBusyState] = useState<BusyState>("idle");
   const [dashboard, setDashboard] = useState<DashboardResponse>();
@@ -197,14 +222,39 @@ export const App = ({ initialLanguage }: AppProps) => {
   const [script, setScript] = useState<ScriptResult>();
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
-  const [language, setLanguage] = useState<Language>(() => initialLanguage ?? getStoredLanguage());
   const text = copy[language];
 
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
+  const activeAssets = useMemo(
+    () =>
+      (project?.assets ?? []).filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
+    [activeAssetCategory, project?.assets],
+  );
+  const activeAssetSearchResults = useMemo(
+    () =>
+      assetSearchResults.filter((result) =>
+        assetMatchesCategory(result.asset, activeAssetCategory),
+      ),
+    [activeAssetCategory, assetSearchResults],
+  );
+  const activeExternalAssetSearchResults = useMemo(
+    () =>
+      externalAssetSearchResults.filter((result) =>
+        externalAssetMatchesCategory(result, activeAssetCategory),
+      ),
+    [activeAssetCategory, externalAssetSearchResults],
+  );
+  const activeSection: WorkspaceSectionId =
+    activePage === "assets"
+      ? "assets"
+      : activePage === "inspiration"
+        ? "inspiration"
+        : activePage === "settings"
+          ? "settings"
+          : "create";
   const statusLabel = project
     ? `${project.productName} / ${project.status}`
     : text.app.createOrLoadProject;
-  const renderStatus = renderTask?.status ?? text.app.notRendered;
 
   useEffect(() => {
     const handleHashChange = () => setActivePage(pageFromHash());
@@ -225,11 +275,62 @@ export const App = ({ initialLanguage }: AppProps) => {
     }
   };
 
+  const handleSectionChange = (section: WorkspaceSectionId) => {
+    handlePageChange(
+      section === "assets"
+        ? "assets"
+        : section === "inspiration"
+          ? "inspiration"
+          : section === "settings"
+            ? "settings"
+            : "project",
+    );
+  };
+
   const handleLanguageChange = (nextLanguage: Language) => {
+    const previousLanguage = language;
     setLanguage(nextLanguage);
+    setAssetDraft((current) => {
+      const previousDefaults = getAssetDraftDefaults(activeAssetCategory, previousLanguage);
+      const nextDefaults = getAssetDraftDefaults(activeAssetCategory, nextLanguage);
+      const isLocalizedDefault =
+        current.type === previousDefaults.type &&
+        current.mimeType === previousDefaults.mimeType &&
+        current.name === previousDefaults.name &&
+        current.tags.join("\u0000") === previousDefaults.tags.join("\u0000");
+
+      return isLocalizedDefault ? { ...nextDefaults, sizeBytes: current.sizeBytes } : current;
+    });
     if (typeof window !== "undefined") {
       window.localStorage.setItem("shopclip-language", nextLanguage);
     }
+  };
+
+  const handleApiConfigChange = (nextApiConfig: UserApiConfig) => {
+    const normalizedConfig = sanitizeApiConfig(nextApiConfig);
+    setApiConfig(normalizedConfig);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("shopclip-api-config", JSON.stringify(normalizedConfig));
+    }
+  };
+
+  const handleStockProviderConfigsChange = (nextConfigs: StockProviderConfig[]) => {
+    const normalizedConfigs = sanitizeStockProviderConfigs(nextConfigs);
+    setStockProviderConfigs(normalizedConfigs);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "shopclip-stock-provider-config",
+        JSON.stringify(normalizedConfigs),
+      );
+    }
+  };
+
+  const handleAssetCategoryChange = (category: AssetCategory) => {
+    setActiveAssetCategory(category);
+    setAssetDraft((current) => ({
+      ...getAssetDraftDefaults(category, language),
+      sizeBytes: current.sizeBytes > 0 ? current.sizeBytes : defaultAssetSizeBytes,
+    }));
   };
 
   const runAction = async (key: string, busy: BusyState, action: () => Promise<void>) => {
@@ -256,11 +357,30 @@ export const App = ({ initialLanguage }: AppProps) => {
       setTraceEvents([]);
       setDashboard(undefined);
       setExportResult(undefined);
+      setHasAssetSearchRun(false);
       setAssetSearchResults([]);
+      setExternalAssetSearchResults([]);
       setEditingSuggestions([]);
       setSelectedSceneId(undefined);
       setDirtySceneIds(new Set());
     });
+
+  const createDemoProjectForAssets = async (): Promise<ProjectSnapshot> => {
+    const createdProject = await createProject(brief);
+    setProject(createdProject);
+    setScript(undefined);
+    setRenderTask(undefined);
+    setTraceEvents([]);
+    setDashboard(undefined);
+    setExportResult(undefined);
+    setHasAssetSearchRun(false);
+    setAssetSearchResults([]);
+    setExternalAssetSearchResults([]);
+    setEditingSuggestions([]);
+    setSelectedSceneId(undefined);
+    setDirtySceneIds(new Set());
+    return createdProject;
+  };
 
   const handleLoadProject = () =>
     runAction("project", "project", async () => {
@@ -282,7 +402,9 @@ export const App = ({ initialLanguage }: AppProps) => {
       setTraceEvents([]);
       setDashboard(undefined);
       setExportResult(undefined);
+      setHasAssetSearchRun(false);
       setAssetSearchResults([]);
+      setExternalAssetSearchResults([]);
       setEditingSuggestions([]);
       setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
       setDirtySceneIds(new Set());
@@ -361,15 +483,92 @@ export const App = ({ initialLanguage }: AppProps) => {
     });
   };
 
-  const handleSearchAssets = () => {
-    if (!project) {
-      setErrors((current) => ({ ...current, asset: "Create or load a project first." }));
+  const handleImportFiles = (files: File[]) => {
+    if (files.length === 0) {
       return;
     }
 
+    const defaults = getAssetDraftDefaults(activeAssetCategory, language);
+
+    void runAction("asset", "asset", async () => {
+      const targetProject = project ?? (await createDemoProjectForAssets());
+      const importedAssets = await Promise.all(
+        files.map((file) =>
+          addAsset(targetProject.id, {
+            ...defaults,
+            name: file.name || defaults.name,
+            mimeType: file.type || defaults.mimeType,
+            sizeBytes: file.size > 0 ? file.size : defaultAssetSizeBytes,
+          }),
+        ),
+      );
+
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              assets: [...current.assets, ...importedAssets],
+            }
+          : current,
+      );
+      setHasAssetSearchRun(false);
+      setAssetSearchResults([]);
+      setExternalAssetSearchResults([]);
+    });
+  };
+
+  const handleSearchAssets = () => {
     void runAction("asset", "search", async () => {
-      const response = await searchAssets(project.id, assetSearchQuery);
+      const targetProject = project ?? (await createDemoProjectForAssets());
+      const response = await searchAssets(targetProject.id, assetSearchQuery);
+      setHasAssetSearchRun(true);
       setAssetSearchResults(response.results);
+      setExternalAssetSearchResults(response.externalResults);
+    });
+  };
+
+  const handleSearchExternalAssets = async (
+    query: string,
+    type?: "image" | "video",
+  ): Promise<ExternalAssetResult[]> => {
+    setBusyState("search");
+    setErrors((current) => ({ ...current, asset: undefined }));
+    try {
+      const response = await searchExternalStockAssets({
+        query,
+        perPage: 12,
+        type,
+        providers: stockProviderConfigs,
+      });
+      return response.externalResults;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Action failed.";
+      setErrors((current) => ({ ...current, asset: message }));
+      throw error;
+    } finally {
+      setBusyState("idle");
+    }
+  };
+
+  const handleImportExternalAsset = (externalAsset: ExternalAssetResult) => {
+    void runAction("asset", "asset", async () => {
+      const targetProject = project ?? (await createDemoProjectForAssets());
+      const asset = await importExternalAsset(targetProject.id, externalAsset);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              assets: [...current.assets, asset],
+            }
+          : {
+              ...targetProject,
+              assets: [...targetProject.assets, asset],
+            },
+      );
+      setAssetSearchResults([]);
+      setExternalAssetSearchResults((current) =>
+        current.filter((candidate) => candidate.id !== externalAsset.id),
+      );
     });
   };
 
@@ -606,122 +805,151 @@ export const App = ({ initialLanguage }: AppProps) => {
   return (
     <AppShell
       activePage={activePage}
+      activeSection={activeSection}
       copy={text}
       language={language}
-      onLanguageChange={handleLanguageChange}
       onPageChange={handlePageChange}
+      onSectionChange={handleSectionChange}
       statusLabel={statusLabel}
     >
-      <WorkspaceSwitcher
-        activePage={activePage}
-        assetsCount={project?.assets.length ?? 0}
-        copy={text}
-        dirtySceneCount={dirtySceneIds.size}
-        onPageChange={handlePageChange}
-        pages={workspacePages}
-        renderStatus={renderStatus}
-        sceneCount={scenes.length}
-        dashboardStatus={dashboard ? text.dashboard.ready : text.dashboard.waiting}
-      />
-
       <div className={`workspace-grid workspace-page page-${activePage}`}>
-        {activePage === "project" ? (
-          <ProjectSetup
-            brief={brief}
-            copy={text.project}
-            disabled={busyState !== "idle"}
-            error={errors.project}
-            isLoading={busyState === "project"}
-            onBriefChange={setBrief}
-            onCreateProject={handleCreateProject}
-            onLoadProject={handleLoadProject}
-            onProjectIdToLoadChange={setProjectIdToLoad}
-            project={project}
-            projectIdToLoad={projectIdToLoad}
-          />
-        ) : null}
-
-        {activePage === "create" ? (
-          <>
+        {activePage === "assets" ? (
+          <section className="asset-workspace" aria-label={text.assets.title}>
+            <AssetCategoryTabs
+              activeCategory={activeAssetCategory}
+              language={language}
+              onCategoryChange={handleAssetCategoryChange}
+            />
             <AssetsPanel
+              activeCategory={activeAssetCategory}
               assetDraft={assetDraft}
-              assets={project?.assets ?? []}
+              assets={activeAssets}
               copy={text.assets}
-              disabled={!project || busyState !== "idle"}
+              disabled={busyState !== "idle"}
               error={errors.asset}
+              hasProject={Boolean(project)}
+              hasSearched={hasAssetSearchRun}
               isLoading={busyState === "asset"}
               isSearching={busyState === "search"}
+              language={language}
               onAssetDraftChange={setAssetDraft}
+              onImportExternalAsset={handleImportExternalAsset}
+              onImportFiles={handleImportFiles}
               onRecallAsset={selectedSceneId ? handleRecallAsset : undefined}
+              onSearchExternalAssets={handleSearchExternalAssets}
               onSearchAssets={handleSearchAssets}
               onSearchQueryChange={setAssetSearchQuery}
               onUploadAsset={handleUploadAsset}
               searchQuery={assetSearchQuery}
-              searchResults={assetSearchResults}
+              stockProviderConfigs={stockProviderConfigs}
+              externalSearchResults={activeExternalAssetSearchResults}
+              searchResults={activeAssetSearchResults}
             />
-            <ScriptPanel
-              copy={text.script}
-              disabled={!project || busyState !== "idle"}
-              error={errors.script}
-              fallbackProvider={fallbackProvider}
-              isLoading={busyState === "script"}
-              onGenerateScript={handleGenerateScript}
-              script={script}
-            />
-          </>
+          </section>
         ) : null}
 
-        {activePage === "studio" ? (
-          <StudioWorkspace
-            assets={project?.assets ?? []}
-            copy={text.studio}
-            dirtySceneIds={dirtySceneIds}
-            isBusy={busyState === "scene"}
-            onApplySuggestion={handleApplySuggestion}
-            onDeleteScene={handleDeleteScene}
-            onDismissSuggestion={handleDismissSuggestion}
-            onLoadSuggestions={handleLoadSuggestions}
-            onRegenerateScene={handleRegenerateScene}
-            onSceneChange={handleSceneChange}
-            onSceneMove={handleSceneMove}
-            onSceneSave={handleSceneSave}
-            onSelectedSceneChange={setSelectedSceneId}
-            scenes={scenes}
-            selectedSceneId={selectedSceneId}
-            suggestions={editingSuggestions}
+        {activePage === "inspiration" ? (
+          <InspirationPanel apiConfig={apiConfig} language={language} />
+        ) : null}
+
+        {activePage === "settings" ? (
+          <SettingsPanel
+            apiConfig={apiConfig}
+            language={language}
+            onApiConfigChange={handleApiConfigChange}
+            onLanguageChange={handleLanguageChange}
+            onStockProviderConfigsChange={handleStockProviderConfigsChange}
+            stockProviderConfigs={stockProviderConfigs}
           />
         ) : null}
 
-        {activePage === "delivery" ? (
-          <RenderPanel
-            copy={text.render}
-            disabled={!project || scenes.length === 0 || busyState !== "idle"}
-            error={errors.render ?? errors.export}
-            exportResult={exportResult}
-            forceRenderFailure={forceRenderFailure}
-            isExporting={busyState === "export"}
-            isRendering={busyState === "render"}
-            mediaSettings={mediaSettings}
-            onForceFailureChange={setForceRenderFailure}
-            onExport={handleExport}
-            onMediaSettingsChange={setMediaSettings}
-            onRefreshRender={handleRefreshRender}
-            onRetryRender={handleRetryRender}
-            onStartRender={handleStartRender}
-            renderTask={renderTask}
-            traceEvents={traceEvents}
-          />
-        ) : null}
+        {isCreationPage(activePage) ? (
+          <section className={`creation-shell creation-shell-${activePage}`}>
+            <div className="creation-main">
+              {activePage === "project" ? (
+                <ProjectSetup
+                  brief={brief}
+                  copy={text.project}
+                  disabled={busyState !== "idle"}
+                  error={errors.project}
+                  isLoading={busyState === "project"}
+                  onBriefChange={setBrief}
+                  onCreateProject={handleCreateProject}
+                  onLoadProject={handleLoadProject}
+                  onProjectIdToLoadChange={setProjectIdToLoad}
+                  project={project}
+                  projectIdToLoad={projectIdToLoad}
+                />
+              ) : null}
 
-        {activePage === "dashboard" ? (
-          <DashboardPanel
-            copy={text.dashboard}
-            dashboard={dashboard}
-            disabled={!project || busyState !== "idle"}
-            error={errors.dashboard}
-            isLoading={busyState === "dashboard"}
-            onLoadDashboard={handleLoadDashboard}
-          />
+              {activePage === "create" ? (
+                <section className="script-workspace">
+                  <ScriptPanel
+                    copy={text.script}
+              disabled={busyState !== "idle"}
+                    error={errors.script}
+                    fallbackProvider={fallbackProvider}
+                    isLoading={busyState === "script"}
+                    onGenerateScript={handleGenerateScript}
+                    script={script}
+                  />
+                </section>
+              ) : null}
+
+              {activePage === "studio" ? (
+                <StudioWorkspace
+                  assets={project?.assets ?? []}
+                  copy={text.studio}
+                  dirtySceneIds={dirtySceneIds}
+                  isBusy={busyState === "scene"}
+                  onApplySuggestion={handleApplySuggestion}
+                  onDeleteScene={handleDeleteScene}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onLoadSuggestions={handleLoadSuggestions}
+                  onRegenerateScene={handleRegenerateScene}
+                  onSceneChange={handleSceneChange}
+                  onSceneMove={handleSceneMove}
+                  onSceneSave={handleSceneSave}
+                  onSelectedSceneChange={setSelectedSceneId}
+                  scenes={scenes}
+                  selectedSceneId={selectedSceneId}
+                  suggestions={editingSuggestions}
+                />
+              ) : null}
+
+              {activePage === "delivery" ? (
+                <RenderPanel
+                  copy={text.render}
+                  disabled={!project || scenes.length === 0 || busyState !== "idle"}
+                  error={errors.render ?? errors.export}
+                  exportResult={exportResult}
+                  forceRenderFailure={forceRenderFailure}
+                  isExporting={busyState === "export"}
+                  isRendering={busyState === "render"}
+                  mediaSettings={mediaSettings}
+                  onForceFailureChange={setForceRenderFailure}
+                  onExport={handleExport}
+                  onMediaSettingsChange={setMediaSettings}
+                  onRefreshRender={handleRefreshRender}
+                  onRetryRender={handleRetryRender}
+                  onStartRender={handleStartRender}
+                  renderTask={renderTask}
+                  traceEvents={traceEvents}
+                />
+              ) : null}
+
+              {activePage === "dashboard" ? (
+                <DashboardPanel
+                  copy={text.dashboard}
+                  dashboard={dashboard}
+                  disabled={!project || busyState !== "idle"}
+                  error={errors.dashboard}
+                  isLoading={busyState === "dashboard"}
+                  onLoadDashboard={handleLoadDashboard}
+                />
+              ) : null}
+            </div>
+          </section>
         ) : null}
       </div>
     </AppShell>

@@ -7,7 +7,7 @@
 - Owner role: `delivery-ops-engineer`
 - Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-22
+- Last updated: 2026-05-23
 
 ## Source Of Truth
 
@@ -73,6 +73,8 @@ Deploy the completed P0/P1 demo, document usage and architecture, perform final 
 - Added Express security baseline headers, JSON body limit, explicit CORS parsing, and generic 404
   handling.
 - Added final security review, deployment decision, handoff note, and Task10 verification evidence.
+- Added Vite dev/preview `allowedHosts: true` so rotating cpolar tunnel hosts are not blocked
+  by Vite's host check during local demo access.
 
 ## Verification Evidence
 
@@ -82,3 +84,4 @@ Deploy the completed P0/P1 demo, document usage and architecture, perform final 
 - `corepack pnpm build`: passed.
 - `corepack pnpm --filter @shopclip/web test:e2e`: passed, 4 browser tests.
 - Evidence file: `projects/shopclip-ai/evidence/part-010-verification.md`.
+- Evidence file: `projects/shopclip-ai/evidence/2026-05-23-vite-cpolar-host.md`.

@@ -17,30 +17,41 @@ test.describe("P1 browser flow", () => {
     await page.goto("/#project");
 
     await page.getByRole("button", { name: "Create project" }).click();
-    await page.getByRole("button", { name: /Creative prep/ }).click();
-    await page.getByRole("button", { name: "Upload metadata" }).click();
+    await expect(page.getByText("Project loaded")).toBeVisible();
+    await page.getByRole("link", { name: /Asset library/ }).click();
+    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
+    await page.getByLabel("Local image files").setInputFiles([
+      {
+        name: "GlowGrip packshot.png",
+        mimeType: "image/png",
+        buffer: Buffer.from("demo-image"),
+      },
+      {
+        name: "Hands free desk lifestyle demo.webp",
+        mimeType: "image/webp",
+        buffer: Buffer.from("demo-webp"),
+      },
+    ]);
+    await page.getByRole("button", { name: "Import selected" }).click();
 
-    await page.getByLabel("Asset name").fill("Hands free desk lifestyle demo");
-    await page.getByLabel("MIME type").fill("image/webp");
-    await page.getByLabel("Tags").fill("desk, benefit");
-    await page.getByRole("button", { name: "Upload metadata" }).click();
-
+    await page.getByRole("link", { name: /Create/ }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await page.getByRole("button", { name: "Generate storyboard" }).click();
     await expect(page.getByText("4 scenes", { exact: true })).toBeVisible();
 
-    await page.getByLabel("Search assets").fill("stable creator table");
+    await page.getByRole("link", { name: /Asset library/ }).click();
+    await page.getByLabel("Search image library").fill("stable creator table");
     await page.getByRole("button", { name: "Search library" }).click();
-    await expect(
-      page
-        .getByLabel("Asset retrieval")
-        .getByRole("heading", { name: "Hands free desk lifestyle demo" }),
-    ).toBeVisible();
+    const searchResult = page.getByRole("button", {
+      name: /Hands free desk lifestyle demo.*Score/,
+    });
+    await expect(searchResult).toBeVisible();
     await page.screenshot({
       fullPage: true,
       path: evidencePath("p1-06-asset-search.png"),
     });
 
-    await page.getByRole("button", { name: "Use in selected scene" }).first().click();
+    await searchResult.click();
     await expect(page.getByRole("heading", { name: "Studio editor" })).toBeVisible();
     await page.getByRole("button", { name: "Save local edit" }).click();
     await expect(page.getByText("Stable")).toBeVisible();

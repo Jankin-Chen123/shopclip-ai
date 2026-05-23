@@ -2,6 +2,8 @@ import cors from "cors";
 import express from "express";
 import type { ErrorRequestHandler, Express } from "express";
 import { createHealthPayload } from "@shopclip/shared";
+import { createInspirationRouter } from "./modules/inspiration/router.js";
+import type { P0RouterOptions } from "./modules/projects/router.js";
 import { createP0Router } from "./modules/projects/router.js";
 
 const parseCorsOrigins = (): string | string[] => {
@@ -24,7 +26,9 @@ const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => 
   });
 };
 
-export const createApp = (): Express => {
+export type AppOptions = P0RouterOptions;
+
+export const createApp = (options: AppOptions = {}): Express => {
   const app = express();
 
   app.disable("x-powered-by");
@@ -45,7 +49,8 @@ export const createApp = (): Express => {
   app.get("/health", (_request, response) => {
     response.json(createHealthPayload("api"));
   });
-  app.use("/api", createP0Router());
+  app.use("/api", createInspirationRouter());
+  app.use("/api", createP0Router(options));
   app.use((_request, response) => {
     response.status(404).json({
       error: {

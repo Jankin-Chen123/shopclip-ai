@@ -5,7 +5,14 @@ import type {
   AssetSlice,
   DashboardResponse,
   EditingSuggestion,
+  ExternalAssetProviderConfig,
+  ExternalAssetResult,
+  ExternalAssetSearchRequest,
+  ExternalAssetSearchResponse,
   AssetType,
+  InspirationAssetType,
+  InspirationGenerateResponse,
+  InspirationGenerateRequest,
   MediaSettings,
   Project,
   ProjectBrief,
@@ -48,6 +55,9 @@ export interface CreateAssetInput {
   sizeBytes: number;
   tags: string[];
 }
+
+export type UserApiConfig = NonNullable<InspirationGenerateRequest["apiConfig"]>;
+export type StockProviderConfig = ExternalAssetProviderConfig;
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
@@ -109,6 +119,20 @@ export const addAsset = async (
   return response.asset;
 };
 
+export const importExternalAsset = async (
+  projectId: string,
+  asset: ExternalAssetResult,
+): Promise<AssetMetadata> => {
+  const response = await requestJson<{ asset: AssetMetadata }>(
+    `/projects/${projectId}/assets/import-external`,
+    {
+      method: "POST",
+      body: JSON.stringify(asset),
+    },
+  );
+  return response.asset;
+};
+
 export const searchAssets = async (
   projectId: string,
   query: string,
@@ -125,11 +149,33 @@ export const searchAssets = async (
   return requestJson(`/assets/search?${params.toString()}`);
 };
 
+export const searchExternalStockAssets = async (
+  request: ExternalAssetSearchRequest,
+): Promise<ExternalAssetSearchResponse> =>
+  requestJson("/assets/external-search", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
 export const generateScript = async (
   projectId: string,
 ): Promise<{ fallback: { used: boolean; provider: string }; script: ScriptResult }> =>
   requestJson(`/projects/${projectId}/generate-script`, {
     method: "POST",
+  });
+
+export const generateInspirationMaterial = async (
+  prompt: string,
+  assetType: InspirationAssetType,
+  apiConfig?: UserApiConfig,
+): Promise<InspirationGenerateResponse> =>
+  requestJson("/inspiration/generate", {
+    method: "POST",
+    body: JSON.stringify({
+      prompt,
+      assetType,
+      apiConfig,
+    }),
   });
 
 export const startRender = async (
@@ -225,6 +271,12 @@ export type {
   AssetSearchResult,
   DashboardResponse,
   EditingSuggestion,
+  ExternalAssetProviderConfig,
+  ExternalAssetResult,
+  ExternalAssetSearchRequest,
+  ExternalAssetSearchResponse,
+  InspirationAssetType,
+  InspirationGenerateResponse,
   MediaSettings,
   RenderRequest,
 };

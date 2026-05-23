@@ -2,19 +2,32 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
-  Boxes,
+  CheckCircle2,
   Clapperboard,
   Download,
   Film,
   FolderKanban,
-  Rocket,
+  Images,
+  Lightbulb,
+  Plus,
+  Settings,
   Sparkles,
 } from "lucide-react";
 
 import type { AppCopy, Language } from "../../app/i18n";
-import { languageNames } from "../../app/i18n";
 
-export type WorkspacePageId = "project" | "create" | "studio" | "delivery" | "dashboard";
+export type WorkspacePageId =
+  | "assets"
+  | "inspiration"
+  | "settings"
+  | "project"
+  | "create"
+  | "studio"
+  | "delivery"
+  | "dashboard";
+
+export type WorkspaceSectionId = "assets" | "inspiration" | "settings" | "create";
+export type CreationPageId = Exclude<WorkspacePageId, "assets" | "inspiration" | "settings">;
 
 export interface WorkspacePage {
   id: WorkspacePageId;
@@ -22,7 +35,19 @@ export interface WorkspacePage {
   icon: LucideIcon;
 }
 
-export const workspacePages: WorkspacePage[] = [
+interface WorkspaceSection {
+  id: WorkspaceSectionId;
+  accent: string;
+  icon: LucideIcon;
+}
+
+interface CreationWorkspacePage {
+  id: CreationPageId;
+  accent: string;
+  icon: LucideIcon;
+}
+
+export const workspacePages: CreationWorkspacePage[] = [
   {
     id: "project",
     accent: "rose",
@@ -50,29 +75,70 @@ export const workspacePages: WorkspacePage[] = [
   },
 ];
 
+export const workspaceSections: WorkspaceSection[] = [
+  {
+    id: "assets",
+    accent: "cyan",
+    icon: Images,
+  },
+  {
+    id: "inspiration",
+    accent: "blue",
+    icon: Lightbulb,
+  },
+  {
+    id: "create",
+    accent: "amber",
+    icon: Sparkles,
+  },
+];
+
 interface AppShellProps {
   activePage: WorkspacePageId;
+  activeSection: WorkspaceSectionId;
   children: ReactNode;
   copy: AppCopy;
   language: Language;
   onPageChange: (page: WorkspacePageId) => void;
-  onLanguageChange: (language: Language) => void;
+  onSectionChange: (section: WorkspaceSectionId) => void;
   statusLabel: string;
 }
 
 export const AppShell = ({
   activePage,
+  activeSection,
   children,
   copy,
   language,
-  onLanguageChange,
   onPageChange,
+  onSectionChange,
   statusLabel,
 }: AppShellProps) => {
-  const activePageMeta: WorkspacePage =
-    workspacePages.find((page) => page.id === activePage) ?? workspacePages[0]!;
-  const activePageCopy = copy.pages[activePageMeta.id];
-  const ActiveIcon = activePageMeta.icon;
+  const getSectionText = (section: WorkspaceSectionId) => {
+    if (section === "assets") {
+      return {
+        label: copy.assets.title,
+        title: copy.assets.searchRegion,
+      };
+    }
+
+    if (section === "inspiration") {
+      return language === "zh"
+        ? { label: "灵感", title: "想法、参考与 AI 生图" }
+        : { label: "Inspiration", title: "Ideas, references, and AI images" };
+    }
+
+    if (section === "settings") {
+      return language === "zh"
+        ? { label: "设置", title: "语言切换与 API 配置" }
+        : { label: "Settings", title: "Language and API configuration" };
+    }
+
+    return {
+      label: copy.pages.create.label,
+      title: copy.pages.create.title,
+    };
+  };
 
   return (
     <div className="workspace-shell">
@@ -89,34 +155,26 @@ export const AppShell = ({
             <span>{copy.app.workspaceBadge}</span>
           </div>
         </div>
-        <fieldset className="language-switcher" aria-label={copy.app.languageLabel}>
-          <legend>{copy.app.languageShortLabel}</legend>
-          {(["en", "zh"] as const).map((option) => (
-            <button
-              aria-pressed={language === option}
-              className={language === option ? "active" : undefined}
-              key={option}
-              onClick={() => onLanguageChange(option)}
-              type="button"
-            >
-              {languageNames[option]}
-            </button>
-          ))}
-        </fieldset>
         <nav className="nav-list">
-          {workspacePages.map((item) => {
+          {workspaceSections.map((item) => {
             const Icon = item.icon;
-            const itemCopy = copy.pages[item.id];
-            const isActive = item.id === activePage;
+            const isActive = item.id === activeSection;
+            const itemCopy = getSectionText(item.id);
             return (
               <a
                 aria-current={isActive ? "page" : undefined}
                 className={isActive ? "active" : undefined}
-                href={`#${item.id}`}
+                href={
+                  item.id === "assets"
+                    ? "#assets"
+                    : item.id === "inspiration"
+                      ? "#inspiration"
+                      : "#project"
+                }
                 key={item.id}
                 onClick={(event) => {
                   event.preventDefault();
-                  onPageChange(item.id);
+                  onSectionChange(item.id);
                 }}
               >
                 <Icon size={18} aria-hidden="true" />
@@ -128,29 +186,83 @@ export const AppShell = ({
             );
           })}
         </nav>
-        <div className="sidebar-footer">
-          <Boxes size={18} aria-hidden="true" />
-          <span>{copy.app.sidebarFooter}</span>
-        </div>
+        <button
+          aria-pressed={activePage === "settings"}
+          className={`sidebar-footer settings-entry ${activePage === "settings" ? "active" : ""}`}
+          onClick={() => onSectionChange("settings")}
+          type="button"
+        >
+          <Settings size={18} aria-hidden="true" />
+          <span>{getSectionText("settings").label}</span>
+        </button>
       </aside>
 
       <main className="workspace-main" id="workspace-content">
         <header className="topbar">
-          <div className={`page-hero hero-${activePageMeta.accent}`}>
-            <div className="page-hero-icon" aria-hidden="true">
-              <ActiveIcon size={24} />
+          {activeSection === "create" ? (
+            <nav className="flow-tabs" aria-label="Creation workflow">
+              {workspacePages.map((page) => {
+                const Icon = page.icon;
+                const pageCopy = copy.pages[page.id];
+                const isActive = activePage === page.id;
+                return (
+                  <button
+                    aria-pressed={isActive}
+                    className={isActive ? "active" : undefined}
+                    key={page.id}
+                    onClick={() => onPageChange(page.id)}
+                    type="button"
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    <span>{pageCopy.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          ) : (
+            <div className="section-title">
+              <strong>{getSectionText(activeSection).label}</strong>
+              <span>{getSectionText(activeSection).title}</span>
             </div>
-            <div>
-              <p className="eyebrow">{copy.app.eyebrow}</p>
-              <h1>{activePageCopy.title}</h1>
-              <p>{activePageCopy.description}</p>
-            </div>
-          </div>
-          <div className="topbar-status" aria-live="polite">
-            <Rocket size={16} aria-hidden="true" />
+          )}
+          <div className="topbar-status concept-top-cta" aria-live="polite">
+            <Plus size={18} aria-hidden="true" />
             {statusLabel}
           </div>
         </header>
+        {activeSection === "create" ? (
+          <nav className="creation-stepper" aria-label="Creation progress">
+            {workspacePages.map((page, index) => {
+              const Icon = page.icon;
+              const pageCopy = copy.pages[page.id];
+              const activeIndex = workspacePages.findIndex((item) => item.id === activePage);
+              const isActive = activePage === page.id;
+              const isComplete = activeIndex > index;
+              return (
+                <button
+                  aria-current={isActive ? "step" : undefined}
+                  className={`${isActive ? "active" : ""} ${isComplete ? "complete" : ""}`.trim()}
+                  key={page.id}
+                  onClick={() => onPageChange(page.id)}
+                  type="button"
+                >
+                  <span className="creation-stepper-index">
+                    {isComplete ? (
+                      <CheckCircle2 size={16} aria-hidden="true" />
+                    ) : (
+                      String(index + 1).padStart(2, "0")
+                    )}
+                  </span>
+                  <span>
+                    <strong>{pageCopy.label}</strong>
+                    <small>{pageCopy.title}</small>
+                  </span>
+                  <Icon size={16} aria-hidden="true" />
+                </button>
+              );
+            })}
+          </nav>
+        ) : null}
         {children}
       </main>
     </div>

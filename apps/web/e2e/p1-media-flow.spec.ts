@@ -17,11 +17,20 @@ test.describe("P1 media and retry flow", () => {
     await page.goto("/#project");
 
     await page.getByRole("button", { name: "Create project" }).click();
-    await page.getByRole("button", { name: /Creative prep/ }).click();
-    await page.getByRole("button", { name: "Upload metadata" }).click();
+    await expect(page.getByText("Project loaded")).toBeVisible();
+    await page.getByRole("link", { name: /Asset library/ }).click();
+    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
+    await page.getByLabel("Local image files").setInputFiles({
+      name: "GlowGrip packshot.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("demo-image"),
+    });
+    await page.getByRole("button", { name: "Import selected" }).click();
+    await page.getByRole("link", { name: /Create/ }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await page.getByRole("button", { name: "Generate storyboard" }).click();
 
-    await page.getByRole("button", { name: /Delivery room/ }).click();
+    await page.getByRole("button", { name: "Delivery" }).click();
     await page.getByLabel("TTS voice").selectOption("energetic-seller");
     await page.getByLabel("Subtitle style").selectOption("high-contrast");
     await page.getByLabel("BGM track").selectOption("creator-pop");

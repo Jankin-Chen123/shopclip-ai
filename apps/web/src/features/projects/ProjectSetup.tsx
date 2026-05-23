@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import type { ProjectBrief } from "@shopclip/shared";
-import { FolderOpen, Loader2, Plus } from "lucide-react";
+import { Box, Clock3, FileText, FolderOpen, Gem, Loader2, Plus, Smile, Users } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -56,44 +56,71 @@ export const ProjectSetup = ({
     };
 
   return (
-    <section className="panel project-panel" id="project" aria-labelledby="project-title">
+    <section
+      className="panel project-panel concept-project-panel"
+      id="project"
+      aria-labelledby="project-title"
+    >
       <div className="panel-heading">
         <div>
           <p className="eyebrow">{copy.step}</p>
           <h2 id="project-title">{copy.title}</h2>
+          <p className="concept-panel-subtitle">
+            {copy.step.startsWith("步骤")
+              ? "完善产品与创意方向，帮助 AI 生成更精准的脚本与镜头。"
+              : "Complete the product and creative direction so AI can generate sharper scripts and shots."}
+          </p>
         </div>
         <StatusPill tone={project ? "success" : "neutral"}>
           {project ? copy.loaded : copy.draft}
         </StatusPill>
       </div>
 
-      <div className="form-grid">
-        <label>
-          {copy.projectTitle}
+      <div className="form-grid concept-brief-grid">
+        <label className="concept-field">
+          <span>
+            <FileText size={17} aria-hidden="true" />
+            {copy.projectTitle}
+          </span>
           <input value={brief.title} onChange={updateField("title")} />
         </label>
-        <label>
-          {copy.productName}
+        <label className="concept-field">
+          <span>
+            <Box size={17} aria-hidden="true" />
+            {copy.productName}
+          </span>
           <input value={brief.productName} onChange={updateField("productName")} />
         </label>
-        <label>
-          {copy.audience}
+        <label className="concept-field">
+          <span>
+            <Users size={17} aria-hidden="true" />
+            {copy.audience}
+          </span>
           <input value={brief.audience} onChange={updateField("audience")} />
         </label>
-        <label>
-          {copy.creativeTone}
+        <label className="concept-field">
+          <span>
+            <Smile size={17} aria-hidden="true" />
+            {copy.creativeTone}
+          </span>
           <input value={brief.tone} onChange={updateField("tone")} />
         </label>
-        <label>
-          {copy.visualStyle}
+        <label className="concept-field">
+          <span>
+            <Gem size={17} aria-hidden="true" />
+            {copy.visualStyle}
+          </span>
           <select value={brief.style} onChange={updateField("style")}>
             <option value="fast desk demo">{copy.styles.fastDeskDemo}</option>
             <option value="premium product closeups">{copy.styles.premiumProductCloseups}</option>
             <option value="ugc problem solution">{copy.styles.ugcProblemSolution}</option>
           </select>
         </label>
-        <label>
-          {copy.targetDuration}
+        <label className="concept-field">
+          <span>
+            <Clock3 size={17} aria-hidden="true" />
+            {copy.targetDuration}
+          </span>
           <select
             value={String(brief.targetDurationSeconds)}
             onChange={updateField("targetDurationSeconds")}
@@ -102,8 +129,11 @@ export const ProjectSetup = ({
             <option value="15">{copy.durations.seconds(15)}</option>
           </select>
         </label>
-        <label className="wide-field">
-          {copy.sellingPoints}
+        <label className="wide-field concept-field concept-selling-points">
+          <span>
+            <Gem size={17} aria-hidden="true" />
+            {copy.sellingPoints}
+          </span>
           <textarea
             value={brief.sellingPoints.join("\n")}
             onChange={updateField("sellingPoints")}

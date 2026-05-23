@@ -142,6 +142,10 @@ export default defineConfig({
       }
     })
   ]
+
+  server: {
+    allowedHosts: 'all' // 允许所有域名访问
+  }
 });
 ```
 

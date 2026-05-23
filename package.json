@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.18.3",
   "type": "module",
   "scripts": {
-    "dev": "corepack pnpm --filter @shopclip/shared build && corepack pnpm -r --parallel --filter './apps/*' dev",
+    "dev": "corepack pnpm --filter @shopclip/shared build && corepack pnpm --filter @shopclip/api --filter @shopclip/web --parallel --stream dev",
     "build": "corepack pnpm -r build",
     "typecheck": "corepack pnpm --filter @shopclip/shared build && corepack pnpm -r typecheck",
     "test": "corepack pnpm --filter @shopclip/shared build && corepack pnpm -r test",

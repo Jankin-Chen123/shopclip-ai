@@ -9,6 +9,16 @@ import type {
   AssetTypeSchema,
   DashboardResponseSchema,
   EditingSuggestionSchema,
+  ExternalAssetProviderConfigSchema,
+  ExternalAssetProviderSchema,
+  ExternalAssetResultSchema,
+  ExternalAssetSearchRequestSchema,
+  ExternalAssetSearchResponseSchema,
+  InspirationAssetTypeSchema,
+  InspirationGenerateRequestSchema,
+  InspirationGenerateResponseSchema,
+  InspirationMaterialSchema,
+  InspirationMaterialStatusSchema,
   MediaSettingsSchema,
   ProjectBriefSchema,
   ProjectSchema,
@@ -27,6 +37,8 @@ import type {
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 export type AssetType = z.infer<typeof AssetTypeSchema>;
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
+export type InspirationAssetType = z.infer<typeof InspirationAssetTypeSchema>;
+export type InspirationMaterialStatus = z.infer<typeof InspirationMaterialStatusSchema>;
 export type SceneStatus = z.infer<typeof SceneStatusSchema>;
 export type RenderTaskStatus = z.infer<typeof RenderTaskStatusSchema>;
 export type TraceEventStatus = z.infer<typeof TraceEventStatusSchema>;
@@ -37,6 +49,14 @@ export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;
 export type AssetSlice = z.infer<typeof AssetSliceSchema>;
 export type AssetSearchResult = z.infer<typeof AssetSearchResultSchema>;
 export type AssetSearchResponse = z.infer<typeof AssetSearchResponseSchema>;
+export type ExternalAssetProviderName = z.infer<typeof ExternalAssetProviderSchema>;
+export type ExternalAssetProviderConfig = z.infer<typeof ExternalAssetProviderConfigSchema>;
+export type ExternalAssetResult = z.infer<typeof ExternalAssetResultSchema>;
+export type ExternalAssetSearchRequest = z.infer<typeof ExternalAssetSearchRequestSchema>;
+export type ExternalAssetSearchResponse = z.infer<typeof ExternalAssetSearchResponseSchema>;
+export type InspirationGenerateRequest = z.infer<typeof InspirationGenerateRequestSchema>;
+export type InspirationMaterial = z.infer<typeof InspirationMaterialSchema>;
+export type InspirationGenerateResponse = z.infer<typeof InspirationGenerateResponseSchema>;
 export type StoryboardScene = z.infer<typeof StoryboardSceneSchema>;
 export type ScriptResult = z.infer<typeof ScriptResultSchema>;
 export type SceneUpdate = z.infer<typeof SceneUpdateSchema>;
