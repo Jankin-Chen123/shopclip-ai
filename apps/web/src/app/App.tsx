@@ -38,7 +38,9 @@ import { copy, isLanguage, type Language } from "./i18n";
 import {
   addAsset,
   applySceneSuggestion,
+  confirmAssetUpload,
   createProject,
+  createAssetUploadIntent,
   deleteScene,
   exportProject,
   generateScript,
@@ -54,6 +56,7 @@ import {
   searchExternalStockAssets,
   startRender,
   updateScene,
+  uploadAssetFileToStorage,
   type AssetSearchResult,
   type CreateAssetInput,
   type EditingSuggestion,
@@ -231,7 +234,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [assetDraft, setAssetDraft] = useState<CreateAssetInput>(() =>
     createDefaultAsset(language),
   );
-  const [assetSearchQuery, setAssetSearchQuery] = useState("desk stable creator table");
+  const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const [hasAssetSearchRun, setHasAssetSearchRun] = useState(false);
   const [assetSearchResults, setAssetSearchResults] = useState<AssetSearchResult[]>([]);
   const [externalAssetSearchResults, setExternalAssetSearchResults] = useState<
@@ -518,9 +521,24 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     void runAction("asset", "asset", async () => {
       const targetProject = project ?? (await createDemoProjectForAssets());
       const importedAssets = await Promise.all(
-        files.map((file) =>
-          addAsset(targetProject.id, createAssetInputFromFile(file, language)),
-        ),
+        files.map(async (file) => {
+          const uploadIntent = await createAssetUploadIntent(
+            targetProject.id,
+            createAssetInputFromFile(file, language),
+          );
+          if (uploadIntent.upload.provider === "tencent-cos") {
+            await uploadAssetFileToStorage(file, uploadIntent.upload);
+          }
+          const confirmed = await confirmAssetUpload(uploadIntent.asset.id, {
+            objectKey: uploadIntent.upload.objectKey,
+            metadata: {
+              uploadedFileName: file.name,
+              uploadedFileSize: file.size,
+              uploadedFileType: file.type,
+            },
+          });
+          return confirmed.asset;
+        }),
       );
 
       setProject((current) =>

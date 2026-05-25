@@ -292,7 +292,7 @@ export const AssetsPanel = ({
 }: AssetsPanelProps) => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isExternalSearchOpen, setIsExternalSearchOpen] = useState(false);
-  const [externalModalQuery, setExternalModalQuery] = useState(searchQuery);
+  const [externalModalQuery, setExternalModalQuery] = useState("");
   const [externalModalResults, setExternalModalResults] = useState<ExternalAssetResult[]>([]);
   const [externalModalPage, setExternalModalPage] = useState(1);
   const [externalModalHasMore, setExternalModalHasMore] = useState(false);
@@ -403,17 +403,13 @@ export const AssetsPanel = ({
   const openExternalSearch = () => {
     const initialType = activeCategory;
     setIsExternalSearchOpen(true);
-    setExternalModalQuery(searchQuery);
+    setExternalModalQuery("");
     setExternalModalType(initialType);
     setSelectedExternalAssetIds(new Set());
     setExternalImportMessage(undefined);
-    if (hasConfiguredStockProvider) {
-      void runExternalSearch(searchQuery, 1, "replace", initialType);
-    } else {
-      setExternalModalResults([]);
-      setExternalModalError(undefined);
-      setExternalModalHasMore(false);
-    }
+    setExternalModalResults([]);
+    setExternalModalError(undefined);
+    setExternalModalHasMore(false);
   };
 
   const handleExternalSearchSubmit = (event: FormEvent<HTMLFormElement>) => {

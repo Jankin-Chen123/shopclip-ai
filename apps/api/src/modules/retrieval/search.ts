@@ -1,6 +1,6 @@
 import type { AssetMetadata, AssetSearchResult, AssetSlice } from "@shopclip/shared";
 
-import type { ProjectSnapshot } from "../projects/memoryStore.js";
+import type { ProjectSnapshot } from "../projects/projectStore.js";
 
 export interface AssetSearchInput {
   query: string;

@@ -1,0 +1,571 @@
+import { AssetStorageProvider as PrismaAssetStorageProvider, PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import type {
+  AssetMetadata,
+  AssetProcessingJob,
+  AssetSlice,
+  EditingSuggestion,
+  ProjectBrief,
+  RenderTask,
+  SceneUpdate,
+  ScriptResult,
+  StoryboardScene,
+  TraceEvent,
+} from "@shopclip/shared";
+
+import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
+
+type AssetWithSlices = Prisma.AssetGetPayload<{ include: { slices: true } }>;
+
+type ProjectWithRelations = Prisma.ProjectGetPayload<{
+  include: {
+    assets: { include: { slices: true } };
+    assetProcessingJobs: true;
+    scripts: { include: { scenes: true } };
+    scenes: true;
+    renderTasks: true;
+  };
+}>;
+
+type RenderTaskWithRelations = Prisma.RenderTaskGetPayload<{
+  include: {
+    traceEvents: true;
+    project: {
+      include: {
+        assets: { include: { slices: true } };
+        assetProcessingJobs: true;
+        scripts: { include: { scenes: true } };
+        scenes: true;
+        renderTasks: true;
+      };
+    };
+  };
+}>;
+
+const toIso = (date: Date): string => date.toISOString();
+
+const toDbStorageProvider = (
+  provider?: AssetMetadata["storageProvider"],
+): PrismaAssetStorageProvider | undefined =>
+  provider?.replaceAll("-", "_") as PrismaAssetStorageProvider | undefined;
+
+const fromDbStorageProvider = (
+  provider?: string | null,
+): AssetMetadata["storageProvider"] | undefined =>
+  provider ? (provider.replaceAll("_", "-") as AssetMetadata["storageProvider"]) : undefined;
+
+const toAsset = (asset: AssetWithSlices): AssetMetadata => ({
+  id: asset.id,
+  projectId: asset.projectId,
+  type: asset.type,
+  status: asset.status,
+  source: asset.source,
+  storageProvider: fromDbStorageProvider(asset.storageProvider),
+  objectKey: asset.objectKey ?? undefined,
+  thumbnailKey: asset.thumbnailKey ?? undefined,
+  url: asset.url,
+  name: asset.name,
+  mimeType: asset.mimeType ?? undefined,
+  sizeBytes: asset.sizeBytes ?? undefined,
+  tags: asset.tags,
+  embeddingText: asset.embeddingText ?? undefined,
+  metadata:
+    asset.metadata && typeof asset.metadata === "object" && !Array.isArray(asset.metadata)
+      ? (asset.metadata as Record<string, unknown>)
+      : undefined,
+  createdAt: toIso(asset.createdAt),
+  updatedAt: toIso(asset.updatedAt),
+});
+
+const toAssetSlice = (slice: AssetWithSlices["slices"][number]): AssetSlice => ({
+  id: slice.id,
+  assetId: slice.assetId,
+  label: slice.label,
+  startSecond: slice.startSecond ?? undefined,
+  endSecond: slice.endSecond ?? undefined,
+  tags: slice.tags,
+});
+
+const toAssetProcessingJob = (
+  job: ProjectWithRelations["assetProcessingJobs"][number],
+): AssetProcessingJob => ({
+  id: job.id,
+  assetId: job.assetId,
+  status: job.status,
+  steps: job.steps,
+  message: job.message,
+  createdAt: toIso(job.createdAt),
+});
+
+const toScene = (scene: ProjectWithRelations["scenes"][number]): StoryboardScene => ({
+  id: scene.id,
+  projectId: scene.projectId,
+  order: scene.order,
+  durationSeconds: scene.durationSeconds,
+  subtitle: scene.subtitle,
+  voiceover: scene.voiceover,
+  visualPrompt: scene.visualPrompt,
+  assetId: scene.assetId ?? undefined,
+  status: scene.status,
+});
+
+const toScript = (script: ProjectWithRelations["scripts"][number]): ScriptResult => ({
+  id: script.id,
+  projectId: script.projectId,
+  hook: script.hook,
+  narrative: script.narrative,
+  constraints: script.constraints,
+  scenes: script.scenes.sort((left, right) => left.order - right.order).map(toScene),
+});
+
+const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): RenderTask => ({
+  id: task.id,
+  projectId: task.projectId,
+  status: task.status,
+  progress: task.progress,
+  previewUrl: task.previewUrl ?? undefined,
+  exportUrl: task.exportUrl ?? undefined,
+  errorMessage: task.errorMessage ?? undefined,
+  createdAt: toIso(task.createdAt),
+  updatedAt: toIso(task.updatedAt),
+});
+
+const toTraceEvent = (event: RenderTaskWithRelations["traceEvents"][number]): TraceEvent => ({
+  id: event.id,
+  renderTaskId: event.renderTaskId,
+  status: event.status,
+  step: event.step,
+  message: event.message,
+  createdAt: toIso(event.createdAt),
+});
+
+const toProjectSnapshot = (project: ProjectWithRelations): ProjectSnapshot => {
+  const assets = project.assets.map(toAsset);
+  const assetSlices = project.assets.flatMap((asset) => asset.slices.map(toAssetSlice));
+  return {
+    id: project.id,
+    title: project.title,
+    productName: project.productName,
+    audience: project.audience,
+    sellingPoints: project.sellingPoints,
+    tone: project.tone,
+    style: project.style,
+    targetDurationSeconds: project.targetDurationSeconds,
+    status: project.status,
+    createdAt: toIso(project.createdAt),
+    updatedAt: toIso(project.updatedAt),
+    assets,
+    assetSlices,
+    assetProcessingJobs: project.assetProcessingJobs.map(toAssetProcessingJob),
+    scripts: project.scripts.map(toScript),
+    scenes: project.scenes.sort((left, right) => left.order - right.order).map(toScene),
+    renderTasks: project.renderTasks.map(toRenderTask),
+  };
+};
+
+const projectInclude = {
+  assets: { include: { slices: true } },
+  assetProcessingJobs: true,
+  scripts: { include: { scenes: true } },
+  scenes: true,
+  renderTasks: true,
+} as const;
+
+export class PrismaProjectStore implements ProjectStore {
+  constructor(private readonly prisma = new PrismaClient()) {}
+
+  async createProject(brief: ProjectBrief): Promise<ProjectSnapshot> {
+    const project = await this.prisma.project.create({
+      data: {
+        ...brief,
+      },
+      include: projectInclude,
+    });
+    return toProjectSnapshot(project);
+  }
+
+  async getProject(id: string): Promise<ProjectSnapshot | undefined> {
+    const project = await this.prisma.project.findUnique({
+      where: { id },
+      include: projectInclude,
+    });
+    return project ? toProjectSnapshot(project) : undefined;
+  }
+
+  async addAsset(
+    projectId: string,
+    asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
+    createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
+  ): Promise<AssetMetadata | undefined> {
+    return this.addAssetWithId(projectId, randomUUID(), asset, createSlices);
+  }
+
+  async addAssetWithId(
+    projectId: string,
+    assetId: string,
+    asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
+    createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
+  ): Promise<AssetMetadata | undefined> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      return undefined;
+    }
+
+    const timestamp = new Date().toISOString();
+    const projectedAsset: AssetMetadata = {
+      ...asset,
+      id: assetId,
+      projectId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const created = await this.prisma.asset.create({
+      data: {
+        id: assetId,
+        projectId,
+        type: asset.type,
+        status: asset.status,
+        source: asset.source ?? "merchant_upload",
+        storageProvider: toDbStorageProvider(asset.storageProvider),
+        objectKey: asset.objectKey,
+        thumbnailKey: asset.thumbnailKey,
+        url: asset.url,
+        name: asset.name,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.sizeBytes,
+        tags: asset.tags,
+        embeddingText: asset.embeddingText,
+        metadata: asset.metadata as Prisma.InputJsonValue | undefined,
+        slices: {
+          create: createSlices(projectedAsset).map((slice) => ({
+            id: randomUUID(),
+            label: slice.label,
+            startSecond: slice.startSecond,
+            endSecond: slice.endSecond,
+            tags: slice.tags,
+          })),
+        },
+      },
+      include: { slices: true },
+    });
+    return toAsset(created);
+  }
+
+  async updateAsset(
+    assetId: string,
+    update: Partial<
+      Pick<
+        AssetMetadata,
+        "embeddingText" | "metadata" | "objectKey" | "status" | "tags" | "thumbnailKey" | "url"
+      >
+    >,
+  ): Promise<AssetMetadata | undefined> {
+    const current = await this.prisma.asset.findUnique({
+      where: { id: assetId },
+      include: { slices: true },
+    });
+    if (!current) {
+      return undefined;
+    }
+
+    const currentMetadata =
+      current.metadata && typeof current.metadata === "object" && !Array.isArray(current.metadata)
+        ? (current.metadata as Record<string, unknown>)
+        : {};
+    const updated = await this.prisma.asset.update({
+      where: { id: assetId },
+      data: {
+        embeddingText: update.embeddingText,
+        metadata: update.metadata
+          ? ({ ...currentMetadata, ...update.metadata } as Prisma.InputJsonValue)
+          : undefined,
+        objectKey: update.objectKey,
+        status: update.status,
+        tags: update.tags,
+        thumbnailKey: update.thumbnailKey,
+        url: update.url,
+      },
+      include: { slices: true },
+    });
+    return toAsset(updated);
+  }
+
+  async addAssetProcessingJob(
+    projectId: string,
+    job: Omit<AssetProcessingJob, "createdAt">,
+  ): Promise<AssetProcessingJob | undefined> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      return undefined;
+    }
+
+    const created = await this.prisma.assetProcessingJob.create({
+      data: {
+        id: job.id,
+        projectId,
+        assetId: job.assetId,
+        status: job.status,
+        steps: job.steps,
+        message: job.message,
+      },
+    });
+    return toAssetProcessingJob(created);
+  }
+
+  async getAssetProcessingJob(jobId: string): Promise<AssetProcessingJob | undefined> {
+    const job = await this.prisma.assetProcessingJob.findUnique({ where: { id: jobId } });
+    return job ? toAssetProcessingJob(job) : undefined;
+  }
+
+  async getLatestAssetProcessingJob(assetId: string): Promise<AssetProcessingJob | undefined> {
+    const job = await this.prisma.assetProcessingJob.findFirst({
+      where: { assetId },
+      orderBy: { createdAt: "desc" },
+    });
+    return job ? toAssetProcessingJob(job) : undefined;
+  }
+
+  async updateAssetProcessingJob(
+    jobId: string,
+    update: Partial<Pick<AssetProcessingJob, "message" | "status" | "steps">>,
+  ): Promise<AssetProcessingJob | undefined> {
+    const current = await this.prisma.assetProcessingJob.findUnique({ where: { id: jobId } });
+    if (!current) {
+      return undefined;
+    }
+    const updated = await this.prisma.assetProcessingJob.update({
+      where: { id: jobId },
+      data: update,
+    });
+    return toAssetProcessingJob(updated);
+  }
+
+  async addScript(
+    projectId: string,
+    script: Omit<ScriptResult, "id" | "projectId">,
+  ): Promise<ScriptResult | undefined> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      return undefined;
+    }
+    const scriptId = randomUUID();
+    const created = await this.prisma.script.create({
+      data: {
+        id: scriptId,
+        projectId,
+        hook: script.hook,
+        narrative: script.narrative,
+        constraints: script.constraints,
+        scenes: {
+          create: script.scenes.map((scene) => ({
+            id: randomUUID(),
+            projectId,
+            order: scene.order,
+            durationSeconds: scene.durationSeconds,
+            subtitle: scene.subtitle,
+            voiceover: scene.voiceover,
+            visualPrompt: scene.visualPrompt,
+            assetId: scene.assetId,
+            status: scene.status,
+          })),
+        },
+      },
+      include: { scenes: true },
+    });
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: { status: "ready" },
+    });
+    return toScript(created);
+  }
+
+  async addRenderTask(
+    projectId: string,
+    renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,
+    traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>,
+  ): Promise<{ renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      return undefined;
+    }
+
+    const created = await this.prisma.renderTask.create({
+      data: {
+        id: randomUUID(),
+        projectId,
+        status: renderTask.status,
+        progress: renderTask.progress,
+        previewUrl: renderTask.previewUrl,
+        exportUrl: renderTask.exportUrl,
+        errorMessage: renderTask.errorMessage,
+        traceEvents: {
+          create: traceEvents.map((event) => ({
+            id: randomUUID(),
+            status: event.status,
+            step: event.step,
+            message: event.message,
+          })),
+        },
+      },
+      include: { traceEvents: true },
+    });
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        status:
+          renderTask.status === "completed"
+            ? "completed"
+            : renderTask.status === "failed"
+              ? "failed"
+              : "rendering",
+      },
+    });
+
+    return {
+      renderTask: toRenderTask(created),
+      traceEvents: created.traceEvents.map(toTraceEvent),
+    };
+  }
+
+  async updateScene(sceneId: string, update: SceneUpdate): Promise<StoryboardScene | undefined> {
+    const current = await this.prisma.storyboardScene.findUnique({ where: { id: sceneId } });
+    if (!current) {
+      return undefined;
+    }
+    const updated = await this.prisma.storyboardScene.update({
+      where: { id: sceneId },
+      data: {
+        durationSeconds: update.durationSeconds,
+        subtitle: update.subtitle,
+        voiceover: update.voiceover,
+        visualPrompt: update.visualPrompt,
+        assetId: update.assetId === null ? null : update.assetId,
+        status: update.status ?? "edited",
+      },
+    });
+    return toScene(updated);
+  }
+
+  async reorderScenes(projectId: string, sceneIds: string[]): Promise<StoryboardScene[] | undefined> {
+    const scenes = await this.prisma.storyboardScene.findMany({ where: { projectId } });
+    if (
+      sceneIds.length !== scenes.length ||
+      sceneIds.some((sceneId) => !scenes.some((scene) => scene.id === sceneId))
+    ) {
+      return undefined;
+    }
+
+    await this.prisma.$transaction(
+      sceneIds.map((sceneId, index) =>
+        this.prisma.storyboardScene.update({
+          where: { id: sceneId },
+          data: { order: index + 1 },
+        }),
+      ),
+    );
+    const updatedScenes = await this.prisma.storyboardScene.findMany({
+      where: { projectId },
+      orderBy: { order: "asc" },
+    });
+    return updatedScenes.map(toScene);
+  }
+
+  async deleteScene(sceneId: string): Promise<StoryboardScene[] | undefined> {
+    const scene = await this.prisma.storyboardScene.findUnique({ where: { id: sceneId } });
+    if (!scene) {
+      return undefined;
+    }
+    await this.prisma.storyboardScene.delete({ where: { id: sceneId } });
+    const remaining = await this.prisma.storyboardScene.findMany({
+      where: { projectId: scene.projectId },
+      orderBy: { order: "asc" },
+    });
+    await this.prisma.$transaction(
+      remaining.map((candidate, index) =>
+        this.prisma.storyboardScene.update({
+          where: { id: candidate.id },
+          data: { order: index + 1 },
+        }),
+      ),
+    );
+    const updated = await this.prisma.storyboardScene.findMany({
+      where: { projectId: scene.projectId },
+      orderBy: { order: "asc" },
+    });
+    return updated.map(toScene);
+  }
+
+  async getSceneContext(
+    sceneId: string,
+  ): Promise<{ project: ProjectSnapshot; scene: StoryboardScene } | undefined> {
+    const scene = await this.prisma.storyboardScene.findUnique({ where: { id: sceneId } });
+    if (!scene) {
+      return undefined;
+    }
+    const project = await this.getProject(scene.projectId);
+    if (!project) {
+      return undefined;
+    }
+    return {
+      project,
+      scene: toScene(scene),
+    };
+  }
+
+  async appendTraceEvent(
+    traceKey: string,
+    event: Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">,
+  ): Promise<TraceEvent> {
+    const renderTask = await this.prisma.renderTask.findUnique({ where: { id: traceKey } });
+    if (!renderTask) {
+      return {
+        ...event,
+        id: randomUUID(),
+        renderTaskId: traceKey,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const created = await this.prisma.traceEvent.create({
+      data: {
+        id: randomUUID(),
+        renderTaskId: traceKey,
+        status: event.status,
+        step: event.step,
+        message: event.message,
+      },
+    });
+    return toTraceEvent(created);
+  }
+
+  getStoredSuggestion(
+    _sceneId: string,
+    suggestionId: string,
+    createSuggestions: () => EditingSuggestion[],
+  ): EditingSuggestion | undefined {
+    return createSuggestions().find((suggestion) => suggestion.id === suggestionId);
+  }
+
+  async getRenderTask(
+    renderTaskId: string,
+  ): Promise<{ project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined> {
+    const renderTask = await this.prisma.renderTask.findUnique({
+      where: { id: renderTaskId },
+      include: {
+        traceEvents: true,
+        project: {
+          include: projectInclude,
+        },
+      },
+    });
+    if (!renderTask) {
+      return undefined;
+    }
+    return {
+      project: toProjectSnapshot(renderTask.project),
+      renderTask: toRenderTask(renderTask),
+      traceEvents: renderTask.traceEvents.map(toTraceEvent),
+    };
+  }
+}

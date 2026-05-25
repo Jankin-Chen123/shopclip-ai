@@ -28,6 +28,19 @@ enum AssetStatus {
   failed
 }
 
+enum AssetSource {
+  merchant_upload
+  external_provider
+  generated
+  public_reference
+}
+
+enum AssetStorageProvider {
+  local
+  mock_cos
+  tencent_cos
+}
+
 enum SceneStatus {
   draft
   generated
@@ -65,6 +78,7 @@ model Project {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
   assets                Asset[]
+  assetProcessingJobs   AssetProcessingJob[]
   scripts               Script[]
   scenes                StoryboardScene[]
   renderTasks           RenderTask[]
@@ -72,22 +86,45 @@ model Project {
 }
 
 model Asset {
-  id        String            @id @default(cuid())
-  projectId String
-  type      AssetType
-  status    AssetStatus       @default(uploaded)
-  url       String
-  name      String
-  mimeType  String?
-  sizeBytes Int?
-  tags      String[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  slices    AssetSlice[]
-  scenes    StoryboardScene[]
+  id              String                @id @default(cuid())
+  projectId       String
+  type            AssetType
+  status          AssetStatus           @default(uploaded)
+  source          AssetSource           @default(merchant_upload)
+  storageProvider AssetStorageProvider?
+  objectKey       String?
+  thumbnailKey    String?
+  url             String
+  name            String
+  mimeType        String?
+  sizeBytes       Int?
+  tags            String[]
+  embeddingText   String?
+  metadata        Json?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slices          AssetSlice[]
+  processingJobs  AssetProcessingJob[]
+  scenes          StoryboardScene[]
 
   @@index([projectId])
+  @@index([objectKey])
+}
+
+model AssetProcessingJob {
+  id        String      @id @default(cuid())
+  projectId String
+  assetId   String
+  status    AssetStatus
+  steps     String[]
+  message   String
+  createdAt DateTime    @default(now())
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset     Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([assetId])
 }
 
 model AssetSlice {

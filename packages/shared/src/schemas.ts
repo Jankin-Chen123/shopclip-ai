@@ -4,6 +4,13 @@ export const ProjectStatusSchema = z.enum(["draft", "ready", "rendering", "compl
 
 export const AssetTypeSchema = z.enum(["image", "video", "reference"]);
 export const AssetStatusSchema = z.enum(["uploaded", "processing", "ready", "failed"]);
+export const AssetSourceSchema = z.enum([
+  "merchant_upload",
+  "external_provider",
+  "generated",
+  "public_reference",
+]);
+export const AssetStorageProviderSchema = z.enum(["local", "mock-cos", "tencent-cos"]);
 export const InspirationAssetTypeSchema = z.enum(["text", "image", "video"]);
 export const InspirationMaterialStatusSchema = z.enum(["ready", "processing", "failed"]);
 export const SceneStatusSchema = z.enum(["draft", "generated", "edited", "regenerating", "failed"]);
@@ -46,13 +53,40 @@ export const AssetMetadataSchema = z.object({
   projectId: z.string().trim().min(1),
   type: AssetTypeSchema,
   status: AssetStatusSchema,
+  source: AssetSourceSchema.default("merchant_upload").optional(),
+  storageProvider: AssetStorageProviderSchema.optional(),
+  objectKey: z.string().trim().min(1).optional(),
+  thumbnailKey: z.string().trim().min(1).optional(),
   url: z.string().trim().min(1),
   name: z.string().trim().min(1),
   mimeType: z.string().trim().min(1).optional(),
   sizeBytes: z.number().int().positive().optional(),
   tags: z.array(z.string().trim().min(1)).default([]),
+  embeddingText: z.string().trim().min(1).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   createdAt: IsoDateTimeSchema.optional(),
   updatedAt: IsoDateTimeSchema.optional(),
+});
+
+export const AssetUploadIntentSchema = z.object({
+  provider: AssetStorageProviderSchema,
+  bucket: z.string().trim().min(1),
+  region: z.string().trim().min(1),
+  objectKey: z.string().trim().min(1),
+  uploadUrl: z.string().trim().min(1),
+  publicUrl: z.string().trim().min(1),
+  method: z.enum(["PUT"]).default("PUT"),
+  headers: z.record(z.string(), z.string()).default({}),
+  expiresAt: IsoDateTimeSchema,
+});
+
+export const AssetProcessingJobSchema = z.object({
+  id: z.string().trim().min(1),
+  assetId: z.string().trim().min(1),
+  status: AssetStatusSchema,
+  steps: z.array(z.string().trim().min(1)).default([]),
+  message: z.string().trim().min(1),
+  createdAt: IsoDateTimeSchema,
 });
 
 export const AssetSliceSchema = z.object({

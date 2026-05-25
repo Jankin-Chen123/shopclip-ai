@@ -1,6 +1,6 @@
 import type { AssetMetadata, EditingSuggestion, StoryboardScene } from "@shopclip/shared";
 
-import type { ProjectSnapshot } from "../../modules/projects/memoryStore.js";
+import type { ProjectSnapshot } from "../../modules/projects/projectStore.js";
 
 export const regenerateSceneFallback = (
   project: ProjectSnapshot,

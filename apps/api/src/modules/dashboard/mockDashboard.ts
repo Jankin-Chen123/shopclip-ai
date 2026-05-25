@@ -1,6 +1,6 @@
 import type { DashboardResponse } from "@shopclip/shared";
 
-import type { ProjectSnapshot } from "../projects/memoryStore.js";
+import type { ProjectSnapshot } from "../projects/projectStore.js";
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 

@@ -1,4 +1,4 @@
-import type { ProjectSnapshot } from "../../modules/projects/memoryStore.js";
+import type { ProjectSnapshot } from "../../modules/projects/projectStore.js";
 import type { MediaSettings, RenderTask, TraceEvent } from "@shopclip/shared";
 import { synthesizeMockVoiceover } from "../tts/mockTtsProvider.js";
 

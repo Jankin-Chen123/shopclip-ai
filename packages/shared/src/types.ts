@@ -2,11 +2,15 @@ import type { z } from "zod";
 
 import type {
   AssetMetadataSchema,
+  AssetProcessingJobSchema,
   AssetSearchResponseSchema,
   AssetSearchResultSchema,
   AssetSliceSchema,
+  AssetSourceSchema,
   AssetStatusSchema,
+  AssetStorageProviderSchema,
   AssetTypeSchema,
+  AssetUploadIntentSchema,
   DashboardResponseSchema,
   EditingSuggestionSchema,
   ExternalAssetProviderConfigSchema,
@@ -39,6 +43,8 @@ import type {
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 export type AssetType = z.infer<typeof AssetTypeSchema>;
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
+export type AssetSource = z.infer<typeof AssetSourceSchema>;
+export type AssetStorageProvider = z.infer<typeof AssetStorageProviderSchema>;
 export type InspirationAssetType = z.infer<typeof InspirationAssetTypeSchema>;
 export type InspirationMaterialStatus = z.infer<typeof InspirationMaterialStatusSchema>;
 export type SceneStatus = z.infer<typeof SceneStatusSchema>;
@@ -48,6 +54,8 @@ export type TraceEventStatus = z.infer<typeof TraceEventStatusSchema>;
 export type ProjectBrief = z.infer<typeof ProjectBriefSchema>;
 export type Project = z.infer<typeof ProjectSchema>;
 export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;
+export type AssetUploadIntent = z.infer<typeof AssetUploadIntentSchema>;
+export type AssetProcessingJob = z.infer<typeof AssetProcessingJobSchema>;
 export type AssetSlice = z.infer<typeof AssetSliceSchema>;
 export type AssetSearchResult = z.infer<typeof AssetSearchResultSchema>;
 export type AssetSearchResponse = z.infer<typeof AssetSearchResponseSchema>;

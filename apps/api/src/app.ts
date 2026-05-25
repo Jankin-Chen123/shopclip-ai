@@ -5,6 +5,7 @@ import { createHealthPayload } from "@shopclip/shared";
 import { createInspirationRouter } from "./modules/inspiration/router.js";
 import type { P0RouterOptions } from "./modules/projects/router.js";
 import { createP0Router } from "./modules/projects/router.js";
+import { createProjectStoreFromEnv } from "./modules/projects/storeFactory.js";
 
 const parseCorsOrigins = (): string | string[] => {
   const configuredOrigin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
@@ -30,6 +31,7 @@ export type AppOptions = P0RouterOptions;
 
 export const createApp = (options: AppOptions = {}): Express => {
   const app = express();
+  const projectStore = options.store ?? createProjectStoreFromEnv();
 
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
@@ -50,7 +52,7 @@ export const createApp = (options: AppOptions = {}): Express => {
     response.json(createHealthPayload("api"));
   });
   app.use("/api", createInspirationRouter());
-  app.use("/api", createP0Router(options));
+  app.use("/api", createP0Router({ ...options, store: projectStore }));
   app.use((_request, response) => {
     response.status(404).json({
       error: {

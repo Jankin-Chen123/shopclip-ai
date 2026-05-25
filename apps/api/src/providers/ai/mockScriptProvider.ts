@@ -1,4 +1,4 @@
-import type { ProjectSnapshot } from "../../modules/projects/memoryStore.js";
+import type { ProjectSnapshot } from "../../modules/projects/projectStore.js";
 import type { ScriptResult } from "@shopclip/shared";
 
 export interface ScriptProviderResult {

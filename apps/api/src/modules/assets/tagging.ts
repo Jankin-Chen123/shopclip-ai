@@ -20,6 +20,8 @@ const derivedTagRules: Array<{ match: RegExp; tags: string[] }> = [
 export const inferAssetTags = (asset: {
   name: string;
   mimeType?: string;
+  storageProvider?: string;
+  source?: string;
   tags?: string[];
 }): string[] => {
   const source = `${asset.name} ${asset.mimeType ?? ""}`.toLowerCase();
@@ -29,7 +31,15 @@ export const inferAssetTags = (asset: {
     .filter((token) => token.length > 2);
   const derivedTags = derivedTagRules.flatMap((rule) => (rule.match.test(source) ? rule.tags : []));
 
-  return uniq([...(asset.tags ?? []), ...nameTokens, ...derivedTags, "ready", "demo-safe"]);
+  return uniq([
+    ...(asset.tags ?? []),
+    ...nameTokens,
+    ...derivedTags,
+    ...(asset.storageProvider ? [`storage-${asset.storageProvider}`] : []),
+    ...(asset.source ? [`source-${asset.source}`] : []),
+    "ready",
+    "demo-safe",
+  ]);
 };
 
 export const createAssetSlices = (

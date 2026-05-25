@@ -1,0 +1,205 @@
+import type { AddressInfo } from "node:net";
+import type { Server } from "node:http";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createApp } from "./app";
+
+const request = async <T>(
+  baseUrl: string,
+  path: string,
+  options?: RequestInit,
+): Promise<{ body: T; status: number }> => {
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      "content-type": "application/json",
+      ...options?.headers,
+    },
+    ...options,
+  });
+
+  const body = (await response.json()) as T;
+  return { body, status: response.status };
+};
+
+const createProject = async (baseUrl: string): Promise<string> => {
+  const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+    method: "POST",
+    body: JSON.stringify({
+      title: "Desk launch clip",
+      productName: "GlowGrip Phone Stand",
+      audience: "TikTok Shop buyers",
+      sellingPoints: ["folds flat", "keeps product shots stable"],
+      tone: "confident",
+      style: "fast desk demo",
+      targetDurationSeconds: 15,
+    }),
+  });
+
+  expect(created.status).toBe(201);
+  return created.body.project.id;
+};
+
+describe("COS-backed asset import contract", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    const app = createApp();
+    server = app.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  });
+
+  it("creates a COS upload intent and stores structured asset metadata without exposing secrets", async () => {
+    const projectId = await createProject(baseUrl);
+
+    const created = await request<{
+      asset: {
+        id: string;
+        status: string;
+        storageProvider: string;
+        objectKey: string;
+        url: string;
+        tags: string[];
+        metadata: Record<string, unknown>;
+      };
+      upload: {
+        provider: string;
+        bucket: string;
+        region: string;
+        objectKey: string;
+        uploadUrl: string;
+        publicUrl: string;
+        method: string;
+        headers: Record<string, string>;
+        expiresAt: string;
+      };
+      processingJob: {
+        id: string;
+        assetId: string;
+        status: string;
+        steps: string[];
+      };
+    }>(baseUrl, `/api/projects/${projectId}/assets/upload-intent`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Hero packshot on white.png",
+        mimeType: "image/png",
+        sizeBytes: 180_000,
+        tags: ["product", "hero"],
+      }),
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.asset).toMatchObject({
+      status: "uploaded",
+      storageProvider: "mock-cos",
+      url: created.body.upload.publicUrl,
+    });
+    expect(created.body.upload).toMatchObject({
+      provider: "mock-cos",
+      method: "PUT",
+      headers: { "content-type": "image/png" },
+    });
+    expect(created.body.upload.objectKey).toBe(created.body.asset.objectKey);
+    expect(created.body.upload.objectKey).toMatch(
+      new RegExp(`^projects/${projectId}/raw/${created.body.asset.id}/source\\.png$`),
+    );
+    expect(created.body.asset.tags).toEqual(
+      expect.arrayContaining(["product", "hero", "storage-mock-cos", "source-merchant-upload"]),
+    );
+    expect(created.body.asset.metadata.structuredAssetVersion).toBe(
+      "asset-multigranularity-v1",
+    );
+    expect(created.body.processingJob).toMatchObject({
+      assetId: created.body.asset.id,
+      status: "processing",
+    });
+    expect(created.body.processingJob.steps).toEqual(
+      expect.arrayContaining(["upload", "multimodal-understanding", "slice-indexing"]),
+    );
+    expect(JSON.stringify(created.body)).not.toContain("SECRET");
+    expect(JSON.stringify(created.body)).not.toContain("COS_SECRET");
+
+    const searched = await request<{
+      results: Array<{ asset: { id: string; objectKey: string; storageProvider: string } }>;
+    }>(baseUrl, `/api/assets/search?projectId=${projectId}&q=hero`);
+
+    expect(searched.status).toBe(200);
+    expect(searched.body.results[0].asset).toMatchObject({
+      id: created.body.asset.id,
+      objectKey: created.body.asset.objectKey,
+      storageProvider: "mock-cos",
+    });
+
+    const confirmed = await request<{
+      asset: {
+        id: string;
+        status: string;
+        metadata: Record<string, unknown>;
+      };
+      processingJob: {
+        id: string;
+        status: string;
+        steps: string[];
+        message: string;
+      };
+    }>(baseUrl, `/api/assets/${created.body.asset.id}/confirm-upload`, {
+      method: "POST",
+      body: JSON.stringify({
+        checksum: "sha256-demo",
+        objectKey: created.body.upload.objectKey,
+        metadata: {
+          uploadedFileName: "Hero packshot on white.png",
+        },
+      }),
+    });
+
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.asset).toMatchObject({
+      id: created.body.asset.id,
+      status: "ready",
+    });
+    expect(confirmed.body.asset.metadata).toMatchObject({
+      checksum: "sha256-demo",
+      uploadedFileName: "Hero packshot on white.png",
+      structureProvider: "mock-asset-processor",
+    });
+    expect(confirmed.body.processingJob).toMatchObject({
+      id: created.body.processingJob.id,
+      status: "ready",
+    });
+    expect(confirmed.body.processingJob.steps).toEqual(expect.arrayContaining(["metadata-ready"]));
+
+    const loadedJob = await request<{
+      processingJob: {
+        id: string;
+        status: string;
+        assetId: string;
+      };
+    }>(baseUrl, `/api/asset-processing-jobs/${created.body.processingJob.id}`);
+
+    expect(loadedJob.status).toBe(200);
+    expect(loadedJob.body.processingJob).toMatchObject({
+      id: created.body.processingJob.id,
+      assetId: created.body.asset.id,
+      status: "ready",
+    });
+  });
+});

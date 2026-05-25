@@ -29,6 +29,14 @@ export const CreateAssetRequestSchema = z
     mimeType: z.string().trim().min(1),
     sizeBytes: z.number().int().positive(),
     url: z.string().trim().min(1).optional(),
+    source: z
+      .enum(["merchant_upload", "external_provider", "generated", "public_reference"])
+      .optional(),
+    storageProvider: z.enum(["local", "mock-cos", "tencent-cos"]).optional(),
+    objectKey: z.string().trim().min(1).optional(),
+    thumbnailKey: z.string().trim().min(1).optional(),
+    embeddingText: z.string().trim().min(1).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
     tags: z.array(z.string().trim().min(1)).default([]),
   })
   .superRefine((asset, context) => {
@@ -49,3 +57,21 @@ export const CreateAssetRequestSchema = z
   });
 
 export type CreateAssetRequest = z.infer<typeof CreateAssetRequestSchema>;
+
+export const CreateAssetUploadIntentRequestSchema = CreateAssetRequestSchema.extend({
+  checksum: z.string().trim().min(1).optional(),
+});
+
+export type CreateAssetUploadIntentRequest = z.infer<
+  typeof CreateAssetUploadIntentRequestSchema
+>;
+
+export const ConfirmAssetUploadRequestSchema = z
+  .object({
+    checksum: z.string().trim().min(1).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    objectKey: z.string().trim().min(1).optional(),
+  })
+  .default({});
+
+export type ConfirmAssetUploadRequest = z.infer<typeof ConfirmAssetUploadRequestSchema>;

@@ -230,6 +230,13 @@ describe("App", () => {
     expect(externalEntryIndex).toBeGreaterThan(tabsIndex);
   });
 
+  it("does not seed the asset search input with a default query", () => {
+    const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="assets" />);
+
+    expect(markup).toContain('id="asset-search-image"');
+    expect(markup).not.toContain("desk stable creator table");
+  });
+
   it("renders the external stock search entry as a modal trigger", () => {
     const markup = renderToStaticMarkup(
       <AssetsPanel

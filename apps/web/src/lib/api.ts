@@ -1,8 +1,10 @@
 import type {
   AssetMetadata,
+  AssetProcessingJob,
   AssetSearchResponse,
   AssetSearchResult,
   AssetSlice,
+  AssetUploadIntent,
   DashboardResponse,
   EditingSuggestion,
   ExternalAssetProviderConfig,
@@ -55,6 +57,18 @@ export interface CreateAssetInput {
   mimeType: string;
   sizeBytes: number;
   tags: string[];
+  source?: AssetMetadata["source"];
+  storageProvider?: AssetMetadata["storageProvider"];
+  objectKey?: string;
+  thumbnailKey?: string;
+  embeddingText?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateAssetUploadIntentResult {
+  asset: AssetMetadata;
+  upload: AssetUploadIntent;
+  processingJob: AssetProcessingJob;
 }
 
 export type UserApiConfig = NonNullable<InspirationGenerateRequest["apiConfig"]>;
@@ -118,6 +132,52 @@ export const addAsset = async (
     body: JSON.stringify(asset),
   });
   return response.asset;
+};
+
+export const createAssetUploadIntent = async (
+  projectId: string,
+  asset: CreateAssetInput,
+): Promise<CreateAssetUploadIntentResult> =>
+  requestJson(`/projects/${projectId}/assets/upload-intent`, {
+    method: "POST",
+    body: JSON.stringify(asset),
+  });
+
+export const confirmAssetUpload = async (
+  assetId: string,
+  confirmation: {
+    checksum?: string;
+    metadata?: Record<string, unknown>;
+    objectKey?: string;
+  } = {},
+): Promise<{ asset: AssetMetadata; processingJob: AssetProcessingJob }> =>
+  requestJson(`/assets/${assetId}/confirm-upload`, {
+    method: "POST",
+    body: JSON.stringify(confirmation),
+  });
+
+export const loadAssetProcessingJob = async (
+  jobId: string,
+): Promise<AssetProcessingJob> => {
+  const response = await requestJson<{ processingJob: AssetProcessingJob }>(
+    `/asset-processing-jobs/${jobId}`,
+  );
+  return response.processingJob;
+};
+
+export const uploadAssetFileToStorage = async (
+  file: File,
+  upload: AssetUploadIntent,
+): Promise<void> => {
+  const response = await fetch(upload.uploadUrl, {
+    method: upload.method,
+    headers: upload.headers,
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Storage upload failed with status ${response.status}.`);
+  }
 };
 
 export const importExternalAsset = async (

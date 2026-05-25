@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
+  AssetProcessingJob,
   AssetSlice,
   EditingSuggestion,
-  Project,
   ProjectBrief,
   RenderTask,
   SceneUpdate,
@@ -11,18 +11,11 @@ import type {
   StoryboardScene,
   TraceEvent,
 } from "@shopclip/shared";
-
-export interface ProjectSnapshot extends Project {
-  assets: AssetMetadata[];
-  assetSlices: AssetSlice[];
-  scripts: ScriptResult[];
-  scenes: StoryboardScene[];
-  renderTasks: RenderTask[];
-}
+import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
 const now = (): string => new Date().toISOString();
 
-export class MemoryProjectStore {
+export class MemoryProjectStore implements ProjectStore {
   private readonly projects = new Map<string, ProjectSnapshot>();
   private readonly traceEvents = new Map<string, TraceEvent[]>();
 
@@ -39,6 +32,7 @@ export class MemoryProjectStore {
       scripts: [],
       scenes: [],
       renderTasks: [],
+      assetProcessingJobs: [],
     };
 
     this.projects.set(project.id, project);
@@ -54,6 +48,15 @@ export class MemoryProjectStore {
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): AssetMetadata | undefined {
+    return this.addAssetWithId(projectId, randomUUID(), asset, createSlices);
+  }
+
+  addAssetWithId(
+    projectId: string,
+    assetId: string,
+    asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
+    createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
+  ): AssetMetadata | undefined {
     const project = this.projects.get(projectId);
     if (!project) {
       return undefined;
@@ -62,7 +65,7 @@ export class MemoryProjectStore {
     const timestamp = now();
     const storedAsset: AssetMetadata = {
       ...asset,
-      id: randomUUID(),
+      id: assetId,
       projectId,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -78,6 +81,103 @@ export class MemoryProjectStore {
     );
     project.updatedAt = timestamp;
     return storedAsset;
+  }
+
+  updateAsset(
+    assetId: string,
+    update: Partial<
+      Pick<
+        AssetMetadata,
+        "embeddingText" | "metadata" | "objectKey" | "status" | "tags" | "thumbnailKey" | "url"
+      >
+    >,
+  ): AssetMetadata | undefined {
+    const match = this.findAssetProject(assetId);
+    if (!match) {
+      return undefined;
+    }
+
+    const timestamp = now();
+    const updatedAsset: AssetMetadata = {
+      ...match.asset,
+      ...update,
+      metadata: {
+        ...(match.asset.metadata ?? {}),
+        ...(update.metadata ?? {}),
+      },
+      updatedAt: timestamp,
+    };
+
+    match.project.assets = match.project.assets.map((asset) =>
+      asset.id === assetId ? updatedAsset : asset,
+    );
+    match.project.updatedAt = timestamp;
+    return updatedAsset;
+  }
+
+  addAssetProcessingJob(
+    projectId: string,
+    job: Omit<AssetProcessingJob, "createdAt">,
+  ): AssetProcessingJob | undefined {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      return undefined;
+    }
+
+    const storedJob: AssetProcessingJob = {
+      ...job,
+      createdAt: now(),
+    };
+    project.assetProcessingJobs.push(storedJob);
+    project.updatedAt = now();
+    return storedJob;
+  }
+
+  getAssetProcessingJob(jobId: string): AssetProcessingJob | undefined {
+    for (const project of this.projects.values()) {
+      const job = project.assetProcessingJobs.find((candidate) => candidate.id === jobId);
+      if (job) {
+        return job;
+      }
+    }
+
+    return undefined;
+  }
+
+  getLatestAssetProcessingJob(assetId: string): AssetProcessingJob | undefined {
+    for (const project of this.projects.values()) {
+      const jobs = project.assetProcessingJobs.filter((candidate) => candidate.assetId === assetId);
+      const latest = jobs.at(-1);
+      if (latest) {
+        return latest;
+      }
+    }
+
+    return undefined;
+  }
+
+  updateAssetProcessingJob(
+    jobId: string,
+    update: Partial<Pick<AssetProcessingJob, "message" | "status" | "steps">>,
+  ): AssetProcessingJob | undefined {
+    for (const project of this.projects.values()) {
+      const job = project.assetProcessingJobs.find((candidate) => candidate.id === jobId);
+      if (!job) {
+        continue;
+      }
+
+      const updatedJob: AssetProcessingJob = {
+        ...job,
+        ...update,
+      };
+      project.assetProcessingJobs = project.assetProcessingJobs.map((candidate) =>
+        candidate.id === jobId ? updatedJob : candidate,
+      );
+      project.updatedAt = now();
+      return updatedJob;
+    }
+
+    return undefined;
   }
 
   addScript(
@@ -270,6 +370,19 @@ export class MemoryProjectStore {
       const scene = project.scenes.find((candidate) => candidate.id === sceneId);
       if (scene) {
         return { project, scene };
+      }
+    }
+
+    return undefined;
+  }
+
+  private findAssetProject(
+    assetId: string,
+  ): { project: ProjectSnapshot; asset: AssetMetadata } | undefined {
+    for (const project of this.projects.values()) {
+      const asset = project.assets.find((candidate) => candidate.id === assetId);
+      if (asset) {
+        return { project, asset };
       }
     }
 
