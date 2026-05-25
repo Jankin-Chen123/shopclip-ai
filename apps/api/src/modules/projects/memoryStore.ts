@@ -144,6 +144,10 @@ export class MemoryProjectStore implements ProjectStore {
     return undefined;
   }
 
+  getAsset(assetId: string): AssetMetadata | undefined {
+    return this.findAssetProject(assetId)?.asset;
+  }
+
   getLatestAssetProcessingJob(assetId: string): AssetProcessingJob | undefined {
     for (const project of this.projects.values()) {
       const jobs = project.assetProcessingJobs.filter((candidate) => candidate.assetId === assetId);

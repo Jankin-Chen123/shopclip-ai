@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, raw } from "express";
 import type { Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
@@ -292,6 +292,86 @@ export const createP0Router = ({
       processingJob,
     });
   });
+
+  router.post(
+    "/assets/:assetId/upload",
+    raw({
+      limit: process.env.ASSET_UPLOAD_BODY_LIMIT ?? "25mb",
+      type: "*/*",
+    }),
+    async (request, response) => {
+      const asset = await store.getAsset(request.params.assetId);
+      if (!asset) {
+        sendNotFound(response, "ASSET_NOT_FOUND", "Asset was not found.");
+        return;
+      }
+      if (!asset.objectKey) {
+        sendInvalidRequest(
+          response,
+          "ASSET_OBJECT_KEY_REQUIRED",
+          "Asset has no object key for server-side upload.",
+        );
+        return;
+      }
+      if (!Buffer.isBuffer(request.body) || request.body.length === 0) {
+        sendInvalidRequest(response, "ASSET_FILE_REQUIRED", "Asset file bytes are required.");
+        return;
+      }
+
+      let uploaded;
+      try {
+        uploaded = await storageProvider.uploadObject({
+          body: request.body,
+          contentType:
+            typeof request.headers["content-type"] === "string"
+              ? request.headers["content-type"]
+              : (asset.mimeType ?? "application/octet-stream"),
+          objectKey: asset.objectKey,
+        });
+      } catch (error) {
+        response.status(502).json({
+          error: {
+            code: "STORAGE_UPLOAD_FAILED",
+            message: error instanceof Error ? error.message : "Storage upload failed.",
+          },
+        });
+        return;
+      }
+
+      const job = await store.getLatestAssetProcessingJob(asset.id);
+      const uploadedAt = new Date().toISOString();
+      const updatedAsset = await store.updateAsset(asset.id, {
+        status: "ready",
+        url: uploaded.publicUrl,
+        metadata: {
+          proxiedUpload: true,
+          uploadedBytes: request.body.length,
+          uploadConfirmedAt: uploadedAt,
+          structuredAssetVersion: "asset-multigranularity-v1",
+          structureProvider: "mock-asset-processor",
+        },
+      });
+      if (!updatedAsset) {
+        sendNotFound(response, "ASSET_NOT_FOUND", "Asset was not found.");
+        return;
+      }
+
+      const processingJob = job
+        ? await store.updateAssetProcessingJob(job.id, {
+            status: "ready",
+            steps: [...job.steps, "server-proxy-upload", "metadata-ready"],
+            message:
+              "Asset uploaded through the API server. Metadata is ready for script generation and storyboard recall.",
+          })
+        : undefined;
+
+      response.json({
+        asset: updatedAsset,
+        processingJob,
+        storage: uploaded,
+      });
+    },
+  );
 
   router.get("/asset-processing-jobs/:jobId", async (request, response) => {
     const processingJob = await store.getAssetProcessingJob(request.params.jobId);

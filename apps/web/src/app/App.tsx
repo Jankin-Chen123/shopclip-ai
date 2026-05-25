@@ -38,7 +38,6 @@ import { copy, isLanguage, type Language } from "./i18n";
 import {
   addAsset,
   applySceneSuggestion,
-  confirmAssetUpload,
   createProject,
   createAssetUploadIntent,
   deleteScene,
@@ -526,18 +525,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
             targetProject.id,
             createAssetInputFromFile(file, language),
           );
-          if (uploadIntent.upload.provider === "tencent-cos") {
-            await uploadAssetFileToStorage(file, uploadIntent.upload);
-          }
-          const confirmed = await confirmAssetUpload(uploadIntent.asset.id, {
-            objectKey: uploadIntent.upload.objectKey,
-            metadata: {
-              uploadedFileName: file.name,
-              uploadedFileSize: file.size,
-              uploadedFileType: file.type,
-            },
-          });
-          return confirmed.asset;
+          const uploaded = await uploadAssetFileToStorage(uploadIntent.asset.id, file);
+          return uploaded.asset;
         }),
       );
 

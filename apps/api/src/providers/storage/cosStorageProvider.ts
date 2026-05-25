@@ -2,7 +2,12 @@ import { createHmac, createHash } from "node:crypto";
 import type { AssetUploadIntent, AssetStorageProvider } from "@shopclip/shared";
 
 import { createAssetObjectKey } from "./storageProvider.js";
-import type { StorageProvider, StorageUploadIntentInput } from "./storageProvider.js";
+import type {
+  StorageProvider,
+  StorageUploadIntentInput,
+  StorageUploadObjectInput,
+  StorageUploadObjectResult,
+} from "./storageProvider.js";
 
 interface CosConfig {
   bucket: string;
@@ -151,6 +156,49 @@ export class CosStorageProvider implements StorageProvider {
         "content-type": input.asset.mimeType,
       },
       expiresAt: new Date((nowSeconds() + uploadUrlTtlSeconds) * 1000).toISOString(),
+    };
+  }
+
+  async uploadObject(input: StorageUploadObjectInput): Promise<StorageUploadObjectResult> {
+    const publicUrl = `${publicBaseUrlFor(this.config)}/${encodePath(input.objectKey)}`;
+
+    if (this.provider === "mock-cos") {
+      return {
+        objectKey: input.objectKey,
+        provider: this.provider,
+        publicUrl,
+      };
+    }
+
+    if (!this.config.secretId || !this.config.secretKey) {
+      throw new Error("COS_SECRET_ID and COS_SECRET_KEY are required for tencent COS mode.");
+    }
+
+    const intent = createTencentCosPresignedPutUrl({
+      config: {
+        bucket: this.config.bucket,
+        publicBaseUrl: this.config.publicBaseUrl,
+        region: this.config.region,
+        secretId: this.config.secretId,
+        secretKey: this.config.secretKey,
+      },
+      contentType: input.contentType,
+      objectKey: input.objectKey,
+    });
+    const response = await fetch(intent.uploadUrl, {
+      method: "PUT",
+      headers: intent.headers,
+      body: new Uint8Array(input.body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`COS upload failed with status ${response.status}.`);
+    }
+
+    return {
+      objectKey: input.objectKey,
+      provider: this.provider,
+      publicUrl,
     };
   }
 

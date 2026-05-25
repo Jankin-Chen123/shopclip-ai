@@ -55,6 +55,7 @@ export interface ProjectStore {
   createProject(brief: ProjectBrief): MaybePromise<ProjectSnapshot>;
   deleteScene(sceneId: string): MaybePromise<StoryboardScene[] | undefined>;
   getAssetProcessingJob(jobId: string): MaybePromise<AssetProcessingJob | undefined>;
+  getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;
   getLatestAssetProcessingJob(assetId: string): MaybePromise<AssetProcessingJob | undefined>;
   getProject(id: string): MaybePromise<ProjectSnapshot | undefined>;
   getRenderTask(
@@ -84,4 +85,3 @@ export interface ProjectStore {
   ): MaybePromise<AssetProcessingJob | undefined>;
   updateScene(sceneId: string, update: SceneUpdate): MaybePromise<StoryboardScene | undefined>;
 }
-

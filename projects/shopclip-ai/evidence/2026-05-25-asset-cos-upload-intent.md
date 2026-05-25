@@ -8,11 +8,12 @@ Implemented the COS-backed material library import contract:
 
 - Asset metadata now carries source, storage provider, object key, embedding text, and structured metadata fields.
 - Backend exposes `POST /api/projects/:projectId/assets/upload-intent`.
+- Backend exposes `POST /api/assets/:assetId/upload` so the browser sends file bytes only to the API server; the API server then uploads to Tencent COS. This avoids requiring browser-to-COS CORS configuration.
 - Backend exposes `POST /api/assets/:assetId/confirm-upload` to move an uploaded asset into `ready` status after the browser/COS upload succeeds.
 - Backend exposes `GET /api/asset-processing-jobs/:jobId` for upload/metadata processing status checks.
 - Prisma now persists COS-backed asset metadata, asset slices, and asset processing jobs in PostgreSQL when `DATABASE_URL` is configured and `PROJECT_STORE_MODE` is not `memory`.
 - Storage provider runs in `mock` mode by default and can switch to Tencent COS presigned PUT mode through environment variables.
-- Frontend file import now requests an upload intent, performs direct file upload when the provider is `tencent-cos`, and confirms the upload so the asset becomes searchable/usable.
+- Frontend file import now requests an upload intent, sends the file to the API server upload proxy, and receives a ready asset once the server-side COS upload succeeds.
 
 ## Verification
 

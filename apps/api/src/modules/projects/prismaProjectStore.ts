@@ -318,6 +318,14 @@ export class PrismaProjectStore implements ProjectStore {
     return job ? toAssetProcessingJob(job) : undefined;
   }
 
+  async getAsset(assetId: string): Promise<AssetMetadata | undefined> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { id: assetId },
+      include: { slices: true },
+    });
+    return asset ? toAsset(asset) : undefined;
+  }
+
   async getLatestAssetProcessingJob(assetId: string): Promise<AssetProcessingJob | undefined> {
     const job = await this.prisma.assetProcessingJob.findFirst({
       where: { assetId },

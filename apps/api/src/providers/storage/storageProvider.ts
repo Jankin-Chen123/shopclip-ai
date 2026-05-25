@@ -8,8 +8,21 @@ export interface StorageUploadIntentInput {
   asset: CreateAssetUploadIntentRequest;
 }
 
+export interface StorageUploadObjectInput {
+  body: Buffer;
+  contentType: string;
+  objectKey: string;
+}
+
+export interface StorageUploadObjectResult {
+  objectKey: string;
+  provider: AssetUploadIntent["provider"];
+  publicUrl: string;
+}
+
 export interface StorageProvider {
   createUploadIntent(input: StorageUploadIntentInput): AssetUploadIntent;
+  uploadObject(input: StorageUploadObjectInput): Promise<StorageUploadObjectResult>;
 }
 
 const extensionFromName = (name: string): string => {

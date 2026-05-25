@@ -148,6 +148,40 @@ describe("COS-backed asset import contract", () => {
       storageProvider: "mock-cos",
     });
 
+    const proxiedUpload = await fetch(`${baseUrl}/api/assets/${created.body.asset.id}/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "image/png",
+      },
+      body: new Uint8Array([137, 80, 78, 71]),
+    });
+    const proxiedUploadBody = (await proxiedUpload.json()) as {
+      asset: { id: string; status: string; metadata: Record<string, unknown> };
+      processingJob?: { status: string; steps: string[] };
+      storage: { objectKey: string; provider: string; publicUrl: string };
+    };
+
+    expect(proxiedUpload.status).toBe(200);
+    expect(proxiedUploadBody.asset).toMatchObject({
+      id: created.body.asset.id,
+      status: "ready",
+    });
+    expect(proxiedUploadBody.asset.metadata).toMatchObject({
+      proxiedUpload: true,
+      uploadedBytes: 4,
+      structureProvider: "mock-asset-processor",
+    });
+    expect(proxiedUploadBody.processingJob).toMatchObject({
+      status: "ready",
+    });
+    expect(proxiedUploadBody.processingJob?.steps).toEqual(
+      expect.arrayContaining(["server-proxy-upload", "metadata-ready"]),
+    );
+    expect(proxiedUploadBody.storage).toMatchObject({
+      objectKey: created.body.upload.objectKey,
+      provider: "mock-cos",
+    });
+
     const confirmed = await request<{
       asset: {
         id: string;

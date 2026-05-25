@@ -166,18 +166,39 @@ export const loadAssetProcessingJob = async (
 };
 
 export const uploadAssetFileToStorage = async (
+  assetId: string,
   file: File,
-  upload: AssetUploadIntent,
-): Promise<void> => {
-  const response = await fetch(upload.uploadUrl, {
-    method: upload.method,
-    headers: upload.headers,
+): Promise<{
+  asset: AssetMetadata;
+  processingJob?: AssetProcessingJob;
+  storage: {
+    objectKey: string;
+    provider: AssetUploadIntent["provider"];
+    publicUrl: string;
+  };
+}> => {
+  const response = await fetch(`${apiBaseUrl}/assets/${assetId}/upload`, {
+    method: "POST",
+    headers: {
+      "content-type": file.type || "application/octet-stream",
+    },
     body: file,
   });
+  const body = (await response.json()) as unknown;
 
   if (!response.ok) {
-    throw new Error(`Storage upload failed with status ${response.status}.`);
+    throw new Error(getErrorMessage(body));
   }
+
+  return body as {
+    asset: AssetMetadata;
+    processingJob?: AssetProcessingJob;
+    storage: {
+      objectKey: string;
+      provider: AssetUploadIntent["provider"];
+      publicUrl: string;
+    };
+  };
 };
 
 export const importExternalAsset = async (
