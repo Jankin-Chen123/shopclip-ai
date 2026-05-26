@@ -95,6 +95,7 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - Added Settings controls for adding Pexels, Pixabay, and Freesound provider configs.
 - Added stock provider API key source controls for Pexels, Pixabay, and Freesound. `Custom` keeps using the browser-local API key; `Use official config` clears the browser key and sends an official-config marker.
 - Updated backend user-configured external provider creation so official stock configs resolve `PEXELS_API_KEY`, `PIXABAY_API_KEY`, or `FREESOUND_API_KEY` from `.env`.
+- Fixed the external search modal provider readiness check so official stock provider configs are searchable without browser API keys and no longer display `missing key`.
 - Added Freesound audio normalization from API v2 search results using high-quality preview MP3/OGG URLs for browser playback; OAuth-only original file download is left as a later production enhancement.
 - Removed the top-right create/load project status CTA from the asset, inspiration, and creation workspaces.
 - Moved the asset type tabs below the asset search/import toolbar. After a search has run, switching asset type tabs keeps the current search text and re-runs the material search.

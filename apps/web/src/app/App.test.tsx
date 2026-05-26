@@ -7,7 +7,7 @@ import {
   assetMatchesCategory,
   externalAssetMatchesCategory,
 } from "../features/assets/AssetCategoryTabs";
-import { AssetsPanel } from "../features/assets/AssetsPanel";
+import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import {
   SettingsPanel,
   createDefaultApiConfig,
@@ -588,6 +588,23 @@ describe("App", () => {
     ).toBe(true);
     expect(
       hasUsableStockProviderCredential({
+        source: "pexels",
+        credentialSource: "custom",
+        enabled: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("treats official stock provider configs as configured inside the search modal", () => {
+    expect(
+      hasSearchableStockProviderCredential({
+        source: "pexels",
+        credentialSource: "official",
+        enabled: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasSearchableStockProviderCredential({
         source: "pexels",
         credentialSource: "custom",
         enabled: true,

@@ -33,3 +33,8 @@ Implemented `Custom` / `Use official config` API key source switching for third-
 ## Notes
 
 Provider API keys remain absent from normalized external asset results and API responses. Official mode still depends on the deployment environment having the corresponding provider key configured.
+
+## Follow-Up Fix
+
+- 2026-05-26: Fixed the asset search modal's provider readiness check. The modal now uses the same official/custom credential rule as the app search handler, so an enabled provider with `credentialSource: "official"` is not shown as `missing key` and can submit searches without a browser API key.
+- Verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`.

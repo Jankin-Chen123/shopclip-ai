@@ -87,6 +87,10 @@ const sourceLabel = (source: ExternalAssetResult["source"]) =>
 const stockProviderLabel = (source: StockProviderConfig["source"]) =>
   source === "pexels" ? "Pexels" : source === "pixabay" ? "Pixabay" : "Freesound";
 
+export const hasSearchableStockProviderCredential = (provider: StockProviderConfig): boolean =>
+  provider.enabled !== false &&
+  (provider.credentialSource === "official" || Boolean(provider.apiKey?.trim()));
+
 const externalSearchPageSize = 12;
 const supportedUploadAccept = "image/*,video/*,audio/*,.txt,.md,text/plain";
 
@@ -106,9 +110,7 @@ const getExternalAssetCardImageUrl = (asset: ExternalAssetResult) =>
 const getExternalVideoPosterUrl = (asset: ExternalAssetResult) =>
   asset.thumbnailUrl || videoCoverFallbackUrl;
 
-const externalSearchTypeForCategory = (
-  category: AssetCategory,
-): AssetCategory => category;
+const externalSearchTypeForCategory = (category: AssetCategory): AssetCategory => category;
 
 const isImageAsset = (asset: AssetMetadata) =>
   asset.type === "image" || asset.mimeType?.startsWith("image/");
@@ -358,9 +360,11 @@ export const AssetsPanel = ({
   const searchInputId = `asset-search-${activeCategory}`;
   const externalSearchInputId = `external-asset-search-${activeCategory}`;
   const fileInputId = `asset-import-${activeCategory}`;
-  const enabledStockProviders = stockProviderConfigs.filter((provider) => provider.enabled !== false);
-  const configuredSearchProviders = enabledStockProviders.filter((provider) =>
-    provider.apiKey?.trim(),
+  const enabledStockProviders = stockProviderConfigs.filter(
+    (provider) => provider.enabled !== false,
+  );
+  const configuredSearchProviders = enabledStockProviders.filter(
+    hasSearchableStockProviderCredential,
   );
   const [externalModalType, setExternalModalType] = useState<AssetCategory>(activeCategory);
   const externalSearchType = externalSearchTypeForCategory(externalModalType);
@@ -568,20 +572,14 @@ export const AssetsPanel = ({
   const isInteractivePreviewTarget = (target: EventTarget | null) =>
     target instanceof HTMLElement && Boolean(target.closest("button, a"));
 
-  const handleExternalAssetCardClick = (
-    event: MouseEvent<HTMLElement>,
-    assetId: string,
-  ) => {
+  const handleExternalAssetCardClick = (event: MouseEvent<HTMLElement>, assetId: string) => {
     if (isInteractivePreviewTarget(event.target)) {
       return;
     }
     toggleExternalAssetSelection(assetId);
   };
 
-  const handleExternalAssetKeyDown = (
-    event: KeyboardEvent<HTMLElement>,
-    assetId: string,
-  ) => {
+  const handleExternalAssetKeyDown = (event: KeyboardEvent<HTMLElement>, assetId: string) => {
     if (isInteractivePreviewTarget(event.target)) {
       return;
     }
@@ -731,7 +729,9 @@ export const AssetsPanel = ({
       {assets.length > 0 ? (
         <div className="asset-bulk-actions">
           <strong>
-            {language === "zh" ? `已选择 ${selectedAssetCount} 个素材` : `${selectedAssetCount} selected`}
+            {language === "zh"
+              ? `已选择 ${selectedAssetCount} 个素材`
+              : `${selectedAssetCount} selected`}
           </strong>
           <Button
             disabled={disabled || !onDeleteAssets || selectedAssetCount === 0}
@@ -748,9 +748,7 @@ export const AssetsPanel = ({
         {assets.length === 0 ? (
           <div
             className={`empty-state asset-empty-state ${
-              searchResults.length > 0
-                ? "asset-empty-state-compact"
-                : ""
+              searchResults.length > 0 ? "asset-empty-state-compact" : ""
             }`.trim()}
           >
             <span className="asset-empty-icon" aria-hidden="true">
@@ -804,9 +802,7 @@ export const AssetsPanel = ({
                 </div>
                 <button
                   aria-label={
-                    language === "zh"
-                      ? `打开 ${asset.name} 详情`
-                      : `Open details for ${asset.name}`
+                    language === "zh" ? `打开 ${asset.name} 详情` : `Open details for ${asset.name}`
                   }
                   className="asset-card-frame asset-card-preview"
                   onClick={() => setPreviewAsset(asset)}
@@ -815,9 +811,7 @@ export const AssetsPanel = ({
                   {!isReady ? (
                     <span
                       aria-label={
-                        language === "zh"
-                          ? `${asset.name} 正在上传`
-                          : `${asset.name} is uploading`
+                        language === "zh" ? `${asset.name} 正在上传` : `${asset.name} is uploading`
                       }
                       className="asset-uploading-placeholder"
                       role="status"
@@ -1058,9 +1052,7 @@ export const AssetsPanel = ({
                     setExternalModalQuery(event.target.value);
                     setExternalImportMessage(undefined);
                   }}
-                  placeholder={
-                    language === "zh" ? "输入素材关键词" : "Search photos and videos"
-                  }
+                  placeholder={language === "zh" ? "输入素材关键词" : "Search photos and videos"}
                   value={externalModalQuery}
                 />
               </div>
@@ -1107,7 +1099,7 @@ export const AssetsPanel = ({
                 <span className="external-source-pill" key={provider.source}>
                   <Globe2 size={14} aria-hidden="true" />
                   {stockProviderLabel(provider.source)}
-                  {!provider.apiKey
+                  {!hasSearchableStockProviderCredential(provider)
                     ? language === "zh"
                       ? "（缺少 key）"
                       : " (missing key)"
@@ -1268,7 +1260,9 @@ export const AssetsPanel = ({
                 <div className="external-empty-result">
                   <Globe2 size={22} aria-hidden="true" />
                   <div>
-                    <h3>{language === "zh" ? "没有找到第三方素材" : "No external stock results"}</h3>
+                    <h3>
+                      {language === "zh" ? "没有找到第三方素材" : "No external stock results"}
+                    </h3>
                     <p>
                       {language === "zh"
                         ? "可以换一个关键词，或到设置页确认素材库 API key 是否已启用。"
@@ -1312,9 +1306,7 @@ export const AssetsPanel = ({
           >
             <div className="asset-import-dialog-heading external-preview-heading">
               <div>
-                <p className="eyebrow">
-                  {language === "zh" ? "素材预览" : "Asset preview"}
-                </p>
+                <p className="eyebrow">{language === "zh" ? "素材预览" : "Asset preview"}</p>
                 <h3 id="external-preview-title">{previewExternalAsset.title}</h3>
               </div>
               <button
@@ -1337,7 +1329,10 @@ export const AssetsPanel = ({
                   />
                 ) : previewExternalAsset.type === "audio" ? (
                   <div className="external-preview-audio">
-                    <div className="external-audio-preview external-audio-preview-large" aria-hidden="true">
+                    <div
+                      className="external-audio-preview external-audio-preview-large"
+                      aria-hidden="true"
+                    >
                       <Music size={42} />
                       <span className="external-audio-waveform">
                         <i />
@@ -1425,7 +1420,9 @@ export const AssetsPanel = ({
                     icon={<Check size={18} />}
                     onClick={() => toggleExternalAssetSelection(previewExternalAsset.id)}
                     variant={
-                      selectedExternalAssetIds.has(previewExternalAsset.id) ? "secondary" : "primary"
+                      selectedExternalAssetIds.has(previewExternalAsset.id)
+                        ? "secondary"
+                        : "primary"
                     }
                   >
                     {selectedExternalAssetIds.has(previewExternalAsset.id)
@@ -1507,7 +1504,9 @@ export const AssetsPanel = ({
               <Button onClick={closeImportDialog}>{language === "zh" ? "取消" : "Cancel"}</Button>
               <Button
                 disabled={disabled || selectedFiles.length === 0 || isLoading}
-                icon={isLoading ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />}
+                icon={
+                  isLoading ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />
+                }
                 onClick={handleConfirmImport}
                 variant="primary"
               >

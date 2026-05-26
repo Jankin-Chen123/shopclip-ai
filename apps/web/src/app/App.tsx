@@ -23,7 +23,7 @@ import {
   type AssetCategory,
 } from "../features/assets/AssetCategoryTabs";
 import { AssetPrepPanel } from "../features/assets/AssetPrepPanel";
-import { AssetsPanel } from "../features/assets/AssetsPanel";
+import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { InspirationPanel } from "../features/inspiration/InspirationPanel";
 import { RenderPanel } from "../features/render/RenderPanel";
@@ -118,9 +118,7 @@ export const createAssetInputFromFile = (file: File, language: Language): Create
   };
 };
 
-export const hasUsableStockProviderCredential = (provider: StockProviderConfig): boolean =>
-  provider.enabled !== false &&
-  (provider.credentialSource === "official" || Boolean(provider.apiKey?.trim()));
+export const hasUsableStockProviderCredential = hasSearchableStockProviderCredential;
 
 const defaultMediaSettings: MediaSettings = {
   bgmTrack: "creator-pop",
