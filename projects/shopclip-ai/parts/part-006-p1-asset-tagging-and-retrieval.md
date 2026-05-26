@@ -78,6 +78,11 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
   - ready image/video assets continue previewing through `GET /api/assets/:assetId/content`;
   - local asset cards support single deletion and selected batch deletion;
   - `DELETE /api/assets` removes COS objects by `objectKey`/`thumbnailKey` and then removes asset, slice, processing-job, and scene references from the store.
+- Added Tencent COS intelligent search integration:
+  - `/api/assets/search` can call COS CI `POST /datasetquery/hybridsearch` with text mode and `ImageSearch` template when `COS_INTELLIGENT_SEARCH_DATASET` is configured;
+  - COS image hits are mapped back to stored asset metadata by `objectKey` or the asset id segment in the COS object path;
+  - only COS matches with score greater than 60 are returned to the frontend;
+  - the asset library search UI now renders search matches directly in the existing asset grid instead of a separate result strip.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
   - `projects/shopclip-ai/evidence/part-006-verification.md`
@@ -111,6 +116,13 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 - `corepack pnpm lint`
 - `corepack pnpm build`
 - `corepack pnpm --filter @shopclip/web test:e2e`
+- `corepack pnpm --filter @shopclip/api test -- cosIntelligentSearchProvider asset-cos-flow p1-flow` on 2026-05-26: 13 files / 45 tests passed.
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx` on 2026-05-26: 1 file / 37 tests passed.
+- `corepack pnpm typecheck` on 2026-05-26: passed.
+- `corepack pnpm lint` on 2026-05-26: passed.
+- `corepack pnpm test` on 2026-05-26: shared 12 tests, API 45 tests, Web 37 tests passed.
+- `corepack pnpm build` on 2026-05-26: shared/API/Web builds passed.
+- Evidence note: `projects/shopclip-ai/evidence/2026-05-26-cos-intelligent-search.md`
 
 ## Verification Plan
 

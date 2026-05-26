@@ -369,11 +369,18 @@ export const AssetsPanel = ({
   const [externalModalType, setExternalModalType] = useState<AssetCategory>(activeCategory);
   const externalSearchType = externalSearchTypeForCategory(externalModalType);
   const hasConfiguredStockProvider = configuredSearchProviders.length > 0;
+  const isShowingSearchResults = hasSearched && searchQuery.trim().length > 0;
+  const previewAssets = isShowingSearchResults
+    ? searchResults.map((result) => result.asset)
+    : assets;
+  const searchScoreByAssetId = new Map(
+    searchResults.map((result) => [result.asset.id, result.score] as const),
+  );
   const selectedExternalAssets = externalModalResults.filter((result) =>
     selectedExternalAssetIds.has(result.id),
   );
   const selectedExternalAssetCount = selectedExternalAssets.length;
-  const selectedAssetCount = assets.filter((asset) => selectedAssetIds.has(asset.id)).length;
+  const selectedAssetCount = previewAssets.filter((asset) => selectedAssetIds.has(asset.id)).length;
   const closeAssetPreview = () => setPreviewAsset(undefined);
   const detailLabel = language === "zh" ? "查看详情" : "View details";
   const previewAssetReady = previewAsset?.status === "ready";
@@ -702,31 +709,7 @@ export const AssetsPanel = ({
         </Button>
       </section>
 
-      {searchResults.length > 0 ? (
-        <section className="asset-result-section" aria-labelledby="local-results-title">
-          <div className="asset-result-heading">
-            <h3 id="local-results-title">
-              {language === "zh" ? "项目素材结果" : "Project asset results"}
-            </h3>
-          </div>
-          <div className="asset-search-results" aria-live="polite">
-            {searchResults.map((result) => (
-              <button
-                className="asset-search-result"
-                disabled={!onRecallAsset}
-                key={result.asset.id}
-                onClick={() => onRecallAsset?.(result.asset.id)}
-                type="button"
-              >
-                <strong>{result.asset.name}</strong>
-                <span>{copy.score(result.score)}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {assets.length > 0 ? (
+      {previewAssets.length > 0 ? (
         <div className="asset-bulk-actions">
           <strong>
             {language === "zh"
@@ -745,17 +728,25 @@ export const AssetsPanel = ({
       ) : null}
 
       <div className="asset-grid" aria-live="polite">
-        {assets.length === 0 ? (
-          <div
-            className={`empty-state asset-empty-state ${
-              searchResults.length > 0 ? "asset-empty-state-compact" : ""
-            }`.trim()}
-          >
+        {previewAssets.length === 0 ? (
+          <div className="empty-state asset-empty-state">
             <span className="asset-empty-icon" aria-hidden="true">
               <CategoryIcon size={34} />
             </span>
-            <strong>{ui.emptyTitle}</strong>
-            <span>{ui.emptyBody}</span>
+            <strong>
+              {isShowingSearchResults
+                ? language === "zh"
+                  ? `没有匹配 ${searchQuery.trim()} 的${getAssetCategoryLabel(activeCategory, language)}素材`
+                  : `No ${getAssetCategoryLabel(activeCategory, language).toLowerCase()} matched ${searchQuery.trim()}`
+                : ui.emptyTitle}
+            </strong>
+            <span>
+              {isShowingSearchResults
+                ? language === "zh"
+                  ? "可以换一个关键词，或先导入更多图片素材。"
+                  : "Try another keyword, or import more image assets first."
+                : ui.emptyBody}
+            </span>
             <button
               className="asset-empty-action"
               onClick={() => setIsImportOpen(true)}
@@ -765,7 +756,7 @@ export const AssetsPanel = ({
             </button>
           </div>
         ) : (
-          assets.map((asset) => {
+          previewAssets.map((asset) => {
             const AssetIcon = isAudioAsset(asset)
               ? Music
               : isScriptAsset(asset)
@@ -773,6 +764,7 @@ export const AssetsPanel = ({
                 : CategoryIcon;
             const isReady = asset.status === "ready";
             const isSelected = selectedAssetIds.has(asset.id);
+            const searchScore = searchScoreByAssetId.get(asset.id);
 
             return (
               <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
@@ -859,7 +851,11 @@ export const AssetsPanel = ({
                     <h3 title={asset.name}>{asset.name}</h3>
                     <p>{asset.mimeType ?? asset.type}</p>
                   </div>
-                  <span>{formatBytes(asset.sizeBytes)}</span>
+                  <span>
+                    {isShowingSearchResults && searchScore !== undefined
+                      ? copy.score(searchScore)
+                      : formatBytes(asset.sizeBytes)}
+                  </span>
                 </div>
               </article>
             );

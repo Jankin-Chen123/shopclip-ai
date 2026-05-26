@@ -138,6 +138,84 @@ describe("COS-backed asset import contract", () => {
     expect(searched.body.results[0]?.asset.id).toBe(created.body.asset.id);
   });
 
+  it("returns COS intelligent image matches as the asset search results", async () => {
+    const app = createApp({
+      cosAssetSearch: async ({ query }) =>
+        query === "dog"
+          ? [
+              {
+                uri: "cos://shopclip-1250000000/library/raw/cos-hit/source.png",
+                objectKey: "library/raw/cos-hit/source.png",
+                score: 87,
+              },
+              {
+                uri: "cos://shopclip-1250000000/library/raw/cos-miss/source.png",
+                objectKey: "library/raw/cos-miss/source.png",
+                score: 60,
+              },
+            ]
+          : [],
+    });
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = app.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const hit = await request<{ asset: { id: string; objectKey: string } }>(
+      baseUrl,
+      "/api/assets",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Golden retriever product photo.png",
+          mimeType: "image/png",
+          sizeBytes: 180_000,
+          objectKey: "library/raw/cos-hit/source.png",
+          storageProvider: "tencent-cos",
+          tags: ["dog"],
+        }),
+      },
+    );
+    expect(hit.status).toBe(201);
+
+    const miss = await request<{ asset: { id: string } }>(baseUrl, "/api/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Borderline score photo.png",
+        mimeType: "image/png",
+        sizeBytes: 180_000,
+        objectKey: "library/raw/cos-miss/source.png",
+        storageProvider: "tencent-cos",
+        tags: ["dog"],
+      }),
+    });
+    expect(miss.status).toBe(201);
+
+    const searched = await request<{
+      results: Array<{ asset: { id: string; name: string }; score: number; reasons: string[] }>;
+    }>(baseUrl, "/api/assets/search?q=dog");
+
+    expect(searched.status).toBe(200);
+    expect(searched.body.results).toHaveLength(1);
+    expect(searched.body.results[0]).toMatchObject({
+      asset: {
+        id: hit.body.asset.id,
+        name: "Golden retriever product photo.png",
+      },
+      score: 87,
+      reasons: expect.arrayContaining(["cos-intelligent-search", "cos-score:87"]),
+    });
+    expect(searched.body.results.map((result) => result.asset.id)).not.toContain(
+      miss.body.asset.id,
+    );
+  });
+
   it("creates a COS upload intent and stores structured asset metadata without exposing secrets", async () => {
     const projectId = await createProject(baseUrl);
 

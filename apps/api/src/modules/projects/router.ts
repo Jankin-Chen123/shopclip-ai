@@ -21,10 +21,14 @@ import {
 import { buildMockDashboard } from "../dashboard/mockDashboard.js";
 import { searchAssets } from "../retrieval/search.js";
 import {
+  mapCosImageMatchesToAssetResults,
+  searchCosIntelligentAssets,
+} from "../../providers/assets/cosIntelligentSearchProvider.js";
+import type { CosIntelligentSearchInput } from "../../providers/assets/cosIntelligentSearchProvider.js";
+import {
   createExternalAssetProvidersFromConfig,
   searchExternalAssets,
 } from "../../providers/assets/externalAssetProviders.js";
-import type { ExternalAssetSearchInput } from "../../providers/assets/externalAssetProviders.js";
 import {
   generateEditingSuggestions,
   regenerateSceneFallback,
@@ -112,14 +116,16 @@ const filterAssetLibrary = (
 };
 
 export interface P0RouterOptions {
+  cosAssetSearch?: (
+    input: CosIntelligentSearchInput,
+  ) => Promise<Awaited<ReturnType<typeof searchCosIntelligentAssets>>>;
   store?: ProjectStore;
-  externalAssetSearch?: (input: ExternalAssetSearchInput) => Promise<unknown[]>;
   storageProvider?: StorageProvider;
 }
 
 export const createP0Router = ({
+  cosAssetSearch = searchCosIntelligentAssets,
   store = new MemoryProjectStore(),
-  externalAssetSearch = searchExternalAssets,
   storageProvider = new CosStorageProvider(),
 }: P0RouterOptions = {}): Router => {
   const router = Router();
@@ -770,38 +776,38 @@ export const createP0Router = ({
             .filter(Boolean)
         : [];
 
-    const externalResults = await externalAssetSearch({
-      query,
-      perPage: 8,
-    });
+    const searchLibrary = project ?? {
+      id: "global-asset-library",
+      title: "Global asset library",
+      productName: "Global asset library",
+      audience: "merchant",
+      sellingPoints: ["shared assets"],
+      tone: "neutral",
+      style: "library",
+      targetDurationSeconds: 15,
+      status: "ready" as const,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      assets: globalLibrary?.assets ?? [],
+      assetSlices: globalLibrary?.assetSlices ?? [],
+      assetProcessingJobs: [],
+      scripts: [],
+      scenes: [],
+      renderTasks: [],
+    };
+    const cosMatches = query.trim()
+      ? await cosAssetSearch({ query, limit: 24, matchThreshold: 60 })
+      : undefined;
+    const cosResults = cosMatches
+      ? mapCosImageMatchesToAssetResults(cosMatches, searchLibrary)
+      : undefined;
 
     response.json({
       ...(projectId ? { projectId } : {}),
       query,
       tags,
-      results: searchAssets(
-        project ?? {
-          id: "global-asset-library",
-          title: "Global asset library",
-          productName: "Global asset library",
-          audience: "merchant",
-          sellingPoints: ["shared assets"],
-          tone: "neutral",
-          style: "library",
-          targetDurationSeconds: 15,
-          status: "ready",
-          createdAt: new Date(0).toISOString(),
-          updatedAt: new Date(0).toISOString(),
-          assets: globalLibrary?.assets ?? [],
-          assetSlices: globalLibrary?.assetSlices ?? [],
-          assetProcessingJobs: [],
-          scripts: [],
-          scenes: [],
-          renderTasks: [],
-        },
-        { query, tags },
-      ),
-      externalResults,
+      results: cosResults ?? searchAssets(searchLibrary, { query, tags }),
+      externalResults: [],
     });
   });
 

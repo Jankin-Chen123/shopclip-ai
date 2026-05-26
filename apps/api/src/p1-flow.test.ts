@@ -139,39 +139,7 @@ describe("P1 asset retrieval and scene editing", () => {
     expect(vectorLike.body.results[0].reasons.join(" ")).toContain("vector-like");
   });
 
-  it("returns external provider results alongside local asset matches", async () => {
-    const externalResult = {
-      id: "pexels:video:321",
-      source: "pexels",
-      externalId: "321",
-      type: "video",
-      title: "Desk product B-roll",
-      thumbnailUrl: "https://images.pexels.com/videos/321/thumb.jpg",
-      previewUrl: "https://videos.pexels.com/video-files/321/preview.mp4",
-      downloadUrl: "https://videos.pexels.com/video-files/321/download.mp4",
-      externalUrl: "https://www.pexels.com/video/321/",
-      authorName: "Pexels Creator",
-      authorUrl: "https://www.pexels.com/@creator",
-      licenseLabel: "Pexels License",
-      licenseUrl: "https://www.pexels.com/license/",
-      canUseCommercially: true,
-      requiresAttribution: false,
-      tags: ["desk", "product"],
-      durationSeconds: 6,
-    } as const;
-
-    const providerApp = createApp({
-      externalAssetSearch: async ({ query }) => (query === "desk" ? [externalResult] : []),
-    });
-
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    server = providerApp.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
-
+  it("keeps external provider results out of local asset matches", async () => {
     const projectId = await createProject(baseUrl);
     const created = await request<{ asset: { id: string } }>(
       baseUrl,
@@ -196,13 +164,7 @@ describe("P1 asset retrieval and scene editing", () => {
 
     expect(searched.status).toBe(200);
     expect(searched.body.results[0].asset.name).toBe("Desk packshot");
-    expect(searched.body.externalResults).toMatchObject([
-      {
-        source: "pexels",
-        title: "Desk product B-roll",
-        previewUrl: "https://videos.pexels.com/video-files/321/preview.mp4",
-      },
-    ]);
+    expect(searched.body.externalResults).toEqual([]);
   });
 
   it("returns an empty external search response when no user provider is configured", async () => {

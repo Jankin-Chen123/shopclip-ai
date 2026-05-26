@@ -280,6 +280,88 @@ describe("App", () => {
     expect(markup).toContain("Open details for GlowGrip packshot");
   });
 
+  it("renders searched asset matches inside the main preview grid", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "image",
+          name: "GlowGrip packshot",
+          mimeType: "image/png",
+          sizeBytes: 220000,
+          tags: ["product", "desk", "hero"],
+        }}
+        assets={[makeAsset({ id: "asset-all", type: "image", name: "All assets packshot" })]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject
+        hasSearched
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="image"
+        onAssetDraftChange={() => undefined}
+        onImportFiles={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery="dog"
+        searchResults={[
+          {
+            asset: makeAsset({
+              id: "asset-cos-hit",
+              type: "image",
+              name: "Golden retriever match",
+              mimeType: "image/png",
+            }),
+            slices: [],
+            score: 87,
+            reasons: ["cos-intelligent-search"],
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("asset-grid");
+    expect(markup).toContain("Golden retriever match");
+    expect(markup).not.toContain("All assets packshot");
+    expect(markup).not.toContain("Project asset results");
+    expect(markup).not.toContain("asset-search-result");
+  });
+
+  it("shows an empty search state in the main preview grid when no assets match", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "image",
+          name: "GlowGrip packshot",
+          mimeType: "image/png",
+          sizeBytes: 220000,
+          tags: ["product", "desk", "hero"],
+        }}
+        assets={[makeAsset({ id: "asset-all", type: "image", name: "All assets packshot" })]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject
+        hasSearched
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="image"
+        onAssetDraftChange={() => undefined}
+        onImportFiles={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery="dog"
+        searchResults={[]}
+      />,
+    );
+
+    expect(markup).toContain("No images matched dog");
+    expect(markup).not.toContain("Project asset results");
+    expect(markup).not.toContain("All assets packshot");
+  });
+
   it("renders upload progress previews and delete controls without card status bars", () => {
     const markup = renderToStaticMarkup(
       <AssetsPanel
@@ -454,7 +536,7 @@ describe("App", () => {
         copy={copy.zh.assets}
         disabled={false}
         hasProject
-        hasSearched
+        hasSearched={false}
         isLoading={false}
         isSearching={false}
         language="zh"
