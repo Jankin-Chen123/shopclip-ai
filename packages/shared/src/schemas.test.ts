@@ -344,4 +344,27 @@ describe("shared contract schemas", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("validates external asset provider official credential requests without browser keys", () => {
+    const parsed = ExternalAssetSearchRequestSchema.safeParse({
+      query: "desk product",
+      type: "image",
+      providers: [
+        { source: "pexels", credentialSource: "official", enabled: true },
+        {
+          source: "pixabay",
+          credentialSource: "custom",
+          apiKey: "pixabay-secret",
+          enabled: true,
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.providers.at(0)?.credentialSource).toBe("official");
+      expect(parsed.data.providers.at(0)?.apiKey).toBeUndefined();
+      expect(parsed.data.providers.at(1)?.credentialSource).toBe("custom");
+    }
+  });
 });

@@ -221,4 +221,41 @@ describe("external asset provider normalization", () => {
     expect(providers.map((provider) => provider.source)).toEqual(["pexels", "freesound"]);
     expect(JSON.stringify(providers.map((provider) => provider.source))).not.toContain("secret");
   });
+
+  it("creates official-configured providers from server environment keys", () => {
+    const previousPexels = process.env.PEXELS_API_KEY;
+    const previousPixabay = process.env.PIXABAY_API_KEY;
+    const previousFreesound = process.env.FREESOUND_API_KEY;
+    process.env.PEXELS_API_KEY = "official-pexels-secret";
+    process.env.PIXABAY_API_KEY = "official-pixabay-secret";
+    delete process.env.FREESOUND_API_KEY;
+
+    try {
+      const providers = createExternalAssetProvidersFromConfig([
+        { source: "pexels", credentialSource: "official", enabled: true },
+        { source: "pixabay", credentialSource: "official", apiKey: "browser-key", enabled: true },
+        { source: "freesound", credentialSource: "official", enabled: true },
+        { source: "pexels", credentialSource: "official", enabled: false },
+      ]);
+
+      expect(providers.map((provider) => provider.source)).toEqual(["pexels", "pixabay"]);
+      expect(JSON.stringify(providers.map((provider) => provider.source))).not.toContain("secret");
+    } finally {
+      if (previousPexels === undefined) {
+        delete process.env.PEXELS_API_KEY;
+      } else {
+        process.env.PEXELS_API_KEY = previousPexels;
+      }
+      if (previousPixabay === undefined) {
+        delete process.env.PIXABAY_API_KEY;
+      } else {
+        process.env.PIXABAY_API_KEY = previousPixabay;
+      }
+      if (previousFreesound === undefined) {
+        delete process.env.FREESOUND_API_KEY;
+      } else {
+        process.env.FREESOUND_API_KEY = previousFreesound;
+      }
+    }
+  });
 });

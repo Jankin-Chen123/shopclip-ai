@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-23
-- Last updated: 2026-05-24
+- Last updated: 2026-05-26
 
 ## Source Of Truth
 
@@ -82,6 +82,8 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - [x] Settings includes Freesound as an audio stock provider option.
 - [x] Audio tabs can search Freesound, show audio-specific cards, open a playable audio preview, and queue selected audio imports.
 - [x] Backend external import accepts normalized audio results and stores them as `reference` assets with `audio/mpeg` metadata until a first-class audio asset type is introduced.
+- [x] Third-party stock libraries support `Custom` and `Use official config` API key sources.
+- [x] In `Use official config` mode, the browser omits provider API keys and the backend resolves the selected provider key from `.env`.
 
 ## Completion Notes
 
@@ -91,6 +93,8 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - Added `POST /api/projects/:projectId/assets/import-external` to create a project asset from a selected external result while preserving source/license tags.
 - Added `POST /api/assets/external-search` so the front end can send selected provider configs and browser-local user API keys in the request body.
 - Added Settings controls for adding Pexels, Pixabay, and Freesound provider configs.
+- Added stock provider API key source controls for Pexels, Pixabay, and Freesound. `Custom` keeps using the browser-local API key; `Use official config` clears the browser key and sends an official-config marker.
+- Updated backend user-configured external provider creation so official stock configs resolve `PEXELS_API_KEY`, `PIXABAY_API_KEY`, or `FREESOUND_API_KEY` from `.env`.
 - Added Freesound audio normalization from API v2 search results using high-quality preview MP3/OGG URLs for browser playback; OAuth-only original file download is left as a later production enhancement.
 - Removed the top-right create/load project status CTA from the asset, inspiration, and creation workspaces.
 - Moved the asset type tabs below the asset search/import toolbar. After a search has run, switching asset type tabs keeps the current search text and re-runs the material search.
@@ -129,6 +133,14 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - `corepack pnpm typecheck`
 - `corepack pnpm lint`
 - `corepack pnpm build`
+- `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts`
+- `corepack pnpm --filter @shopclip/api test -- externalAssetProviders.test.ts`
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+- `corepack pnpm lint`
+- `corepack pnpm build`
+- Evidence note: `projects/shopclip-ai/evidence/2026-05-26-stock-provider-official-config-toggle.md`
 - `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p1-external-assets.spec.ts`
   - Starts from Settings, verifies provider configuration UI, opens the asset-page modal, searches mocked Pexels results through routed paged API responses, opens preview details, verifies the modal result area scrolls and loads the next page at the bottom, selects result cards, and verifies one-click frontend-only import feedback.
   - Verifies the no-provider reminder state and disabled modal search button.

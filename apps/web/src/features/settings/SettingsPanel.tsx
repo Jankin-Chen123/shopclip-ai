@@ -50,9 +50,7 @@ const providerPresets: ProviderPreset[] = [
         "doubao-seedream-4-5-251128",
         "doubao-seedream-4-0-250828",
       ],
-      video: [
-        "doubao-seedance-1-5-pro-251215",
-      ],
+      video: ["doubao-seedance-1-5-pro-251215"],
     },
   },
   {
@@ -205,11 +203,14 @@ const settingsCopy = {
     officialKeyPlaceholder: "Backend .env API key",
     stockTitle: "Third-party stock libraries",
     stockDescription:
-      "Choose a stock site and add its API key. Keys stay in this browser and are only sent when you search that site.",
+      "Choose a stock site and decide whether searches use your browser key or the backend .env key.",
     addStockLibrary: "Add third-party library",
     stockProvider: "Stock site",
+    stockCredentialSource: "Stock API key source",
     stockApiKey: "Stock API key",
     stockApiKeyPlaceholder: "Paste provider API key",
+    stockOfficialKeyPlaceholder: "Backend .env stock API key",
+    stockOfficialKeyHelp: "The backend uses the selected stock provider key from its .env file.",
     enabled: "Enabled",
     remove: "Remove",
     configured: "Configured libraries",
@@ -246,9 +247,11 @@ const localizedSettingsCopy = {
     credentialSource: "API key 来源",
     customCredential: "自定义",
     officialCredential: "使用官方配置",
-    officialKeyHelp:
-      "使用官方配置时，请求会携带服务端配置标记，后端使用 .env 中的 API key。",
+    officialKeyHelp: "使用官方配置时，请求会携带服务端配置标记，后端使用 .env 中的 API key。",
     officialKeyPlaceholder: "后端 .env API key",
+    stockCredentialSource: "素材 API key 来源",
+    stockOfficialKeyPlaceholder: "后端 .env 素材 API key",
+    stockOfficialKeyHelp: "后端使用 .env 中选中素材库的 API key。",
   },
 } as const;
 
@@ -386,11 +389,17 @@ export const sanitizeStockProviderConfigs = (
   const knownSources = new Set(stockProviderPresets.map((provider) => provider.source));
   const normalized = configs
     .filter((config) => knownSources.has(config.source))
-    .map((config) => ({
-      source: config.source,
-      enabled: config.enabled !== false,
-      apiKey: config.apiKey?.trim() || undefined,
-    }));
+    .map((config) => {
+      const credentialSource: CredentialSource =
+        config.credentialSource === "official" ? "official" : "custom";
+
+      return {
+        source: config.source,
+        credentialSource,
+        enabled: config.enabled !== false,
+        apiKey: credentialSource === "official" ? undefined : config.apiKey?.trim() || undefined,
+      };
+    });
 
   return normalized;
 };
@@ -409,6 +418,8 @@ export const SettingsPanel = ({
   const stockConfigs = sanitizeStockProviderConfigs(stockProviderConfigs);
   const [draftStockProvider, setDraftStockProvider] =
     useState<StockProviderConfig["source"]>("pexels");
+  const [draftStockCredentialSource, setDraftStockCredentialSource] =
+    useState<CredentialSource>("custom");
   const [draftStockApiKey, setDraftStockApiKey] = useState("");
 
   const updateRole = (
@@ -433,7 +444,10 @@ export const SettingsPanel = ({
     });
   };
 
-  const handleCredentialSourceChange = (role: ApiConfigRole, credentialSource: CredentialSource) => {
+  const handleCredentialSourceChange = (
+    role: ApiConfigRole,
+    credentialSource: CredentialSource,
+  ) => {
     updateRole(role, {
       credentialSource,
       apiKey: credentialSource === "official" ? undefined : config[role]?.apiKey,
@@ -451,11 +465,26 @@ export const SettingsPanel = ({
     );
   };
 
+  const handleStockCredentialSourceChange = (
+    source: StockProviderConfig["source"],
+    credentialSource: CredentialSource,
+  ) => {
+    const currentProvider = stockConfigs.find((provider) => provider.source === source);
+    updateStockProvider(source, {
+      credentialSource,
+      apiKey: credentialSource === "official" ? undefined : currentProvider?.apiKey,
+    });
+  };
+
   const addStockProvider = () => {
     const nextConfig: StockProviderConfig = {
       source: draftStockProvider,
+      credentialSource: draftStockCredentialSource,
       enabled: true,
-      apiKey: draftStockApiKey.trim() || undefined,
+      apiKey:
+        draftStockCredentialSource === "official"
+          ? undefined
+          : draftStockApiKey.trim() || undefined,
     };
     const existing = stockConfigs.some((provider) => provider.source === draftStockProvider);
     onStockProviderConfigsChange(
@@ -587,7 +616,9 @@ export const SettingsPanel = ({
                       : text.keyPlaceholder
                   }
                   type="password"
-                  value={roleConfig.credentialSource === "official" ? "" : (roleConfig.apiKey ?? "")}
+                  value={
+                    roleConfig.credentialSource === "official" ? "" : (roleConfig.apiKey ?? "")
+                  }
                 />
               </label>
               {roleConfig.credentialSource === "official" ? (
@@ -624,20 +655,47 @@ export const SettingsPanel = ({
             </select>
           </label>
 
+          <fieldset className="credential-source-field">
+            <legend>{text.stockCredentialSource}</legend>
+            <div className="settings-segmented-control">
+              {(["custom", "official"] as const).map((credentialSource) => (
+                <button
+                  aria-pressed={draftStockCredentialSource === credentialSource}
+                  className={draftStockCredentialSource === credentialSource ? "active" : undefined}
+                  key={credentialSource}
+                  onClick={() => {
+                    setDraftStockCredentialSource(credentialSource);
+                    if (credentialSource === "official") {
+                      setDraftStockApiKey("");
+                    }
+                  }}
+                  type="button"
+                >
+                  {credentialSource === "custom" ? text.customCredential : text.officialCredential}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <label>
             {text.stockApiKey}
             <input
               autoComplete="off"
+              disabled={draftStockCredentialSource === "official"}
               onChange={(event) => setDraftStockApiKey(event.target.value)}
-              placeholder={text.stockApiKeyPlaceholder}
+              placeholder={
+                draftStockCredentialSource === "official"
+                  ? text.stockOfficialKeyPlaceholder
+                  : text.stockApiKeyPlaceholder
+              }
               type="password"
-              value={draftStockApiKey}
+              value={draftStockCredentialSource === "official" ? "" : draftStockApiKey}
             />
           </label>
 
           <button
             className="stock-provider-add-button"
-            disabled={!draftStockApiKey.trim()}
+            disabled={draftStockCredentialSource === "custom" && !draftStockApiKey.trim()}
             onClick={addStockProvider}
             type="button"
           >
@@ -671,20 +729,55 @@ export const SettingsPanel = ({
                     <p>{preset.description[language]}</p>
                   </div>
 
+                  <fieldset className="credential-source-field">
+                    <legend>{text.stockCredentialSource}</legend>
+                    <div className="settings-segmented-control">
+                      {(["custom", "official"] as const).map((credentialSource) => (
+                        <button
+                          aria-pressed={provider.credentialSource === credentialSource}
+                          className={
+                            provider.credentialSource === credentialSource ? "active" : undefined
+                          }
+                          key={credentialSource}
+                          onClick={() =>
+                            handleStockCredentialSourceChange(provider.source, credentialSource)
+                          }
+                          type="button"
+                        >
+                          {credentialSource === "custom"
+                            ? text.customCredential
+                            : text.officialCredential}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+
                   <label>
                     {text.stockApiKey}
                     <input
                       autoComplete="off"
+                      disabled={provider.credentialSource === "official"}
                       onChange={(event) =>
                         updateStockProvider(provider.source, {
                           apiKey: event.target.value || undefined,
                         })
                       }
-                      placeholder={text.stockApiKeyPlaceholder}
+                      placeholder={
+                        provider.credentialSource === "official"
+                          ? text.stockOfficialKeyPlaceholder
+                          : text.stockApiKeyPlaceholder
+                      }
                       type="password"
-                      value={provider.apiKey ?? ""}
+                      value={
+                        provider.credentialSource === "official" ? "" : (provider.apiKey ?? "")
+                      }
                     />
                   </label>
+                  {provider.credentialSource === "official" ? (
+                    <p className="settings-key-help stock-provider-official-help">
+                      {text.stockOfficialKeyHelp}
+                    </p>
+                  ) : null}
 
                   <button
                     aria-label={`${text.remove} ${preset.label}`}

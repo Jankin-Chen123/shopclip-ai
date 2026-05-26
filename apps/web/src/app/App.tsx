@@ -90,10 +90,7 @@ const createDefaultAsset = (language: Language): CreateAssetInput => ({
   sizeBytes: defaultAssetSizeBytes,
 });
 
-export const createAssetInputFromFile = (
-  file: File,
-  language: Language,
-): CreateAssetInput => {
+export const createAssetInputFromFile = (file: File, language: Language): CreateAssetInput => {
   const lowerName = file.name.toLowerCase();
   const inferredCategory: AssetCategory = file.type.startsWith("image/")
     ? "image"
@@ -121,6 +118,10 @@ export const createAssetInputFromFile = (
   };
 };
 
+export const hasUsableStockProviderCredential = (provider: StockProviderConfig): boolean =>
+  provider.enabled !== false &&
+  (provider.credentialSource === "official" || Boolean(provider.apiKey?.trim()));
+
 const defaultMediaSettings: MediaSettings = {
   bgmTrack: "creator-pop",
   subtitleStyle: "clean-lower-third",
@@ -128,13 +129,7 @@ const defaultMediaSettings: MediaSettings = {
   ttsVoice: "clear-host",
 };
 
-const creationPageIds: CreationPageId[] = [
-  "project",
-  "create",
-  "studio",
-  "delivery",
-  "dashboard",
-];
+const creationPageIds: CreationPageId[] = ["project", "create", "studio", "delivery", "dashboard"];
 
 const isCreationPage = (page: WorkspacePageId): page is CreationPageId =>
   creationPageIds.includes(page as CreationPageId);
@@ -268,8 +263,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
   const activeAssets = useMemo(
-    () =>
-      assetLibrary.assets.filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
+    () => assetLibrary.assets.filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
     [activeAssetCategory, assetLibrary.assets],
   );
   const activeAssetSearchResults = useMemo(
@@ -611,9 +605,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     page = 1,
     perPage = 12,
   ): Promise<ExternalAssetSearchResponse> => {
-    const enabledProviders = stockProviderConfigs.filter(
-      (provider) => provider.enabled !== false && provider.apiKey?.trim(),
-    );
+    const enabledProviders = stockProviderConfigs.filter(hasUsableStockProviderCredential);
     if (enabledProviders.length === 0) {
       return { query, page, perPage, hasMore: false, externalResults: [] };
     }

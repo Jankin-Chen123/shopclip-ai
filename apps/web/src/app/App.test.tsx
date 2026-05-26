@@ -12,8 +12,9 @@ import {
   SettingsPanel,
   createDefaultApiConfig,
   sanitizeApiConfig,
+  sanitizeStockProviderConfigs,
 } from "../features/settings/SettingsPanel";
-import { App, createAssetInputFromFile } from "./App";
+import { App, createAssetInputFromFile, hasUsableStockProviderCredential } from "./App";
 import { copy } from "./i18n";
 
 const makeAsset = (asset: Partial<AssetMetadata>): AssetMetadata => ({
@@ -61,13 +62,11 @@ describe("App", () => {
     expect(markup).not.toContain("concept-wave");
     expect(markup).not.toContain("creation-assistant");
     expect(markup).toContain("Step 01");
-    expect(markup).toContain("creation-stepper-index\">05");
+    expect(markup).toContain('creation-stepper-index">05');
   });
 
   it("routes the creation workflow through asset prep before script and storyboard", () => {
-    const assetPrepMarkup = renderToStaticMarkup(
-      <App initialLanguage="zh" initialPage="create" />,
-    );
+    const assetPrepMarkup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="create" />);
     const storyboardMarkup = renderToStaticMarkup(
       <App initialLanguage="zh" initialPage="studio" />,
     );
@@ -323,7 +322,11 @@ describe("App", () => {
       "en",
     );
 
-    expect(imageAsset).toMatchObject({ type: "image", name: "packshot.png", mimeType: "image/png" });
+    expect(imageAsset).toMatchObject({
+      type: "image",
+      name: "packshot.png",
+      mimeType: "image/png",
+    });
     expect(videoAsset).toMatchObject({ type: "video", name: "demo.mp4", mimeType: "video/mp4" });
     expect(audioAsset).toMatchObject({
       type: "reference",
@@ -535,6 +538,61 @@ describe("App", () => {
 
     expect(markup).toContain("Freesound");
     expect(markup).toContain("Search Freesound audio effects");
+  });
+
+  it("renders stock provider API key source controls", () => {
+    const markup = renderToStaticMarkup(
+      <SettingsPanel
+        apiConfig={createDefaultApiConfig()}
+        language="en"
+        onApiConfigChange={() => undefined}
+        onLanguageChange={() => undefined}
+        onStockProviderConfigsChange={() => undefined}
+        stockProviderConfigs={[{ source: "pexels", credentialSource: "official", enabled: true }]}
+      />,
+    );
+
+    expect(markup).toContain("Third-party stock libraries");
+    expect(markup).toContain("Stock API key source");
+    expect(markup).toContain("Use official config");
+    expect(markup).toContain("Backend .env stock API key");
+    expect(markup).toContain(
+      "The backend uses the selected stock provider key from its .env file.",
+    );
+  });
+
+  it("normalizes stock provider official credentials without browser API keys", () => {
+    const normalized = sanitizeStockProviderConfigs([
+      {
+        source: "pexels",
+        credentialSource: "official",
+        apiKey: "browser-secret",
+        enabled: true,
+      },
+      { source: "pixabay", apiKey: " pixabay-secret ", enabled: true },
+    ]);
+
+    expect(normalized).toEqual([
+      { source: "pexels", credentialSource: "official", enabled: true, apiKey: undefined },
+      { source: "pixabay", credentialSource: "custom", enabled: true, apiKey: "pixabay-secret" },
+    ]);
+  });
+
+  it("treats official stock provider configs as searchable without browser API keys", () => {
+    expect(
+      hasUsableStockProviderCredential({
+        source: "pexels",
+        credentialSource: "official",
+        enabled: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasUsableStockProviderCredential({
+        source: "pexels",
+        credentialSource: "custom",
+        enabled: true,
+      }),
+    ).toBe(false);
   });
 
   it("normalizes legacy Ark display-name models from stored settings into callable model ids", () => {

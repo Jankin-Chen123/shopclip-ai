@@ -131,6 +131,7 @@ export const ExternalAssetResultSchema = z.object({
 
 export const ExternalAssetProviderConfigSchema = z.object({
   source: ExternalAssetProviderSchema,
+  credentialSource: z.enum(["custom", "official"]).default("custom"),
   apiKey: z.string().trim().min(1).max(4000).optional(),
   enabled: z.boolean().default(true),
 });

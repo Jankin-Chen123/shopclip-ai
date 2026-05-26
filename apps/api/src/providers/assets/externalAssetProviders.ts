@@ -22,7 +22,8 @@ const PEXELS_LICENSE_URL = "https://www.pexels.com/license/";
 const PIXABAY_LICENSE_URL = "https://pixabay.com/service/license-summary/";
 const FREESOUND_SEARCH_URL = "https://freesound.org/apiv2/search/text/";
 
-const isRecord = (value: unknown): value is AnyRecord => typeof value === "object" && value !== null;
+const isRecord = (value: unknown): value is AnyRecord =>
+  typeof value === "object" && value !== null;
 
 const getString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value : undefined;
@@ -208,7 +209,9 @@ export const normalizeFreesoundSound = (sound: AnyRecord): ExternalAssetResult =
     licenseUrl,
     canUseCommercially: !licenseUrl?.includes("/by-nc/"),
     requiresAttribution: Boolean(licenseUrl && !licenseUrl.includes("/zero/")),
-    tags: Array.isArray(sound.tags) ? sound.tags.filter((tag): tag is string => Boolean(getString(tag))) : [],
+    tags: Array.isArray(sound.tags)
+      ? sound.tags.filter((tag): tag is string => Boolean(getString(tag)))
+      : [],
     durationSeconds: getNumber(sound.duration),
   };
 };
@@ -302,16 +305,9 @@ export const createFreesoundProvider = (apiKey: string): ExternalAssetProvider =
       query,
       page: String(page),
       page_size: String(perPage),
-      fields: [
-        "id",
-        "name",
-        "url",
-        "username",
-        "license",
-        "tags",
-        "duration",
-        "previews",
-      ].join(","),
+      fields: ["id", "name", "url", "username", "license", "tags", "duration", "previews"].join(
+        ",",
+      ),
     });
     const body = await fetchJson(`${FREESOUND_SEARCH_URL}?${params.toString()}`, {
       headers: { Authorization: `Token ${apiKey}` },
@@ -330,6 +326,18 @@ const enabledProviders = (): Set<string> =>
       .map((provider) => provider.trim().toLowerCase())
       .filter(Boolean),
   );
+
+const getOfficialExternalProviderApiKey = (
+  source: ExternalAssetProviderName,
+): string | undefined => {
+  if (source === "pexels") {
+    return process.env.PEXELS_API_KEY?.trim() || undefined;
+  }
+  if (source === "pixabay") {
+    return process.env.PIXABAY_API_KEY?.trim() || undefined;
+  }
+  return process.env.FREESOUND_API_KEY?.trim() || undefined;
+};
 
 export const createConfiguredExternalAssetProviders = (): ExternalAssetProvider[] => {
   const enabled = enabledProviders();
@@ -361,7 +369,10 @@ export const createExternalAssetProvidersFromConfig = (
       continue;
     }
 
-    const apiKey = config.apiKey?.trim();
+    const apiKey =
+      config.credentialSource === "official"
+        ? getOfficialExternalProviderApiKey(config.source)
+        : config.apiKey?.trim();
     if (config.source === "pexels" && apiKey) {
       providers.push(createPexelsProvider(apiKey));
     }
