@@ -555,7 +555,7 @@ describe("App", () => {
     expect(markup).toContain("Third-party stock libraries");
     expect(markup).toContain("Stock API key source");
     expect(markup).toContain("Use official config");
-    expect(markup).toContain("Backend .env stock API key");
+    expect(markup).not.toContain("Backend .env stock API key");
     expect(markup).toContain(
       "The backend uses the selected stock provider key from its .env file.",
     );
@@ -651,6 +651,32 @@ describe("App", () => {
     expect(normalized.image?.credentialSource).toBe("official");
     expect(normalized.image?.apiKey).toBeUndefined();
     expect(normalized.image?.model).toBe("doubao-seedream-5-0-260128");
+  });
+
+  it("hides custom model fields when official API configuration is selected", () => {
+    const markup = renderToStaticMarkup(
+      <SettingsPanel
+        apiConfig={{
+          general: { ...createDefaultApiConfig().general, credentialSource: "official" },
+          image: { ...createDefaultApiConfig().image, credentialSource: "official" },
+          video: { ...createDefaultApiConfig().video, credentialSource: "official" },
+        }}
+        language="en"
+        onApiConfigChange={() => undefined}
+        onLanguageChange={() => undefined}
+        onStockProviderConfigsChange={() => undefined}
+        stockProviderConfigs={[{ source: "pexels", credentialSource: "official", enabled: true }]}
+      />,
+    );
+
+    expect(markup).not.toContain("API service address");
+    expect(markup).not.toContain("General API key");
+    expect(markup).not.toContain("Image API key");
+    expect(markup).not.toContain("Video API key");
+    expect(markup).not.toContain("Backend .env API key");
+    expect(markup).not.toContain("Backend .env stock API key");
+    expect(markup).toContain("Official config sends a server-side flag");
+    expect(markup).toContain("The backend uses the selected stock provider key");
   });
 
   it("renders only the supported asset library categories in English", () => {

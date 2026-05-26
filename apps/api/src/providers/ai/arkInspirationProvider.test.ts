@@ -5,11 +5,15 @@ import { generateInspiration } from "./arkInspirationProvider";
 const touchedKeys = [
   "AI_PROVIDER_MODE",
   "AI_API_KEY",
+  "AI_TEXT_API_KEY",
   "AI_IMAGE_API_KEY",
+  "AI_VIDEO_API_KEY",
   "AI_TEXT_ENDPOINT_ID",
   "AI_IMAGE_ENDPOINT_ID",
   "AI_VIDEO_ENDPOINT_ID",
+  "ARK_API_KEY",
   "ARK_API_BASE_URL",
+  "ARK_IMAGE_SIZE",
 ];
 
 const configureArkEnv = () => {
@@ -94,7 +98,10 @@ describe("ark inspiration provider", () => {
 
   it("keeps image results in fallback when the image provider does not return media", async () => {
     configureArkEnv();
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ data: [{}] })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ data: [{}] })),
+    );
 
     const generated = await generateInspiration({
       prompt: "Create an image for a fold-flat phone stand.",
@@ -151,17 +158,11 @@ describe("ark inspiration provider", () => {
     );
   });
 
-  it("uses server API credentials when official configuration is requested", async () => {
+  it("uses complete server API configuration when official configuration is requested", async () => {
     configureArkEnv();
     const fetchMock = vi.fn(async () =>
       Response.json({
-        choices: [
-          {
-            message: {
-              content: "Official configured text response.",
-            },
-          },
-        ],
+        output_text: "Official configured text response.",
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -173,22 +174,69 @@ describe("ark inspiration provider", () => {
         general: {
           credentialSource: "official",
           provider: "openai-compatible",
-          apiBaseUrl: "https://api.example.test/v1",
+          apiBaseUrl: "https://api.example.test/should-not-be-used",
           model: "custom-text-model",
         },
       },
     });
 
     expect(generated.fallback.used).toBe(false);
-    expect(generated.model).toBe("custom-text-model");
-    expect(generated.provider).toBe("openai-compatible");
+    expect(generated.model).toBe("ep-text-test");
+    expect(generated.provider).toBe("volcengine-ark");
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.example.test/v1/chat/completions",
+      "https://ark.example.test/api/v3/responses",
       expect.objectContaining({
         headers: expect.objectContaining({
           authorization: "Bearer test-api-key",
         }),
-        body: expect.stringContaining('"model":"custom-text-model"'),
+        body: expect.stringContaining('"model":"ep-text-test"'),
+      }),
+    );
+  });
+
+  it("uses role-specific server API keys and valid Seedream image sizes in official mode", async () => {
+    configureArkEnv();
+    process.env.AI_IMAGE_API_KEY = "image-official-key";
+    process.env.ARK_IMAGE_SIZE = "1024x1024";
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        data: [
+          {
+            url: "https://cdn.example.test/generated-official-image.png",
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const generated = await generateInspiration({
+      prompt: "Create an image for a fold-flat phone stand.",
+      assetType: "image",
+      apiConfig: {
+        image: {
+          credentialSource: "official",
+          provider: "volcengine-ark",
+          apiBaseUrl: "https://api.example.test/should-not-be-used",
+          model: "doubao-seedream-5-0-260128",
+        },
+      },
+    });
+
+    expect(generated.fallback.used).toBe(false);
+    expect(generated.model).toBe("ep-image-test");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://ark.example.test/api/v3/images/generations",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer image-official-key",
+        }),
+        body: expect.stringContaining('"model":"ep-image-test"'),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: expect.stringContaining('"size":"2048x2048"'),
       }),
     );
   });

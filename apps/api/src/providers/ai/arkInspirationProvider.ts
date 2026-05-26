@@ -10,6 +10,7 @@ const SEED_MODEL_NAME = "doubao-seed2.0-pro";
 const IMAGE_MODEL_NAME = "doubao-seedream";
 const SEEDANCE_MODEL_NAME = "doubao-seedance1.5-pro";
 const DEFAULT_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+const MIN_ARK_IMAGE_PIXELS = 3_686_400;
 
 const ARK_MODEL_ALIASES = new Map<string, string>([
   ["doubao-seed-2.0-pro", "doubao-seed-2-0-pro-260215"],
@@ -59,10 +60,10 @@ const hasUserConfigInput = (request: InspirationGenerateRequest) => {
   const userConfig = getUserConfigForAssetType(request);
   return Boolean(
     userConfig?.credentialSource === "official" ||
-      userConfig?.apiKey?.trim() ||
-      userConfig?.model?.trim() ||
-      userConfig?.apiBaseUrl?.trim() ||
-      userConfig?.provider?.trim(),
+    userConfig?.apiKey?.trim() ||
+    userConfig?.model?.trim() ||
+    userConfig?.apiBaseUrl?.trim() ||
+    userConfig?.provider?.trim(),
   );
 };
 
@@ -76,17 +77,17 @@ const isArkProvider = (provider?: string) => {
   return providerId === "volcengine-ark" || providerId === "ark" || providerId === "doubao";
 };
 
-const resolveArkModel = (
-  model: string,
-  assetType: InspirationAssetType,
-  provider?: string,
-) => {
+const resolveArkModel = (model: string, assetType: InspirationAssetType, provider?: string) => {
   const normalizedModel = normalizeArkModel(model);
   return isArkProvider(provider) ? normalizedModel : model.trim();
 };
 
 const getRequestModelName = (request: InspirationGenerateRequest) => {
   const userConfig = getUserConfigForAssetType(request);
+  if (userConfig?.credentialSource === "official") {
+    return getEnvironmentModel(request.assetType) ?? getDefaultModelName(request.assetType);
+  }
+
   const userModel = userConfig?.model?.trim();
   return userModel
     ? resolveArkModel(userModel, request.assetType, userConfig?.provider)
@@ -103,10 +104,16 @@ const getEnvironmentModel = (assetType: InspirationAssetType) => {
   return process.env.AI_TEXT_ENDPOINT_ID?.trim();
 };
 
-const getEnvironmentApiKey = (assetType: InspirationAssetType) =>
-  assetType === "image"
-    ? (process.env.AI_IMAGE_API_KEY?.trim() ?? process.env.AI_API_KEY?.trim())
-    : process.env.AI_API_KEY?.trim();
+const getEnvironmentApiKey = (assetType: InspirationAssetType) => {
+  const sharedApiKey = process.env.AI_API_KEY?.trim() || process.env.ARK_API_KEY?.trim();
+  if (assetType === "text") {
+    return process.env.AI_TEXT_API_KEY?.trim() || sharedApiKey;
+  }
+  if (assetType === "image") {
+    return process.env.AI_IMAGE_API_KEY?.trim() || sharedApiKey;
+  }
+  return process.env.AI_VIDEO_API_KEY?.trim() || sharedApiKey;
+};
 
 const createId = (prefix: string, seed: string) => {
   let hash = 0;
@@ -208,10 +215,7 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
   const userConfig = getUserConfigForAssetType(request);
   if (userConfig?.credentialSource === "official") {
     const apiKey = getEnvironmentApiKey(request.assetType);
-    const userModel = userConfig.model?.trim();
-    const model = userModel
-      ? resolveArkModel(userModel, request.assetType, userConfig.provider)
-      : getEnvironmentModel(request.assetType);
+    const model = getEnvironmentModel(request.assetType);
 
     if (!apiKey || !model) {
       return undefined;
@@ -220,8 +224,8 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
     return {
       apiKey,
       model,
-      baseUrl: (userConfig.apiBaseUrl?.trim() || process.env.ARK_API_BASE_URL || DEFAULT_ARK_BASE_URL).replace(/\/$/, ""),
-      provider: userConfig.provider?.trim() || "volcengine-ark",
+      baseUrl: (process.env.ARK_API_BASE_URL || DEFAULT_ARK_BASE_URL).replace(/\/$/, ""),
+      provider: "volcengine-ark",
     };
   }
 
@@ -287,7 +291,8 @@ const postArkJson = async (
   const responseBody = await parseJson(response);
 
   if (!response.ok) {
-    const error = isRecord(responseBody) && isRecord(responseBody.error) ? responseBody.error : undefined;
+    const error =
+      isRecord(responseBody) && isRecord(responseBody.error) ? responseBody.error : undefined;
     const errorCode = getString(error?.code);
     if (errorCode === "InvalidEndpointOrModel.ModelIDAccessDisabled") {
       throw new Error(
@@ -303,11 +308,7 @@ const postArkJson = async (
   return responseBody;
 };
 
-const getArkJson = async (
-  path: string,
-  apiKey: string,
-  baseUrl: string,
-): Promise<unknown> => {
+const getArkJson = async (path: string, apiKey: string, baseUrl: string): Promise<unknown> => {
   const response = await fetch(`${baseUrl}${path}`, {
     headers: {
       authorization: `Bearer ${apiKey}`,
@@ -319,7 +320,9 @@ const getArkJson = async (
     const responseSummary = isRecord(responseBody)
       ? ` ${JSON.stringify(responseBody).slice(0, 240)}`
       : "";
-    throw new Error(`Ark video task polling failed with HTTP ${response.status}.${responseSummary}`);
+    throw new Error(
+      `Ark video task polling failed with HTTP ${response.status}.${responseSummary}`,
+    );
   }
 
   return responseBody;
@@ -400,9 +403,8 @@ const generateTextWithArk = async (
         temperature: 0.7,
       });
 
-  const firstChoice = !isArkProvider(config.provider) && isRecord(body)
-    ? firstRecord(body.choices)
-    : undefined;
+  const firstChoice =
+    !isArkProvider(config.provider) && isRecord(body) ? firstRecord(body.choices) : undefined;
   const message = isRecord(firstChoice?.message) ? firstChoice.message : undefined;
   const content =
     getResponsesApiText(body) ??
@@ -420,21 +422,54 @@ const generateTextWithArk = async (
   };
 };
 
+const hasMinimumArkImagePixels = (size: string) => {
+  const match = /^(\d+)x(\d+)$/i.exec(size.trim());
+  if (!match) {
+    return false;
+  }
+
+  const width = Number.parseInt(match[1]!, 10);
+  const height = Number.parseInt(match[2]!, 10);
+  return width > 0 && height > 0 && width * height >= MIN_ARK_IMAGE_PIXELS;
+};
+
+const fallbackImageSizeForAspectRatio = (aspectRatio: string) => {
+  if (aspectRatio === "16:9") {
+    return "2560x1440";
+  }
+  if (aspectRatio === "9:16") {
+    return "1440x2560";
+  }
+  if (aspectRatio === "4:3") {
+    return "2304x1728";
+  }
+  if (aspectRatio === "3:4") {
+    return "1728x2304";
+  }
+  return "2048x2048";
+};
+
 const imageSizeFromOptions = (request: InspirationGenerateRequest) => {
   const aspectRatio = request.options?.image?.aspectRatio ?? "auto";
   if (aspectRatio === "16:9") {
-    return "1344x768";
+    return fallbackImageSizeForAspectRatio(aspectRatio);
   }
   if (aspectRatio === "9:16") {
-    return "768x1344";
+    return fallbackImageSizeForAspectRatio(aspectRatio);
   }
   if (aspectRatio === "4:3") {
-    return "1152x864";
+    return fallbackImageSizeForAspectRatio(aspectRatio);
   }
   if (aspectRatio === "3:4") {
-    return "864x1152";
+    return fallbackImageSizeForAspectRatio(aspectRatio);
   }
-  return process.env.ARK_IMAGE_SIZE ?? "1024x1024";
+
+  const configuredSize = process.env.ARK_IMAGE_SIZE?.trim();
+  if (configuredSize && hasMinimumArkImagePixels(configuredSize)) {
+    return configuredSize;
+  }
+
+  return fallbackImageSizeForAspectRatio(aspectRatio);
 };
 
 const generateImageWithArk = async (
@@ -633,7 +668,11 @@ export const loadInspirationVideoTask = async (
   };
   const config = getRequiredConfig(generationLikeRequest);
 
-  if (!config || (!hasUserConfigInput(generationLikeRequest) && !["ark", "doubao", "real"].includes(providerMode))) {
+  if (
+    !config ||
+    (!hasUserConfigInput(generationLikeRequest) &&
+      !["ark", "doubao", "real"].includes(providerMode))
+  ) {
     return {
       id: createId("material", request.taskId),
       type: "video",
@@ -648,7 +687,11 @@ export const loadInspirationVideoTask = async (
 
   try {
     const videoPath = process.env.ARK_VIDEO_GENERATION_PATH ?? "/contents/generations/tasks";
-    const body = await getArkJson(`${videoPath}/${encodeURIComponent(request.taskId)}`, config.apiKey, config.baseUrl);
+    const body = await getArkJson(
+      `${videoPath}/${encodeURIComponent(request.taskId)}`,
+      config.apiKey,
+      config.baseUrl,
+    );
     const status = taskStatusFromBody(body);
     const videoUrl = collectVideoUrls(body)[0];
     const materialStatus = videoUrl ? "ready" : status;
@@ -723,10 +766,6 @@ export const generateInspiration = async (
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Ark provider error.";
-    return createFallbackResponse(
-      request,
-      `${message} Deterministic fallback used.`,
-      true,
-    );
+    return createFallbackResponse(request, `${message} Deterministic fallback used.`, true);
   }
 };

@@ -538,6 +538,7 @@ export const SettingsPanel = ({
           const roleConfig = config[role]!;
           const preset = getPreset(roleConfig.provider);
           const models = preset.models[role];
+          const isOfficialCredential = roleConfig.credentialSource === "official";
           return (
             <section className="api-config-card" key={role} aria-labelledby={`${role}-config`}>
               <div className="settings-section-heading">
@@ -583,47 +584,43 @@ export const SettingsPanel = ({
                 </div>
               </fieldset>
 
-              <label>
-                {text.apiBaseUrl}
-                <input
-                  onChange={(event) => updateRole(role, { apiBaseUrl: event.target.value })}
-                  type="url"
-                  value={roleConfig.apiBaseUrl ?? ""}
-                />
-              </label>
-
-              <label>
-                {text.model}
-                <ModelCombobox
-                  label={roleText[role].title}
-                  models={models}
-                  onChange={(model) => updateRole(role, { model })}
-                  placeholder={text.modelPlaceholder}
-                  role={role}
-                  value={roleConfig.model ?? ""}
-                />
-              </label>
-
-              <label>
-                {roleText[role].keyLabel}
-                <input
-                  autoComplete="off"
-                  disabled={roleConfig.credentialSource === "official"}
-                  onChange={(event) => updateRole(role, { apiKey: event.target.value })}
-                  placeholder={
-                    roleConfig.credentialSource === "official"
-                      ? text.officialKeyPlaceholder
-                      : text.keyPlaceholder
-                  }
-                  type="password"
-                  value={
-                    roleConfig.credentialSource === "official" ? "" : (roleConfig.apiKey ?? "")
-                  }
-                />
-              </label>
-              {roleConfig.credentialSource === "official" ? (
+              {isOfficialCredential ? (
                 <p className="settings-key-help">{text.officialKeyHelp}</p>
-              ) : null}
+              ) : (
+                <>
+                  <label>
+                    {text.apiBaseUrl}
+                    <input
+                      onChange={(event) => updateRole(role, { apiBaseUrl: event.target.value })}
+                      type="url"
+                      value={roleConfig.apiBaseUrl ?? ""}
+                    />
+                  </label>
+
+                  <label>
+                    {text.model}
+                    <ModelCombobox
+                      label={roleText[role].title}
+                      models={models}
+                      onChange={(model) => updateRole(role, { model })}
+                      placeholder={text.modelPlaceholder}
+                      role={role}
+                      value={roleConfig.model ?? ""}
+                    />
+                  </label>
+
+                  <label>
+                    {roleText[role].keyLabel}
+                    <input
+                      autoComplete="off"
+                      onChange={(event) => updateRole(role, { apiKey: event.target.value })}
+                      placeholder={text.keyPlaceholder}
+                      type="password"
+                      value={roleConfig.apiKey ?? ""}
+                    />
+                  </label>
+                </>
+              )}
             </section>
           );
         })}
@@ -677,21 +674,22 @@ export const SettingsPanel = ({
             </div>
           </fieldset>
 
-          <label>
-            {text.stockApiKey}
-            <input
-              autoComplete="off"
-              disabled={draftStockCredentialSource === "official"}
-              onChange={(event) => setDraftStockApiKey(event.target.value)}
-              placeholder={
-                draftStockCredentialSource === "official"
-                  ? text.stockOfficialKeyPlaceholder
-                  : text.stockApiKeyPlaceholder
-              }
-              type="password"
-              value={draftStockCredentialSource === "official" ? "" : draftStockApiKey}
-            />
-          </label>
+          {draftStockCredentialSource === "official" ? (
+            <p className="settings-key-help stock-provider-official-help">
+              {text.stockOfficialKeyHelp}
+            </p>
+          ) : (
+            <label>
+              {text.stockApiKey}
+              <input
+                autoComplete="off"
+                onChange={(event) => setDraftStockApiKey(event.target.value)}
+                placeholder={text.stockApiKeyPlaceholder}
+                type="password"
+                value={draftStockApiKey}
+              />
+            </label>
+          )}
 
           <button
             className="stock-provider-add-button"
@@ -752,32 +750,26 @@ export const SettingsPanel = ({
                     </div>
                   </fieldset>
 
-                  <label>
-                    {text.stockApiKey}
-                    <input
-                      autoComplete="off"
-                      disabled={provider.credentialSource === "official"}
-                      onChange={(event) =>
-                        updateStockProvider(provider.source, {
-                          apiKey: event.target.value || undefined,
-                        })
-                      }
-                      placeholder={
-                        provider.credentialSource === "official"
-                          ? text.stockOfficialKeyPlaceholder
-                          : text.stockApiKeyPlaceholder
-                      }
-                      type="password"
-                      value={
-                        provider.credentialSource === "official" ? "" : (provider.apiKey ?? "")
-                      }
-                    />
-                  </label>
                   {provider.credentialSource === "official" ? (
                     <p className="settings-key-help stock-provider-official-help">
                       {text.stockOfficialKeyHelp}
                     </p>
-                  ) : null}
+                  ) : (
+                    <label>
+                      {text.stockApiKey}
+                      <input
+                        autoComplete="off"
+                        onChange={(event) =>
+                          updateStockProvider(provider.source, {
+                            apiKey: event.target.value || undefined,
+                          })
+                        }
+                        placeholder={text.stockApiKeyPlaceholder}
+                        type="password"
+                        value={provider.apiKey ?? ""}
+                      />
+                    </label>
+                  )}
 
                   <button
                     aria-label={`${text.remove} ${preset.label}`}

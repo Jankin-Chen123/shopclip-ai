@@ -43,3 +43,21 @@
 
 - Official mode still requires the backend deployment environment to define the relevant API key. If the key is absent, generation falls back with a configuration error.
 - Provider/model access still depends on the backend account permissions and the selected model ID.
+
+## Follow-Up Fix
+
+- 2026-05-26: Fixed official mode so model generation uses the complete backend `.env` configuration for provider, base URL, endpoint/model, and API key. Browser-selected custom base/model fields are no longer mixed into official requests.
+- Added support for role-specific backend API keys:
+  - `AI_TEXT_API_KEY`
+  - `AI_IMAGE_API_KEY`
+  - `AI_VIDEO_API_KEY`
+  - `ARK_API_KEY` as a shared fallback after `AI_API_KEY`
+- Settings now hides custom model fields below the source switch when `Use official config` is selected.
+- Seedream image generation now avoids invalid small image requests by falling back to sizes at or above the provider-reported minimum pixel count when `ARK_IMAGE_SIZE` is absent or too small.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api test -- arkInspirationProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
+  - `corepack pnpm test`
+  - `corepack pnpm typecheck`
+  - `corepack pnpm lint`
+  - `corepack pnpm build`
