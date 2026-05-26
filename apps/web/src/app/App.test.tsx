@@ -7,7 +7,7 @@ import {
   assetMatchesCategory,
   externalAssetMatchesCategory,
 } from "../features/assets/AssetCategoryTabs";
-import { AssetPrepPanel } from "../features/assets/AssetPrepPanel";
+import { AssetPrepPanel, filterPrepLibraryAssets } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import {
   SettingsPanel,
@@ -123,6 +123,102 @@ describe("App", () => {
     expect(markup).toContain('aria-label="删除关键词：便携"');
     expect(markup).toContain("添加关键词");
     expect(markup).toContain("关键词内容");
+  });
+
+  it("renders searchable library import with preview and selected import controls", () => {
+    const markup = renderToStaticMarkup(
+      <AssetPrepPanel
+        defaultOpenLibraryBucketId="hero"
+        disabled={false}
+        isGenerating={false}
+        isImporting={false}
+        language="zh"
+        libraryAssets={[
+          makeAsset({
+            id: "asset-packshot",
+            name: "GlowGrip packshot.png",
+            type: "image",
+            mimeType: "image/png",
+            tags: ["hero", "产品"],
+          }),
+        ]}
+        onBack={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onImportFiles={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("搜索素材库");
+    expect(markup).toContain("预览");
+    expect(markup).toContain("选择");
+    expect(markup).toContain("导入选中素材");
+    expect(markup).toContain("GlowGrip packshot.png");
+    expect(markup).toContain("/api/assets/asset-packshot/content");
+  });
+
+  it("filters prep library assets by name, MIME type, and tags", () => {
+    const assets = [
+      makeAsset({
+        id: "asset-packshot",
+        name: "GlowGrip packshot.png",
+        type: "image",
+        mimeType: "image/png",
+        tags: ["hero", "产品"],
+      }),
+      makeAsset({
+        id: "asset-video",
+        name: "Desk demo.mp4",
+        type: "video",
+        mimeType: "video/mp4",
+        tags: ["motion"],
+      }),
+    ];
+
+    expect(filterPrepLibraryAssets(assets, "image", "hero").map((asset) => asset.id)).toEqual([
+      "asset-packshot",
+    ]);
+    expect(filterPrepLibraryAssets(assets, "video", "mp4").map((asset) => asset.id)).toEqual([
+      "asset-video",
+    ]);
+    expect(filterPrepLibraryAssets(assets, "image", "missing")).toEqual([]);
+  });
+
+  it("renders imported library image and video assets as inline prep thumbnails", () => {
+    const markup = renderToStaticMarkup(
+      <AssetPrepPanel
+        disabled={false}
+        isGenerating={false}
+        isImporting={false}
+        language="zh"
+        preparedLibraryAssetsByBucket={{
+          hero: [
+            makeAsset({
+              id: "asset-packshot",
+              name: "GlowGrip packshot.png",
+              type: "image",
+              mimeType: "image/png",
+            }),
+          ],
+          demo: [
+            makeAsset({
+              id: "asset-demo",
+              name: "GlowGrip demo.mp4",
+              type: "video",
+              mimeType: "video/mp4",
+            }),
+          ],
+        }}
+        onBack={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onImportFiles={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('class="asset-prep-thumb-media"');
+    expect(markup).toContain('alt="GlowGrip packshot.png"');
+    expect(markup).toContain("/api/assets/asset-packshot/content");
+    expect(markup).toContain('aria-label="GlowGrip demo.mp4"');
+    expect(markup).toContain("/api/assets/asset-demo/content");
   });
 
   it("omits the top-right project CTA from asset, inspiration, and creation sections", () => {

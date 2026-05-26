@@ -4,11 +4,13 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Eye,
   FileText,
   FolderOpen,
   Image,
   Loader2,
   Plus,
+  Search,
   Tag,
   UploadCloud,
   Video,
@@ -18,10 +20,13 @@ import {
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { Language } from "../../app/i18n";
+import { getAssetContentUrl } from "../../lib/api";
 import type { AssetCategory } from "./AssetCategoryTabs";
 
 interface AssetPrepPanelProps {
+  defaultOpenLibraryBucketId?: string;
   libraryAssets?: AssetMetadata[];
+  preparedLibraryAssetsByBucket?: Record<string, AssetMetadata[]>;
   disabled: boolean;
   error?: string;
   isGenerating: boolean;
@@ -44,6 +49,8 @@ interface PrepBucket {
 
 interface ManualPrepUpload {
   id: string;
+  asset?: AssetMetadata;
+  mimeType?: string;
   name: string;
   size: number;
   source: "file" | "library";
@@ -59,8 +66,16 @@ const text = {
     import: "Import",
     importFromLibrary: "Import from library",
     libraryDialogTitle: "Import from asset library",
+    librarySearch: "Search asset library",
+    librarySearchPlaceholder: "Search name, MIME, or tag",
     emptyLibrary: "No matching library assets",
     closeLibrary: "Close asset library",
+    previewAsset: (name: string) => `Preview ${name}`,
+    selectAsset: (name: string) => `Select ${name}`,
+    selectedCount: (count: number) => `${count} selected`,
+    importSelected: "Import selected assets",
+    previewTitle: "Asset preview",
+    closePreview: "Close preview",
     addMore: "Add more",
     keywords: "Product keywords",
     addKeyword: "Add keyword",
@@ -104,8 +119,16 @@ const text = {
     import: "导入",
     importFromLibrary: "从素材库导入",
     libraryDialogTitle: "从素材库导入",
+    librarySearch: "搜索素材库",
+    librarySearchPlaceholder: "搜索名称、MIME 或标签",
     emptyLibrary: "暂无匹配的素材库素材",
     closeLibrary: "关闭素材库",
+    previewAsset: (name: string) => `预览 ${name}`,
+    selectAsset: (name: string) => `选择 ${name}`,
+    selectedCount: (count: number) => `已选择 ${count} 个`,
+    importSelected: "导入选中素材",
+    previewTitle: "素材预览",
+    closePreview: "关闭预览",
     addMore: "继续上传",
     keywords: "产品关键词（可选）",
     addKeyword: "添加关键词",
@@ -162,14 +185,14 @@ const formatSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 };
 
-const assetFitsPrepBucket = (asset: AssetMetadata, bucket: PrepBucket) => {
-  if (bucket.category === "image") {
+const assetFitsPrepCategory = (asset: AssetMetadata, category: AssetCategory) => {
+  if (category === "image") {
     return asset.type === "image" || asset.mimeType?.startsWith("image/");
   }
-  if (bucket.category === "video") {
+  if (category === "video") {
     return asset.type === "video" || asset.mimeType?.startsWith("video/");
   }
-  if (bucket.category === "audio") {
+  if (category === "audio") {
     return asset.mimeType?.startsWith("audio/");
   }
   return (
@@ -181,7 +204,44 @@ const assetFitsPrepBucket = (asset: AssetMetadata, bucket: PrepBucket) => {
   );
 };
 
+const isPrepImageAsset = (asset: AssetMetadata) =>
+  asset.type === "image" || asset.mimeType?.startsWith("image/");
+
+const isPrepVideoAsset = (asset: AssetMetadata) =>
+  asset.type === "video" || asset.mimeType?.startsWith("video/");
+
+const isPrepAudioAsset = (asset: AssetMetadata) => asset.mimeType?.startsWith("audio/");
+
+const createLibraryPrepUpload = (asset: AssetMetadata): ManualPrepUpload => ({
+  id: asset.id,
+  asset,
+  mimeType: asset.mimeType,
+  name: asset.name,
+  size: asset.sizeBytes ?? 0,
+  source: "library",
+});
+
+export const filterPrepLibraryAssets = (
+  assets: AssetMetadata[],
+  category: AssetCategory,
+  query: string,
+) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  return assets.filter((asset) => {
+    if (!assetFitsPrepCategory(asset, category)) {
+      return false;
+    }
+    if (!normalizedQuery) {
+      return true;
+    }
+    return [asset.name, asset.mimeType, asset.type, ...asset.tags]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => value.toLowerCase().includes(normalizedQuery));
+  });
+};
+
 export const AssetPrepPanel = ({
+  defaultOpenLibraryBucketId,
   disabled,
   error,
   isGenerating,
@@ -191,9 +251,24 @@ export const AssetPrepPanel = ({
   onGenerateStoryboard,
   onImportFiles,
   libraryAssets = [],
+  preparedLibraryAssetsByBucket = {},
 }: AssetPrepPanelProps) => {
-  const [manualUploads, setManualUploads] = useState<Record<string, ManualPrepUpload[]>>({});
-  const [activeLibraryBucketId, setActiveLibraryBucketId] = useState<string>();
+  const [manualUploads, setManualUploads] = useState<Record<string, ManualPrepUpload[]>>(() =>
+    Object.fromEntries(
+      Object.entries(preparedLibraryAssetsByBucket).map(([bucketId, assets]) => [
+        bucketId,
+        assets.map(createLibraryPrepUpload),
+      ]),
+    ),
+  );
+  const [activeLibraryBucketId, setActiveLibraryBucketId] = useState<string | undefined>(
+    defaultOpenLibraryBucketId,
+  );
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [selectedLibraryAssetIds, setSelectedLibraryAssetIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [previewAsset, setPreviewAsset] = useState<AssetMetadata>();
   const [keywords, setKeywords] = useState<string[]>(() => [...text[language].keywordList]);
   const [newKeyword, setNewKeyword] = useState("");
   const copy = text[language];
@@ -215,6 +290,7 @@ export const AssetPrepPanel = ({
         ...(current[bucketId] ?? []),
         ...files.map((file) => ({
           id: `${file.name}-${file.size}-${file.lastModified}`,
+          mimeType: file.type,
           name: file.name,
           size: file.size,
           source: "file" as const,
@@ -224,26 +300,43 @@ export const AssetPrepPanel = ({
     onImportFiles(files);
   };
 
-  const addLibraryAssetToBucket = (bucketId: string, asset: AssetMetadata) => {
+  const addLibraryAssetsToBucket = (bucketId: string, assets: AssetMetadata[]) => {
+    if (assets.length === 0) {
+      return;
+    }
     setManualUploads((current) => {
       const currentBucketUploads = current[bucketId] ?? [];
-      if (currentBucketUploads.some((upload) => upload.id === asset.id)) {
-        return current;
-      }
+      const existingIds = new Set(currentBucketUploads.map((upload) => upload.id));
       return {
         ...current,
         [bucketId]: [
           ...currentBucketUploads,
-          {
-            id: asset.id,
-            name: asset.name,
-            size: asset.sizeBytes ?? 0,
-            source: "library",
-          },
+          ...assets
+            .filter((asset) => !existingIds.has(asset.id))
+            .map(createLibraryPrepUpload),
         ],
       };
     });
+    setSelectedLibraryAssetIds(new Set());
     setActiveLibraryBucketId(undefined);
+  };
+
+  const openLibraryBucket = (bucketId: string) => {
+    setActiveLibraryBucketId(bucketId);
+    setLibraryQuery("");
+    setSelectedLibraryAssetIds(new Set());
+  };
+
+  const toggleLibraryAsset = (assetId: string) => {
+    setSelectedLibraryAssetIds((current) => {
+      const next = new Set(current);
+      if (next.has(assetId)) {
+        next.delete(assetId);
+      } else {
+        next.add(assetId);
+      }
+      return next;
+    });
   };
 
   const updateKeyword = (index: number, value: string) => {
@@ -267,7 +360,14 @@ export const AssetPrepPanel = ({
 
   const activeLibraryBucket = buckets.find((bucket) => bucket.id === activeLibraryBucketId);
   const activeLibraryAssets = activeLibraryBucket
-    ? libraryAssets.filter((asset) => assetFitsPrepBucket(asset, activeLibraryBucket))
+    ? filterPrepLibraryAssets(libraryAssets, activeLibraryBucket.category, libraryQuery)
+    : [];
+  const selectedLibraryAssets = activeLibraryBucket
+    ? libraryAssets.filter(
+        (asset) =>
+          assetFitsPrepCategory(asset, activeLibraryBucket.category) &&
+          selectedLibraryAssetIds.has(asset.id),
+      )
     : [];
 
   return (
@@ -308,16 +408,44 @@ export const AssetPrepPanel = ({
               </div>
               <div className="asset-prep-strip" aria-live="polite">
                 {bucketUploads.length > 0
-                  ? bucketUploads.map((upload) => (
-                      <article className="asset-prep-thumb" key={`${bucket.id}-${upload.id}`}>
-                        <span className="asset-prep-thumb-icon" aria-hidden="true">
-                          <Icon size={20} />
-                        </span>
+                  ? bucketUploads.map((upload) => {
+                      const asset = upload.asset;
+                      return (
+                        <article className="asset-prep-thumb" key={`${bucket.id}-${upload.id}`}>
+                          {asset && (isPrepImageAsset(asset) || isPrepVideoAsset(asset)) ? (
+                            <span className="asset-prep-thumb-media">
+                              {isPrepImageAsset(asset) ? (
+                                <img alt={upload.name} src={getAssetContentUrl(asset.id)} />
+                              ) : (
+                                <video
+                                  aria-label={upload.name}
+                                  muted
+                                  preload="metadata"
+                                  src={getAssetContentUrl(asset.id)}
+                                />
+                              )}
+                            </span>
+                          ) : (
+                            <span className="asset-prep-thumb-icon" aria-hidden="true">
+                              <Icon size={20} />
+                            </span>
+                          )}
                         <strong title={upload.name}>{upload.name}</strong>
-                        <small>{formatSize(upload.size)}</small>
+                        <small>{formatSize(upload.size) || upload.mimeType}</small>
+                        {asset ? (
+                          <button
+                            aria-label={copy.previewAsset(upload.name)}
+                            className="asset-prep-thumb-preview"
+                            onClick={() => setPreviewAsset(asset)}
+                            type="button"
+                          >
+                            <Eye size={14} aria-hidden="true" />
+                          </button>
+                        ) : null}
                         <CheckCircle2 size={16} aria-hidden="true" />
                       </article>
-                    ))
+                      );
+                    })
                   : null}
                 <label className="asset-prep-upload" htmlFor={inputId}>
                   <Plus size={20} aria-hidden="true" />
@@ -335,7 +463,7 @@ export const AssetPrepPanel = ({
                 </label>
                 <button
                   className="asset-prep-library-button"
-                  onClick={() => setActiveLibraryBucketId(bucket.id)}
+                  onClick={() => openLibraryBucket(bucket.id)}
                   type="button"
                 >
                   <FolderOpen size={20} aria-hidden="true" />
@@ -423,33 +551,153 @@ export const AssetPrepPanel = ({
               <button
                 aria-label={copy.closeLibrary}
                 className="icon-button"
-                onClick={() => setActiveLibraryBucketId(undefined)}
+                onClick={() => {
+                  setActiveLibraryBucketId(undefined);
+                  setSelectedLibraryAssetIds(new Set());
+                }}
                 type="button"
               >
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <div className="asset-prep-library-list">
+            <label className="asset-prep-library-search">
+              <Search size={18} aria-hidden="true" />
+              <span>{copy.librarySearch}</span>
+              <input
+                value={libraryQuery}
+                onChange={(event) => setLibraryQuery(event.target.value)}
+                placeholder={copy.librarySearchPlaceholder}
+              />
+            </label>
+            <div className="asset-prep-library-list asset-prep-library-grid">
               {activeLibraryAssets.length > 0 ? (
-                activeLibraryAssets.map((asset) => (
-                  <button
-                    className="asset-prep-library-option"
-                    key={asset.id}
-                    onClick={() => addLibraryAssetToBucket(activeLibraryBucket.id, asset)}
-                    type="button"
-                  >
-                    <FolderOpen size={20} aria-hidden="true" />
-                    <span>
-                      <strong>{asset.name}</strong>
-                      <small>{asset.mimeType ?? asset.type}</small>
-                    </span>
-                    <small>{formatSize(asset.sizeBytes)}</small>
-                  </button>
-                ))
+                activeLibraryAssets.map((asset) => {
+                  const isSelected = selectedLibraryAssetIds.has(asset.id);
+                  const assetContentUrl = getAssetContentUrl(asset.id);
+
+                  return (
+                    <article
+                      className={`asset-prep-library-option ${
+                        isSelected ? "is-selected" : ""
+                      }`.trim()}
+                      key={asset.id}
+                    >
+                      <button
+                        aria-label={copy.previewAsset(asset.name)}
+                        className="asset-prep-library-preview-frame"
+                        onClick={() => setPreviewAsset(asset)}
+                        type="button"
+                      >
+                        {isPrepImageAsset(asset) ? (
+                          <img
+                            alt={asset.name}
+                            decoding="async"
+                            loading="lazy"
+                            src={assetContentUrl}
+                          />
+                        ) : isPrepVideoAsset(asset) ? (
+                          <video
+                            aria-label={asset.name}
+                            muted
+                            preload="metadata"
+                            src={assetContentUrl}
+                          />
+                        ) : isPrepAudioAsset(asset) ? (
+                          <span className="asset-prep-audio-preview" aria-hidden="true">
+                            <FolderOpen size={28} />
+                            <span>
+                              <i />
+                              <i />
+                              <i />
+                              <i />
+                            </span>
+                          </span>
+                        ) : (
+                          <>
+                            <span className="asset-prep-preview-glow" aria-hidden="true" />
+                            <FileText size={30} aria-hidden="true" />
+                          </>
+                        )}
+                        <span className="asset-prep-preview-chip">
+                          <Eye size={15} aria-hidden="true" />
+                          {language === "zh" ? "预览" : "Preview"}
+                        </span>
+                      </button>
+                      <span className="asset-prep-library-meta">
+                        <strong title={asset.name}>{asset.name}</strong>
+                        <small>{asset.mimeType ?? asset.type}</small>
+                        <small>{formatSize(asset.sizeBytes)}</small>
+                      </span>
+                      <div className="asset-prep-library-actions">
+                        <button
+                          aria-label={copy.selectAsset(asset.name)}
+                          aria-pressed={isSelected}
+                          onClick={() => toggleLibraryAsset(asset.id)}
+                          type="button"
+                        >
+                          <CheckCircle2 size={15} aria-hidden="true" />
+                          {language === "zh" ? "选择" : "Select"}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })
               ) : (
                 <div className="empty-state compact-empty">
                   <strong>{copy.emptyLibrary}</strong>
                   <span>{activeLibraryBucket.support}</span>
+                </div>
+              )}
+            </div>
+            <div className="asset-prep-library-footer">
+              <strong>{copy.selectedCount(selectedLibraryAssets.length)}</strong>
+              <Button
+                disabled={selectedLibraryAssets.length === 0}
+                icon={<CheckCircle2 size={18} />}
+                onClick={() => addLibraryAssetsToBucket(activeLibraryBucket.id, selectedLibraryAssets)}
+                variant="primary"
+              >
+                {copy.importSelected}
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {previewAsset ? (
+        <div className="asset-prep-library-backdrop" role="presentation">
+          <section
+            aria-labelledby="asset-prep-preview-title"
+            aria-modal="true"
+            className="asset-prep-preview-dialog"
+            role="dialog"
+          >
+            <div className="asset-prep-library-heading">
+              <div>
+                <p className="eyebrow">{copy.previewTitle}</p>
+                <h3 id="asset-prep-preview-title">{previewAsset.name}</h3>
+              </div>
+              <button
+                aria-label={copy.closePreview}
+                className="icon-button"
+                onClick={() => setPreviewAsset(undefined)}
+                type="button"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="asset-prep-preview-media">
+              {previewAsset.type === "image" || previewAsset.mimeType?.startsWith("image/") ? (
+                <img alt={previewAsset.name} src={getAssetContentUrl(previewAsset.id)} />
+              ) : previewAsset.type === "video" || previewAsset.mimeType?.startsWith("video/") ? (
+                <video controls src={getAssetContentUrl(previewAsset.id)} />
+              ) : previewAsset.mimeType?.startsWith("audio/") ? (
+                <audio controls src={getAssetContentUrl(previewAsset.id)} />
+              ) : (
+                <div className="asset-prep-document-preview">
+                  <FileText size={42} aria-hidden="true" />
+                  <strong>{previewAsset.name}</strong>
+                  <span>{previewAsset.mimeType ?? previewAsset.type}</span>
                 </div>
               )}
             </div>

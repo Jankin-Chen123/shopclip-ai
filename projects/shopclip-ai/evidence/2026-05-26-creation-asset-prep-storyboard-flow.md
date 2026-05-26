@@ -29,12 +29,24 @@
 - Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
 - Browser evidence: `output/playwright/creation-asset-prep-library-keywords-zh.png`.
 
+## 2026-05-26 Searchable Library Import And Preview
+
+- Reworked "Import from asset library" into a searchable asset-library picker inside Step 02.
+- The picker now filters by asset name, MIME type, type, and tags, shows media preview cards, supports selecting assets, and imports selected assets into the current material bucket.
+- Imported library assets now retain their source metadata, show image/video thumbnails inline inside the Step 02 material bucket, and expose a preview action for larger review.
+- Added regression coverage for searchable library import controls, asset content preview URL rendering, and library filtering.
+- Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
+- Browser evidence: `output/playwright/creation-asset-prep-library-search-preview-zh.png`, `output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`, and `output/playwright/creation-asset-prep-imported-preview-zh.png`.
+
 ## Browser Evidence
 
 - `output/playwright/creation-asset-prep-zh.png`
 - `output/playwright/creation-script-storyboard-zh.png`
 - `output/playwright/creation-asset-prep.png`
 - `output/playwright/creation-script-storyboard.png`
+- `output/playwright/creation-asset-prep-library-search-preview-zh.png`
+- `output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`
+- `output/playwright/creation-asset-prep-imported-preview-zh.png`
 
 ## Notes
 

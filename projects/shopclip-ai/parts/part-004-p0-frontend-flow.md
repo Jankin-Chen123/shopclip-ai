@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Implementation Complete
 - Created: 2026-05-21
-- Last updated: 2026-05-23
+- Last updated: 2026-05-26
 
 ## Source Of Truth
 
@@ -94,6 +94,7 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-26 creation flow update: replaced the direct Step 03 script entry in the Create section with Step 02 asset prep, added a bottom-right "Generate storyboard" action that runs storyboard generation and navigates to Step 03, and updated Step 03 to combine Script & storyboard with storyboard re-edit.
 - 2026-05-26 asset prep source update: stopped preloading global asset library/project assets into Step 02; the page now only shows files manually selected in the current asset prep upload cards.
 - 2026-05-26 asset prep import/keyword update: added explicit "Import from asset library" selectors for each Step 02 bucket and changed product keywords from static pills to editable inputs with delete and add controls.
+- 2026-05-26 searchable asset prep library update: changed the Step 02 asset-library selector into a searchable media picker with reusable asset-library card previews, selected-asset import, inline image/video thumbnails after import, and post-import preview actions.
 
 ## Verification Evidence
 
@@ -119,3 +120,4 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-26 creation asset prep/storyboard verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-zh.png` and `../../output/playwright/creation-script-storyboard-zh.png`; evidence recorded in `../evidence/2026-05-26-creation-asset-prep-storyboard-flow.md`.
 - 2026-05-26 asset prep source verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; regression test confirms existing library assets are not rendered in Step 02.
 - 2026-05-26 asset prep import/keyword verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshot captured at `../../output/playwright/creation-asset-prep-library-keywords-zh.png`.
+- 2026-05-26 searchable asset prep library verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-library-search-preview-zh.png`, `../../output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`, and `../../output/playwright/creation-asset-prep-imported-preview-zh.png`.
