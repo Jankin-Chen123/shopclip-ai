@@ -16,11 +16,19 @@ services:
         value: 1mb
       - key: AI_PROVIDER_MODE
         value: mock
-      - key: AI_API_KEY
+      - key: ARK_API_KEY
         sync: false
-      - key: AI_TEXT_ENDPOINT_ID
+      - key: AI_GENERAL_API_KEY
         sync: false
-      - key: AI_VIDEO_ENDPOINT_ID
+      - key: AI_GENERAL_MODEL_ID
+        sync: false
+      - key: AI_IMAGE_MODEL_ID
+        sync: false
+      - key: AI_VIDEO_MODEL_ID
+        sync: false
+      - key: AI_IMAGE_API_KEY
+        sync: false
+      - key: AI_VIDEO_API_KEY
         sync: false
       - key: TTS_PROVIDER_MODE
         value: mock

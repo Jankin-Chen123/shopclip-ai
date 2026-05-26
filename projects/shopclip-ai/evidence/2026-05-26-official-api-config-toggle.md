@@ -48,10 +48,15 @@
 
 - 2026-05-26: Fixed official mode so model generation uses the complete backend `.env` configuration for provider, base URL, endpoint/model, and API key. Browser-selected custom base/model fields are no longer mixed into official requests.
 - Added support for role-specific backend API keys:
-  - `AI_TEXT_API_KEY`
+  - `AI_GENERAL_API_KEY`
   - `AI_IMAGE_API_KEY`
   - `AI_VIDEO_API_KEY`
-  - `ARK_API_KEY` as a shared fallback after `AI_API_KEY`
+  - `ARK_API_KEY` as the shared fallback for all AI roles
+- Renamed the preferred backend model variables to role-oriented names:
+  - `AI_GENERAL_MODEL_ID`
+  - `AI_IMAGE_MODEL_ID`
+  - `AI_VIDEO_MODEL_ID`
+  - Legacy `AI_TEXT_ENDPOINT_ID`, `AI_IMAGE_ENDPOINT_ID`, `AI_IMAGE_MODEL_NAME`, and `AI_VIDEO_ENDPOINT_ID` remain supported for older deployments.
 - Settings now hides custom model fields below the source switch when `Use official config` is selected.
 - Seedream image generation now avoids invalid small image requests by falling back to sizes at or above the provider-reported minimum pixel count when `ARK_IMAGE_SIZE` is absent or too small.
 - Verification:
@@ -61,3 +66,17 @@
   - `corepack pnpm typecheck`
   - `corepack pnpm lint`
   - `corepack pnpm build`
+
+## Env Naming Clarification Verification
+
+- 2026-05-26: Replaced the preferred official AI `.env` names with role-oriented `ARK_API_KEY`, `AI_GENERAL_*`, `AI_IMAGE_*`, and `AI_VIDEO_*` variables, migrated local placeholders, and kept legacy endpoint/key names as backend fallbacks.
+- `corepack pnpm --filter @shopclip/api test -- arkInspirationProvider.test.ts env.test.ts`
+  - Result: passed, API test suite 12 files / 41 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`
+  - Result: passed.
+- `corepack pnpm test`
+  - Result: passed, shared 12 tests, API 41 tests, web 35 tests.
+- `corepack pnpm typecheck`
+  - Result: passed across shared, API, and web.
+- `corepack pnpm lint`
+  - Result: passed across shared, API, and web.

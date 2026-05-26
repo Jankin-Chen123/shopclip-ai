@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { loadLocalEnvFile } from "./env";
 
-const touchedKeys = ["AI_PROVIDER_MODE", "AI_TEXT_ENDPOINT_ID", "AI_API_KEY"];
+const touchedKeys = ["AI_PROVIDER_MODE", "AI_GENERAL_MODEL_ID", "ARK_API_KEY"];
 
 describe("loadLocalEnvFile", () => {
   afterEach(() => {
@@ -21,8 +21,8 @@ describe("loadLocalEnvFile", () => {
       envPath,
       [
         "AI_PROVIDER_MODE=ark",
-        "AI_TEXT_ENDPOINT_ID=ep-local-test",
-        "AI_API_KEY=local-secret",
+        "AI_GENERAL_MODEL_ID=ep-local-test",
+        "ARK_API_KEY=local-secret",
       ].join("\n"),
       "utf8",
     );
@@ -31,8 +31,8 @@ describe("loadLocalEnvFile", () => {
     loadLocalEnvFile(envPath);
 
     expect(process.env.AI_PROVIDER_MODE).toBe("mock");
-    expect(process.env.AI_TEXT_ENDPOINT_ID).toBe("ep-local-test");
-    expect(process.env.AI_API_KEY).toBe("local-secret");
+    expect(process.env.AI_GENERAL_MODEL_ID).toBe("ep-local-test");
+    expect(process.env.ARK_API_KEY).toBe("local-secret");
 
     await rm(tempDir, { force: true, recursive: true });
   });

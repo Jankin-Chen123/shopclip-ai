@@ -83,13 +83,14 @@ corepack pnpm dev
 | `VITE_API_URL`         | Web    | 生产必需             | 公共 API base URL，例如 `https://<api>.onrender.com/api`。 |
 | `DATABASE_URL`         | API    | 未来使用             | 当前 Demo 使用内存存储，后续接 PostgreSQL/Prisma。         |
 | `AI_PROVIDER_MODE`     | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
-| `AI_API_KEY`           | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
-| `AI_IMAGE_API_KEY`     | API    | 图片生成可选         | 图片生成专用服务端密钥；未配置时回退使用 `AI_API_KEY`。     |
-| `AI_TEXT_ENDPOINT_ID`  | API    | 真实 provider 才需要 | 服务端 provider 配置。                                     |
-| `AI_IMAGE_ENDPOINT_ID` | API    | 图片生成才需要       | 服务端图像生成 endpoint/model，必须能调用图片生成接口。     |
-| `AI_IMAGE_MODEL_NAME`  | API    | 可选                 | 前端展示用图片模型名，不要填 endpoint ID。                 |
+| `ARK_API_KEY`          | API    | 真实 provider 才需要 | 火山方舟共享服务端密钥；三类 AI 模型默认共用它。             |
+| `AI_GENERAL_API_KEY`   | API    | 可选                 | 通用/文案模型专用密钥；为空时回退使用 `ARK_API_KEY`。       |
+| `AI_IMAGE_API_KEY`     | API    | 图片生成可选         | 图片生成专用密钥；为空时回退使用 `ARK_API_KEY`。            |
+| `AI_VIDEO_API_KEY`     | API    | 视频生成可选         | 视频生成专用密钥；为空时回退使用 `ARK_API_KEY`。            |
+| `AI_GENERAL_MODEL_ID`  | API    | 真实 provider 才需要 | 通用/文案模型的方舟 endpoint ID 或可调用 model ID。          |
+| `AI_IMAGE_MODEL_ID`    | API    | 图片生成才需要       | 图片生成模型的方舟 endpoint ID 或可调用 model ID。           |
 | `ARK_IMAGE_SIZE`       | API    | 可选                 | 图片生成尺寸，默认 `1024x1024`。                           |
-| `AI_VIDEO_ENDPOINT_ID` | API    | 真实 provider 才需要 | 服务端 provider 配置。                                     |
+| `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID 或可调用 model ID。           |
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |

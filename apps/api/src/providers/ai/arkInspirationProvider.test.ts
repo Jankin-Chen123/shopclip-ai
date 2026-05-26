@@ -4,10 +4,15 @@ import { generateInspiration } from "./arkInspirationProvider";
 
 const touchedKeys = [
   "AI_PROVIDER_MODE",
+  "AI_GENERAL_API_KEY",
+  "AI_GENERAL_MODEL_ID",
   "AI_API_KEY",
   "AI_TEXT_API_KEY",
+  "AI_TEXT_MODEL_ID",
   "AI_IMAGE_API_KEY",
+  "AI_IMAGE_MODEL_ID",
   "AI_VIDEO_API_KEY",
+  "AI_VIDEO_MODEL_ID",
   "AI_TEXT_ENDPOINT_ID",
   "AI_IMAGE_ENDPOINT_ID",
   "AI_VIDEO_ENDPOINT_ID",
@@ -18,10 +23,10 @@ const touchedKeys = [
 
 const configureArkEnv = () => {
   process.env.AI_PROVIDER_MODE = "ark";
-  process.env.AI_API_KEY = "test-api-key";
-  process.env.AI_TEXT_ENDPOINT_ID = "ep-text-test";
-  process.env.AI_IMAGE_ENDPOINT_ID = "ep-image-test";
-  process.env.AI_VIDEO_ENDPOINT_ID = "ep-video-test";
+  process.env.ARK_API_KEY = "ark-shared-key";
+  process.env.AI_GENERAL_MODEL_ID = "ep-text-test";
+  process.env.AI_IMAGE_MODEL_ID = "ep-image-test";
+  process.env.AI_VIDEO_MODEL_ID = "ep-video-test";
   process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
 };
 
@@ -52,7 +57,7 @@ describe("ark inspiration provider", () => {
     });
 
     expect(generated.fallback.used).toBe(false);
-    expect(generated.model).toBe("doubao-seedream");
+    expect(generated.model).toBe("ep-image-test");
     expect(generated.materials[0]).toMatchObject({
       type: "image",
       status: "ready",
@@ -187,9 +192,39 @@ describe("ark inspiration provider", () => {
       "https://ark.example.test/api/v3/responses",
       expect.objectContaining({
         headers: expect.objectContaining({
-          authorization: "Bearer test-api-key",
+          authorization: "Bearer ark-shared-key",
         }),
         body: expect.stringContaining('"model":"ep-text-test"'),
+      }),
+    );
+  });
+
+  it("keeps legacy endpoint and shared key environment names working", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.AI_API_KEY = "legacy-shared-key";
+    process.env.AI_TEXT_ENDPOINT_ID = "legacy-text-endpoint";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        output_text: "Legacy environment text response.",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const generated = await generateInspiration({
+      prompt: "Create a launch concept for a fold-flat phone stand.",
+      assetType: "text",
+    });
+
+    expect(generated.fallback.used).toBe(false);
+    expect(generated.model).toBe("legacy-text-endpoint");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://ark.example.test/api/v3/responses",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer legacy-shared-key",
+        }),
+        body: expect.stringContaining('"model":"legacy-text-endpoint"'),
       }),
     );
   });

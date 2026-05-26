@@ -39,11 +39,22 @@ type ProviderConfig = {
   provider: string;
 };
 
+const firstEnv = (...keys: string[]) => {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
 const getDefaultModelName = (assetType: InspirationAssetType) =>
   assetType === "video"
     ? SEEDANCE_MODEL_NAME
     : assetType === "image"
-      ? (process.env.AI_IMAGE_MODEL_NAME?.trim() ?? IMAGE_MODEL_NAME)
+      ? (firstEnv("AI_IMAGE_MODEL_ID", "AI_IMAGE_ENDPOINT_ID", "AI_IMAGE_MODEL_NAME") ??
+        IMAGE_MODEL_NAME)
       : SEED_MODEL_NAME;
 
 const getUserConfigForAssetType = (request: InspirationGenerateRequest) => {
@@ -89,30 +100,34 @@ const getRequestModelName = (request: InspirationGenerateRequest) => {
   }
 
   const userModel = userConfig?.model?.trim();
-  return userModel
-    ? resolveArkModel(userModel, request.assetType, userConfig?.provider)
-    : getDefaultModelName(request.assetType);
+  if (userModel) {
+    return resolveArkModel(userModel, request.assetType, userConfig?.provider);
+  }
+
+  return hasUserConfigInput(request)
+    ? getDefaultModelName(request.assetType)
+    : (getEnvironmentModel(request.assetType) ?? getDefaultModelName(request.assetType));
 };
 
 const getEnvironmentModel = (assetType: InspirationAssetType) => {
   if (assetType === "video") {
-    return process.env.AI_VIDEO_ENDPOINT_ID?.trim();
+    return firstEnv("AI_VIDEO_MODEL_ID", "AI_VIDEO_ENDPOINT_ID");
   }
   if (assetType === "image") {
-    return process.env.AI_IMAGE_ENDPOINT_ID?.trim();
+    return firstEnv("AI_IMAGE_MODEL_ID", "AI_IMAGE_ENDPOINT_ID", "AI_IMAGE_MODEL_NAME");
   }
-  return process.env.AI_TEXT_ENDPOINT_ID?.trim();
+  return firstEnv("AI_GENERAL_MODEL_ID", "AI_TEXT_MODEL_ID", "AI_TEXT_ENDPOINT_ID");
 };
 
 const getEnvironmentApiKey = (assetType: InspirationAssetType) => {
-  const sharedApiKey = process.env.AI_API_KEY?.trim() || process.env.ARK_API_KEY?.trim();
+  const sharedApiKey = firstEnv("ARK_API_KEY", "AI_API_KEY");
   if (assetType === "text") {
-    return process.env.AI_TEXT_API_KEY?.trim() || sharedApiKey;
+    return firstEnv("AI_GENERAL_API_KEY", "AI_TEXT_API_KEY") || sharedApiKey;
   }
   if (assetType === "image") {
-    return process.env.AI_IMAGE_API_KEY?.trim() || sharedApiKey;
+    return firstEnv("AI_IMAGE_API_KEY") || sharedApiKey;
   }
-  return process.env.AI_VIDEO_API_KEY?.trim() || sharedApiKey;
+  return firstEnv("AI_VIDEO_API_KEY") || sharedApiKey;
 };
 
 const createId = (prefix: string, seed: string) => {
