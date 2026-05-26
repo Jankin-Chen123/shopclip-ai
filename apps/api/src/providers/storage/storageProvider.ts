@@ -29,9 +29,14 @@ export interface StorageReadUrlResult {
   url: string;
 }
 
+export interface StorageDeleteObjectInput {
+  objectKey: string;
+}
+
 export interface StorageProvider {
   createUploadIntent(input: StorageUploadIntentInput): AssetUploadIntent;
   createReadUrl(input: StorageReadUrlInput): StorageReadUrlResult;
+  deleteObject(input: StorageDeleteObjectInput): Promise<void>;
   uploadObject(input: StorageUploadObjectInput): Promise<StorageUploadObjectResult>;
 }
 

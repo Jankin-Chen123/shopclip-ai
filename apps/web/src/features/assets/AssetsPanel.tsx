@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, UIEvent } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AssetMetadata } from "@shopclip/shared";
 import {
   Check,
@@ -12,13 +12,13 @@ import {
   Music,
   Plus,
   Search,
+  Trash2,
   UploadCloud,
   Video,
   X,
 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
-import { StatusPill } from "../../components/ui/StatusPill";
 import type { AppCopy, Language } from "../../app/i18n";
 import type {
   AssetSearchResult,
@@ -46,6 +46,7 @@ interface AssetsPanelProps {
   hasProject: boolean;
   onAssetDraftChange: (asset: CreateAssetInput) => void;
   onCategoryChange: (category: AssetCategory) => void;
+  onDeleteAssets?: (assetIds: string[]) => void;
   onImportExternalAsset?: (asset: ExternalAssetResult) => void;
   onImportFiles: (files: File[]) => void;
   onRecallAsset?: (assetId: string) => void;
@@ -322,6 +323,7 @@ export const AssetsPanel = ({
   onImportFiles,
   onRecallAsset,
   onCategoryChange,
+  onDeleteAssets,
   onSearchExternalAssets,
   onSearchAssets,
   onSearchQueryChange,
@@ -340,6 +342,7 @@ export const AssetsPanel = ({
   const [selectedExternalAssetIds, setSelectedExternalAssetIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
   const [importedExternalAssetIds, setImportedExternalAssetIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -366,9 +369,20 @@ export const AssetsPanel = ({
     selectedExternalAssetIds.has(result.id),
   );
   const selectedExternalAssetCount = selectedExternalAssets.length;
+  const selectedAssetCount = assets.filter((asset) => selectedAssetIds.has(asset.id)).length;
   const closeAssetPreview = () => setPreviewAsset(undefined);
   const detailLabel = language === "zh" ? "查看详情" : "View details";
-  const previewAssetUrl = previewAsset ? getAssetContentUrl(previewAsset.id) : "";
+  const previewAssetReady = previewAsset?.status === "ready";
+  const previewAssetUrl =
+    previewAsset && previewAssetReady ? getAssetContentUrl(previewAsset.id) : "";
+
+  useEffect(() => {
+    const currentAssetIds = new Set(assets.map((asset) => asset.id));
+    setSelectedAssetIds((current) => {
+      const next = new Set([...current].filter((assetId) => currentAssetIds.has(assetId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [assets]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(Array.from(event.target.files ?? []));
@@ -514,6 +528,41 @@ export const AssetsPanel = ({
       }
       return next;
     });
+  };
+
+  const toggleAssetSelection = (assetId: string) => {
+    setSelectedAssetIds((current) => {
+      const next = new Set(current);
+      if (next.has(assetId)) {
+        next.delete(assetId);
+      } else {
+        next.add(assetId);
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteAsset = (assetId: string) => {
+    onDeleteAssets?.([assetId]);
+    setSelectedAssetIds((current) => {
+      const next = new Set(current);
+      next.delete(assetId);
+      return next;
+    });
+    if (previewAsset?.id === assetId) {
+      closeAssetPreview();
+    }
+  };
+
+  const handleDeleteSelectedAssets = () => {
+    const assetIds = assets
+      .filter((asset) => selectedAssetIds.has(asset.id))
+      .map((asset) => asset.id);
+    onDeleteAssets?.(assetIds);
+    setSelectedAssetIds(new Set());
+    if (previewAsset && assetIds.includes(previewAsset.id)) {
+      closeAssetPreview();
+    }
   };
 
   const isInteractivePreviewTarget = (target: EventTarget | null) =>
@@ -679,6 +728,22 @@ export const AssetsPanel = ({
         </section>
       ) : null}
 
+      {assets.length > 0 ? (
+        <div className="asset-bulk-actions">
+          <strong>
+            {language === "zh" ? `已选择 ${selectedAssetCount} 个素材` : `${selectedAssetCount} selected`}
+          </strong>
+          <Button
+            disabled={disabled || !onDeleteAssets || selectedAssetCount === 0}
+            icon={<Trash2 size={18} />}
+            onClick={handleDeleteSelectedAssets}
+            variant="secondary"
+          >
+            {language === "zh" ? "删除选中" : "Delete selected"}
+          </Button>
+        </div>
+      ) : null}
+
       <div className="asset-grid" aria-live="polite">
         {assets.length === 0 ? (
           <div
@@ -708,9 +773,35 @@ export const AssetsPanel = ({
               : isScriptAsset(asset)
                 ? FileText
                 : CategoryIcon;
+            const isReady = asset.status === "ready";
+            const isSelected = selectedAssetIds.has(asset.id);
 
             return (
-              <article className="asset-card" key={asset.id}>
+              <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
+                <div className="asset-card-actions">
+                  <button
+                    aria-label={
+                      language === "zh"
+                        ? `${isSelected ? "取消选择" : "选择"} ${asset.name}`
+                        : `${isSelected ? "Deselect" : "Select"} ${asset.name}`
+                    }
+                    aria-pressed={isSelected}
+                    className="asset-selection-control"
+                    onClick={() => toggleAssetSelection(asset.id)}
+                    type="button"
+                  >
+                    {isSelected ? <Check size={15} aria-hidden="true" /> : null}
+                  </button>
+                  <button
+                    aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
+                    className="asset-card-delete"
+                    disabled={disabled || !onDeleteAssets}
+                    onClick={() => handleDeleteAsset(asset.id)}
+                    type="button"
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
+                </div>
                 <button
                   aria-label={
                     language === "zh"
@@ -721,7 +812,19 @@ export const AssetsPanel = ({
                   onClick={() => setPreviewAsset(asset)}
                   type="button"
                 >
-                  {isImageAsset(asset) ? (
+                  {!isReady ? (
+                    <span
+                      aria-label={
+                        language === "zh"
+                          ? `${asset.name} 正在上传`
+                          : `${asset.name} is uploading`
+                      }
+                      className="asset-uploading-placeholder"
+                      role="status"
+                    >
+                      <span className="asset-uploading-spinner" aria-hidden="true" />
+                    </span>
+                  ) : isImageAsset(asset) ? (
                     <img
                       alt={asset.name}
                       decoding="async"
@@ -764,9 +867,6 @@ export const AssetsPanel = ({
                   </div>
                   <span>{formatBytes(asset.sizeBytes)}</span>
                 </div>
-                <StatusPill tone={asset.status === "ready" ? "success" : "warning"}>
-                  {asset.status}
-                </StatusPill>
               </article>
             );
           })
@@ -798,7 +898,17 @@ export const AssetsPanel = ({
 
             <div className="external-preview-content">
               <div className="external-preview-media asset-preview-media">
-                {isImageAsset(previewAsset) ? (
+                {!previewAssetReady ? (
+                  <div className="asset-document-preview" role="status">
+                    <span className="asset-uploading-spinner" aria-hidden="true" />
+                    <strong>
+                      {language === "zh"
+                        ? "正在上传，稍后可预览"
+                        : "Uploading, preview will be available soon"}
+                    </strong>
+                    <span>{previewAsset.name}</span>
+                  </div>
+                ) : isImageAsset(previewAsset) ? (
                   <img alt={previewAsset.name} decoding="async" src={previewAssetUrl} />
                 ) : isVideoAsset(previewAsset) ? (
                   <video controls preload="metadata" src={previewAssetUrl} />
@@ -891,15 +1001,17 @@ export const AssetsPanel = ({
                       {language === "zh" ? "用于当前分镜" : "Use in selected scene"}
                     </Button>
                   ) : null}
-                  <a
-                    className="external-open-link"
-                    href={previewAssetUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <ExternalLink size={16} aria-hidden="true" />
-                    {language === "zh" ? "打开文件" : "Open file"}
-                  </a>
+                  {previewAssetReady ? (
+                    <a
+                      className="external-open-link"
+                      href={previewAssetUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <ExternalLink size={16} aria-hidden="true" />
+                      {language === "zh" ? "打开文件" : "Open file"}
+                    </a>
+                  ) : null}
                 </div>
               </aside>
             </div>

@@ -53,6 +53,7 @@ export interface ProjectStore {
     script: Omit<ScriptResult, "id" | "projectId">,
   ): MaybePromise<ScriptResult | undefined>;
   createProject(brief: ProjectBrief): MaybePromise<ProjectSnapshot>;
+  deleteAssets(assetIds: string[]): MaybePromise<AssetMetadata[]>;
   deleteScene(sceneId: string): MaybePromise<StoryboardScene[] | undefined>;
   getAssetProcessingJob(jobId: string): MaybePromise<AssetProcessingJob | undefined>;
   getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;

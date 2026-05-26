@@ -151,6 +151,48 @@ describe("ark inspiration provider", () => {
     );
   });
 
+  it("uses server API credentials when official configuration is requested", async () => {
+    configureArkEnv();
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: "Official configured text response.",
+            },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const generated = await generateInspiration({
+      prompt: "Create a launch concept for a fold-flat phone stand.",
+      assetType: "text",
+      apiConfig: {
+        general: {
+          credentialSource: "official",
+          provider: "openai-compatible",
+          apiBaseUrl: "https://api.example.test/v1",
+          model: "custom-text-model",
+        },
+      },
+    });
+
+    expect(generated.fallback.used).toBe(false);
+    expect(generated.model).toBe("custom-text-model");
+    expect(generated.provider).toBe("openai-compatible");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer test-api-key",
+        }),
+        body: expect.stringContaining('"model":"custom-text-model"'),
+      }),
+    );
+  });
+
   it("uses the Ark Responses API for versioned Doubao Seed text models", async () => {
     const fetchMock = vi.fn(async () =>
       Response.json({

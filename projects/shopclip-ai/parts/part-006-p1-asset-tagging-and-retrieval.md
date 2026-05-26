@@ -72,6 +72,12 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
   - local asset card and detail previews now use `GET /api/assets/:assetId/content` instead of directly embedding the stored COS public URL;
   - the API redirects to a storage read URL, generating a signed read URL for `tencent-cos` assets so private buckets can still preview through the app;
   - added storage tests to verify Tencent COS read signatures do not expose the secret key.
+- Added asset deletion and upload-state preview behavior:
+  - asset cards no longer render status pills;
+  - uploading assets show a rotating placeholder and do not request the preview content URL until `status` is `ready`;
+  - ready image/video assets continue previewing through `GET /api/assets/:assetId/content`;
+  - local asset cards support single deletion and selected batch deletion;
+  - `DELETE /api/assets` removes COS objects by `objectKey`/`thumbnailKey` and then removes asset, slice, processing-job, and scene references from the store.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
   - `projects/shopclip-ai/evidence/part-006-verification.md`
@@ -88,6 +94,14 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 - `corepack pnpm --filter @shopclip/api typecheck` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web build` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api test -- src/asset-cos-flow.test.ts src/providers/storage/cosStorageProvider.test.ts` on 2026-05-26: 12 files / 38 tests passed.
+- `corepack pnpm --filter @shopclip/web test` on 2026-05-26: 1 file / 28 tests passed.
+- `corepack pnpm --filter @shopclip/api typecheck` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web typecheck` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.

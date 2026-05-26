@@ -16,6 +16,7 @@ import {
   CreateAssetRequestSchema,
   CreateAssetUploadIntentRequestSchema,
   ConfirmAssetUploadRequestSchema,
+  DeleteAssetsRequestSchema,
 } from "../assets/validation.js";
 import { buildMockDashboard } from "../dashboard/mockDashboard.js";
 import { searchAssets } from "../retrieval/search.js";
@@ -602,6 +603,59 @@ export const createP0Router = ({
 
     response.setHeader("Cache-Control", "private, max-age=300");
     response.redirect(302, readUrl.url);
+  });
+
+  router.delete("/assets", async (request, response) => {
+    const parsedDelete = DeleteAssetsRequestSchema.safeParse(request.body);
+    if (!parsedDelete.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_ASSET_DELETE_REQUEST",
+        "assetIds must contain at least one asset id.",
+      );
+      return;
+    }
+
+    const assets = (
+      await Promise.all(parsedDelete.data.assetIds.map((assetId) => store.getAsset(assetId)))
+    ).filter((asset): asset is AssetMetadata => Boolean(asset));
+    if (assets.length !== parsedDelete.data.assetIds.length) {
+      sendNotFound(response, "ASSET_NOT_FOUND", "One or more assets were not found.");
+      return;
+    }
+
+    const objectKeys = new Set<string>();
+    assets.forEach((asset) => {
+      if (asset.objectKey) {
+        objectKeys.add(asset.objectKey);
+      }
+      if (asset.thumbnailKey) {
+        objectKeys.add(asset.thumbnailKey);
+      }
+    });
+
+    try {
+      await Promise.all(
+        [...objectKeys].map((objectKey) =>
+          storageProvider.deleteObject({
+            objectKey,
+          }),
+        ),
+      );
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "STORAGE_DELETE_FAILED",
+          message: error instanceof Error ? error.message : "Storage delete failed.",
+        },
+      });
+      return;
+    }
+
+    const deletedAssets = await store.deleteAssets(parsedDelete.data.assetIds);
+    response.json({
+      deletedAssets,
+    });
   });
 
   router.get("/asset-processing-jobs/:jobId", async (request, response) => {

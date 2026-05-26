@@ -151,6 +151,14 @@ export const ExternalAssetSearchResponseSchema = z.object({
   externalResults: z.array(ExternalAssetResultSchema).default([]),
 });
 
+const UserModelApiSettingsSchema = z.object({
+  credentialSource: z.enum(["custom", "official"]).default("custom"),
+  provider: z.string().trim().min(1).max(120).optional(),
+  apiBaseUrl: z.string().trim().url().max(500).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
+  apiKey: z.string().trim().min(1).max(4000).optional(),
+});
+
 export const AssetSearchResponseSchema = z.object({
   projectId: z.string().trim().min(1).optional(),
   query: z.string().default(""),
@@ -181,30 +189,9 @@ export const InspirationGenerateRequestSchema = z.object({
     .optional(),
   apiConfig: z
     .object({
-      general: z
-        .object({
-          provider: z.string().trim().min(1).max(120).optional(),
-          apiBaseUrl: z.string().trim().url().max(500).optional(),
-          model: z.string().trim().min(1).max(200).optional(),
-          apiKey: z.string().trim().min(1).max(4000).optional(),
-        })
-        .optional(),
-      image: z
-        .object({
-          provider: z.string().trim().min(1).max(120).optional(),
-          apiBaseUrl: z.string().trim().url().max(500).optional(),
-          model: z.string().trim().min(1).max(200).optional(),
-          apiKey: z.string().trim().min(1).max(4000).optional(),
-        })
-        .optional(),
-      video: z
-        .object({
-          provider: z.string().trim().min(1).max(120).optional(),
-          apiBaseUrl: z.string().trim().url().max(500).optional(),
-          model: z.string().trim().min(1).max(200).optional(),
-          apiKey: z.string().trim().min(1).max(4000).optional(),
-        })
-        .optional(),
+      general: UserModelApiSettingsSchema.optional(),
+      image: UserModelApiSettingsSchema.optional(),
+      video: UserModelApiSettingsSchema.optional(),
     })
     .optional(),
 });

@@ -157,6 +157,14 @@ export const loadProjectAssets = async (
   return requestJson(projectId ? `/projects/${projectId}/assets?${params.toString()}` : `/assets?${params.toString()}`);
 };
 
+export const deleteAssets = async (
+  assetIds: string[],
+): Promise<{ deletedAssets: AssetMetadata[] }> =>
+  requestJson("/assets", {
+    method: "DELETE",
+    body: JSON.stringify({ assetIds }),
+  });
+
 export const createAssetUploadIntent = async (
   projectId: string | undefined,
   asset: CreateAssetInput,

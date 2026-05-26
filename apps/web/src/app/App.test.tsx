@@ -64,6 +64,26 @@ describe("App", () => {
     expect(markup).toContain("creation-stepper-index\">05");
   });
 
+  it("routes the creation workflow through asset prep before script and storyboard", () => {
+    const assetPrepMarkup = renderToStaticMarkup(
+      <App initialLanguage="zh" initialPage="create" />,
+    );
+    const storyboardMarkup = renderToStaticMarkup(
+      <App initialLanguage="zh" initialPage="studio" />,
+    );
+
+    expect(assetPrepMarkup).toContain("步骤 02");
+    expect(assetPrepMarkup).toContain("素材准备");
+    expect(assetPrepMarkup).toContain("产品主图");
+    expect(assetPrepMarkup).toContain("生成分镜");
+    expect(assetPrepMarkup).not.toContain("脚本和分镜");
+
+    expect(storyboardMarkup).toContain("步骤 03");
+    expect(storyboardMarkup).toContain("脚本与分镜");
+    expect(storyboardMarkup).toContain("分镜待生成");
+    expect(storyboardMarkup).toContain("分镜重编辑");
+  });
+
   it("omits the top-right project CTA from asset, inspiration, and creation sections", () => {
     const pages = ["assets", "inspiration", "project"] as const;
 
@@ -217,6 +237,62 @@ describe("App", () => {
     expect(markup).toContain('alt="GlowGrip packshot"');
     expect(markup).toContain("View details");
     expect(markup).toContain("Open details for GlowGrip packshot");
+  });
+
+  it("renders upload progress previews and delete controls without card status bars", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "image",
+          name: "GlowGrip packshot",
+          mimeType: "image/png",
+          sizeBytes: 220000,
+          tags: ["product", "desk", "hero"],
+        }}
+        assets={[
+          makeAsset({
+            id: "asset-uploading",
+            type: "image",
+            name: "Uploading packshot",
+            mimeType: "image/png",
+            status: "uploaded",
+            url: "/uploads/uploading.png",
+          }),
+          makeAsset({
+            id: "asset-ready",
+            type: "image",
+            name: "Ready packshot",
+            mimeType: "image/png",
+            status: "ready",
+            url: "/uploads/ready.png",
+          }),
+        ]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject
+        hasSearched={false}
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="image"
+        onAssetDraftChange={() => undefined}
+        onDeleteAssets={() => undefined}
+        onImportFiles={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery=""
+        searchResults={[]}
+      />,
+    );
+
+    expect(markup).toContain("asset-uploading-spinner");
+    expect(markup).not.toContain("/api/assets/asset-uploading/content");
+    expect(markup).toContain("/api/assets/asset-ready/content");
+    expect(markup).toContain("Select Uploading packshot");
+    expect(markup).toContain("Delete Ready packshot");
+    expect(markup).toContain("Delete selected");
+    expect(markup).not.toContain("status-pill");
   });
 
   it("uses one import entry for every asset category", () => {
@@ -422,6 +498,9 @@ describe("App", () => {
     expect(markup).toContain("Image generation model");
     expect(markup).toContain("Video generation model");
     expect(markup).toContain("API service address");
+    expect(markup).toContain("API key source");
+    expect(markup).toContain("Custom");
+    expect(markup).toContain("Use official config");
     expect(markup).toContain("Volcengine Ark");
     expect(markup).toContain("Select a model or paste an endpoint ID");
     expect(markup).toContain("model-combobox");
@@ -477,6 +556,26 @@ describe("App", () => {
     expect(normalized.general?.model).toBe("doubao-seed-2-0-pro-260215");
     expect(normalized.image?.model).toBe("doubao-seedream-5-0-260128");
     expect(normalized.video?.model).toBe("doubao-seedance-1-5-pro-251215");
+  });
+
+  it("keeps model settings while defaulting credential source to custom", () => {
+    const normalized = sanitizeApiConfig({
+      general: {
+        provider: "openai-compatible",
+        apiBaseUrl: "https://api.example.test/v1",
+        model: "custom-text-model",
+      },
+      image: {
+        credentialSource: "official",
+        provider: "volcengine-ark",
+        model: "doubao-seedream-5-0-260128",
+      },
+    });
+
+    expect(normalized.general?.credentialSource).toBe("custom");
+    expect(normalized.image?.credentialSource).toBe("official");
+    expect(normalized.image?.apiKey).toBeUndefined();
+    expect(normalized.image?.model).toBe("doubao-seedream-5-0-260128");
   });
 
   it("renders only the supported asset library categories in English", () => {

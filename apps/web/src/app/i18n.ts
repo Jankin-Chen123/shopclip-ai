@@ -29,14 +29,14 @@ export const copy = {
       },
       create: {
         label: "Create",
-        title: "Creative prep",
-        description: "Assets, retrieval, script, and storyboard generation.",
+        title: "Asset prep",
+        description: "Import product assets and reference materials.",
         assetsMetric: (count: number) => `${count} assets`,
       },
       studio: {
         label: "Studio",
-        title: "Generation studio",
-        description: "Scene preview, timeline cards, and P1 editor actions.",
+        title: "Script and storyboard",
+        description: "Generate storyboard scenes and edit images, copy, and voiceover.",
         scenesMetric: (sceneCount: number, dirtySceneCount: number) =>
           `${sceneCount} scenes / ${dirtySceneCount} edited`,
       },
@@ -102,7 +102,7 @@ export const copy = {
     },
     script: {
       step: "Step 03",
-      title: "Script and storyboard",
+      title: "Script & storyboard",
       sceneCount: (count: number) => `${count} scenes`,
       notGenerated: "Not generated",
       generate: "Generate storyboard",
@@ -113,8 +113,8 @@ export const copy = {
       emptyBody: "Generate after project setup so the Studio editor can open scene cards.",
     },
     studio: {
-      step: "Step 04",
-      title: "Studio editor",
+      step: "Step 03",
+      title: "Storyboard re-edit",
       unsaved: (count: number) => `${count} unsaved`,
       stable: "Stable",
       previewLabel: "9 by 16 preview",
@@ -147,8 +147,8 @@ export const copy = {
       noSelectedSceneBody: "Generate the storyboard before editing scene fields.",
     },
     render: {
-      step: "Step 05",
-      title: "Render trace",
+      step: "Step 04",
+      title: "Video preview and download",
       waiting: "Waiting",
       mediaControls: "Media controls",
       ttsVoice: "TTS voice",
@@ -163,7 +163,7 @@ export const copy = {
       noTrace: "No trace yet",
       noTraceBody:
         "Start render after storyboard generation to see queue, validation, and preview events.",
-      exportStep: "Step 06",
+      exportStep: "Step 04",
       exportTitle: "Preview and export",
       previewArtifact: "Preview artifact",
       previewUnavailable: "Preview unavailable",
@@ -190,7 +190,7 @@ export const copy = {
         `Voice ${voice} / subtitles ${subtitles} / BGM ${bgm}`,
     },
     dashboard: {
-      step: "Step 07",
+      step: "Step 05",
       title: "Mock analytics",
       waiting: "Metrics pending",
       ready: "Metrics ready",
@@ -238,14 +238,14 @@ export const copy = {
       },
       create: {
         label: "创作",
-        title: "创意准备",
-        description: "准备素材、检索、脚本和分镜生成。",
+        title: "素材准备",
+        description: "导入产品素材与参考资料。",
         assetsMetric: (count: number) => `${count} 个素材`,
       },
       studio: {
         label: "工作室",
-        title: "生成工作室",
-        description: "预览分镜、时间线卡片和 P1 编辑能力。",
+        title: "脚本与分镜",
+        description: "生成分镜并编辑图片、脚本和旁白。",
         scenesMetric: (sceneCount: number, dirtySceneCount: number) =>
           `${sceneCount} 个分镜 / ${dirtySceneCount} 个已编辑`,
       },
@@ -311,7 +311,7 @@ export const copy = {
     },
     script: {
       step: "步骤 03",
-      title: "脚本和分镜",
+      title: "脚本与分镜",
       sceneCount: (count: number) => `${count} 个分镜`,
       notGenerated: "尚未生成",
       generate: "生成分镜",
@@ -322,8 +322,8 @@ export const copy = {
       emptyBody: "完成项目设置后生成分镜，Studio 编辑器会显示分镜卡片。",
     },
     studio: {
-      step: "步骤 04",
-      title: "工作室编辑器",
+      step: "步骤 03",
+      title: "分镜重编辑",
       unsaved: (count: number) => `${count} 个未保存`,
       stable: "稳定",
       previewLabel: "9:16 预览",
@@ -356,8 +356,8 @@ export const copy = {
       noSelectedSceneBody: "生成分镜后再编辑字段。",
     },
     render: {
-      step: "步骤 05",
-      title: "渲染 trace",
+      step: "步骤 04",
+      title: "视频生成预览与下载",
       waiting: "等待中",
       mediaControls: "媒体控制",
       ttsVoice: "TTS 声线",
@@ -371,7 +371,7 @@ export const copy = {
       progressLabel: "渲染进度",
       noTrace: "暂无 trace",
       noTraceBody: "分镜生成后开始渲染，即可看到排队、校验和预览事件。",
-      exportStep: "步骤 06",
+      exportStep: "步骤 04",
       exportTitle: "预览和导出",
       previewArtifact: "预览产物",
       previewUnavailable: "预览不可用",
@@ -398,7 +398,7 @@ export const copy = {
         `声线 ${voice} / 字幕 ${subtitles} / BGM ${bgm}`,
     },
     dashboard: {
-      step: "步骤 07",
+      step: "步骤 05",
       title: "模拟数据分析",
       waiting: "指标待生成",
       ready: "指标已就绪",

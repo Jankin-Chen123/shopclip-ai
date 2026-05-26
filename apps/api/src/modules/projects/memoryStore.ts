@@ -127,6 +127,63 @@ export class MemoryProjectStore implements ProjectStore {
     return updatedAsset;
   }
 
+  deleteAssets(assetIds: string[]): AssetMetadata[] {
+    const requestedAssetIds = new Set(assetIds);
+    const deletedAssets: AssetMetadata[] = [];
+    const timestamp = now();
+
+    this.globalAssets
+      .filter((asset) => requestedAssetIds.has(asset.id))
+      .forEach((asset) => deletedAssets.push(asset));
+    for (let index = this.globalAssets.length - 1; index >= 0; index -= 1) {
+      if (requestedAssetIds.has(this.globalAssets[index]?.id ?? "")) {
+        this.globalAssets.splice(index, 1);
+      }
+    }
+    for (let index = this.globalAssetSlices.length - 1; index >= 0; index -= 1) {
+      if (requestedAssetIds.has(this.globalAssetSlices[index]?.assetId ?? "")) {
+        this.globalAssetSlices.splice(index, 1);
+      }
+    }
+    for (let index = this.globalAssetProcessingJobs.length - 1; index >= 0; index -= 1) {
+      if (requestedAssetIds.has(this.globalAssetProcessingJobs[index]?.assetId ?? "")) {
+        this.globalAssetProcessingJobs.splice(index, 1);
+      }
+    }
+
+    for (const project of this.projects.values()) {
+      const projectDeletedAssets = project.assets.filter((asset) => requestedAssetIds.has(asset.id));
+      if (projectDeletedAssets.length === 0) {
+        continue;
+      }
+
+      deletedAssets.push(...projectDeletedAssets);
+      project.assets = project.assets.filter((asset) => !requestedAssetIds.has(asset.id));
+      project.assetSlices = project.assetSlices.filter(
+        (slice) => !requestedAssetIds.has(slice.assetId),
+      );
+      project.assetProcessingJobs = project.assetProcessingJobs.filter(
+        (job) => !requestedAssetIds.has(job.assetId),
+      );
+      project.scenes = project.scenes.map((scene) =>
+        scene.assetId && requestedAssetIds.has(scene.assetId)
+          ? { ...scene, assetId: undefined }
+          : scene,
+      );
+      project.scripts = project.scripts.map((script) => ({
+        ...script,
+        scenes: script.scenes.map((scene) =>
+          scene.assetId && requestedAssetIds.has(scene.assetId)
+            ? { ...scene, assetId: undefined }
+            : scene,
+        ),
+      }));
+      project.updatedAt = timestamp;
+    }
+
+    return deletedAssets;
+  }
+
   addAssetProcessingJob(
     projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,
@@ -436,6 +493,11 @@ export class MemoryProjectStore implements ProjectStore {
   private findAssetProject(
     assetId: string,
   ): { project?: ProjectSnapshot; asset: AssetMetadata } | undefined {
+    const globalAsset = this.globalAssets.find((candidate) => candidate.id === assetId);
+    if (globalAsset) {
+      return { asset: globalAsset };
+    }
+
     for (const project of this.projects.values()) {
       const asset = project.assets.find((candidate) => candidate.id === assetId);
       if (asset) {

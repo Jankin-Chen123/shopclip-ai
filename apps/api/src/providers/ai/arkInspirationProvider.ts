@@ -58,7 +58,8 @@ const getUserConfigForAssetType = (request: InspirationGenerateRequest) => {
 const hasUserConfigInput = (request: InspirationGenerateRequest) => {
   const userConfig = getUserConfigForAssetType(request);
   return Boolean(
-    userConfig?.apiKey?.trim() ||
+    userConfig?.credentialSource === "official" ||
+      userConfig?.apiKey?.trim() ||
       userConfig?.model?.trim() ||
       userConfig?.apiBaseUrl?.trim() ||
       userConfig?.provider?.trim(),
@@ -101,6 +102,11 @@ const getEnvironmentModel = (assetType: InspirationAssetType) => {
   }
   return process.env.AI_TEXT_ENDPOINT_ID?.trim();
 };
+
+const getEnvironmentApiKey = (assetType: InspirationAssetType) =>
+  assetType === "image"
+    ? (process.env.AI_IMAGE_API_KEY?.trim() ?? process.env.AI_API_KEY?.trim())
+    : process.env.AI_API_KEY?.trim();
 
 const createId = (prefix: string, seed: string) => {
   let hash = 0;
@@ -200,6 +206,25 @@ const createFallbackResponse = (
 
 const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig | undefined => {
   const userConfig = getUserConfigForAssetType(request);
+  if (userConfig?.credentialSource === "official") {
+    const apiKey = getEnvironmentApiKey(request.assetType);
+    const userModel = userConfig.model?.trim();
+    const model = userModel
+      ? resolveArkModel(userModel, request.assetType, userConfig.provider)
+      : getEnvironmentModel(request.assetType);
+
+    if (!apiKey || !model) {
+      return undefined;
+    }
+
+    return {
+      apiKey,
+      model,
+      baseUrl: (userConfig.apiBaseUrl?.trim() || process.env.ARK_API_BASE_URL || DEFAULT_ARK_BASE_URL).replace(/\/$/, ""),
+      provider: userConfig.provider?.trim() || "volcengine-ark",
+    };
+  }
+
   if (userConfig?.apiKey?.trim() && userConfig.model?.trim() && userConfig.apiBaseUrl?.trim()) {
     return {
       apiKey: userConfig.apiKey.trim(),
@@ -213,10 +238,7 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
     return undefined;
   }
 
-  const apiKey =
-    request.assetType === "image"
-      ? (process.env.AI_IMAGE_API_KEY?.trim() ?? process.env.AI_API_KEY?.trim())
-      : process.env.AI_API_KEY?.trim();
+  const apiKey = getEnvironmentApiKey(request.assetType);
   const model = getEnvironmentModel(request.assetType);
 
   if (!apiKey || !model) {

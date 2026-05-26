@@ -293,6 +293,32 @@ export class PrismaProjectStore implements ProjectStore {
     return toAsset(updated);
   }
 
+  async deleteAssets(assetIds: string[]): Promise<AssetMetadata[]> {
+    const assets = await this.prisma.asset.findMany({
+      where: { id: { in: assetIds } },
+      include: { slices: true },
+    });
+    if (assets.length === 0) {
+      return [];
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.storyboardScene.updateMany({
+        where: { assetId: { in: assetIds } },
+        data: { assetId: null },
+      }),
+      this.prisma.asset.deleteMany({
+        where: { id: { in: assets.map((asset) => asset.id) } },
+      }),
+    ]);
+
+    const assetById = new Map(assets.map((asset) => [asset.id, toAsset(asset)]));
+    return assetIds.flatMap((assetId) => {
+      const asset = assetById.get(assetId);
+      return asset ? [asset] : [];
+    });
+  }
+
   async addAssetProcessingJob(
     projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,

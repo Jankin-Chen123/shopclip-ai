@@ -130,7 +130,7 @@ export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps)
         : assetType === "video"
           ? apiConfig.video
           : apiConfig.general;
-    if (!activeConfig?.apiKey?.trim()) {
+    if (activeConfig?.credentialSource !== "official" && !activeConfig?.apiKey?.trim()) {
       setError(text.missingConfig);
       return;
     }

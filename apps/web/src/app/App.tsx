@@ -22,6 +22,7 @@ import {
   getAssetDraftDefaults,
   type AssetCategory,
 } from "../features/assets/AssetCategoryTabs";
+import { AssetPrepPanel } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { InspirationPanel } from "../features/inspiration/InspirationPanel";
@@ -42,6 +43,7 @@ import {
   applySceneSuggestion,
   createProject,
   createAssetUploadIntent,
+  deleteAssets as deleteAssetsRequest,
   deleteScene,
   exportProject,
   generateScript,
@@ -284,6 +286,16 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       ),
     [activeAssetCategory, externalAssetSearchResults],
   );
+  const prepAssets = useMemo(() => {
+    const seenAssetIds = new Set<string>();
+    return [...(project?.assets ?? []), ...assetLibrary.assets].filter((asset) => {
+      if (seenAssetIds.has(asset.id)) {
+        return false;
+      }
+      seenAssetIds.add(asset.id);
+      return true;
+    });
+  }, [assetLibrary.assets, project?.assets]);
   const activeSection: WorkspaceSectionId =
     activePage === "assets"
       ? "assets"
@@ -648,7 +660,62 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
-  const handleGenerateScript = () => {
+  const handleDeleteAssets = (assetIds: string[]) => {
+    if (assetIds.length === 0) {
+      return;
+    }
+
+    void runAction("asset", "asset", async () => {
+      const response = await deleteAssetsRequest(assetIds);
+      const deletedAssetIds = new Set(response.deletedAssets.map((asset) => asset.id));
+
+      setAssetLibrary((current) => ({
+        assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
+        assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
+      }));
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
+              assetSlices: current.assetSlices.filter(
+                (slice) => !deletedAssetIds.has(slice.assetId),
+              ),
+              scenes: current.scenes.map((scene) =>
+                scene.assetId && deletedAssetIds.has(scene.assetId)
+                  ? { ...scene, assetId: undefined }
+                  : scene,
+              ),
+              scripts: current.scripts.map((currentScript) => ({
+                ...currentScript,
+                scenes: currentScript.scenes.map((scene) =>
+                  scene.assetId && deletedAssetIds.has(scene.assetId)
+                    ? { ...scene, assetId: undefined }
+                    : scene,
+                ),
+              })),
+            }
+          : current,
+      );
+      setScript((current) =>
+        current
+          ? {
+              ...current,
+              scenes: current.scenes.map((scene) =>
+                scene.assetId && deletedAssetIds.has(scene.assetId)
+                  ? { ...scene, assetId: undefined }
+                  : scene,
+              ),
+            }
+          : current,
+      );
+      setAssetSearchResults((current) =>
+        current.filter((result) => !deletedAssetIds.has(result.asset.id)),
+      );
+    });
+  };
+
+  const handleGenerateScript = (nextPage?: WorkspacePageId) => {
     if (!project) {
       setErrors((current) => ({ ...current, script: "Create or load a project first." }));
       return;
@@ -671,6 +738,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
             }
           : current,
       );
+      if (nextPage) {
+        handlePageChange(nextPage);
+      }
     });
   };
 
@@ -906,6 +976,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               onCategoryChange={handleAssetCategoryChange}
               onImportExternalAsset={handleImportExternalAsset}
               onImportFiles={handleImportFiles}
+              onDeleteAssets={handleDeleteAssets}
               onRecallAsset={selectedSceneId ? handleRecallAsset : undefined}
               onSearchExternalAssets={handleSearchExternalAssets}
               onSearchAssets={handleSearchAssets}
@@ -954,38 +1025,49 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               ) : null}
 
               {activePage === "create" ? (
-                <section className="script-workspace">
-                  <ScriptPanel
-                    copy={text.script}
-              disabled={busyState !== "idle"}
-                    error={errors.script}
-                    fallbackProvider={fallbackProvider}
-                    isLoading={busyState === "script"}
-                    onGenerateScript={handleGenerateScript}
-                    script={script}
-                  />
-                </section>
+                <AssetPrepPanel
+                  assets={prepAssets}
+                  disabled={busyState !== "idle"}
+                  error={errors.asset ?? errors.script}
+                  isGenerating={busyState === "script"}
+                  isImporting={busyState === "asset"}
+                  language={language}
+                  onBack={() => handlePageChange("project")}
+                  onGenerateStoryboard={() => handleGenerateScript("studio")}
+                  onImportFiles={handleImportFiles}
+                />
               ) : null}
 
               {activePage === "studio" ? (
-                <StudioWorkspace
-                  assets={project?.assets ?? []}
-                  copy={text.studio}
-                  dirtySceneIds={dirtySceneIds}
-                  isBusy={busyState === "scene"}
-                  onApplySuggestion={handleApplySuggestion}
-                  onDeleteScene={handleDeleteScene}
-                  onDismissSuggestion={handleDismissSuggestion}
-                  onLoadSuggestions={handleLoadSuggestions}
-                  onRegenerateScene={handleRegenerateScene}
-                  onSceneChange={handleSceneChange}
-                  onSceneMove={handleSceneMove}
-                  onSceneSave={handleSceneSave}
-                  onSelectedSceneChange={setSelectedSceneId}
-                  scenes={scenes}
-                  selectedSceneId={selectedSceneId}
-                  suggestions={editingSuggestions}
-                />
+                <section className="script-storyboard-workspace">
+                  <ScriptPanel
+                    copy={text.script}
+                    disabled={busyState !== "idle"}
+                    error={errors.script}
+                    fallbackProvider={fallbackProvider}
+                    isLoading={busyState === "script"}
+                    onGenerateScript={() => handleGenerateScript()}
+                    script={script}
+                  />
+                  <StudioWorkspace
+                    assets={project?.assets ?? assetLibrary.assets}
+                    copy={text.studio}
+                    dirtySceneIds={dirtySceneIds}
+                    isBusy={busyState === "scene"}
+                    onApplySuggestion={handleApplySuggestion}
+                    onDeleteScene={handleDeleteScene}
+                    onDismissSuggestion={handleDismissSuggestion}
+                    onLoadSuggestions={handleLoadSuggestions}
+                    onRegenerateScene={handleRegenerateScene}
+                    onSceneChange={handleSceneChange}
+                    onSceneMove={handleSceneMove}
+                    onSceneSave={handleSceneSave}
+                    onSelectedSceneChange={setSelectedSceneId}
+                    scenes={scenes}
+                    selectedSceneId={selectedSceneId}
+                    suggestions={editingSuggestions}
+                  />
+                </section>
               ) : null}
 
               {activePage === "delivery" ? (

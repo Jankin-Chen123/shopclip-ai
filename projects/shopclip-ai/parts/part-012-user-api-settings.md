@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-23
-- Last updated: 2026-05-23
+- Last updated: 2026-05-26
 
 ## Source Of Truth
 
@@ -78,3 +78,4 @@ Replace the left sidebar footer with a Settings entry and let users configure th
 ## Maintenance Notes
 
 - 2026-05-24: Fixed Ark 404 fallback caused by Settings sending display-name model presets as API `model` values. Settings now stores and displays user-provided versioned Ark model IDs such as `doubao-seed-2-0-pro-260215`, `doubao-seedream-5-0-260128`, and `doubao-seedance-1-5-pro-251215`; the frontend migrates legacy browser-stored display names into those IDs, and the backend keeps alias compatibility before provider calls. The model field is now one editable dropdown-backed input instead of a separate input plus preset select. Evidence: `../evidence/2026-05-24-ark-inspiration-model-routing-fix.md`.
+- 2026-05-26: Added per-model API key source switching in Settings. Each General/Image/Video model card now supports `custom` and `official` credential modes. `custom` keeps the previous behavior and sends the browser-entered API key with generation requests. `official` clears the browser-entered key from saved request config and sends a `credentialSource: "official"` marker; the backend then uses the server-side `.env` API key while keeping the selected provider, base URL, and model. Evidence: `../evidence/2026-05-26-official-api-config-toggle.md`.

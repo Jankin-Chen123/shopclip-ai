@@ -7,6 +7,7 @@ import { languageNames } from "../../app/i18n";
 import type { StockProviderConfig, UserApiConfig } from "../../lib/api";
 
 type ApiConfigRole = "general" | "image" | "video";
+type CredentialSource = "custom" | "official";
 
 interface SettingsPanelProps {
   apiConfig: UserApiConfig;
@@ -191,11 +192,17 @@ const settingsCopy = {
     subtitle: "Language and model provider configuration.",
     languageTitle: "Language",
     provider: "API provider",
+    credentialSource: "API key source",
+    customCredential: "Custom",
+    officialCredential: "Use official config",
     apiBaseUrl: "API service address",
     model: "Model",
     modelPlaceholder: "Select a model or paste an endpoint ID",
     keyHelp: "API keys are stored in this browser and sent only with generation requests.",
+    officialKeyHelp:
+      "Official config sends a server-side flag with the request. The backend uses the API key from its .env file.",
     keyPlaceholder: "Paste API key",
+    officialKeyPlaceholder: "Backend .env API key",
     stockTitle: "Third-party stock libraries",
     stockDescription:
       "Choose a stock site and add its API key. Keys stay in this browser and are only sent when you search that site.",
@@ -229,6 +236,19 @@ const settingsCopy = {
     remove: "移除",
     configured: "已添加素材库",
     noStockProviders: "还没有添加第三方素材库。",
+  },
+} as const;
+
+const localizedSettingsCopy = {
+  ...settingsCopy,
+  zh: {
+    ...settingsCopy.zh,
+    credentialSource: "API key 来源",
+    customCredential: "自定义",
+    officialCredential: "使用官方配置",
+    officialKeyHelp:
+      "使用官方配置时，请求会携带服务端配置标记，后端使用 .env 中的 API key。",
+    officialKeyPlaceholder: "后端 .env API key",
   },
 } as const;
 
@@ -311,16 +331,19 @@ const ModelCombobox = ({
 
 export const createDefaultApiConfig = (): UserApiConfig => ({
   general: {
+    credentialSource: "custom",
     provider: "volcengine-ark",
     apiBaseUrl: defaultProviderPreset.baseUrl,
     model: defaultProviderPreset.models.general[0],
   },
   image: {
+    credentialSource: "custom",
     provider: "volcengine-ark",
     apiBaseUrl: defaultProviderPreset.baseUrl,
     model: defaultProviderPreset.models.image[0],
   },
   video: {
+    credentialSource: "custom",
     provider: "volcengine-ark",
     apiBaseUrl: defaultProviderPreset.baseUrl,
     model: defaultProviderPreset.models.video[0],
@@ -332,22 +355,26 @@ export const sanitizeApiConfig = (apiConfig: UserApiConfig): UserApiConfig => {
   const defaultGeneral = defaults.general!;
   const defaultImage = defaults.image!;
   const defaultVideo = defaults.video!;
+  const sanitizeRole = (
+    roleConfig: UserApiConfig[ApiConfigRole] | undefined,
+    defaultRoleConfig: NonNullable<UserApiConfig[ApiConfigRole]>,
+  ): NonNullable<UserApiConfig[ApiConfigRole]> => {
+    const credentialSource: CredentialSource =
+      roleConfig?.credentialSource === "official" ? "official" : "custom";
+
+    return {
+      ...defaultRoleConfig,
+      ...roleConfig,
+      credentialSource,
+      apiKey: credentialSource === "official" ? undefined : roleConfig?.apiKey,
+      model: normalizeApiModel(roleConfig?.model) ?? defaultRoleConfig.model,
+    };
+  };
+
   return {
-    general: {
-      ...defaultGeneral,
-      ...apiConfig.general,
-      model: normalizeApiModel(apiConfig.general?.model) ?? defaultGeneral.model,
-    },
-    image: {
-      ...defaultImage,
-      ...apiConfig.image,
-      model: normalizeApiModel(apiConfig.image?.model) ?? defaultImage.model,
-    },
-    video: {
-      ...defaultVideo,
-      ...apiConfig.video,
-      model: normalizeApiModel(apiConfig.video?.model) ?? defaultVideo.model,
-    },
+    general: sanitizeRole(apiConfig.general, defaultGeneral),
+    image: sanitizeRole(apiConfig.image, defaultImage),
+    video: sanitizeRole(apiConfig.video, defaultVideo),
   };
 };
 
@@ -376,7 +403,7 @@ export const SettingsPanel = ({
   onLanguageChange,
   onStockProviderConfigsChange,
 }: SettingsPanelProps) => {
-  const text = settingsCopy[language];
+  const text = { ...localizedSettingsCopy.en, ...localizedSettingsCopy[language] };
   const roleText = roleCopy[language];
   const config = sanitizeApiConfig(apiConfig);
   const stockConfigs = sanitizeStockProviderConfigs(stockProviderConfigs);
@@ -386,7 +413,7 @@ export const SettingsPanel = ({
 
   const updateRole = (
     role: ApiConfigRole,
-    update: NonNullable<UserApiConfig[ApiConfigRole]>,
+    update: Partial<NonNullable<UserApiConfig[ApiConfigRole]>>,
   ) => {
     onApiConfigChange({
       ...config,
@@ -403,6 +430,13 @@ export const SettingsPanel = ({
       provider: preset.id,
       apiBaseUrl: preset.baseUrl || config[role]?.apiBaseUrl,
       model: preset.models[role][0] ?? config[role]?.model ?? "",
+    });
+  };
+
+  const handleCredentialSourceChange = (role: ApiConfigRole, credentialSource: CredentialSource) => {
+    updateRole(role, {
+      credentialSource,
+      apiKey: credentialSource === "official" ? undefined : config[role]?.apiKey,
     });
   };
 
@@ -472,7 +506,7 @@ export const SettingsPanel = ({
 
       <div className="api-config-grid">
         {(["general", "image", "video"] as const).map((role) => {
-          const roleConfig = config[role] ?? {};
+          const roleConfig = config[role]!;
           const preset = getPreset(roleConfig.provider);
           const models = preset.models[role];
           return (
@@ -499,6 +533,27 @@ export const SettingsPanel = ({
                 </select>
               </label>
 
+              <fieldset className="credential-source-field">
+                <legend>{text.credentialSource}</legend>
+                <div className="settings-segmented-control">
+                  {(["custom", "official"] as const).map((credentialSource) => (
+                    <button
+                      aria-pressed={roleConfig.credentialSource === credentialSource}
+                      className={
+                        roleConfig.credentialSource === credentialSource ? "active" : undefined
+                      }
+                      key={credentialSource}
+                      onClick={() => handleCredentialSourceChange(role, credentialSource)}
+                      type="button"
+                    >
+                      {credentialSource === "custom"
+                        ? text.customCredential
+                        : text.officialCredential}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
               <label>
                 {text.apiBaseUrl}
                 <input
@@ -524,12 +579,20 @@ export const SettingsPanel = ({
                 {roleText[role].keyLabel}
                 <input
                   autoComplete="off"
+                  disabled={roleConfig.credentialSource === "official"}
                   onChange={(event) => updateRole(role, { apiKey: event.target.value })}
-                  placeholder={text.keyPlaceholder}
+                  placeholder={
+                    roleConfig.credentialSource === "official"
+                      ? text.officialKeyPlaceholder
+                      : text.keyPlaceholder
+                  }
                   type="password"
-                  value={roleConfig.apiKey ?? ""}
+                  value={roleConfig.credentialSource === "official" ? "" : (roleConfig.apiKey ?? "")}
                 />
               </label>
+              {roleConfig.credentialSource === "official" ? (
+                <p className="settings-key-help">{text.officialKeyHelp}</p>
+              ) : null}
             </section>
           );
         })}

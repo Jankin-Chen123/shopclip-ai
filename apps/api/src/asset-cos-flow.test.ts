@@ -354,5 +354,31 @@ describe("COS-backed asset import contract", () => {
       assetId: created.body.asset.id,
       status: "ready",
     });
+
+    const deleted = await request<{
+      deletedAssets: Array<{ id: string; objectKey?: string }>;
+    }>(baseUrl, "/api/assets", {
+      method: "DELETE",
+      body: JSON.stringify({
+        assetIds: [created.body.asset.id],
+      }),
+    });
+
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.deletedAssets).toEqual([
+      expect.objectContaining({
+        id: created.body.asset.id,
+        objectKey: created.body.upload.objectKey,
+      }),
+    ]);
+
+    const listedAfterDelete = await request<{
+      assets: Array<{ id: string }>;
+      assetSlices: Array<{ assetId: string }>;
+    }>(baseUrl, `/api/projects/${projectId}/assets?category=image`);
+
+    expect(listedAfterDelete.status).toBe(200);
+    expect(listedAfterDelete.body.assets).toHaveLength(0);
+    expect(listedAfterDelete.body.assetSlices).toHaveLength(0);
   });
 });

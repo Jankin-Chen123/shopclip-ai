@@ -3,6 +3,7 @@ import type { AssetUploadIntent, AssetStorageProvider } from "@shopclip/shared";
 
 import { createAssetObjectKey } from "./storageProvider.js";
 import type {
+  StorageDeleteObjectInput,
   StorageProvider,
   StorageReadUrlInput,
   StorageReadUrlResult,
@@ -105,6 +106,45 @@ const createTencentCosPresignedGetUrl = ({
   const httpString = ["get", `/${encodePath(objectKey)}`, "", `host=${host.toLowerCase()}`, ""].join(
     "\n",
   );
+  const stringToSign = ["sha1", keyTime, sha1(httpString), ""].join("\n");
+  const signKey = hmacSha1(config.secretKey, keyTime);
+  const signature = hmacSha1(signKey, stringToSign);
+  const authorization = [
+    "q-sign-algorithm=sha1",
+    `q-ak=${encodeURIComponent(config.secretId)}`,
+    `q-sign-time=${keyTime}`,
+    `q-key-time=${keyTime}`,
+    `q-header-list=${headerList}`,
+    "q-url-param-list=",
+    `q-signature=${signature}`,
+  ].join("&");
+
+  return {
+    expiresAt: new Date(end * 1000).toISOString(),
+    url: `${publicBaseUrlFor(config)}/${encodePath(objectKey)}?${authorization}`,
+  };
+};
+
+const createTencentCosPresignedDeleteUrl = ({
+  config,
+  objectKey,
+}: {
+  config: Required<Pick<CosConfig, "bucket" | "region" | "secretId" | "secretKey">> &
+    Pick<CosConfig, "publicBaseUrl">;
+  objectKey: string;
+}): { expiresAt: string; url: string } => {
+  const start = nowSeconds();
+  const end = start + uploadUrlTtlSeconds;
+  const keyTime = `${start};${end}`;
+  const host = `${config.bucket}.cos.${config.region}.myqcloud.com`;
+  const headerList = "host";
+  const httpString = [
+    "delete",
+    `/${encodePath(objectKey)}`,
+    "",
+    `host=${host.toLowerCase()}`,
+    "",
+  ].join("\n");
   const stringToSign = ["sha1", keyTime, sha1(httpString), ""].join("\n");
   const signKey = hmacSha1(config.secretKey, keyTime);
   const signature = hmacSha1(signKey, stringToSign);
@@ -262,6 +302,34 @@ export class CosStorageProvider implements StorageProvider {
       provider: this.provider,
       publicUrl,
     };
+  }
+
+  async deleteObject(input: StorageDeleteObjectInput): Promise<void> {
+    if (this.provider === "mock-cos") {
+      return;
+    }
+
+    if (!this.config.secretId || !this.config.secretKey) {
+      throw new Error("COS_SECRET_ID and COS_SECRET_KEY are required for tencent COS mode.");
+    }
+
+    const intent = createTencentCosPresignedDeleteUrl({
+      config: {
+        bucket: this.config.bucket,
+        publicBaseUrl: this.config.publicBaseUrl,
+        region: this.config.region,
+        secretId: this.config.secretId,
+        secretKey: this.config.secretKey,
+      },
+      objectKey: input.objectKey,
+    });
+    const response = await fetch(intent.url, {
+      method: "DELETE",
+    });
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`COS delete failed with status ${response.status}.`);
+    }
   }
 
   private withUploadPrefix(objectKey: string): string {

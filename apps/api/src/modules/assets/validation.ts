@@ -75,3 +75,9 @@ export const ConfirmAssetUploadRequestSchema = z
   .default({});
 
 export type ConfirmAssetUploadRequest = z.infer<typeof ConfirmAssetUploadRequestSchema>;
+
+export const DeleteAssetsRequestSchema = z.object({
+  assetIds: z.array(z.string().trim().min(1)).min(1),
+});
+
+export type DeleteAssetsRequest = z.infer<typeof DeleteAssetsRequestSchema>;
