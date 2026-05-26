@@ -96,6 +96,7 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-26 asset prep import/keyword update: added explicit "Import from asset library" selectors for each Step 02 bucket and changed product keywords from static pills to editable inputs with delete and add controls.
 - 2026-05-26 searchable asset prep library update: changed the Step 02 asset-library selector into a searchable media picker with reusable asset-library card previews, selected-asset import, inline image/video thumbnails after import, and post-import preview actions.
 - 2026-05-26 video prep update: Step 02 now refreshes the full asset library for creation prep so the demo video bucket can import videos without requiring a prior visit to the Asset library video tab; local demo uploads are constrained to MP4/MOV inputs.
+- 2026-05-26 asset prep category alignment: Step 02 asset-library import now uses the same category rules as the Asset library section, preventing hidden `type=reference` image assets from appearing in image prep buckets.
 
 ## Verification Evidence
 
@@ -123,3 +124,4 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-26 asset prep import/keyword verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshot captured at `../../output/playwright/creation-asset-prep-library-keywords-zh.png`.
 - 2026-05-26 searchable asset prep library verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-library-search-preview-zh.png`, `../../output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`, and `../../output/playwright/creation-asset-prep-imported-preview-zh.png`.
 - 2026-05-26 video prep verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-video-library-import-zh.png` and `../../output/playwright/creation-asset-prep-video-preview-zh.png`.
+- 2026-05-26 asset prep category alignment verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; regression confirms `type=reference` image assets are excluded from image prep import results.

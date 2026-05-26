@@ -48,6 +48,13 @@
 - Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
 - Browser evidence: `output/playwright/creation-asset-prep-video-library-import-zh.png` and `output/playwright/creation-asset-prep-video-preview-zh.png`.
 
+## 2026-05-26 Asset Prep Library Category Alignment
+
+- Root cause: `Reference mood board` is seeded as `type=reference` with `mimeType=image/png`, so it is not visible in the Asset library image/script/video/audio tabs, while the Step 02 import picker previously classified it as an image by MIME type.
+- Updated Step 02 import filtering to reuse the same `assetMatchesCategory` rules as the Asset library section.
+- Added regression coverage: `keeps prep library filtering aligned with visible asset library categories`.
+- Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
+
 ## Browser Evidence
 
 - `output/playwright/creation-asset-prep-zh.png`

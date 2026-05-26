@@ -21,7 +21,7 @@ import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { Language } from "../../app/i18n";
 import { getAssetContentUrl } from "../../lib/api";
-import type { AssetCategory } from "./AssetCategoryTabs";
+import { assetMatchesCategory, type AssetCategory } from "./AssetCategoryTabs";
 
 interface AssetPrepPanelProps {
   defaultOpenLibraryBucketId?: string;
@@ -186,24 +186,7 @@ const formatSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 };
 
-const assetFitsPrepCategory = (asset: AssetMetadata, category: AssetCategory) => {
-  if (category === "image") {
-    return asset.type === "image" || asset.mimeType?.startsWith("image/");
-  }
-  if (category === "video") {
-    return asset.type === "video" || asset.mimeType?.startsWith("video/");
-  }
-  if (category === "audio") {
-    return asset.mimeType?.startsWith("audio/");
-  }
-  return (
-    asset.type === "reference" ||
-    asset.mimeType?.startsWith("text/") ||
-    asset.mimeType === "application/pdf" ||
-    asset.mimeType?.includes("document") ||
-    asset.mimeType?.includes("presentation")
-  );
-};
+const assetFitsPrepCategory = assetMatchesCategory;
 
 const isPrepImageAsset = (asset: AssetMetadata) =>
   asset.type === "image" || asset.mimeType?.startsWith("image/");

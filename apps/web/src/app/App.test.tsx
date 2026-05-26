@@ -188,6 +188,27 @@ describe("App", () => {
     expect(filterPrepLibraryAssets(assets, "image", "missing")).toEqual([]);
   });
 
+  it("keeps prep library filtering aligned with visible asset library categories", () => {
+    const assets = [
+      makeAsset({
+        id: "asset-reference-image",
+        name: "Reference mood board",
+        type: "reference",
+        mimeType: "image/png",
+      }),
+      makeAsset({
+        id: "asset-packshot",
+        name: "Visible packshot.png",
+        type: "image",
+        mimeType: "image/png",
+      }),
+    ];
+
+    expect(filterPrepLibraryAssets(assets, "image", "").map((asset) => asset.id)).toEqual([
+      "asset-packshot",
+    ]);
+  });
+
   it("renders imported library image and video assets as inline prep thumbnails", () => {
     const markup = renderToStaticMarkup(
       <AssetPrepPanel
