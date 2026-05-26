@@ -87,7 +87,7 @@ describe("App", () => {
   it("does not preload existing library assets into asset prep", () => {
     const markup = renderToStaticMarkup(
       <AssetPrepPanel
-        assets={[makeAsset({ name: "Existing library packshot", type: "image" })]}
+        libraryAssets={[makeAsset({ name: "Existing library packshot", type: "image" })]}
         disabled={false}
         isGenerating={false}
         isImporting={false}
@@ -100,8 +100,29 @@ describe("App", () => {
 
     expect(markup).toContain("素材准备");
     expect(markup).toContain("已上传 0/4");
+    expect(markup).toContain("从素材库导入");
     expect(markup).not.toContain("Existing library packshot");
     expect(markup).not.toContain("继续上传");
+  });
+
+  it("renders free-editable product keyword controls in asset prep", () => {
+    const markup = renderToStaticMarkup(
+      <AssetPrepPanel
+        disabled={false}
+        isGenerating={false}
+        isImporting={false}
+        language="zh"
+        onBack={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onImportFiles={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('aria-label="编辑关键词：便携"');
+    expect(markup).toContain('value="便携"');
+    expect(markup).toContain('aria-label="删除关键词：便携"');
+    expect(markup).toContain("添加关键词");
+    expect(markup).toContain("关键词内容");
   });
 
   it("omits the top-right project CTA from asset, inspiration, and creation sections", () => {

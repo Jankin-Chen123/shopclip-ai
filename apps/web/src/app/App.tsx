@@ -1011,6 +1011,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                   isGenerating={busyState === "script"}
                   isImporting={busyState === "asset"}
                   language={language}
+                  libraryAssets={[...(project?.assets ?? []), ...assetLibrary.assets]}
                   onBack={() => handlePageChange("project")}
                   onGenerateStoryboard={() => handleGenerateScript("studio")}
                   onImportFiles={handleImportFiles}

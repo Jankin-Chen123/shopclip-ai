@@ -5,12 +5,14 @@ import {
   ArrowRight,
   CheckCircle2,
   FileText,
+  FolderOpen,
   Image,
   Loader2,
   Plus,
   Tag,
   UploadCloud,
   Video,
+  X,
 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -19,7 +21,7 @@ import type { Language } from "../../app/i18n";
 import type { AssetCategory } from "./AssetCategoryTabs";
 
 interface AssetPrepPanelProps {
-  assets?: AssetMetadata[];
+  libraryAssets?: AssetMetadata[];
   disabled: boolean;
   error?: string;
   isGenerating: boolean;
@@ -44,6 +46,7 @@ interface ManualPrepUpload {
   id: string;
   name: string;
   size: number;
+  source: "file" | "library";
 }
 
 const text = {
@@ -54,8 +57,17 @@ const text = {
     uploaded: (count: number, limit: number) => `Uploaded ${count}/${limit}`,
     complete: "Ready",
     import: "Import",
+    importFromLibrary: "Import from library",
+    libraryDialogTitle: "Import from asset library",
+    emptyLibrary: "No matching library assets",
+    closeLibrary: "Close asset library",
     addMore: "Add more",
     keywords: "Product keywords",
+    addKeyword: "Add keyword",
+    keywordInput: "Keyword",
+    keywordPlaceholder: "Enter keyword",
+    editKeyword: (keyword: string) => `Edit keyword: ${keyword}`,
+    removeKeyword: (keyword: string) => `Remove keyword: ${keyword}`,
     keywordList: ["portable", "foldable", "desktop stable", "anti-slip base", "aluminum", "TikTok vertical"],
     back: "Back",
     generate: "Generate storyboard",
@@ -90,8 +102,17 @@ const text = {
     uploaded: (count: number, limit: number) => `已上传 ${count}/${limit}`,
     complete: "已完成",
     import: "导入",
+    importFromLibrary: "从素材库导入",
+    libraryDialogTitle: "从素材库导入",
+    emptyLibrary: "暂无匹配的素材库素材",
+    closeLibrary: "关闭素材库",
     addMore: "继续上传",
     keywords: "产品关键词（可选）",
+    addKeyword: "添加关键词",
+    keywordInput: "关键词内容",
+    keywordPlaceholder: "输入关键词",
+    editKeyword: (keyword: string) => `编辑关键词：${keyword}`,
+    removeKeyword: (keyword: string) => `删除关键词：${keyword}`,
     keywordList: ["便携", "可折叠", "桌面稳定", "防滑底座", "铝合金材质", "TikTok 竖屏"],
     back: "返回上一步",
     generate: "生成分镜",
@@ -141,6 +162,25 @@ const formatSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 };
 
+const assetFitsPrepBucket = (asset: AssetMetadata, bucket: PrepBucket) => {
+  if (bucket.category === "image") {
+    return asset.type === "image" || asset.mimeType?.startsWith("image/");
+  }
+  if (bucket.category === "video") {
+    return asset.type === "video" || asset.mimeType?.startsWith("video/");
+  }
+  if (bucket.category === "audio") {
+    return asset.mimeType?.startsWith("audio/");
+  }
+  return (
+    asset.type === "reference" ||
+    asset.mimeType?.startsWith("text/") ||
+    asset.mimeType === "application/pdf" ||
+    asset.mimeType?.includes("document") ||
+    asset.mimeType?.includes("presentation")
+  );
+};
+
 export const AssetPrepPanel = ({
   disabled,
   error,
@@ -150,8 +190,12 @@ export const AssetPrepPanel = ({
   onBack,
   onGenerateStoryboard,
   onImportFiles,
+  libraryAssets = [],
 }: AssetPrepPanelProps) => {
   const [manualUploads, setManualUploads] = useState<Record<string, ManualPrepUpload[]>>({});
+  const [activeLibraryBucketId, setActiveLibraryBucketId] = useState<string>();
+  const [keywords, setKeywords] = useState<string[]>(() => [...text[language].keywordList]);
+  const [newKeyword, setNewKeyword] = useState("");
   const copy = text[language];
   const buckets = getBuckets(language);
   const inputPrefix = `asset-prep-${language}`;
@@ -173,11 +217,58 @@ export const AssetPrepPanel = ({
           id: `${file.name}-${file.size}-${file.lastModified}`,
           name: file.name,
           size: file.size,
+          source: "file" as const,
         })),
       ],
     }));
     onImportFiles(files);
   };
+
+  const addLibraryAssetToBucket = (bucketId: string, asset: AssetMetadata) => {
+    setManualUploads((current) => {
+      const currentBucketUploads = current[bucketId] ?? [];
+      if (currentBucketUploads.some((upload) => upload.id === asset.id)) {
+        return current;
+      }
+      return {
+        ...current,
+        [bucketId]: [
+          ...currentBucketUploads,
+          {
+            id: asset.id,
+            name: asset.name,
+            size: asset.sizeBytes ?? 0,
+            source: "library",
+          },
+        ],
+      };
+    });
+    setActiveLibraryBucketId(undefined);
+  };
+
+  const updateKeyword = (index: number, value: string) => {
+    setKeywords((current) =>
+      current.map((keyword, keywordIndex) => (keywordIndex === index ? value : keyword)),
+    );
+  };
+
+  const removeKeyword = (index: number) => {
+    setKeywords((current) => current.filter((_, keywordIndex) => keywordIndex !== index));
+  };
+
+  const addKeyword = () => {
+    const keyword = newKeyword.trim();
+    if (!keyword) {
+      return;
+    }
+    setKeywords((current) => [...current, keyword]);
+    setNewKeyword("");
+  };
+
+  const activeLibraryBucket = buckets.find((bucket) => bucket.id === activeLibraryBucketId);
+  const activeLibraryAssets = activeLibraryBucket
+    ? libraryAssets.filter((asset) => assetFitsPrepBucket(asset, activeLibraryBucket))
+    : [];
 
   return (
     <section className="panel asset-prep-panel" id="asset-prep" aria-labelledby="asset-prep-title">
@@ -242,6 +333,14 @@ export const AssetPrepPanel = ({
                     type="file"
                   />
                 </label>
+                <button
+                  className="asset-prep-library-button"
+                  onClick={() => setActiveLibraryBucketId(bucket.id)}
+                  type="button"
+                >
+                  <FolderOpen size={20} aria-hidden="true" />
+                  <span>{copy.importFromLibrary}</span>
+                </button>
               </div>
               <small className="asset-prep-support">{bucket.support}</small>
             </section>
@@ -254,14 +353,41 @@ export const AssetPrepPanel = ({
           <Tag size={16} aria-hidden="true" />
           {copy.keywords}
         </h3>
-        <div>
-          {copy.keywordList.map((keyword) => (
-            <span key={keyword}>{keyword}</span>
+        <div className="asset-keyword-list">
+          {keywords.map((keyword, index) => (
+            <span className="asset-keyword-chip" key={`${keyword}-${index}`}>
+              <input
+                aria-label={copy.editKeyword(keyword)}
+                value={keyword}
+                onChange={(event) => updateKeyword(index, event.target.value)}
+              />
+              <button
+                aria-label={copy.removeKeyword(keyword)}
+                onClick={() => removeKeyword(index)}
+                type="button"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </span>
           ))}
-          <button type="button">
-            <Plus size={15} aria-hidden="true" />
-            {language === "zh" ? "添加标签" : "Add tag"}
-          </button>
+          <label className="asset-keyword-add">
+            <span>{copy.keywordInput}</span>
+            <input
+              value={newKeyword}
+              onChange={(event) => setNewKeyword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addKeyword();
+                }
+              }}
+              placeholder={copy.keywordPlaceholder}
+            />
+            <button onClick={addKeyword} type="button">
+              <Plus size={15} aria-hidden="true" />
+              {copy.addKeyword}
+            </button>
+          </label>
         </div>
       </section>
 
@@ -280,6 +406,56 @@ export const AssetPrepPanel = ({
           <ArrowRight size={18} aria-hidden="true" />
         </Button>
       </div>
+
+      {activeLibraryBucket ? (
+        <div className="asset-prep-library-backdrop" role="presentation">
+          <section
+            aria-labelledby="asset-prep-library-title"
+            aria-modal="true"
+            className="asset-prep-library-dialog"
+            role="dialog"
+          >
+            <div className="asset-prep-library-heading">
+              <div>
+                <p className="eyebrow">{activeLibraryBucket.title}</p>
+                <h3 id="asset-prep-library-title">{copy.libraryDialogTitle}</h3>
+              </div>
+              <button
+                aria-label={copy.closeLibrary}
+                className="icon-button"
+                onClick={() => setActiveLibraryBucketId(undefined)}
+                type="button"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="asset-prep-library-list">
+              {activeLibraryAssets.length > 0 ? (
+                activeLibraryAssets.map((asset) => (
+                  <button
+                    className="asset-prep-library-option"
+                    key={asset.id}
+                    onClick={() => addLibraryAssetToBucket(activeLibraryBucket.id, asset)}
+                    type="button"
+                  >
+                    <FolderOpen size={20} aria-hidden="true" />
+                    <span>
+                      <strong>{asset.name}</strong>
+                      <small>{asset.mimeType ?? asset.type}</small>
+                    </span>
+                    <small>{formatSize(asset.sizeBytes)}</small>
+                  </button>
+                ))
+              ) : (
+                <div className="empty-state compact-empty">
+                  <strong>{copy.emptyLibrary}</strong>
+                  <span>{activeLibraryBucket.support}</span>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 };

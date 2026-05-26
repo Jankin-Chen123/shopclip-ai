@@ -20,6 +20,15 @@
 - Added regression coverage: `does not preload existing library assets into asset prep`.
 - Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
 
+## 2026-05-26 Asset Library Import And Keyword Editing
+
+- Added explicit "Import from asset library" actions to each Step 02 material bucket.
+- Existing asset library items remain hidden until the user opens the library selector and chooses an asset.
+- Replaced static product keyword pills with editable keyword inputs, delete controls, and an add-keyword field.
+- Added regression coverage for the library import entry and free-editable keyword controls.
+- Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
+- Browser evidence: `output/playwright/creation-asset-prep-library-keywords-zh.png`.
+
 ## Browser Evidence
 
 - `output/playwright/creation-asset-prep-zh.png`

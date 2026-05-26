@@ -93,6 +93,7 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-23 creation right-side removal: removed the right-side AI co-pilot, quality radar, timing cards, and the project panel dotted wave texture from all Create workflow steps; the workflow content now occupies a single main column while preserving the top stepper and top-right CTA.
 - 2026-05-26 creation flow update: replaced the direct Step 03 script entry in the Create section with Step 02 asset prep, added a bottom-right "Generate storyboard" action that runs storyboard generation and navigates to Step 03, and updated Step 03 to combine Script & storyboard with storyboard re-edit.
 - 2026-05-26 asset prep source update: stopped preloading global asset library/project assets into Step 02; the page now only shows files manually selected in the current asset prep upload cards.
+- 2026-05-26 asset prep import/keyword update: added explicit "Import from asset library" selectors for each Step 02 bucket and changed product keywords from static pills to editable inputs with delete and add controls.
 
 ## Verification Evidence
 
@@ -117,3 +118,4 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-23 creation right-side removal verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-no-right-project-desktop.png`, `../../output/playwright/creation-no-right-project-mobile.png`, and `../../output/playwright/creation-no-right-studio-desktop.png`.
 - 2026-05-26 creation asset prep/storyboard verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-zh.png` and `../../output/playwright/creation-script-storyboard-zh.png`; evidence recorded in `../evidence/2026-05-26-creation-asset-prep-storyboard-flow.md`.
 - 2026-05-26 asset prep source verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; regression test confirms existing library assets are not rendered in Step 02.
+- 2026-05-26 asset prep import/keyword verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshot captured at `../../output/playwright/creation-asset-prep-library-keywords-zh.png`.
