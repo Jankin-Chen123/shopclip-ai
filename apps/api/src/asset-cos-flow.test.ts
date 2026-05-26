@@ -217,7 +217,7 @@ describe("COS-backed asset import contract", () => {
     );
   });
 
-  it("falls back to local asset search when COS intelligent search fails", async () => {
+  it("returns empty search results when configured COS intelligent search fails", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const app = createApp({
       cosAssetSearch: async () => {
@@ -250,14 +250,9 @@ describe("COS-backed asset import contract", () => {
     }>(baseUrl, "/api/assets/search?q=dog");
 
     expect(searched.status).toBe(200);
-    expect(searched.body.results[0]).toMatchObject({
-      asset: {
-        id: created.body.asset.id,
-        name: "Dog product photo.png",
-      },
-    });
+    expect(searched.body.results).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      "[assets/search] COS intelligent search failed; falling back to local search.",
+      "[assets/search] COS intelligent search failed; returning empty COS results.",
       expect.any(Error),
     );
     warnSpy.mockRestore();

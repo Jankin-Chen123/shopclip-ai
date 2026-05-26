@@ -801,9 +801,10 @@ export const createP0Router = ({
         cosMatches = await cosAssetSearch({ query, limit: 24, matchThreshold: 60 });
       } catch (error) {
         console.warn(
-          "[assets/search] COS intelligent search failed; falling back to local search.",
+          "[assets/search] COS intelligent search failed; returning empty COS results.",
           error,
         );
+        cosMatches = [];
       }
     }
     const cosResults = cosMatches

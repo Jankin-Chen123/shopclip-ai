@@ -11,7 +11,7 @@
 - `/api/assets/search` maps COS image result URIs back to stored asset metadata by `objectKey` or the asset id segment in the COS object path.
 - Results at score `60` or below are filtered out; only `score > 60` reaches the frontend.
 - The asset library now renders search matches directly in the existing asset grid and no longer renders the separate project-result strip.
-- COS search failures are caught inside `/api/assets/search`; the API logs a warning and falls back to local asset search instead of returning HTTP 500 to the frontend.
+- COS search failures are caught inside `/api/assets/search`; the API logs a warning and returns an empty result set instead of returning HTTP 500 or local `score: 0` fallback rows to the frontend.
 
 ## Configuration
 
@@ -28,7 +28,7 @@
 - `corepack pnpm lint`: passed.
 - `corepack pnpm test`: passed.
 - `corepack pnpm build`: passed.
-- `corepack pnpm --filter @shopclip/api test -- asset-cos-flow`: passed after adding the COS failure fallback regression case.
+- `corepack pnpm --filter @shopclip/api test -- asset-cos-flow`: passed after adding the COS failure empty-result regression case.
 
 ## Residual Risk
 
