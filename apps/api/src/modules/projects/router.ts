@@ -573,6 +573,37 @@ export const createP0Router = ({
     },
   );
 
+  router.get("/assets/:assetId/content", async (request, response) => {
+    const asset = await store.getAsset(request.params.assetId);
+    if (!asset) {
+      sendNotFound(response, "ASSET_NOT_FOUND", "Asset was not found.");
+      return;
+    }
+
+    if (!asset.objectKey) {
+      response.redirect(302, asset.url);
+      return;
+    }
+
+    let readUrl;
+    try {
+      readUrl = storageProvider.createReadUrl({
+        objectKey: asset.objectKey,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "STORAGE_READ_URL_FAILED",
+          message: error instanceof Error ? error.message : "Storage read URL could not be created.",
+        },
+      });
+      return;
+    }
+
+    response.setHeader("Cache-Control", "private, max-age=300");
+    response.redirect(302, readUrl.url);
+  });
+
   router.get("/asset-processing-jobs/:jobId", async (request, response) => {
     const processingJob = await store.getAssetProcessingJob(request.params.jobId);
     if (!processingJob) {

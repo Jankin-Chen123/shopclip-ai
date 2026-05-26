@@ -20,8 +20,18 @@ export interface StorageUploadObjectResult {
   publicUrl: string;
 }
 
+export interface StorageReadUrlInput {
+  objectKey: string;
+}
+
+export interface StorageReadUrlResult {
+  expiresAt?: string;
+  url: string;
+}
+
 export interface StorageProvider {
   createUploadIntent(input: StorageUploadIntentInput): AssetUploadIntent;
+  createReadUrl(input: StorageReadUrlInput): StorageReadUrlResult;
   uploadObject(input: StorageUploadObjectInput): Promise<StorageUploadObjectResult>;
 }
 

@@ -213,7 +213,7 @@ describe("App", () => {
       />,
     );
 
-    expect(markup).toContain('src="/uploads/glowgrip-packshot.png"');
+    expect(markup).toContain("/api/assets/asset-packshot/content");
     expect(markup).toContain('alt="GlowGrip packshot"');
     expect(markup).toContain("View details");
     expect(markup).toContain("Open details for GlowGrip packshot");

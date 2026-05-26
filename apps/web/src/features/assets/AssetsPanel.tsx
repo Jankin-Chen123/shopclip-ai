@@ -27,6 +27,7 @@ import type {
   ExternalAssetSearchResponse,
   StockProviderConfig,
 } from "../../lib/api";
+import { getAssetContentUrl } from "../../lib/api";
 import type { AssetCategory } from "./AssetCategoryTabs";
 import { AssetCategoryTabs, assetCategories, getAssetCategoryLabel } from "./AssetCategoryTabs";
 
@@ -367,6 +368,7 @@ export const AssetsPanel = ({
   const selectedExternalAssetCount = selectedExternalAssets.length;
   const closeAssetPreview = () => setPreviewAsset(undefined);
   const detailLabel = language === "zh" ? "查看详情" : "View details";
+  const previewAssetUrl = previewAsset ? getAssetContentUrl(previewAsset.id) : "";
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(Array.from(event.target.files ?? []));
@@ -720,9 +722,19 @@ export const AssetsPanel = ({
                   type="button"
                 >
                   {isImageAsset(asset) ? (
-                    <img alt={asset.name} decoding="async" loading="lazy" src={asset.url} />
+                    <img
+                      alt={asset.name}
+                      decoding="async"
+                      loading="lazy"
+                      src={getAssetContentUrl(asset.id)}
+                    />
                   ) : isVideoAsset(asset) ? (
-                    <video aria-label={asset.name} muted preload="metadata" src={asset.url} />
+                    <video
+                      aria-label={asset.name}
+                      muted
+                      preload="metadata"
+                      src={getAssetContentUrl(asset.id)}
+                    />
                   ) : isAudioAsset(asset) ? (
                     <span className="asset-audio-preview" aria-hidden="true">
                       <Music size={28} />
@@ -787,9 +799,9 @@ export const AssetsPanel = ({
             <div className="external-preview-content">
               <div className="external-preview-media asset-preview-media">
                 {isImageAsset(previewAsset) ? (
-                  <img alt={previewAsset.name} decoding="async" src={previewAsset.url} />
+                  <img alt={previewAsset.name} decoding="async" src={previewAssetUrl} />
                 ) : isVideoAsset(previewAsset) ? (
-                  <video controls preload="metadata" src={previewAsset.url} />
+                  <video controls preload="metadata" src={previewAssetUrl} />
                 ) : isAudioAsset(previewAsset) ? (
                   <div className="external-preview-audio">
                     <div
@@ -807,7 +819,7 @@ export const AssetsPanel = ({
                         <i />
                       </span>
                     </div>
-                    <audio controls src={previewAsset.url} />
+                    <audio controls src={previewAssetUrl} />
                   </div>
                 ) : (
                   <div className="asset-document-preview">
@@ -881,7 +893,7 @@ export const AssetsPanel = ({
                   ) : null}
                   <a
                     className="external-open-link"
-                    href={previewAsset.url}
+                    href={previewAssetUrl}
                     rel="noreferrer"
                     target="_blank"
                   >

@@ -21,6 +21,20 @@ const request = async <T>(
   return { body, status: response.status };
 };
 
+const requestWithoutRedirect = async (
+  baseUrl: string,
+  path: string,
+): Promise<{ location: string | null; status: number }> => {
+  const response = await fetch(`${baseUrl}${path}`, {
+    redirect: "manual",
+  });
+
+  return {
+    location: response.headers.get("location"),
+    status: response.status,
+  };
+};
+
 const createProject = async (baseUrl: string): Promise<string> => {
   const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
     method: "POST",
@@ -278,6 +292,14 @@ describe("COS-backed asset import contract", () => {
       objectKey: created.body.upload.objectKey,
       provider: "mock-cos",
     });
+
+    const content = await requestWithoutRedirect(
+      baseUrl,
+      `/api/assets/${created.body.asset.id}/content`,
+    );
+
+    expect(content.status).toBe(302);
+    expect(content.location).toBe(proxiedUploadBody.storage.publicUrl);
 
     const confirmed = await request<{
       asset: {

@@ -85,6 +85,9 @@ export type StockProviderConfig = ExternalAssetProviderConfig;
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
+export const getAssetContentUrl = (assetId: string): string =>
+  `${apiBaseUrl}/assets/${encodeURIComponent(assetId)}/content`;
+
 const getErrorMessage = (body: unknown): string => {
   if (
     typeof body === "object" &&

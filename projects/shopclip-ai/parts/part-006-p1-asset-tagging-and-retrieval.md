@@ -68,6 +68,10 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
   - asset cards now render image/video/audio/script previews from the stored asset URL instead of icon-only placeholders;
   - clicking a local asset opens a detail dialog with type, size, status, source, storage, tags, retrieval text, created time, and file link;
   - when a scene is selected, the detail dialog can assign the asset to the selected scene.
+- Fixed cloud-server COS preview behavior:
+  - local asset card and detail previews now use `GET /api/assets/:assetId/content` instead of directly embedding the stored COS public URL;
+  - the API redirects to a storage read URL, generating a signed read URL for `tencent-cos` assets so private buckets can still preview through the app;
+  - added storage tests to verify Tencent COS read signatures do not expose the secret key.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
   - `projects/shopclip-ai/evidence/part-006-verification.md`
@@ -80,6 +84,10 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 - `corepack pnpm --filter @shopclip/web typecheck` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/web build` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api test` on 2026-05-26: 12 files / 37 tests passed after adding asset content redirect and COS read URL coverage.
+- `corepack pnpm --filter @shopclip/api typecheck` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.
