@@ -71,7 +71,7 @@ export interface CreateAssetUploadIntentResult {
   processingJob: AssetProcessingJob;
 }
 
-export type AssetLibraryCategory = "image" | "video" | "audio" | "script";
+export type AssetLibraryCategory = "image" | "video" | "audio" | "script" | "all";
 
 export interface AssetLibraryResponse {
   projectId?: string;

@@ -34,9 +34,19 @@
 - Reworked "Import from asset library" into a searchable asset-library picker inside Step 02.
 - The picker now filters by asset name, MIME type, type, and tags, shows media preview cards, supports selecting assets, and imports selected assets into the current material bucket.
 - Imported library assets now retain their source metadata, show image/video thumbnails inline inside the Step 02 material bucket, and expose a preview action for larger review.
+- The creation asset-prep page now refreshes the full asset library (`category=all`) so the demo video bucket can import videos even if the user did not previously open the video tab in Asset library.
+- Local files selected from the demo video bucket are restricted to MP4/MOV-compatible input types.
 - Added regression coverage for searchable library import controls, asset content preview URL rendering, and library filtering.
 - Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
 - Browser evidence: `output/playwright/creation-asset-prep-library-search-preview-zh.png`, `output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`, and `output/playwright/creation-asset-prep-imported-preview-zh.png`.
+
+## 2026-05-26 Video Import And Preview
+
+- Fixed the empty "Demo videos" library picker by loading all asset categories when entering Step 02 asset prep.
+- Verified that video assets appear in the demo video picker, can be selected/imported, and open in the post-import preview dialog with native video controls.
+- Added regression coverage: `requests all asset library categories for creation asset prep`.
+- Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
+- Browser evidence: `output/playwright/creation-asset-prep-video-library-import-zh.png` and `output/playwright/creation-asset-prep-video-preview-zh.png`.
 
 ## Browser Evidence
 
@@ -47,6 +57,8 @@
 - `output/playwright/creation-asset-prep-library-search-preview-zh.png`
 - `output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`
 - `output/playwright/creation-asset-prep-imported-preview-zh.png`
+- `output/playwright/creation-asset-prep-video-library-import-zh.png`
+- `output/playwright/creation-asset-prep-video-preview-zh.png`
 
 ## Notes
 

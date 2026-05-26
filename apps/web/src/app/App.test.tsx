@@ -15,7 +15,12 @@ import {
   sanitizeApiConfig,
   sanitizeStockProviderConfigs,
 } from "../features/settings/SettingsPanel";
-import { App, createAssetInputFromFile, hasUsableStockProviderCredential } from "./App";
+import {
+  App,
+  createAssetInputFromFile,
+  getCreationAssetLibraryRefreshCategory,
+  hasUsableStockProviderCredential,
+} from "./App";
 import { copy } from "./i18n";
 
 const makeAsset = (asset: Partial<AssetMetadata>): AssetMetadata => ({
@@ -219,6 +224,11 @@ describe("App", () => {
     expect(markup).toContain("/api/assets/asset-packshot/content");
     expect(markup).toContain('aria-label="GlowGrip demo.mp4"');
     expect(markup).toContain("/api/assets/asset-demo/content");
+  });
+
+  it("requests all asset library categories for creation asset prep", () => {
+    expect(getCreationAssetLibraryRefreshCategory("create")).toBe("all");
+    expect(getCreationAssetLibraryRefreshCategory("assets")).toBeUndefined();
   });
 
   it("omits the top-right project CTA from asset, inspiration, and creation sections", () => {

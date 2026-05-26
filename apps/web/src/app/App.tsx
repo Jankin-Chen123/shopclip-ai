@@ -61,6 +61,7 @@ import {
   startRender,
   updateScene,
   uploadAssetFileToStorage,
+  type AssetLibraryCategory,
   type AssetSearchResult,
   type CreateAssetInput,
   type EditingSuggestion,
@@ -212,6 +213,10 @@ const pageFromHash = (): WorkspacePageId => {
   }
   return "project";
 };
+
+export const getCreationAssetLibraryRefreshCategory = (
+  page: WorkspacePageId,
+): AssetLibraryCategory | undefined => (page === "create" ? "all" : undefined);
 
 interface AppProps {
   initialLanguage?: Language;
@@ -380,10 +385,14 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const replaceAssetCategoryInLibrary = (
     currentLibrary: { assets: AssetMetadata[]; assetSlices: AssetSlice[] },
-    category: AssetCategory,
+    category: AssetLibraryCategory,
     assets: AssetMetadata[],
     assetSlices: AssetSlice[],
   ): { assets: AssetMetadata[]; assetSlices: AssetSlice[] } => {
+    if (category === "all") {
+      return { assets, assetSlices };
+    }
+
     const replacedAssetIds = new Set(
       currentLibrary.assets
         .filter((asset) => assetMatchesCategory(asset, category))
@@ -405,7 +414,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     };
   };
 
-  const refreshAssetLibrary = (category: AssetCategory) => {
+  const refreshAssetLibrary = (category: AssetLibraryCategory) => {
     void runAction("asset", "asset", async () => {
       const response = await loadProjectAssets(undefined, category);
       setAssetLibrary((current) =>
@@ -420,6 +429,12 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   useEffect(() => {
     if (activePage === "assets") {
       refreshAssetLibrary(activeAssetCategory);
+      return;
+    }
+
+    const creationAssetLibraryRefreshCategory = getCreationAssetLibraryRefreshCategory(activePage);
+    if (creationAssetLibraryRefreshCategory) {
+      refreshAssetLibrary(creationAssetLibraryRefreshCategory);
     }
   }, [activePage, activeAssetCategory]);
 

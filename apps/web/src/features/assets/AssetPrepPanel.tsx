@@ -39,6 +39,7 @@ interface AssetPrepPanelProps {
 
 interface PrepBucket {
   id: string;
+  accept: string;
   category: AssetCategory;
   icon: typeof Image;
   limit: number;
@@ -168,10 +169,10 @@ const text = {
 const getBuckets = (language: Language): PrepBucket[] => {
   const localized = text[language].buckets;
   return [
-    { id: "hero", category: "image", icon: Image, limit: 4, ...localized.hero },
-    { id: "scene", category: "image", icon: Image, limit: 8, ...localized.scene },
-    { id: "demo", category: "video", icon: Video, limit: 2, ...localized.demo },
-    { id: "brand", category: "script", icon: FileText, limit: 3, ...localized.brand },
+    { id: "hero", accept: "image/jpeg,image/png,image/webp", category: "image", icon: Image, limit: 4, ...localized.hero },
+    { id: "scene", accept: "image/jpeg,image/png,image/webp", category: "image", icon: Image, limit: 8, ...localized.scene },
+    { id: "demo", accept: "video/mp4,video/quicktime,.mp4,.mov", category: "video", icon: Video, limit: 2, ...localized.demo },
+    { id: "brand", accept: ".pdf,.doc,.docx,.ppt,.pptx,image/png,text/plain,text/markdown", category: "script", icon: FileText, limit: 3, ...localized.brand },
   ];
 };
 
@@ -451,6 +452,7 @@ export const AssetPrepPanel = ({
                   <Plus size={20} aria-hidden="true" />
                   <span>{bucketUploads.length > 0 ? copy.addMore : copy.import}</span>
                   <input
+                    accept={bucket.accept}
                     disabled={disabled || isImporting}
                     id={inputId}
                     multiple
