@@ -2,9 +2,9 @@
 
 ## Scope
 
-- Added a session history area to the Inspiration page.
+- Added a collapsed-by-default session history area to the Inspiration page.
 - Each successful Inspiration generation is saved as a browser-local session containing prompt, asset type, provider/model metadata, and returned materials.
-- Users can click a session history item to restore the previous prompt and view the model artifact again.
+- Users can expand the session list, then click a session history item to restore the previous prompt and view the model artifact again.
 - Video polling updates the saved history entry when the processing material changes, so later clicks show the latest artifact state.
 
 ## Files Updated
@@ -19,6 +19,7 @@
 - `corepack pnpm --filter @shopclip/web test -- App.test.tsx`: passed, 45 tests.
 - `corepack pnpm --filter @shopclip/web typecheck`: passed.
 - `corepack pnpm --filter @shopclip/web lint`: passed.
+- `corepack pnpm --filter @shopclip/web build`: passed.
 
 ## Notes
 

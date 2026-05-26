@@ -2937,26 +2937,37 @@ textarea {
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 120px), #15161b;
 }
 
-.inspiration-history-heading {
+.inspiration-history-toggle {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
 }
 
-.inspiration-history-heading svg {
+.inspiration-history-icon {
+  display: inline-flex;
+}
+
+.inspiration-history-icon svg {
   flex: 0 0 auto;
-  margin-top: 2px;
   color: #67e8f9;
 }
 
-.inspiration-history-heading h3 {
+.inspiration-history-toggle h3 {
   margin: 0;
   text-align: left;
   font-size: 0.98rem;
   line-height: 1.25;
 }
 
-.inspiration-history-heading p,
+.inspiration-history-toggle p,
 .inspiration-history-empty {
   margin: 4px 0 0;
   color: var(--muted);
@@ -2964,10 +2975,36 @@ textarea {
   line-height: 1.45;
 }
 
+.inspiration-history-count {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  border-radius: 999px;
+  color: #bae6fd;
+  background: rgba(34, 211, 238, 0.08);
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.history-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 180ms ease;
+}
+
+.history-chevron.open {
+  transform: rotate(180deg);
+}
+
 .inspiration-history-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
+}
+
+.inspiration-history-list[hidden] {
+  display: none;
 }
 
 .inspiration-history-list button {

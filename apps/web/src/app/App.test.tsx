@@ -781,6 +781,8 @@ describe("App", () => {
     );
 
     expect(markup).toContain("Session history");
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("1 session");
     expect(markup).toContain("Minimal desk setup product hero image");
     expect(markup).toContain("1 image artifact");
     expect(markup).toContain("Previous conversations and generated artifacts");

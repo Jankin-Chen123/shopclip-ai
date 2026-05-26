@@ -62,6 +62,8 @@ const copy = {
     viewSession: "View session",
     artifact: "artifact",
     artifacts: "artifacts",
+    session: "session",
+    sessions: "sessions",
     fallbackHistoryDate: "Just now",
   },
   zh: {
@@ -98,6 +100,8 @@ const copy = {
     viewSession: "查看会话",
     artifact: "个产物",
     artifacts: "个产物",
+    session: "条会话",
+    sessions: "条会话",
     fallbackHistoryDate: "刚刚",
   },
 } as const;
@@ -204,6 +208,7 @@ export const InspirationPanel = ({
   const [imageQuality, setImageQuality] = useState<(typeof qualityOptions)[number]>("standard");
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [pollError, setPollError] = useState<string>();
   const [prompt, setPrompt] = useState(initialResult?.prompt ?? "");
@@ -264,6 +269,7 @@ export const InspirationPanel = ({
       );
       setResult(generatedResult);
       setSelectedHistoryId(generatedResult.id);
+      setIsHistoryOpen(true);
       setHistory((currentHistory) => {
         const nextHistory = appendInspirationSessionHistory(currentHistory, generatedResult);
         saveInspirationHistory(nextHistory);
@@ -528,15 +534,33 @@ export const InspirationPanel = ({
           </button>
         </div>
         <section className="inspiration-session-history" aria-labelledby="inspiration-history-title">
-          <div className="inspiration-history-heading">
-            <History size={18} aria-hidden="true" />
+          <button
+            aria-controls="inspiration-history-list"
+            aria-expanded={isHistoryOpen}
+            className="inspiration-history-toggle"
+            onClick={() => setIsHistoryOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            <span className="inspiration-history-icon">
+              <History size={18} aria-hidden="true" />
+            </span>
             <div>
               <h3 id="inspiration-history-title">{text.historyTitle}</h3>
               <p>{text.historyDescription}</p>
             </div>
-          </div>
+            <span className="inspiration-history-count">
+              {language === "zh"
+                ? `${history.length}${text.sessions}`
+                : `${history.length} ${history.length === 1 ? text.session : text.sessions}`}
+            </span>
+            <ChevronDown
+              className={isHistoryOpen ? "history-chevron open" : "history-chevron"}
+              size={16}
+              aria-hidden="true"
+            />
+          </button>
           {history.length > 0 ? (
-            <div className="inspiration-history-list">
+            <div className="inspiration-history-list" hidden={!isHistoryOpen} id="inspiration-history-list">
               {history.map((entry) => {
                 const materialCount = entry.result.materials.length;
                 const artifactLabel =
