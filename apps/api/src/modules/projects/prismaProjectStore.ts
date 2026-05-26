@@ -1,5 +1,5 @@
-import { AssetStorageProvider as PrismaAssetStorageProvider, PrismaClient } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import type { AssetStorageProvider as PrismaAssetStorageProvider, Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
@@ -57,7 +57,7 @@ const fromDbStorageProvider = (
 
 const toAsset = (asset: AssetWithSlices): AssetMetadata => ({
   id: asset.id,
-  projectId: asset.projectId,
+  projectId: asset.projectId ?? undefined,
   type: asset.type,
   status: asset.status,
   source: asset.source,
@@ -194,7 +194,7 @@ export class PrismaProjectStore implements ProjectStore {
   }
 
   async addAsset(
-    projectId: string,
+    projectId: string | undefined,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): Promise<AssetMetadata | undefined> {
@@ -202,13 +202,15 @@ export class PrismaProjectStore implements ProjectStore {
   }
 
   async addAssetWithId(
-    projectId: string,
+    projectId: string | undefined,
     assetId: string,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): Promise<AssetMetadata | undefined> {
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) {
+    const project = projectId
+      ? await this.prisma.project.findUnique({ where: { id: projectId } })
+      : undefined;
+    if (projectId && !project) {
       return undefined;
     }
 
@@ -292,11 +294,13 @@ export class PrismaProjectStore implements ProjectStore {
   }
 
   async addAssetProcessingJob(
-    projectId: string,
+    projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,
   ): Promise<AssetProcessingJob | undefined> {
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) {
+    const project = projectId
+      ? await this.prisma.project.findUnique({ where: { id: projectId } })
+      : undefined;
+    if (projectId && !project) {
       return undefined;
     }
 
@@ -574,6 +578,18 @@ export class PrismaProjectStore implements ProjectStore {
       project: toProjectSnapshot(renderTask.project),
       renderTask: toRenderTask(renderTask),
       traceEvents: renderTask.traceEvents.map(toTraceEvent),
+    };
+  }
+
+  async listAssets(): Promise<{ assets: AssetMetadata[]; assetSlices: AssetSlice[] }> {
+    const assets = await this.prisma.asset.findMany({
+      include: { slices: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      assets: assets.map(toAsset),
+      assetSlices: assets.flatMap((asset) => asset.slices.map(toAssetSlice)),
     };
   }
 }

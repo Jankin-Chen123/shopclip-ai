@@ -29,18 +29,18 @@ export interface ProjectStore {
     event: Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">,
   ): MaybePromise<TraceEvent>;
   addAsset(
-    projectId: string,
+    projectId: string | undefined,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices?: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">>,
   ): MaybePromise<AssetMetadata | undefined>;
   addAssetWithId(
-    projectId: string,
+    projectId: string | undefined,
     assetId: string,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices?: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">>,
   ): MaybePromise<AssetMetadata | undefined>;
   addAssetProcessingJob(
-    projectId: string,
+    projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,
   ): MaybePromise<AssetProcessingJob | undefined>;
   addRenderTask(
@@ -58,6 +58,7 @@ export interface ProjectStore {
   getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;
   getLatestAssetProcessingJob(assetId: string): MaybePromise<AssetProcessingJob | undefined>;
   getProject(id: string): MaybePromise<ProjectSnapshot | undefined>;
+  listAssets(): MaybePromise<{ assets: AssetMetadata[]; assetSlices: AssetSlice[] }>;
   getRenderTask(
     renderTaskId: string,
   ): MaybePromise<{ project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined>;

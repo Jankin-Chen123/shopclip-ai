@@ -71,6 +71,15 @@ export interface CreateAssetUploadIntentResult {
   processingJob: AssetProcessingJob;
 }
 
+export type AssetLibraryCategory = "image" | "video" | "audio" | "script";
+
+export interface AssetLibraryResponse {
+  projectId?: string;
+  category: AssetLibraryCategory | "all";
+  assets: AssetMetadata[];
+  assetSlices: AssetSlice[];
+}
+
 export type UserApiConfig = NonNullable<InspirationGenerateRequest["apiConfig"]>;
 export type StockProviderConfig = ExternalAssetProviderConfig;
 
@@ -124,21 +133,32 @@ export const loadProject = async (projectId: string): Promise<ProjectSnapshot> =
 };
 
 export const addAsset = async (
-  projectId: string,
+  projectId: string | undefined,
   asset: CreateAssetInput,
 ): Promise<AssetMetadata> => {
-  const response = await requestJson<{ asset: AssetMetadata }>(`/projects/${projectId}/assets`, {
+  const response = await requestJson<{ asset: AssetMetadata }>(
+    projectId ? `/projects/${projectId}/assets` : "/assets",
+    {
     method: "POST",
     body: JSON.stringify(asset),
-  });
+    },
+  );
   return response.asset;
 };
 
+export const loadProjectAssets = async (
+  projectId: string | undefined,
+  category: AssetLibraryCategory,
+): Promise<AssetLibraryResponse> => {
+  const params = new URLSearchParams({ category });
+  return requestJson(projectId ? `/projects/${projectId}/assets?${params.toString()}` : `/assets?${params.toString()}`);
+};
+
 export const createAssetUploadIntent = async (
-  projectId: string,
+  projectId: string | undefined,
   asset: CreateAssetInput,
 ): Promise<CreateAssetUploadIntentResult> =>
-  requestJson(`/projects/${projectId}/assets/upload-intent`, {
+  requestJson(projectId ? `/projects/${projectId}/assets/upload-intent` : "/assets/upload-intent", {
     method: "POST",
     body: JSON.stringify(asset),
   });
@@ -202,11 +222,11 @@ export const uploadAssetFileToStorage = async (
 };
 
 export const importExternalAsset = async (
-  projectId: string,
+  projectId: string | undefined,
   asset: ExternalAssetResult,
 ): Promise<AssetMetadata> => {
   const response = await requestJson<{ asset: AssetMetadata }>(
-    `/projects/${projectId}/assets/import-external`,
+    projectId ? `/projects/${projectId}/assets/import-external` : "/assets/import-external",
     {
       method: "POST",
       body: JSON.stringify(asset),
@@ -216,14 +236,14 @@ export const importExternalAsset = async (
 };
 
 export const searchAssets = async (
-  projectId: string,
+  projectId: string | undefined,
   query: string,
   tags: string[] = [],
 ): Promise<AssetSearchResponse> => {
-  const params = new URLSearchParams({
-    projectId,
-    q: query,
-  });
+  const params = new URLSearchParams({ q: query });
+  if (projectId) {
+    params.set("projectId", projectId);
+  }
   if (tags.length > 0) {
     params.set("tags", tags.join(","));
   }

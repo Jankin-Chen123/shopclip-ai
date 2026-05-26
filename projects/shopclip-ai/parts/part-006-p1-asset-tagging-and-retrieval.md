@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-22
+- Last updated: 2026-05-26
 
 ## Source Of Truth
 
@@ -56,12 +56,26 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 - Added one slice per uploaded asset and returned slice metadata on project snapshots.
 - Added `/api/assets/search` with keyword, tag, and deterministic vector-like concept scoring.
 - Added front-end asset retrieval UI and "Use in selected scene" recall action.
+- Added category-scoped global asset library refresh:
+  - `GET /api/assets?category=image|video|audio|script|all`
+  - entering the left-sidebar asset library page now refreshes the selected category from the backend without requiring a project;
+  - uploading or importing from the asset library writes to the global library by default;
+  - switching asset categories refreshes the matching resource type and replaces only that category in local library state.
+- Added global asset persistence support:
+  - `Asset.projectId` and `AssetProcessingJob.projectId` are nullable;
+  - project-level asset endpoints remain as compatibility paths, but the asset library entry point is global.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
   - `projects/shopclip-ai/evidence/part-006-verification.md`
 
 ## Verification Evidence
 
+- `corepack pnpm --filter @shopclip/api test` on 2026-05-26: 11 files / 36 tests passed.
+- `corepack pnpm --filter @shopclip/web test` on 2026-05-26: 1 file / 24 tests passed.
+- `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web build` on 2026-05-26: passed.
 - `corepack pnpm test`
 - `corepack pnpm typecheck`
 - `corepack pnpm lint`

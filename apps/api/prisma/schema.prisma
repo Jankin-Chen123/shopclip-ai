@@ -87,7 +87,7 @@ model Project {
 
 model Asset {
   id              String                @id @default(cuid())
-  projectId       String
+  projectId       String?
   type            AssetType
   status          AssetStatus           @default(uploaded)
   source          AssetSource           @default(merchant_upload)
@@ -103,7 +103,7 @@ model Asset {
   metadata        Json?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
-  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   slices          AssetSlice[]
   processingJobs  AssetProcessingJob[]
   scenes          StoryboardScene[]
@@ -114,13 +114,13 @@ model Asset {
 
 model AssetProcessingJob {
   id        String      @id @default(cuid())
-  projectId String
+  projectId String?
   assetId   String
   status    AssetStatus
   steps     String[]
   message   String
   createdAt DateTime    @default(now())
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   asset     Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([projectId])

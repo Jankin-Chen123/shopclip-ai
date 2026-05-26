@@ -42,6 +42,18 @@ All future implementation work for the material library storage, metadata indexi
 - Raw files, thumbnails, slices, metadata JSON, and vector records must use deterministic keys under the object layout defined in this document.
 - MetaInsight file indexes and vector indexes are retrieval accelerators, not the source of truth. PostgreSQL remains the source of truth for workflow status, asset ownership, project binding, and business metadata.
 
+### 2026-05-26 Boundary Clarification
+
+- The material library is a global merchant/system asset pool, not a child table that only exists under a single video project.
+- `Asset.projectId` and `AssetProcessingJob.projectId` are optional. A project can consume or reference an asset, but asset upload, listing, search, COS persistence, and structured metadata generation must work without a project.
+- The primary material library APIs are global:
+  - `GET /api/assets?category=image|video|audio|script|all`
+  - `POST /api/assets`
+  - `POST /api/assets/upload-intent`
+  - `POST /api/assets/import-external`
+- Project-scoped asset APIs may remain as compatibility or future "bind asset to project" paths, but the left-sidebar material library must call the global APIs.
+- Global COS object keys use `library/raw/<assetId>/source.<ext>`; project-scoped compatibility keys may continue using `projects/<projectId>/raw/<assetId>/source.<ext>`.
+
 ## 1. Goal
 
 本设计定义 ShopClip AI 的素材资产层。目标是让商家上传的商品图片、商品视频和参考素材，经过可复现的媒体处理和多模态理解后，形成商品级、视频级、slice 级三层结构化资产，并写入数据库、对象存储和向量检索索引，供剧本生成、分镜匹配和智能剪辑模块调用。

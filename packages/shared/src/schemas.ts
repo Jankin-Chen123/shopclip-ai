@@ -50,7 +50,7 @@ export const ProjectSchema = ProjectBriefSchema.extend({
 
 export const AssetMetadataSchema = z.object({
   id: z.string().trim().min(1),
-  projectId: z.string().trim().min(1),
+  projectId: z.string().trim().min(1).optional(),
   type: AssetTypeSchema,
   status: AssetStatusSchema,
   source: AssetSourceSchema.default("merchant_upload").optional(),
@@ -152,7 +152,7 @@ export const ExternalAssetSearchResponseSchema = z.object({
 });
 
 export const AssetSearchResponseSchema = z.object({
-  projectId: z.string().trim().min(1),
+  projectId: z.string().trim().min(1).optional(),
   query: z.string().default(""),
   tags: z.array(z.string().trim().min(1)).default([]),
   results: z.array(AssetSearchResultSchema),

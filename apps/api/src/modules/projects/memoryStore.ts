@@ -17,6 +17,9 @@ const now = (): string => new Date().toISOString();
 
 export class MemoryProjectStore implements ProjectStore {
   private readonly projects = new Map<string, ProjectSnapshot>();
+  private readonly globalAssets: AssetMetadata[] = [];
+  private readonly globalAssetSlices: AssetSlice[] = [];
+  private readonly globalAssetProcessingJobs: AssetProcessingJob[] = [];
   private readonly traceEvents = new Map<string, TraceEvent[]>();
 
   createProject(brief: ProjectBrief): ProjectSnapshot {
@@ -44,7 +47,7 @@ export class MemoryProjectStore implements ProjectStore {
   }
 
   addAsset(
-    projectId: string,
+    projectId: string | undefined,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): AssetMetadata | undefined {
@@ -52,13 +55,13 @@ export class MemoryProjectStore implements ProjectStore {
   }
 
   addAssetWithId(
-    projectId: string,
+    projectId: string | undefined,
     assetId: string,
     asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
     createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): AssetMetadata | undefined {
-    const project = this.projects.get(projectId);
-    if (!project) {
+    const project = projectId ? this.projects.get(projectId) : undefined;
+    if (projectId && !project) {
       return undefined;
     }
 
@@ -70,16 +73,20 @@ export class MemoryProjectStore implements ProjectStore {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
+    const storedSlices = createSlices(storedAsset).map((slice) => ({
+      ...slice,
+      id: randomUUID(),
+      assetId: storedAsset.id,
+    }));
 
-    project.assets.push(storedAsset);
-    project.assetSlices.push(
-      ...createSlices(storedAsset).map((slice) => ({
-        ...slice,
-        id: randomUUID(),
-        assetId: storedAsset.id,
-      })),
-    );
-    project.updatedAt = timestamp;
+    if (project) {
+      project.assets.push(storedAsset);
+      project.assetSlices.push(...storedSlices);
+      project.updatedAt = timestamp;
+    } else {
+      this.globalAssets.push(storedAsset);
+      this.globalAssetSlices.push(...storedSlices);
+    }
     return storedAsset;
   }
 
@@ -108,19 +115,24 @@ export class MemoryProjectStore implements ProjectStore {
       updatedAt: timestamp,
     };
 
-    match.project.assets = match.project.assets.map((asset) =>
-      asset.id === assetId ? updatedAsset : asset,
-    );
-    match.project.updatedAt = timestamp;
+    if (match.project) {
+      match.project.assets = match.project.assets.map((asset) =>
+        asset.id === assetId ? updatedAsset : asset,
+      );
+      match.project.updatedAt = timestamp;
+    } else {
+      const index = this.globalAssets.findIndex((asset) => asset.id === assetId);
+      this.globalAssets[index] = updatedAsset;
+    }
     return updatedAsset;
   }
 
   addAssetProcessingJob(
-    projectId: string,
+    projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,
   ): AssetProcessingJob | undefined {
-    const project = this.projects.get(projectId);
-    if (!project) {
+    const project = projectId ? this.projects.get(projectId) : undefined;
+    if (projectId && !project) {
       return undefined;
     }
 
@@ -128,12 +140,21 @@ export class MemoryProjectStore implements ProjectStore {
       ...job,
       createdAt: now(),
     };
-    project.assetProcessingJobs.push(storedJob);
-    project.updatedAt = now();
+    if (project) {
+      project.assetProcessingJobs.push(storedJob);
+      project.updatedAt = now();
+    } else {
+      this.globalAssetProcessingJobs.push(storedJob);
+    }
     return storedJob;
   }
 
   getAssetProcessingJob(jobId: string): AssetProcessingJob | undefined {
+    const globalJob = this.globalAssetProcessingJobs.find((candidate) => candidate.id === jobId);
+    if (globalJob) {
+      return globalJob;
+    }
+
     for (const project of this.projects.values()) {
       const job = project.assetProcessingJobs.find((candidate) => candidate.id === jobId);
       if (job) {
@@ -145,10 +166,21 @@ export class MemoryProjectStore implements ProjectStore {
   }
 
   getAsset(assetId: string): AssetMetadata | undefined {
+    const globalAsset = this.globalAssets.find((candidate) => candidate.id === assetId);
+    if (globalAsset) {
+      return globalAsset;
+    }
     return this.findAssetProject(assetId)?.asset;
   }
 
   getLatestAssetProcessingJob(assetId: string): AssetProcessingJob | undefined {
+    const globalLatest = this.globalAssetProcessingJobs
+      .filter((candidate) => candidate.assetId === assetId)
+      .at(-1);
+    if (globalLatest) {
+      return globalLatest;
+    }
+
     for (const project of this.projects.values()) {
       const jobs = project.assetProcessingJobs.filter((candidate) => candidate.assetId === assetId);
       const latest = jobs.at(-1);
@@ -164,6 +196,17 @@ export class MemoryProjectStore implements ProjectStore {
     jobId: string,
     update: Partial<Pick<AssetProcessingJob, "message" | "status" | "steps">>,
   ): AssetProcessingJob | undefined {
+    const globalJob = this.globalAssetProcessingJobs.find((candidate) => candidate.id === jobId);
+    if (globalJob) {
+      const updatedJob: AssetProcessingJob = {
+        ...globalJob,
+        ...update,
+      };
+      const index = this.globalAssetProcessingJobs.findIndex((candidate) => candidate.id === jobId);
+      this.globalAssetProcessingJobs[index] = updatedJob;
+      return updatedJob;
+    }
+
     for (const project of this.projects.values()) {
       const job = project.assetProcessingJobs.find((candidate) => candidate.id === jobId);
       if (!job) {
@@ -367,6 +410,16 @@ export class MemoryProjectStore implements ProjectStore {
     return undefined;
   }
 
+  listAssets(): { assets: AssetMetadata[]; assetSlices: AssetSlice[] } {
+    const projectAssets = [...this.projects.values()].flatMap((project) => project.assets);
+    const projectSlices = [...this.projects.values()].flatMap((project) => project.assetSlices);
+
+    return {
+      assets: [...this.globalAssets, ...projectAssets],
+      assetSlices: [...this.globalAssetSlices, ...projectSlices],
+    };
+  }
+
   private findSceneProject(
     sceneId: string,
   ): { project: ProjectSnapshot; scene: StoryboardScene } | undefined {
@@ -382,7 +435,7 @@ export class MemoryProjectStore implements ProjectStore {
 
   private findAssetProject(
     assetId: string,
-  ): { project: ProjectSnapshot; asset: AssetMetadata } | undefined {
+  ): { project?: ProjectSnapshot; asset: AssetMetadata } | undefined {
     for (const project of this.projects.values()) {
       const asset = project.assets.find((candidate) => candidate.id === assetId);
       if (asset) {

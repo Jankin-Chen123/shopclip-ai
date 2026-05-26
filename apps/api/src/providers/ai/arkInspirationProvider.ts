@@ -110,7 +110,7 @@ const createId = (prefix: string, seed: string) => {
   return `${prefix}_${Date.now().toString(36)}_${hash.toString(36)}`;
 };
 
-const normalizePromptTitle = (prompt: string) =>
+const _normalizePromptTitle = (prompt: string) =>
   prompt
     .replace(/\s+/g, " ")
     .trim()

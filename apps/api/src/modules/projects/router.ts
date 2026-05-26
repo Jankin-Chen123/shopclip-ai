@@ -1,6 +1,7 @@
 import { Router, raw } from "express";
 import type { Response } from "express";
 import { randomUUID } from "node:crypto";
+import type { AssetMetadata } from "@shopclip/shared";
 import {
   ExternalAssetSearchRequestSchema,
   ProjectBriefSchema,
@@ -64,6 +65,51 @@ const assetTypeForExternalAsset = (type: "image" | "video" | "audio") =>
 const mimeTypeForExternalAsset = (type: "image" | "video" | "audio") =>
   type === "video" ? "video/mp4" : type === "audio" ? "audio/mpeg" : "image/jpeg";
 
+const assetMatchesCategory = (asset: AssetMetadata, category: string): boolean => {
+  const tags = asset.tags.map((tag) => tag.toLowerCase());
+
+  if (category === "image") {
+    return asset.type === "image";
+  }
+
+  if (category === "video") {
+    return asset.type === "video";
+  }
+
+  if (category === "audio") {
+    return asset.mimeType?.startsWith("audio/") === true || tags.includes("audio");
+  }
+
+  if (category === "script") {
+    return (
+      asset.mimeType === "text/plain" ||
+      asset.mimeType === "text/markdown" ||
+      tags.some((tag) => tag === "script" || tag === "copy")
+    );
+  }
+
+  return true;
+};
+
+const getAssetCategory = (value: unknown): string =>
+  typeof value === "string" && value.trim() ? value.trim() : "all";
+
+const filterAssetLibrary = (
+  library: { assets: AssetMetadata[]; assetSlices: { assetId: string }[] },
+  category: string,
+) => {
+  const assets =
+    category === "all"
+      ? library.assets
+      : library.assets.filter((asset) => assetMatchesCategory(asset, category));
+  const assetIds = new Set(assets.map((asset) => asset.id));
+
+  return {
+    assets,
+    assetSlices: library.assetSlices.filter((slice) => assetIds.has(slice.assetId)),
+  };
+};
+
 export interface P0RouterOptions {
   store?: ProjectStore;
   externalAssetSearch?: (input: ExternalAssetSearchInput) => Promise<unknown[]>;
@@ -111,6 +157,65 @@ export const createP0Router = ({
     }
 
     response.json(buildMockDashboard(project));
+  });
+
+  router.get("/assets", async (request, response) => {
+    const category = getAssetCategory(request.query.category);
+    const library = filterAssetLibrary(await store.listAssets(), category);
+
+    response.json({
+      category,
+      assets: library.assets,
+      assetSlices: library.assetSlices,
+    });
+  });
+
+  router.get("/projects/:projectId/assets", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const category = getAssetCategory(request.query.category);
+    const library = filterAssetLibrary(project, category);
+
+    response.json({
+      projectId: project.id,
+      category,
+      assets: library.assets,
+      assetSlices: library.assetSlices,
+    });
+  });
+
+  router.post("/assets", async (request, response) => {
+    const parsedAsset = CreateAssetRequestSchema.safeParse(request.body);
+    if (!parsedAsset.success) {
+      sendInvalidRequest(response, "INVALID_ASSET", "Asset metadata failed P0 image validation.");
+      return;
+    }
+
+    const storedAsset = await store.addAsset(
+      undefined,
+      {
+        type: parsedAsset.data.type,
+        status: "ready",
+        url: parsedAsset.data.url ?? `/demo-assets/library/${parsedAsset.data.name}`,
+        name: parsedAsset.data.name,
+        mimeType: parsedAsset.data.mimeType,
+        sizeBytes: parsedAsset.data.sizeBytes,
+        source: parsedAsset.data.source ?? "merchant_upload",
+        storageProvider: parsedAsset.data.storageProvider,
+        objectKey: parsedAsset.data.objectKey,
+        thumbnailKey: parsedAsset.data.thumbnailKey,
+        embeddingText: parsedAsset.data.embeddingText,
+        metadata: parsedAsset.data.metadata,
+        tags: inferAssetTags(parsedAsset.data),
+      },
+      createAssetSlices,
+    );
+
+    response.status(201).json({ asset: storedAsset });
   });
 
   router.post("/projects/:projectId/assets", async (request, response) => {
@@ -232,6 +337,101 @@ export const createP0Router = ({
     });
     if (!processingJob) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.status(201).json({
+      asset: storedAsset,
+      upload: uploadIntent,
+      processingJob,
+    });
+  });
+
+  router.post("/assets/upload-intent", async (request, response) => {
+    const parsedAsset = CreateAssetUploadIntentRequestSchema.safeParse(request.body);
+    if (!parsedAsset.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_ASSET_UPLOAD_INTENT",
+        "Asset upload request failed validation.",
+      );
+      return;
+    }
+
+    const assetId = randomUUID();
+    let uploadIntent;
+    try {
+      uploadIntent = storageProvider.createUploadIntent({
+        assetId,
+        asset: parsedAsset.data,
+      });
+    } catch (error) {
+      response.status(503).json({
+        error: {
+          code: "STORAGE_PROVIDER_NOT_CONFIGURED",
+          message: error instanceof Error ? error.message : "Storage provider is not configured.",
+        },
+      });
+      return;
+    }
+
+    const storedAsset = await store.addAssetWithId(
+      undefined,
+      assetId,
+      {
+        type: parsedAsset.data.type,
+        status: "uploaded",
+        url: uploadIntent.publicUrl,
+        name: parsedAsset.data.name,
+        mimeType: parsedAsset.data.mimeType,
+        sizeBytes: parsedAsset.data.sizeBytes,
+        source: parsedAsset.data.source ?? "merchant_upload",
+        storageProvider: uploadIntent.provider,
+        objectKey: uploadIntent.objectKey,
+        embeddingText:
+          parsedAsset.data.embeddingText ??
+          `${parsedAsset.data.name} ${(parsedAsset.data.tags ?? []).join(" ")}`,
+        metadata: {
+          ...(parsedAsset.data.metadata ?? {}),
+          bucket: uploadIntent.bucket,
+          region: uploadIntent.region,
+          checksum: parsedAsset.data.checksum,
+          structuredAssetVersion: "asset-multigranularity-v1",
+        },
+        tags: inferAssetTags({
+          ...parsedAsset.data,
+          source: parsedAsset.data.source ?? "merchant_upload",
+          storageProvider: uploadIntent.provider,
+        }),
+      },
+      createAssetSlices,
+    );
+
+    if (!storedAsset) {
+      response.status(500).json({
+        error: {
+          code: "ASSET_CREATE_FAILED",
+          message: "Global asset could not be created.",
+        },
+      });
+      return;
+    }
+
+    const processingJob = await store.addAssetProcessingJob(undefined, {
+      id: randomUUID(),
+      assetId: storedAsset.id,
+      status: "processing",
+      steps: ["upload", "multimodal-understanding", "slice-indexing"],
+      message:
+        "Upload intent created. Structured metadata generation can run after the object is uploaded.",
+    });
+    if (!processingJob) {
+      response.status(500).json({
+        error: {
+          code: "ASSET_PROCESSING_JOB_CREATE_FAILED",
+          message: "Global asset processing job could not be created.",
+        },
+      });
       return;
     }
 
@@ -383,6 +583,45 @@ export const createP0Router = ({
     response.json({ processingJob });
   });
 
+  router.post("/assets/import-external", async (request, response) => {
+    const parsedExternalAsset = ExternalAssetResultSchema.safeParse(request.body);
+    if (!parsedExternalAsset.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_EXTERNAL_ASSET",
+        "External asset metadata failed validation.",
+      );
+      return;
+    }
+
+    const externalAsset = parsedExternalAsset.data;
+    const storedAsset = await store.addAsset(
+      undefined,
+      {
+        type: assetTypeForExternalAsset(externalAsset.type),
+        status: "ready",
+        url: externalAsset.downloadUrl ?? externalAsset.previewUrl,
+        name: externalAsset.title,
+        mimeType: mimeTypeForExternalAsset(externalAsset.type),
+        tags: inferAssetTags({
+          name: externalAsset.title,
+          mimeType: mimeTypeForExternalAsset(externalAsset.type),
+          tags: [
+            ...externalAsset.tags,
+            ...(externalAsset.type === "audio" ? ["audio"] : []),
+            "external",
+            `source-${externalAsset.source}`,
+            `external-id-${externalAsset.externalId}`,
+            `license-${normalizeTag(externalAsset.licenseLabel)}`,
+          ],
+        }),
+      },
+      createAssetSlices,
+    );
+
+    response.status(201).json({ asset: storedAsset });
+  });
+
   router.post("/projects/:projectId/assets/import-external", async (request, response) => {
     const parsedExternalAsset = ExternalAssetResultSchema.safeParse(request.body);
     if (!parsedExternalAsset.success) {
@@ -430,16 +669,12 @@ export const createP0Router = ({
   router.get("/assets/search", async (request, response) => {
     const projectId =
       typeof request.query.projectId === "string" ? request.query.projectId.trim() : "";
-    if (!projectId) {
-      sendInvalidRequest(response, "PROJECT_ID_REQUIRED", "projectId is required.");
-      return;
-    }
-
-    const project = await store.getProject(projectId);
-    if (!project) {
+    const project = projectId ? await store.getProject(projectId) : undefined;
+    if (projectId && !project) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
       return;
     }
+    const globalLibrary = project ? undefined : await store.listAssets();
 
     const query = typeof request.query.q === "string" ? request.query.q : "";
     const tags =
@@ -456,10 +691,31 @@ export const createP0Router = ({
     });
 
     response.json({
-      projectId,
+      ...(projectId ? { projectId } : {}),
       query,
       tags,
-      results: searchAssets(project, { query, tags }),
+      results: searchAssets(
+        project ?? {
+          id: "global-asset-library",
+          title: "Global asset library",
+          productName: "Global asset library",
+          audience: "merchant",
+          sellingPoints: ["shared assets"],
+          tone: "neutral",
+          style: "library",
+          targetDurationSeconds: 15,
+          status: "ready",
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+          assets: globalLibrary?.assets ?? [],
+          assetSlices: globalLibrary?.assetSlices ?? [],
+          assetProcessingJobs: [],
+          scripts: [],
+          scenes: [],
+          renderTasks: [],
+        },
+        { query, tags },
+      ),
       externalResults,
     });
   });

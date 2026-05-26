@@ -3,7 +3,7 @@ import type { AssetUploadIntent } from "@shopclip/shared";
 import type { CreateAssetUploadIntentRequest } from "../../modules/assets/validation.js";
 
 export interface StorageUploadIntentInput {
-  projectId: string;
+  projectId?: string;
   assetId: string;
   asset: CreateAssetUploadIntentRequest;
 }
@@ -37,5 +37,8 @@ export const createAssetObjectKey = ({
 }: {
   assetId: string;
   name: string;
-  projectId: string;
-}): string => `projects/${projectId}/raw/${assetId}/source${extensionFromName(name)}`;
+  projectId?: string;
+}): string =>
+  projectId
+    ? `projects/${projectId}/raw/${assetId}/source${extensionFromName(name)}`
+    : `library/raw/${assetId}/source${extensionFromName(name)}`;

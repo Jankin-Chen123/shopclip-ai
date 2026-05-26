@@ -65,6 +65,65 @@ describe("COS-backed asset import contract", () => {
     });
   });
 
+  it("supports a global asset library without requiring a project", async () => {
+    const created = await request<{
+      asset: {
+        id: string;
+        projectId?: string;
+        status: string;
+        objectKey: string;
+        type: string;
+      };
+      upload: {
+        objectKey: string;
+        publicUrl: string;
+      };
+    }>(baseUrl, "/api/assets/upload-intent", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Global hero.png",
+        mimeType: "image/png",
+        sizeBytes: 128_000,
+        tags: ["global", "hero"],
+      }),
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.asset.projectId).toBeUndefined();
+    expect(created.body.asset.objectKey).toMatch(
+      new RegExp(`^library/raw/${created.body.asset.id}/source\\.png$`),
+    );
+
+    const listedImages = await request<{
+      assets: Array<{ id: string; projectId?: string; type: string }>;
+      assetSlices: Array<{ assetId: string }>;
+      category: string;
+    }>(baseUrl, "/api/assets?category=image");
+
+    expect(listedImages.status).toBe(200);
+    expect(listedImages.body.category).toBe("image");
+    expect(listedImages.body.assets).toEqual([
+      expect.objectContaining({
+        id: created.body.asset.id,
+        type: "image",
+      }),
+    ]);
+    expect(listedImages.body.assets[0]?.projectId).toBeUndefined();
+    expect(listedImages.body.assetSlices.every((slice) => slice.assetId === created.body.asset.id)).toBe(
+      true,
+    );
+
+    const searched = await request<{
+      projectId?: string;
+      results: Array<{ asset: { id: string } }>;
+    }>(baseUrl, "/api/assets/search?q=hero");
+
+    expect(searched.status).toBe(200);
+    expect(searched.body.projectId).toBeUndefined();
+    expect(searched.body.results[0]?.asset.id).toBe(created.body.asset.id);
+  });
+
   it("creates a COS upload intent and stores structured asset metadata without exposing secrets", async () => {
     const projectId = await createProject(baseUrl);
 
@@ -147,6 +206,44 @@ describe("COS-backed asset import contract", () => {
       objectKey: created.body.asset.objectKey,
       storageProvider: "mock-cos",
     });
+
+    const video = await request<{ asset: { id: string; type: string; name: string } }>(
+      baseUrl,
+      `/api/projects/${projectId}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "video",
+          name: "Desk demo clip.mp4",
+          mimeType: "video/mp4",
+          sizeBytes: 1_800_000,
+          tags: ["product", "demo"],
+        }),
+      },
+    );
+    expect(video.status).toBe(201);
+
+    const listedImages = await request<{
+      assets: Array<{ id: string; type: string; name: string }>;
+      assetSlices: Array<{ assetId: string }>;
+      category: string;
+      projectId: string;
+    }>(baseUrl, `/api/projects/${projectId}/assets?category=image`);
+
+    expect(listedImages.status).toBe(200);
+    expect(listedImages.body).toMatchObject({
+      category: "image",
+      projectId,
+    });
+    expect(listedImages.body.assets).toHaveLength(1);
+    expect(listedImages.body.assets[0]).toMatchObject({
+      id: created.body.asset.id,
+      type: "image",
+    });
+    expect(listedImages.body.assets.map((asset) => asset.id)).not.toContain(video.body.asset.id);
+    expect(listedImages.body.assetSlices.every((slice) => slice.assetId === created.body.asset.id)).toBe(
+      true,
+    );
 
     const proxiedUpload = await fetch(`${baseUrl}/api/assets/${created.body.asset.id}/upload`, {
       method: "POST",

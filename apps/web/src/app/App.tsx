@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AssetMetadata,
+  AssetSlice,
   DashboardResponse,
   ProjectBrief,
   RenderTask,
@@ -47,6 +49,7 @@ import {
   loadDashboard,
   loadSceneSuggestions,
   loadProject,
+  loadProjectAssets,
   loadRenderTask,
   regenerateScene,
   reorderScenes,
@@ -248,6 +251,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [fallbackProvider, setFallbackProvider] = useState<string>();
   const [forceRenderFailure, setForceRenderFailure] = useState(false);
   const [editingSuggestions, setEditingSuggestions] = useState<EditingSuggestion[]>([]);
+  const [assetLibrary, setAssetLibrary] = useState<{
+    assets: AssetMetadata[];
+    assetSlices: AssetSlice[];
+  }>({ assets: [], assetSlices: [] });
   const [mediaSettings, setMediaSettings] = useState<MediaSettings>(defaultMediaSettings);
   const [project, setProject] = useState<ProjectSnapshot>();
   const [projectIdToLoad, setProjectIdToLoad] = useState("");
@@ -260,8 +267,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
   const activeAssets = useMemo(
     () =>
-      (project?.assets ?? []).filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
-    [activeAssetCategory, project?.assets],
+      assetLibrary.assets.filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
+    [activeAssetCategory, assetLibrary.assets],
   );
   const activeAssetSearchResults = useMemo(
     () =>
@@ -377,6 +384,51 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
   };
 
+  const replaceAssetCategoryInLibrary = (
+    currentLibrary: { assets: AssetMetadata[]; assetSlices: AssetSlice[] },
+    category: AssetCategory,
+    assets: AssetMetadata[],
+    assetSlices: AssetSlice[],
+  ): { assets: AssetMetadata[]; assetSlices: AssetSlice[] } => {
+    const replacedAssetIds = new Set(
+      currentLibrary.assets
+        .filter((asset) => assetMatchesCategory(asset, category))
+        .map((asset) => asset.id),
+    );
+    const nextAssetIds = new Set(assets.map((asset) => asset.id));
+
+    return {
+      assets: [
+        ...currentLibrary.assets.filter((asset) => !replacedAssetIds.has(asset.id)),
+        ...assets,
+      ],
+      assetSlices: [
+        ...currentLibrary.assetSlices.filter(
+          (slice) => !replacedAssetIds.has(slice.assetId) && !nextAssetIds.has(slice.assetId),
+        ),
+        ...assetSlices,
+      ],
+    };
+  };
+
+  const refreshAssetLibrary = (category: AssetCategory) => {
+    void runAction("asset", "asset", async () => {
+      const response = await loadProjectAssets(undefined, category);
+      setAssetLibrary((current) =>
+        replaceAssetCategoryInLibrary(current, category, response.assets, response.assetSlices),
+      );
+      setHasAssetSearchRun(false);
+      setAssetSearchResults([]);
+      setExternalAssetSearchResults([]);
+    });
+  };
+
+  useEffect(() => {
+    if (activePage === "assets") {
+      refreshAssetLibrary(activeAssetCategory);
+    }
+  }, [activePage, activeAssetCategory]);
+
   const handleCreateProject = () =>
     runAction("project", "project", async () => {
       const createdProject = await createProject(brief);
@@ -393,23 +445,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setSelectedSceneId(undefined);
       setDirtySceneIds(new Set());
     });
-
-  const createDemoProjectForAssets = async (): Promise<ProjectSnapshot> => {
-    const createdProject = await createProject(brief);
-    setProject(createdProject);
-    setScript(undefined);
-    setRenderTask(undefined);
-    setTraceEvents([]);
-    setDashboard(undefined);
-    setExportResult(undefined);
-    setHasAssetSearchRun(false);
-    setAssetSearchResults([]);
-    setExternalAssetSearchResults([]);
-    setEditingSuggestions([]);
-    setSelectedSceneId(undefined);
-    setDirtySceneIds(new Set());
-    return createdProject;
-  };
 
   const handleLoadProject = () =>
     runAction("project", "project", async () => {
@@ -494,15 +529,14 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const handleUploadAsset = () => {
-    if (!project) {
-      setErrors((current) => ({ ...current, asset: "Create or load a project first." }));
-      return;
-    }
-
     void runAction("asset", "asset", async () => {
-      const asset = await addAsset(project.id, assetDraft);
+      const asset = await addAsset(undefined, assetDraft);
+      setAssetLibrary((current) => ({
+        ...current,
+        assets: [...current.assets, asset],
+      }));
       setProject((current) =>
-        current
+        current && asset.projectId === current.id
           ? {
               ...current,
               assets: [...current.assets, asset],
@@ -518,11 +552,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
 
     void runAction("asset", "asset", async () => {
-      const targetProject = project ?? (await createDemoProjectForAssets());
       const importedAssets = await Promise.all(
         files.map(async (file) => {
           const uploadIntent = await createAssetUploadIntent(
-            targetProject.id,
+            undefined,
             createAssetInputFromFile(file, language),
           );
           const uploaded = await uploadAssetFileToStorage(uploadIntent.asset.id, file);
@@ -530,11 +563,18 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         }),
       );
 
+      setAssetLibrary((current) => ({
+        ...current,
+        assets: [...current.assets, ...importedAssets],
+      }));
       setProject((current) =>
-        current
+        current && importedAssets.some((asset) => asset.projectId === current.id)
           ? {
               ...current,
-              assets: [...current.assets, ...importedAssets],
+              assets: [
+                ...current.assets,
+                ...importedAssets.filter((asset) => asset.projectId === current.id),
+              ],
             }
           : current,
       );
@@ -546,8 +586,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const handleSearchAssets = () => {
     void runAction("asset", "search", async () => {
-      const targetProject = project ?? (await createDemoProjectForAssets());
-      const response = await searchAssets(targetProject.id, assetSearchQuery);
+      const response = await searchAssets(undefined, assetSearchQuery);
       setHasAssetSearchRun(true);
       setAssetSearchResults(response.results);
       setExternalAssetSearchResults(response.externalResults);
@@ -589,18 +628,18 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const handleImportExternalAsset = (externalAsset: ExternalAssetResult) => {
     void runAction("asset", "asset", async () => {
-      const targetProject = project ?? (await createDemoProjectForAssets());
-      const asset = await importExternalAsset(targetProject.id, externalAsset);
+      const asset = await importExternalAsset(undefined, externalAsset);
+      setAssetLibrary((current) => ({
+        ...current,
+        assets: [...current.assets, asset],
+      }));
       setProject((current) =>
-        current
+        current && asset.projectId === current.id
           ? {
               ...current,
               assets: [...current.assets, asset],
             }
-          : {
-              ...targetProject,
-              assets: [...targetProject.assets, asset],
-            },
+          : current,
       );
       setAssetSearchResults([]);
       setExternalAssetSearchResults((current) =>
