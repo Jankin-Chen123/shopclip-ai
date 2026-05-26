@@ -30,7 +30,7 @@ interface CosIntelligentSearchConfig {
 }
 
 const hybridSearchPath = "/datasetquery/hybridsearch";
-const defaultMatchThreshold = 60;
+const defaultMatchThreshold = 70;
 const defaultLimit = 24;
 
 const isRecord = (value: unknown): value is AnyRecord =>
@@ -159,7 +159,7 @@ export const normalizeCosHybridSearchResponse = (body: unknown): CosImageSearchM
         score,
       };
     })
-    .filter((match) => match.uri && match.score > defaultMatchThreshold)
+    .filter((match) => match.uri && match.score >= defaultMatchThreshold)
     .sort((left, right) => right.score - left.score);
 
 const deriveAppIdFromBucket = (bucket?: string): string | undefined => {
@@ -211,11 +211,12 @@ export const createCosIntelligentSearchProvider = (
       if (!trimmedQuery) {
         return [];
       }
+      const effectiveMatchThreshold = Math.max(matchThreshold, defaultMatchThreshold);
 
       const body = JSON.stringify({
         DatasetName: config.datasetName,
         Limit: limit,
-        MatchThreshold: matchThreshold,
+        MatchThreshold: effectiveMatchThreshold,
         Mode: "text",
         SearchText: trimmedQuery,
         Templates: "ImageSearch",
@@ -243,7 +244,7 @@ export const createCosIntelligentSearchProvider = (
       }
 
       return normalizeCosHybridSearchResponse(await response.json()).filter(
-        (match) => match.score > matchThreshold,
+        (match) => match.score >= effectiveMatchThreshold,
       );
     },
   };
@@ -280,7 +281,7 @@ export const mapCosImageMatchesToAssetResults = (
   const seenAssetIds = new Set<string>();
   const results: AssetSearchResult[] = [];
 
-  for (const match of matches.filter((candidate) => candidate.score > defaultMatchThreshold)) {
+  for (const match of matches.filter((candidate) => candidate.score >= defaultMatchThreshold)) {
     const asset = findMatchingAsset(match, library.assets);
     if (!asset || seenAssetIds.has(asset.id)) {
       continue;

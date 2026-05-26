@@ -619,10 +619,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const handleImportExternalAsset = async (externalAsset: ExternalAssetResult) => {
-    setBusyState("asset");
     setErrors((current) => ({ ...current, asset: undefined }));
     try {
-      const asset = await importExternalAsset(undefined, externalAsset);
+      const { asset } = await importExternalAsset(undefined, externalAsset);
       setAssetLibrary((current) => ({
         ...current,
         assets: [...current.assets, asset],
@@ -646,8 +645,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         asset: message,
       }));
       throw error;
-    } finally {
-      setBusyState("idle");
     }
   };
 

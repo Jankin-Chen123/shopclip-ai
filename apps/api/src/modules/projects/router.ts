@@ -1,7 +1,12 @@
 import { Router, raw } from "express";
 import type { Response } from "express";
 import { randomUUID } from "node:crypto";
-import type { AssetMetadata, AssetUploadIntent, ExternalAssetResult } from "@shopclip/shared";
+import type {
+  AssetMetadata,
+  AssetProcessingJob,
+  AssetUploadIntent,
+  ExternalAssetResult,
+} from "@shopclip/shared";
 import {
   ExternalAssetSearchRequestSchema,
   ProjectBriefSchema,
@@ -266,88 +271,173 @@ export const createP0Router = ({
 }: P0RouterOptions = {}): Router => {
   const router = Router();
 
-  const importExternalAssetToStore = async (
+  const buildExternalImportTags = (
+    externalAsset: ExternalAssetResult,
+    contentType: string,
+    storageProviderName?: AssetMetadata["storageProvider"],
+  ): string[] =>
+    inferAssetTags({
+      name: externalAsset.title,
+      mimeType: contentType,
+      source: "external_provider",
+      storageProvider: storageProviderName,
+      tags: [
+        ...externalAsset.tags,
+        externalAssetTypeTag(externalAsset.type),
+        "external",
+        `source-${externalAsset.source}`,
+        `external-id-${externalAsset.externalId}`,
+        `license-${normalizeTag(externalAsset.licenseLabel)}`,
+      ],
+    });
+
+  const buildExternalImportMetadata = (
+    externalAsset: ExternalAssetResult,
+    extras: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    externalAssetImport: true,
+    externalAssetType: externalAsset.type,
+    externalId: externalAsset.externalId,
+    externalSource: externalAsset.source,
+    externalUrl: externalAsset.externalUrl,
+    originalDownloadUrl: externalAsset.downloadUrl,
+    originalPreviewUrl: externalAsset.previewUrl,
+    licenseLabel: externalAsset.licenseLabel,
+    licenseUrl: externalAsset.licenseUrl,
+    requiresAttribution: externalAsset.requiresAttribution,
+    canUseCommercially: externalAsset.canUseCommercially,
+    structuredAssetVersion: "asset-multigranularity-v1",
+    ...extras,
+  });
+
+  const runExternalAssetImportJob = async (
     projectId: string | undefined,
     externalAsset: ExternalAssetResult,
-  ): Promise<AssetMetadata | undefined> => {
-    const downloaded = await externalAssetDownloader(externalAsset);
-    const contentType = contentTypeForExternalAsset(externalAsset.type, downloaded.contentType);
-    const assetId = randomUUID();
-    const assetType = assetTypeForExternalAsset(externalAsset.type);
-    const sizeBytes = downloaded.body.length;
-    const uploadIntent: AssetUploadIntent = storageProvider.createUploadIntent({
-      projectId,
-      assetId,
-      asset: {
-        type: assetType,
-        name: fileNameForExternalImport(externalAsset.title, contentType),
-        mimeType: contentType,
-        sizeBytes,
-        source: "external_provider",
-        tags: [
-          ...externalAsset.tags,
-          externalAssetTypeTag(externalAsset.type),
-          "external",
-        ],
-      },
-    });
-    const uploaded = await storageProvider.uploadObject({
-      body: downloaded.body,
-      contentType,
-      objectKey: uploadIntent.objectKey,
-    });
-    const sourceUrl = downloaded.sourceUrl || externalAsset.downloadUrl || externalAsset.previewUrl;
+    assetId: string,
+    jobId: string,
+  ): Promise<void> => {
+    try {
+      await store.updateAssetProcessingJob(jobId, {
+        status: "processing",
+        steps: ["queued", "external-download"],
+        message: "Downloading the selected third-party asset before COS upload.",
+      });
 
-    return store.addAssetWithId(
-      projectId,
-      assetId,
-      {
-        type: assetType,
+      const downloaded = await externalAssetDownloader(externalAsset);
+      const contentType = contentTypeForExternalAsset(externalAsset.type, downloaded.contentType);
+      const assetType = assetTypeForExternalAsset(externalAsset.type);
+      const sizeBytes = downloaded.body.length;
+      const uploadIntent: AssetUploadIntent = storageProvider.createUploadIntent({
+        projectId,
+        assetId,
+        asset: {
+          type: assetType,
+          name: fileNameForExternalImport(externalAsset.title, contentType),
+          mimeType: contentType,
+          sizeBytes,
+          source: "external_provider",
+          tags: [...externalAsset.tags, externalAssetTypeTag(externalAsset.type), "external"],
+        },
+      });
+
+      await store.updateAssetProcessingJob(jobId, {
+        status: "processing",
+        steps: ["queued", "external-download", "cos-upload"],
+        message: "Uploading the downloaded third-party asset into Tencent COS.",
+      });
+
+      const uploaded = await storageProvider.uploadObject({
+        body: downloaded.body,
+        contentType,
+        objectKey: uploadIntent.objectKey,
+      });
+      const sourceUrl =
+        downloaded.sourceUrl || externalAsset.downloadUrl || externalAsset.previewUrl;
+
+      await store.updateAsset(assetId, {
         status: "ready",
         url: uploaded.publicUrl,
-        name: externalAsset.title,
         mimeType: contentType,
         sizeBytes,
         source: "external_provider",
         storageProvider: uploaded.provider,
         objectKey: uploaded.objectKey,
         embeddingText: `${externalAsset.title} ${externalAsset.tags.join(" ")}`,
-        metadata: {
+        metadata: buildExternalImportMetadata(externalAsset, {
           bucket: uploadIntent.bucket,
           region: uploadIntent.region,
-          externalAssetImport: true,
-          externalAssetType: externalAsset.type,
-          externalId: externalAsset.externalId,
-          externalSource: externalAsset.source,
-          externalUrl: externalAsset.externalUrl,
-          originalDownloadUrl: externalAsset.downloadUrl,
-          originalPreviewUrl: externalAsset.previewUrl,
           downloadedFromUrl: sourceUrl,
           downloadedBytes: sizeBytes,
-          licenseLabel: externalAsset.licenseLabel,
-          licenseUrl: externalAsset.licenseUrl,
-          requiresAttribution: externalAsset.requiresAttribution,
-          canUseCommercially: externalAsset.canUseCommercially,
           importedAt: new Date().toISOString(),
-          structuredAssetVersion: "asset-multigranularity-v1",
-        },
-        tags: inferAssetTags({
-          name: externalAsset.title,
-          mimeType: contentType,
-          source: "external_provider",
-          storageProvider: uploaded.provider,
-          tags: [
-            ...externalAsset.tags,
-            externalAssetTypeTag(externalAsset.type),
-            "external",
-            `source-${externalAsset.source}`,
-            `external-id-${externalAsset.externalId}`,
-            `license-${normalizeTag(externalAsset.licenseLabel)}`,
-          ],
         }),
+        tags: buildExternalImportTags(externalAsset, contentType, uploaded.provider),
+      });
+
+      await store.updateAssetProcessingJob(jobId, {
+        status: "ready",
+        steps: ["queued", "external-download", "cos-upload", "metadata-ready"],
+        message: "External asset imported into Tencent COS and metadata persisted.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "External asset import failed.";
+      await store.updateAsset(assetId, {
+        status: "failed",
+        metadata: {
+          externalImportError: message,
+          failedAt: new Date().toISOString(),
+        },
+      });
+      await store.updateAssetProcessingJob(jobId, {
+        status: "failed",
+        steps: ["queued", "external-download", "cos-upload"],
+        message,
+      });
+    }
+  };
+
+  const enqueueExternalAssetImport = async (
+    projectId: string | undefined,
+    externalAsset: ExternalAssetResult,
+  ): Promise<{ asset: AssetMetadata; processingJob: AssetProcessingJob } | undefined> => {
+    const assetId = randomUUID();
+    const contentType = mimeTypeForExternalAsset(externalAsset.type);
+    const storedAsset = await store.addAssetWithId(
+      projectId,
+      assetId,
+      {
+        type: assetTypeForExternalAsset(externalAsset.type),
+        status: "processing",
+        url: externalAsset.previewUrl,
+        name: externalAsset.title,
+        mimeType: contentType,
+        source: "external_provider",
+        embeddingText: `${externalAsset.title} ${externalAsset.tags.join(" ")}`,
+        metadata: buildExternalImportMetadata(externalAsset, {
+          queuedAt: new Date().toISOString(),
+        }),
+        tags: buildExternalImportTags(externalAsset, contentType),
       },
       createAssetSlices,
     );
+    if (!storedAsset) {
+      return undefined;
+    }
+
+    const processingJob = await store.addAssetProcessingJob(projectId, {
+      id: randomUUID(),
+      assetId,
+      status: "processing",
+      steps: ["queued", "external-download", "cos-upload", "metadata-ready"],
+      message:
+        "External asset import queued. Download, Tencent COS upload, and metadata persistence will continue in the background.",
+    });
+    if (!processingJob) {
+      return undefined;
+    }
+
+    void runExternalAssetImportJob(projectId, externalAsset, assetId, processingJob.id);
+
+    return { asset: storedAsset, processingJob };
   };
 
   router.post("/projects", async (request, response) => {
@@ -905,20 +995,18 @@ export const createP0Router = ({
       return;
     }
 
-    let storedAsset;
-    try {
-      storedAsset = await importExternalAssetToStore(undefined, parsedExternalAsset.data);
-    } catch (error) {
+    const queuedImport = await enqueueExternalAssetImport(undefined, parsedExternalAsset.data);
+    if (!queuedImport) {
       response.status(502).json({
         error: {
-          code: "EXTERNAL_ASSET_IMPORT_FAILED",
-          message: error instanceof Error ? error.message : "External asset import failed.",
+          code: "EXTERNAL_ASSET_IMPORT_QUEUE_FAILED",
+          message: "External asset import could not be queued.",
         },
       });
       return;
     }
 
-    response.status(201).json({ asset: storedAsset });
+    response.status(202).json(queuedImport);
   });
 
   router.post("/projects/:projectId/assets/import-external", async (request, response) => {
@@ -938,28 +1026,16 @@ export const createP0Router = ({
       return;
     }
 
-    let storedAsset;
-    try {
-      storedAsset = await importExternalAssetToStore(
-        request.params.projectId,
-        parsedExternalAsset.data,
-      );
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "EXTERNAL_ASSET_IMPORT_FAILED",
-          message: error instanceof Error ? error.message : "External asset import failed.",
-        },
-      });
-      return;
-    }
-
-    if (!storedAsset) {
+    const queuedImport = await enqueueExternalAssetImport(
+      request.params.projectId,
+      parsedExternalAsset.data,
+    );
+    if (!queuedImport) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
       return;
     }
 
-    response.status(201).json({ asset: storedAsset });
+    response.status(202).json(queuedImport);
   });
 
   router.get("/assets/search", async (request, response) => {
@@ -1003,7 +1079,7 @@ export const createP0Router = ({
     let cosMatches: Awaited<ReturnType<NonNullable<P0RouterOptions["cosAssetSearch"]>>>;
     if (query.trim()) {
       try {
-        cosMatches = await cosAssetSearch({ query, limit: 24, matchThreshold: 60 });
+        cosMatches = await cosAssetSearch({ query, limit: 24, matchThreshold: 70 });
       } catch (error) {
         console.warn(
           "[assets/search] COS intelligent search failed; returning empty COS results.",

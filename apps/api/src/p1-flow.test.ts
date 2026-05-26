@@ -21,6 +21,23 @@ const request = async <T>(
   return { body, status: response.status };
 };
 
+const waitFor = async <T>(
+  load: () => Promise<T>,
+  predicate: (value: T) => boolean,
+  timeoutMs = 2_000,
+): Promise<T> => {
+  const startedAt = Date.now();
+  let latest = await load();
+  while (!predicate(latest)) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("Timed out waiting for expected state.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    latest = await load();
+  }
+  return latest;
+};
+
 const createProject = async (baseUrl: string): Promise<string> => {
   const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
     method: "POST",
@@ -211,11 +228,17 @@ describe("P1 asset retrieval and scene editing", () => {
         id: string;
         name: string;
         objectKey?: string;
+        status: string;
         storageProvider?: string;
         type: string;
         url: string;
         tags: string[];
         mimeType?: string;
+      };
+      processingJob: {
+        assetId: string;
+        id: string;
+        status: string;
       };
     }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
       method: "POST",
@@ -240,18 +263,57 @@ describe("P1 asset retrieval and scene editing", () => {
       }),
     });
 
-    expect(imported.status).toBe(201);
+    expect(imported.status).toBe(202);
     expect(imported.body.asset).toMatchObject({
       name: "Desk setup B-roll",
       type: "video",
       mimeType: "video/mp4",
+      status: "processing",
+    });
+    expect(imported.body.processingJob).toMatchObject({
+      assetId: imported.body.asset.id,
+      status: "processing",
+    });
+
+    const completed = await waitFor(
+      () =>
+        request<{
+          processingJob: {
+            id: string;
+            status: string;
+          };
+        }>(baseUrl, `/api/asset-processing-jobs/${imported.body.processingJob.id}`),
+      (loaded) => loaded.body.processingJob.status === "ready",
+    );
+    expect(completed.body.processingJob.status).toBe("ready");
+
+    const loaded = await request<{
+      project: {
+        assets: Array<{
+          id: string;
+          name: string;
+          objectKey?: string;
+          status: string;
+          storageProvider?: string;
+          tags: string[];
+          url: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    const readyAsset = loaded.body.project.assets.find(
+      (asset) => asset.id === imported.body.asset.id,
+    );
+    expect(readyAsset).toMatchObject({
+      id: imported.body.asset.id,
+      name: "Desk setup B-roll",
+      status: "ready",
       storageProvider: "mock-cos",
     });
-    expect(imported.body.asset.objectKey).toMatch(
+    expect(readyAsset?.objectKey).toMatch(
       new RegExp(`^projects/${projectId}/raw/${imported.body.asset.id}/source\\.mp4$`),
     );
-    expect(imported.body.asset.url).toContain(imported.body.asset.objectKey ?? "");
-    expect(imported.body.asset.tags).toEqual(
+    expect(readyAsset?.url).toContain(readyAsset?.objectKey ?? "");
+    expect(readyAsset?.tags).toEqual(
       expect.arrayContaining([
         "desk",
         "product",
@@ -261,11 +323,6 @@ describe("P1 asset retrieval and scene editing", () => {
         "license-pexels-license",
         "storage-mock-cos",
       ]),
-    );
-
-    const loaded = await request<{ project: { assets: Array<{ id: string; name: string }> } }>(
-      baseUrl,
-      `/api/projects/${projectId}`,
     );
     expect(loaded.body.project.assets).toContainEqual(
       expect.objectContaining({ id: imported.body.asset.id, name: "Desk setup B-roll" }),
@@ -280,11 +337,17 @@ describe("P1 asset retrieval and scene editing", () => {
         id: string;
         name: string;
         objectKey?: string;
+        status: string;
         storageProvider?: string;
         type: string;
         url: string;
         tags: string[];
         mimeType?: string;
+      };
+      processingJob: {
+        assetId: string;
+        id: string;
+        status: string;
       };
     }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
       method: "POST",
@@ -309,18 +372,49 @@ describe("P1 asset retrieval and scene editing", () => {
       }),
     });
 
-    expect(imported.status).toBe(201);
+    expect(imported.status).toBe(202);
     expect(imported.body.asset).toMatchObject({
       name: "Cash register button click",
       type: "reference",
       mimeType: "audio/mpeg",
+      status: "processing",
+    });
+
+    await waitFor(
+      () =>
+        request<{
+          processingJob: {
+            id: string;
+            status: string;
+          };
+        }>(baseUrl, `/api/asset-processing-jobs/${imported.body.processingJob.id}`),
+      (loaded) => loaded.body.processingJob.status === "ready",
+    );
+
+    const loaded = await request<{
+      project: {
+        assets: Array<{
+          id: string;
+          objectKey?: string;
+          status: string;
+          storageProvider?: string;
+          tags: string[];
+          url: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    const readyAsset = loaded.body.project.assets.find(
+      (asset) => asset.id === imported.body.asset.id,
+    );
+    expect(readyAsset).toMatchObject({
+      status: "ready",
       storageProvider: "mock-cos",
     });
-    expect(imported.body.asset.objectKey).toMatch(
+    expect(readyAsset?.objectKey).toMatch(
       new RegExp(`^projects/${projectId}/raw/${imported.body.asset.id}/source\\.mp3$`),
     );
-    expect(imported.body.asset.url).toContain(imported.body.asset.objectKey ?? "");
-    expect(imported.body.asset.tags).toEqual(
+    expect(readyAsset?.url).toContain(readyAsset?.objectKey ?? "");
+    expect(readyAsset?.tags).toEqual(
       expect.arrayContaining([
         "audio",
         "click",

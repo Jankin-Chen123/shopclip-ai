@@ -25,11 +25,11 @@ describe("COS intelligent search provider", () => {
     vi.useRealTimers();
   });
 
-  it("normalizes image results and keeps only matches scoring above 60", () => {
+  it("normalizes image results and keeps only matches scoring at least 70", () => {
     const matches = normalizeCosHybridSearchResponse({
       ImageResult: [
-        { URI: "cos://shopclip-1250000000/projects/demo/raw/asset-1/source.png", Score: 61 },
-        { URI: "cos://shopclip-1250000000/projects/demo/raw/asset-2/source.png", Score: 60 },
+        { URI: "cos://shopclip-1250000000/projects/demo/raw/asset-1/source.png", Score: 70 },
+        { URI: "cos://shopclip-1250000000/projects/demo/raw/asset-2/source.png", Score: 69 },
         { URI: "cos://shopclip-1250000000/projects/demo/raw/asset-3/source.png", Score: 0 },
       ],
       RequestId: "request-1",
@@ -39,7 +39,7 @@ describe("COS intelligent search provider", () => {
       {
         uri: "cos://shopclip-1250000000/projects/demo/raw/asset-1/source.png",
         objectKey: "projects/demo/raw/asset-1/source.png",
-        score: 61,
+        score: 70,
       },
     ]);
   });
@@ -86,7 +86,7 @@ describe("COS intelligent search provider", () => {
         {
           uri: "cos://shopclip-1250000000/projects/demo/raw/asset-low-score/source.png",
           objectKey: "projects/demo/raw/asset-low-score/source.png",
-          score: 60,
+          score: 69,
         },
       ],
       { assets, assetSlices: slices },
@@ -155,7 +155,7 @@ describe("COS intelligent search provider", () => {
         Templates: "ImageSearch",
         SearchText: "golden retriever product photo",
         Limit: 12,
-        MatchThreshold: 60,
+        MatchThreshold: 70,
       },
     });
     expect(requests[0]?.headers.authorization).toContain("q-sign-algorithm=sha1");

@@ -259,7 +259,17 @@ export class PrismaProjectStore implements ProjectStore {
     update: Partial<
       Pick<
         AssetMetadata,
-        "embeddingText" | "metadata" | "objectKey" | "status" | "tags" | "thumbnailKey" | "url"
+        | "embeddingText"
+        | "metadata"
+        | "mimeType"
+        | "objectKey"
+        | "sizeBytes"
+        | "source"
+        | "status"
+        | "storageProvider"
+        | "tags"
+        | "thumbnailKey"
+        | "url"
       >
     >,
   ): Promise<AssetMetadata | undefined> {
@@ -282,8 +292,12 @@ export class PrismaProjectStore implements ProjectStore {
         metadata: update.metadata
           ? ({ ...currentMetadata, ...update.metadata } as Prisma.InputJsonValue)
           : undefined,
+        mimeType: update.mimeType,
         objectKey: update.objectKey,
+        sizeBytes: update.sizeBytes,
+        source: update.source,
         status: update.status,
+        storageProvider: toDbStorageProvider(update.storageProvider),
         tags: update.tags,
         thumbnailKey: update.thumbnailKey,
         url: update.url,

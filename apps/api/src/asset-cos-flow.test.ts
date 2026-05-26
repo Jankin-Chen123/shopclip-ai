@@ -4,6 +4,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app";
 
+const waitFor = async <T>(
+  load: () => Promise<T>,
+  predicate: (value: T) => boolean,
+  timeoutMs = 2_000,
+): Promise<T> => {
+  const startedAt = Date.now();
+  let latest = await load();
+  while (!predicate(latest)) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("Timed out waiting for expected state.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    latest = await load();
+  }
+  return latest;
+};
+
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, reject, resolve };
+};
+
 const request = async <T>(
   baseUrl: string,
   path: string,
@@ -152,7 +180,7 @@ describe("COS-backed asset import contract", () => {
               {
                 uri: "cos://shopclip-1250000000/library/raw/cos-miss/source.png",
                 objectKey: "library/raw/cos-miss/source.png",
-                score: 60,
+                score: 69,
               },
             ]
           : [],
@@ -502,25 +530,19 @@ describe("COS-backed asset import contract", () => {
     expect(listedAfterDelete.body.assetSlices).toHaveLength(0);
   });
 
-  it("downloads selected external assets by type and imports them into COS-backed storage", async () => {
+  it("queues external imports immediately and completes COS/database metadata in the background", async () => {
+    const imageDownload = createDeferred<{
+      body: Buffer;
+      contentType: string;
+      sourceUrl: string;
+    }>();
     const uploadedObjects: Array<{
       body: Buffer;
       contentType: string;
       objectKey: string;
     }> = [];
     const app = createApp({
-      externalAssetDownloader: async (asset) => ({
-        body: Buffer.from(`downloaded:${asset.type}:${asset.externalId}`),
-        contentType:
-          asset.type === "image"
-            ? "image/webp"
-            : asset.type === "video"
-              ? "video/mp4"
-              : asset.type === "audio"
-                ? "audio/mpeg"
-                : "text/plain",
-        sourceUrl: asset.downloadUrl ?? asset.previewUrl,
-      }),
+      externalAssetDownloader: () => imageDownload.promise,
       storageProvider: {
         createReadUrl: ({ objectKey }) => ({ url: `https://cos.example.test/${objectKey}` }),
         createUploadIntent: ({ asset, assetId, projectId }) => ({
@@ -557,109 +579,144 @@ describe("COS-backed asset import contract", () => {
     baseUrl = `http://127.0.0.1:${address.port}`;
     const projectId = await createProject(baseUrl);
 
-    const cases = [
-      {
+    const queued = await request<{
+      asset: {
+        id: string;
+        metadata: Record<string, unknown>;
+        mimeType: string;
+        objectKey?: string;
+        source: string;
+        status: string;
+        storageProvider?: string;
+        tags: string[];
+        type: string;
+        url: string;
+      };
+      processingJob: {
+        id: string;
+        assetId: string;
+        status: string;
+        steps: string[];
+      };
+    }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
+      method: "POST",
+      body: JSON.stringify({
+        id: "pexels:image:asset-image",
+        source: "pexels",
+        externalId: "asset-image",
         type: "image",
         title: "Water packshot",
-        expectedAssetType: "image",
-        expectedMimeType: "image/webp",
-        expectedTypeTag: "image",
-      },
-      {
-        type: "video",
-        title: "Water surface B-roll",
-        expectedAssetType: "video",
-        expectedMimeType: "video/mp4",
-        expectedTypeTag: "video",
-      },
-      {
-        type: "audio",
-        title: "Water ambience",
-        expectedAssetType: "reference",
-        expectedMimeType: "audio/mpeg",
-        expectedTypeTag: "audio",
-      },
-      {
-        type: "text",
-        title: "Water product script",
-        expectedAssetType: "reference",
-        expectedMimeType: "text/plain",
-        expectedTypeTag: "script",
-      },
-    ] as const;
+        thumbnailUrl: "https://images.pexels.com/thumb.jpg",
+        previewUrl: "https://images.pexels.com/image/preview",
+        downloadUrl: "https://images.pexels.com/image/download",
+        externalUrl: "https://www.pexels.com/photo/asset-image/",
+        authorName: "Pexels Creator",
+        authorUrl: "https://www.pexels.com/@creator",
+        licenseLabel: "Pexels License",
+        licenseUrl: "https://www.pexels.com/license/",
+        canUseCommercially: true,
+        requiresAttribution: false,
+        tags: ["water"],
+      }),
+    });
 
-    for (const externalAsset of cases) {
-      const imported = await request<{
-        asset: {
+    expect(queued.status).toBe(202);
+    expect(queued.body.asset).toMatchObject({
+      name: "Water packshot",
+      type: "image",
+      mimeType: "image/jpeg",
+      source: "external_provider",
+      status: "processing",
+      url: "https://images.pexels.com/image/preview",
+    });
+    expect(queued.body.asset.objectKey).toBeUndefined();
+    expect(queued.body.asset.storageProvider).toBeUndefined();
+    expect(queued.body.asset.metadata).toMatchObject({
+      externalAssetImport: true,
+      externalAssetType: "image",
+      externalId: "asset-image",
+      externalSource: "pexels",
+      originalDownloadUrl: "https://images.pexels.com/image/download",
+      originalPreviewUrl: "https://images.pexels.com/image/preview",
+    });
+    expect(queued.body.processingJob).toMatchObject({
+      assetId: queued.body.asset.id,
+      status: "processing",
+    });
+    expect(queued.body.processingJob.steps).toEqual(
+      expect.arrayContaining(["queued", "external-download", "cos-upload"]),
+    );
+    expect(uploadedObjects).toHaveLength(0);
+
+    imageDownload.resolve({
+      body: Buffer.from("downloaded:image:asset-image"),
+      contentType: "image/webp",
+      sourceUrl: "https://images.pexels.com/image/download",
+    });
+
+    const completedJob = await waitFor(
+      () =>
+        request<{
+          processingJob: {
+            id: string;
+            status: string;
+            steps: string[];
+          };
+        }>(baseUrl, `/api/asset-processing-jobs/${queued.body.processingJob.id}`),
+      (loaded) => loaded.body.processingJob.status === "ready",
+    );
+
+    expect(completedJob.body.processingJob.steps).toEqual(
+      expect.arrayContaining(["external-download", "cos-upload", "metadata-ready"]),
+    );
+
+    const project = await request<{
+      project: {
+        assets: Array<{
           id: string;
           metadata: Record<string, unknown>;
           mimeType: string;
-          objectKey: string;
-          source: string;
-          storageProvider: string;
+          objectKey?: string;
+          status: string;
+          storageProvider?: string;
           tags: string[];
-          type: string;
           url: string;
-        };
-      }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
-        method: "POST",
-        body: JSON.stringify({
-          id: `pexels:${externalAsset.type}:asset-${externalAsset.type}`,
-          source: "pexels",
-          externalId: `asset-${externalAsset.type}`,
-          type: externalAsset.type,
-          title: externalAsset.title,
-          thumbnailUrl: "https://images.pexels.com/thumb.jpg",
-          previewUrl: `https://images.pexels.com/${externalAsset.type}/preview`,
-          downloadUrl: `https://images.pexels.com/${externalAsset.type}/download`,
-          externalUrl: `https://www.pexels.com/${externalAsset.type}/asset-${externalAsset.type}/`,
-          authorName: "Pexels Creator",
-          authorUrl: "https://www.pexels.com/@creator",
-          licenseLabel: "Pexels License",
-          licenseUrl: "https://www.pexels.com/license/",
-          canUseCommercially: true,
-          requiresAttribution: false,
-          tags: ["water"],
-        }),
-      });
-
-      expect(imported.status).toBe(201);
-      expect(imported.body.asset).toMatchObject({
-        name: externalAsset.title,
-        type: externalAsset.expectedAssetType,
-        mimeType: externalAsset.expectedMimeType,
-        source: "external_provider",
-        storageProvider: "tencent-cos",
-      });
-      expect(imported.body.asset.url).toBe(
-        `https://cos.example.test/${imported.body.asset.objectKey}`,
-      );
-      expect(imported.body.asset.tags).toEqual(
-        expect.arrayContaining([
-          "external",
-          externalAsset.expectedTypeTag,
-          "source-pexels",
-          `external-id-asset-${externalAsset.type}`,
-          "license-pexels-license",
-          "storage-tencent-cos",
-        ]),
-      );
-      expect(imported.body.asset.metadata).toMatchObject({
-        externalAssetImport: true,
-        externalAssetType: externalAsset.type,
-        externalId: `asset-${externalAsset.type}`,
-        externalSource: "pexels",
-        originalDownloadUrl: `https://images.pexels.com/${externalAsset.type}/download`,
-        originalPreviewUrl: `https://images.pexels.com/${externalAsset.type}/preview`,
-      });
-    }
-
-    expect(uploadedObjects).toHaveLength(cases.length);
-    expect(uploadedObjects.map((object) => object.contentType)).toEqual(
-      cases.map((item) => item.expectedMimeType),
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    const importedAsset = project.body.project.assets.find(
+      (asset) => asset.id === queued.body.asset.id,
     );
-    expect(uploadedObjects.map((object) => object.body.toString())).toEqual(
-      cases.map((item) => `downloaded:${item.type}:asset-${item.type}`),
+
+    expect(importedAsset).toMatchObject({
+      status: "ready",
+      mimeType: "image/webp",
+      storageProvider: "tencent-cos",
+      url: `https://cos.example.test/${importedAsset?.objectKey}`,
+    });
+    expect(importedAsset?.tags).toEqual(
+      expect.arrayContaining([
+        "external",
+        "image",
+        "source-pexels",
+        "external-id-asset-image",
+        "license-pexels-license",
+        "storage-tencent-cos",
+      ]),
     );
+    expect(importedAsset?.metadata).toMatchObject({
+      externalAssetImport: true,
+      externalAssetType: "image",
+      externalId: "asset-image",
+      externalSource: "pexels",
+      downloadedBytes: Buffer.byteLength("downloaded:image:asset-image"),
+      downloadedFromUrl: "https://images.pexels.com/image/download",
+    });
+    expect(uploadedObjects).toHaveLength(1);
+    expect(uploadedObjects[0]).toMatchObject({
+      body: Buffer.from("downloaded:image:asset-image"),
+      contentType: "image/webp",
+      objectKey: importedAsset?.objectKey,
+    });
   });
 });

@@ -130,20 +130,21 @@ test.describe("External stock asset flow", () => {
         externalAsset.type === "image" || externalAsset.type === "video"
           ? externalAsset.type
           : "reference";
-      const objectKey = `library/raw/imported-${externalAsset.externalId}/source`;
-
       await route.fulfill({
         contentType: "application/json",
-        status: 201,
+        status: 202,
         body: JSON.stringify({
           asset: {
             id: `imported-${externalAsset.externalId}`,
             type: assetType,
-            status: "ready",
+            status: "processing",
             source: "external_provider",
-            storageProvider: "tencent-cos",
-            objectKey,
-            url: `https://cos.example.test/${objectKey}`,
+            url:
+              externalAsset.type === "video"
+                ? "https://videos.pexels.com/video-files/provider-cover/preview.mp4"
+                : externalAsset.type === "audio"
+                  ? "https://cdn.freesound.org/previews/12/cash-register-hq.mp3"
+                  : highResSvg,
             name: externalAsset.title,
             mimeType,
             sizeBytes: 1024,
@@ -153,6 +154,15 @@ test.describe("External stock asset flow", () => {
               externalAsset.type === "text" ? "script" : externalAsset.type,
               `source-${externalAsset.source}`,
             ],
+          },
+          processingJob: {
+            id: `job-imported-${externalAsset.externalId}`,
+            assetId: `imported-${externalAsset.externalId}`,
+            status: "processing",
+            steps: ["queued", "external-download", "cos-upload", "metadata-ready"],
+            message:
+              "External asset import queued. Download, Tencent COS upload, and metadata persistence will continue in the background.",
+            createdAt: "2026-05-26T00:00:00.000Z",
           },
         }),
       });
@@ -256,8 +266,8 @@ test.describe("External stock asset flow", () => {
 
     await page.getByRole("button", { name: "Import selected" }).click();
 
-    await expect(page.getByText(/2 assets imported to Tencent COS/)).toBeVisible();
-    await expect(page.getByText("Imported", { exact: true })).toHaveCount(2);
+    await expect(page.getByText(/2 assets queued for background import/)).toBeVisible();
+    await expect(page.getByText("Queued", { exact: true })).toHaveCount(2);
     await page.screenshot({
       fullPage: true,
       path: evidencePath("p1-13-external-asset-import.png"),
@@ -306,7 +316,7 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: /选择 Pexels desk product packshot/ }).click();
     await expect(page.getByText("已选择 1 个素材")).toBeVisible();
     await page.getByRole("button", { name: "一键导入" }).click();
-    await expect(page.getByText(/已将 1 个素材导入腾讯 COS/)).toBeVisible();
+    await expect(page.getByText(/已将 1 个素材加入后台导入队列/)).toBeVisible();
 
     await page.screenshot({
       fullPage: true,
@@ -468,7 +478,7 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: "Select Cash register button click" }).click();
     await expect(page.getByText("1 selected")).toBeVisible();
     await page.getByRole("button", { name: "Import selected" }).click();
-    await expect(page.getByText(/1 asset imported to Tencent COS/)).toBeVisible();
+    await expect(page.getByText(/1 asset queued for background import/)).toBeVisible();
   });
 
   test("reminds users when no third-party stock library is configured", async ({ page }) => {

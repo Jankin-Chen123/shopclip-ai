@@ -85,6 +85,9 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - [x] Backend external import distinguishes image, video, audio, and text results when choosing asset type, MIME type, storage metadata, and category tags.
 - [x] Third-party stock libraries support `Custom` and `Use official config` API key sources.
 - [x] In `Use official config` mode, the browser omits provider API keys and the backend resolves the selected provider key from `.env`.
+- [x] One-click third-party asset import returns immediately as a background queue job; the user can continue operating while COS upload and database metadata persistence finish asynchronously.
+- [x] Background import creates a `processing` asset placeholder and `AssetProcessingJob`, then updates the asset to `ready` with COS `objectKey`, `url`, `storageProvider`, MIME/size, provider/license metadata, and type-specific tags after upload.
+- [x] COS intelligent asset query score threshold is now `>= 70`; scores below 70 are filtered out.
 
 ## Completion Notes
 
@@ -106,6 +109,9 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - Replaced inline external stock results with a dedicated search modal and responsive selectable result cards. Cards now use larger 16:9 previews, wrap/clamp long title/license text inside the card, and no longer show per-card import buttons.
 - Added a sticky modal action area for selected-count feedback and one-click bulk import. Bulk import now calls the backend import endpoint for each selected result and confirms COS/database persistence.
 - Added server-side external asset downloading and COS upload during external import. Imported records now persist `source`, `storageProvider`, `objectKey`, COS `url`, MIME type, provider/license metadata, and type-specific tags in the asset store/database.
+- Converted external asset import to a background queue flow. The import endpoints now return `202 Accepted` with a `processing` asset and `processingJob`; the in-process background task downloads the selected third-party asset, uploads it to Tencent COS, and updates database/store metadata when complete.
+- Updated the one-click import modal to enqueue selected assets concurrently and show a non-blocking queue confirmation instead of a blocking "importing to COS" state. Queued cards are labeled `Queued` / `已入队`.
+- Raised the COS intelligent search threshold to `>= 70` across request payloads, normalization, and local result mapping.
 - Added internal scrolling to the external-search modal so large provider result sets can be browsed without overflowing the viewport.
 - Added paged external search (`page`, `perPage`, `hasMore`) and infinite-scroll loading in the modal result pane. Pexels/Pixabay provider requests now pass the requested page to the upstream API.
 - Added a themed scrollbar for the external result pane and a clear loading/end-of-results state at the bottom of the modal.
@@ -148,6 +154,7 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
   - Starts from Settings, verifies provider configuration UI, opens the asset-page modal, searches mocked Pexels results through routed paged API responses, opens preview details, verifies the modal result area scrolls and loads the next page at the bottom, selects result cards, and verifies one-click COS import feedback.
   - Verifies the no-provider reminder state and disabled modal search button.
 - `corepack pnpm --filter @shopclip/api test -- asset-cos-flow.test.ts p1-flow.test.ts`
+- `corepack pnpm --filter @shopclip/api test -- asset-cos-flow.test.ts p1-flow.test.ts cosIntelligentSearchProvider.test.ts`
 - `corepack pnpm --filter @shopclip/web test:e2e -- p1-external-assets.spec.ts`
 - Screenshot: `projects/shopclip-ai/evidence/p1-13-external-provider-settings.png`
 - Screenshot: `projects/shopclip-ai/evidence/p1-13-external-search-modal.png`
@@ -170,4 +177,5 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 
 - External API rate limits and license terms differ by provider; production import should record license and source at time of use.
 - External imports now download and cache selected provider files in COS. Production rollout should still review provider license terms, rate limits, and whether to store original files or provider-approved previews per source.
+- The current background import runner is in-process. For production, move it to a durable queue/worker so queued third-party imports survive API process restarts.
 - User-supplied stock API keys are stored in browser localStorage for this deliverable demo; production should move this to encrypted per-user secret storage before multi-user rollout.

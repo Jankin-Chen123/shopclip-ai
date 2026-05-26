@@ -95,7 +95,17 @@ export class MemoryProjectStore implements ProjectStore {
     update: Partial<
       Pick<
         AssetMetadata,
-        "embeddingText" | "metadata" | "objectKey" | "status" | "tags" | "thumbnailKey" | "url"
+        | "embeddingText"
+        | "metadata"
+        | "mimeType"
+        | "objectKey"
+        | "sizeBytes"
+        | "source"
+        | "status"
+        | "storageProvider"
+        | "tags"
+        | "thumbnailKey"
+        | "url"
       >
     >,
   ): AssetMetadata | undefined {

@@ -603,11 +603,12 @@ export const AssetsPanel = ({
       return;
     }
 
-    setExternalImportMessage(language === "zh" ? "正在导入到腾讯 COS..." : "Importing to Tencent COS...");
+    const assetsToQueue = selectedExternalAssets;
+    setExternalImportMessage(
+      language === "zh" ? "正在加入后台导入队列..." : "Adding imports to the background queue...",
+    );
     try {
-      for (const asset of selectedExternalAssets) {
-        await onImportExternalAsset(asset);
-      }
+      await Promise.all(assetsToQueue.map((asset) => onImportExternalAsset(asset)));
     } catch (error) {
       setExternalImportMessage(
         error instanceof Error
@@ -621,15 +622,15 @@ export const AssetsPanel = ({
 
     setImportedExternalAssetIds((current) => {
       const next = new Set(current);
-      selectedExternalAssets.forEach((asset) => next.add(asset.id));
+      assetsToQueue.forEach((asset) => next.add(asset.id));
       return next;
     });
     setExternalImportMessage(
       language === "zh"
-        ? `已将 ${selectedExternalAssetCount} 个素材导入腾讯 COS，并写入正式素材库。`
-        : `${selectedExternalAssetCount} asset${
-            selectedExternalAssetCount === 1 ? "" : "s"
-          } imported to Tencent COS and saved in the asset library.`,
+        ? `已将 ${assetsToQueue.length} 个素材加入后台导入队列，可继续操作；后台会上传腾讯 COS 并写入数据库元数据。`
+        : `${assetsToQueue.length} asset${
+            assetsToQueue.length === 1 ? "" : "s"
+          } queued for background import. You can keep working while Tencent COS upload and database metadata persistence continue.`,
     );
     setSelectedExternalAssetIds(new Set());
   };
@@ -1244,7 +1245,7 @@ export const AssetsPanel = ({
                               <h4 title={result.title}>{result.title}</h4>
                               {isImported ? (
                                 <span className="external-imported-label">
-                                  {language === "zh" ? "已存库" : "Imported"}
+                                  {language === "zh" ? "已入队" : "Queued"}
                                 </span>
                               ) : null}
                               <p>
@@ -1296,7 +1297,7 @@ export const AssetsPanel = ({
                   {externalImportMessage ? <p role="status">{externalImportMessage}</p> : null}
                 </div>
                 <Button
-                  disabled={disabled || selectedExternalAssetCount === 0 || isLoading}
+                  disabled={disabled || selectedExternalAssetCount === 0}
                   icon={<Check size={18} />}
                   onClick={handleBulkExternalImport}
                   variant="primary"

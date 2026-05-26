@@ -235,16 +235,14 @@ export const uploadAssetFileToStorage = async (
 export const importExternalAsset = async (
   projectId: string | undefined,
   asset: ExternalAssetResult,
-): Promise<AssetMetadata> => {
-  const response = await requestJson<{ asset: AssetMetadata }>(
+): Promise<{ asset: AssetMetadata; processingJob: AssetProcessingJob }> =>
+  requestJson<{ asset: AssetMetadata; processingJob: AssetProcessingJob }>(
     projectId ? `/projects/${projectId}/assets/import-external` : "/assets/import-external",
     {
       method: "POST",
       body: JSON.stringify(asset),
     },
   );
-  return response.asset;
-};
 
 export const searchAssets = async (
   projectId: string | undefined,
