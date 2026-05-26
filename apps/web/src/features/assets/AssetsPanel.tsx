@@ -108,6 +108,44 @@ const externalSearchTypeForCategory = (
   category: AssetCategory,
 ): AssetCategory => category;
 
+const isImageAsset = (asset: AssetMetadata) =>
+  asset.type === "image" || asset.mimeType?.startsWith("image/");
+
+const isVideoAsset = (asset: AssetMetadata) =>
+  asset.type === "video" || asset.mimeType?.startsWith("video/");
+
+const isAudioAsset = (asset: AssetMetadata) =>
+  asset.mimeType?.startsWith("audio/") || asset.tags.some((tag) => tag.toLowerCase() === "audio");
+
+const isScriptAsset = (asset: AssetMetadata) =>
+  asset.mimeType?.startsWith("text/") ||
+  asset.mimeType === "text/markdown" ||
+  asset.tags.some((tag) => ["script", "copy", "text", "脚本"].includes(tag.toLowerCase()));
+
+const assetSourceLabel = (asset: AssetMetadata, language: Language) => {
+  if (asset.source === "external_provider") {
+    return language === "zh" ? "第三方素材" : "External provider";
+  }
+  if (asset.source === "generated") {
+    return language === "zh" ? "生成素材" : "Generated";
+  }
+  if (asset.source === "public_reference") {
+    return language === "zh" ? "公共参考" : "Public reference";
+  }
+  return language === "zh" ? "本地导入" : "Local import";
+};
+
+const formatAssetDate = (value: string | undefined) => {
+  if (!value) {
+    return undefined;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+};
+
 const genericImportUi = {
   en: {
     action: "Import assets",
@@ -304,6 +342,7 @@ export const AssetsPanel = ({
   const [importedExternalAssetIds, setImportedExternalAssetIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [previewAsset, setPreviewAsset] = useState<AssetMetadata>();
   const [previewExternalAsset, setPreviewExternalAsset] = useState<ExternalAssetResult>();
   const [isExternalModalSearching, setIsExternalModalSearching] = useState(false);
   const [isExternalModalLoadingMore, setIsExternalModalLoadingMore] = useState(false);
@@ -326,6 +365,8 @@ export const AssetsPanel = ({
     selectedExternalAssetIds.has(result.id),
   );
   const selectedExternalAssetCount = selectedExternalAssets.length;
+  const closeAssetPreview = () => setPreviewAsset(undefined);
+  const detailLabel = language === "zh" ? "查看详情" : "View details";
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(Array.from(event.target.files ?? []));
@@ -659,32 +700,200 @@ export const AssetsPanel = ({
             </button>
           </div>
         ) : (
-          assets.map((asset) => (
-            <article className="asset-card" key={asset.id}>
-              <button
-                aria-label={asset.name}
-                className="asset-card-frame asset-card-preview"
-                disabled={!onRecallAsset}
-                onClick={() => onRecallAsset?.(asset.id)}
-                type="button"
-              >
-                <span className="asset-preview-glow" aria-hidden="true" />
-                <CategoryIcon size={32} aria-hidden="true" />
-              </button>
-              <div className="asset-card-meta">
-                <div>
-                  <h3>{asset.name}</h3>
-                  <p>{asset.mimeType ?? asset.type}</p>
+          assets.map((asset) => {
+            const AssetIcon = isAudioAsset(asset)
+              ? Music
+              : isScriptAsset(asset)
+                ? FileText
+                : CategoryIcon;
+
+            return (
+              <article className="asset-card" key={asset.id}>
+                <button
+                  aria-label={
+                    language === "zh"
+                      ? `打开 ${asset.name} 详情`
+                      : `Open details for ${asset.name}`
+                  }
+                  className="asset-card-frame asset-card-preview"
+                  onClick={() => setPreviewAsset(asset)}
+                  type="button"
+                >
+                  {isImageAsset(asset) ? (
+                    <img alt={asset.name} decoding="async" loading="lazy" src={asset.url} />
+                  ) : isVideoAsset(asset) ? (
+                    <video aria-label={asset.name} muted preload="metadata" src={asset.url} />
+                  ) : isAudioAsset(asset) ? (
+                    <span className="asset-audio-preview" aria-hidden="true">
+                      <Music size={28} />
+                      <span className="external-audio-waveform">
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    </span>
+                  ) : (
+                    <>
+                      <span className="asset-preview-glow" aria-hidden="true" />
+                      <AssetIcon size={32} aria-hidden="true" />
+                    </>
+                  )}
+                  <span className="asset-card-detail-chip">
+                    <Eye size={15} aria-hidden="true" />
+                    {detailLabel}
+                  </span>
+                </button>
+                <div className="asset-card-meta">
+                  <div>
+                    <h3 title={asset.name}>{asset.name}</h3>
+                    <p>{asset.mimeType ?? asset.type}</p>
+                  </div>
+                  <span>{formatBytes(asset.sizeBytes)}</span>
                 </div>
-                <span>{formatBytes(asset.sizeBytes)}</span>
-              </div>
-              <StatusPill tone={asset.status === "ready" ? "success" : "warning"}>
-                {asset.status}
-              </StatusPill>
-            </article>
-          ))
+                <StatusPill tone={asset.status === "ready" ? "success" : "warning"}>
+                  {asset.status}
+                </StatusPill>
+              </article>
+            );
+          })
         )}
       </div>
+
+      {previewAsset ? (
+        <div className="external-preview-backdrop" role="presentation">
+          <section
+            aria-labelledby="asset-preview-title"
+            aria-modal="true"
+            className="external-preview-dialog asset-preview-dialog"
+            role="dialog"
+          >
+            <div className="asset-import-dialog-heading external-preview-heading">
+              <div>
+                <p className="eyebrow">{language === "zh" ? "素材详情" : "Asset details"}</p>
+                <h3 id="asset-preview-title">{previewAsset.name}</h3>
+              </div>
+              <button
+                aria-label={language === "zh" ? "关闭素材详情" : "Close asset details"}
+                className="icon-button"
+                onClick={closeAssetPreview}
+                type="button"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="external-preview-content">
+              <div className="external-preview-media asset-preview-media">
+                {isImageAsset(previewAsset) ? (
+                  <img alt={previewAsset.name} decoding="async" src={previewAsset.url} />
+                ) : isVideoAsset(previewAsset) ? (
+                  <video controls preload="metadata" src={previewAsset.url} />
+                ) : isAudioAsset(previewAsset) ? (
+                  <div className="external-preview-audio">
+                    <div
+                      className="external-audio-preview external-audio-preview-large"
+                      aria-hidden="true"
+                    >
+                      <Music size={42} />
+                      <span className="external-audio-waveform">
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    </div>
+                    <audio controls src={previewAsset.url} />
+                  </div>
+                ) : (
+                  <div className="asset-document-preview">
+                    <FileText size={42} aria-hidden="true" />
+                    <strong>{previewAsset.name}</strong>
+                    <span>{previewAsset.mimeType ?? previewAsset.type}</span>
+                  </div>
+                )}
+              </div>
+
+              <aside className="external-preview-details">
+                <span className="external-source-pill">
+                  <Globe2 size={14} aria-hidden="true" />
+                  {assetSourceLabel(previewAsset, language)}
+                </span>
+                <dl>
+                  <div>
+                    <dt>{language === "zh" ? "名称" : "Name"}</dt>
+                    <dd>{previewAsset.name}</dd>
+                  </div>
+                  <div>
+                    <dt>{language === "zh" ? "类型" : "Type"}</dt>
+                    <dd>{previewAsset.mimeType ?? previewAsset.type}</dd>
+                  </div>
+                  <div>
+                    <dt>{language === "zh" ? "大小" : "Size"}</dt>
+                    <dd>{formatBytes(previewAsset.sizeBytes)}</dd>
+                  </div>
+                  <div>
+                    <dt>{language === "zh" ? "状态" : "Status"}</dt>
+                    <dd>{previewAsset.status}</dd>
+                  </div>
+                  {previewAsset.storageProvider ? (
+                    <div>
+                      <dt>{language === "zh" ? "存储" : "Storage"}</dt>
+                      <dd>{previewAsset.storageProvider}</dd>
+                    </div>
+                  ) : null}
+                  {previewAsset.tags.length > 0 ? (
+                    <div>
+                      <dt>{language === "zh" ? "标签" : "Tags"}</dt>
+                      <dd>{previewAsset.tags.join(", ")}</dd>
+                    </div>
+                  ) : null}
+                  {previewAsset.embeddingText ? (
+                    <div>
+                      <dt>{language === "zh" ? "检索描述" : "Retrieval text"}</dt>
+                      <dd>{previewAsset.embeddingText}</dd>
+                    </div>
+                  ) : null}
+                  {formatAssetDate(previewAsset.createdAt) ? (
+                    <div>
+                      <dt>{language === "zh" ? "创建时间" : "Created"}</dt>
+                      <dd>{formatAssetDate(previewAsset.createdAt)}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+
+                <div className="external-preview-actions">
+                  {onRecallAsset ? (
+                    <Button
+                      icon={<Check size={18} />}
+                      onClick={() => {
+                        onRecallAsset(previewAsset.id);
+                        closeAssetPreview();
+                      }}
+                      variant="primary"
+                    >
+                      {language === "zh" ? "用于当前分镜" : "Use in selected scene"}
+                    </Button>
+                  ) : null}
+                  <a
+                    className="external-open-link"
+                    href={previewAsset.url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <ExternalLink size={16} aria-hidden="true" />
+                    {language === "zh" ? "打开文件" : "Open file"}
+                  </a>
+                </div>
+              </aside>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {isExternalSearchOpen ? (
         <div className="asset-import-backdrop external-search-backdrop" role="presentation">

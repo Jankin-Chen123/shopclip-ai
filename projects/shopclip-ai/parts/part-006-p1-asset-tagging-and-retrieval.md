@@ -64,6 +64,10 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 - Added global asset persistence support:
   - `Asset.projectId` and `AssetProcessingJob.projectId` are nullable;
   - project-level asset endpoints remain as compatibility paths, but the asset library entry point is global.
+- Added front-end local asset preview and detail viewing:
+  - asset cards now render image/video/audio/script previews from the stored asset URL instead of icon-only placeholders;
+  - clicking a local asset opens a detail dialog with type, size, status, source, storage, tags, retrieval text, created time, and file link;
+  - when a scene is selected, the detail dialog can assign the asset to the selected scene.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
   - `projects/shopclip-ai/evidence/part-006-verification.md`
@@ -72,6 +76,10 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 
 - `corepack pnpm --filter @shopclip/api test` on 2026-05-26: 11 files / 36 tests passed.
 - `corepack pnpm --filter @shopclip/web test` on 2026-05-26: 1 file / 24 tests passed.
+- `corepack pnpm --filter @shopclip/web test` on 2026-05-26: 1 file / 25 tests passed after adding local asset preview/detail coverage.
+- `corepack pnpm --filter @shopclip/web typecheck` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
+- `corepack pnpm --filter @shopclip/web build` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/web lint` on 2026-05-26: passed.
 - `corepack pnpm --filter @shopclip/api build` on 2026-05-26: passed.

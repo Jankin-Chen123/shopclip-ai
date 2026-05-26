@@ -174,6 +174,51 @@ describe("App", () => {
     expect(markup).not.toContain("Size in bytes");
   });
 
+  it("renders local asset previews with a detail action", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "image",
+          name: "GlowGrip packshot",
+          mimeType: "image/png",
+          sizeBytes: 220000,
+          tags: ["product", "desk", "hero"],
+        }}
+        assets={[
+          makeAsset({
+            id: "asset-packshot",
+            type: "image",
+            name: "GlowGrip packshot",
+            mimeType: "image/png",
+            sizeBytes: 242000,
+            tags: ["product", "hero"],
+            url: "/uploads/glowgrip-packshot.png",
+          }),
+        ]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject
+        hasSearched={false}
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="image"
+        onAssetDraftChange={() => undefined}
+        onImportFiles={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery=""
+        searchResults={[]}
+      />,
+    );
+
+    expect(markup).toContain('src="/uploads/glowgrip-packshot.png"');
+    expect(markup).toContain('alt="GlowGrip packshot"');
+    expect(markup).toContain("View details");
+    expect(markup).toContain("Open details for GlowGrip packshot");
+  });
+
   it("uses one import entry for every asset category", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
 
