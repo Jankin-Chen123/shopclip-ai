@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AssetMetadata, AssetSlice } from "@shopclip/shared";
 
 import {
@@ -21,6 +21,10 @@ const makeAsset = (overrides: Partial<AssetMetadata>): AssetMetadata => ({
 });
 
 describe("COS intelligent search provider", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("normalizes image results and keeps only matches scoring above 60", () => {
     const matches = normalizeCosHybridSearchResponse({
       ImageResult: [
@@ -157,6 +161,34 @@ describe("COS intelligent search provider", () => {
     expect(requests[0]?.headers.authorization).toContain("q-sign-algorithm=sha1");
     expect(matches).toHaveLength(1);
     expect(matches[0]?.score).toBe(91);
+  });
+
+  it("does not include the request body in the COS XML authorization signature", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-26T00:00:00.000Z"));
+    const authorizations: string[] = [];
+    const provider = createCosIntelligentSearchProvider(
+      {
+        COS_APP_ID: "1250000000",
+        COS_INTELLIGENT_SEARCH_DATASET: "shopclip-multidata",
+        COS_REGION: "ap-beijing",
+        COS_SECRET_ID: "secret-id",
+        COS_SECRET_KEY: "secret-key",
+      },
+      async (_url, init) => {
+        authorizations.push(String((init?.headers as Record<string, string>).authorization));
+        return new Response(JSON.stringify({ ImageResult: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    );
+
+    await provider.search({ query: "dog", limit: 12, matchThreshold: 60 });
+    await provider.search({ query: "cat", limit: 12, matchThreshold: 60 });
+
+    expect(authorizations).toHaveLength(2);
+    expect(authorizations[0]).toBe(authorizations[1]);
   });
 
   it("includes the COS response body when a hybrid search request fails", async () => {

@@ -74,13 +74,11 @@ const normalizeHeaderValue = (value: string): string => encodeURIComponent(value
 const nowSeconds = (): number => Math.floor(Date.now() / 1000);
 
 const createAuthorization = ({
-  body,
   config,
   host,
   method,
   path,
 }: {
-  body: string;
   config: Pick<CosIntelligentSearchConfig, "secretId" | "secretKey">;
   host: string;
   method: string;
@@ -95,7 +93,7 @@ const createAuthorization = ({
     path,
     "",
     `content-type=${normalizeHeaderValue("application/json")}&host=${host.toLowerCase()}`,
-    sha1(body),
+    "",
   ].join("\n");
   const stringToSign = ["sha1", keyTime, sha1(httpString), ""].join("\n");
   const signKey = hmacSha1(config.secretKey, keyTime);
@@ -227,7 +225,6 @@ export const createCosIntelligentSearchProvider = (
         headers: {
           accept: "application/json",
           authorization: createAuthorization({
-            body,
             config,
             host,
             method: "POST",
