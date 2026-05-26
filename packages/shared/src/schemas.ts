@@ -111,7 +111,7 @@ export const ExternalAssetResultSchema = z.object({
   id: z.string().trim().min(1),
   source: ExternalAssetProviderSchema,
   externalId: z.string().trim().min(1),
-  type: z.enum(["image", "video", "audio"]),
+  type: z.enum(["image", "video", "audio", "text"]),
   title: z.string().trim().min(1),
   thumbnailUrl: z.string().trim().default(""),
   previewUrl: z.string().trim().min(1),

@@ -133,7 +133,7 @@ export const externalAssetMatchesCategory = (
     return asset.type === "audio";
   }
 
-  return false;
+  return asset.type === "text";
 };
 
 interface AssetCategoryTabsProps {

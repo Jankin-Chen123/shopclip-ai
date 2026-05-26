@@ -34,7 +34,7 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 ### Out Of Scope
 
 - Paid stock licensing flows.
-- Downloading third-party file binaries into object storage.
+- Paid provider original-file entitlement checks beyond provider preview/download URLs.
 - Paid provider account setup or production license checkout flows.
 - Production vector search over third-party content.
 
@@ -67,7 +67,7 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - [x] The modal searches with the user's configured providers and adapts the result grid across desktop/mobile widths.
 - [x] Demo Stock/mock provider code has been removed from shared contracts, backend providers, Settings, and the search modal.
 - [x] When no third-party stock library is configured, the modal shows a reminder and disables search instead of using mock results.
-- [x] Users can click external result cards to quickly select multiple assets and use "Import selected"/"一键导入" for a frontend-only import confirmation while backend storage is pending.
+- [x] Users can click external result cards to quickly select multiple assets and use "Import selected"/"一键导入" to import selected third-party assets into Tencent COS and persist normalized metadata.
 - [x] Scrolling the modal result list to the bottom loads the next page of third-party results and appends them without replacing selected items.
 - [x] Users can open a preview from each external result card to inspect the full image/video and complete provider metadata before selecting it.
 - [x] Image preview uses the highest-quality provider URL available (`downloadUrl`, falling back to `previewUrl`) instead of the compressed card/preview thumbnail.
@@ -80,8 +80,9 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - [x] Chinese UI copy in the external stock result flow renders without mojibake.
 - [x] Browser E2E captures the external search/import flow.
 - [x] Settings includes Freesound as an audio stock provider option.
-- [x] Audio tabs can search Freesound, show audio-specific cards, open a playable audio preview, and queue selected audio imports.
-- [x] Backend external import accepts normalized audio results and stores them as `reference` assets with `audio/mpeg` metadata until a first-class audio asset type is introduced.
+- [x] Audio tabs can search Freesound, show audio-specific cards, open a playable audio preview, and import selected audio into COS.
+- [x] Backend external import accepts normalized audio results, stores the downloaded file in COS, and persists it as a `reference` asset with audio metadata until a first-class audio asset type is introduced.
+- [x] Backend external import distinguishes image, video, audio, and text results when choosing asset type, MIME type, storage metadata, and category tags.
 - [x] Third-party stock libraries support `Custom` and `Use official config` API key sources.
 - [x] In `Use official config` mode, the browser omits provider API keys and the backend resolves the selected provider key from `.env`.
 
@@ -103,7 +104,8 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - Added image/video/audio/script type switches inside the third-party stock search modal. Switching type keeps the same query text and immediately re-searches with the selected resource type.
 - Removed Demo Stock/mock provider support from `ExternalAssetProviderSchema`, backend provider creation, default Settings state, and browser E2E.
 - Replaced inline external stock results with a dedicated search modal and responsive selectable result cards. Cards now use larger 16:9 previews, wrap/clamp long title/license text inside the card, and no longer show per-card import buttons.
-- Added a sticky modal action area for selected-count feedback and one-click bulk import. For this iteration, import is a frontend-only temporary queue because the production database/object-storage import path is not ready.
+- Added a sticky modal action area for selected-count feedback and one-click bulk import. Bulk import now calls the backend import endpoint for each selected result and confirms COS/database persistence.
+- Added server-side external asset downloading and COS upload during external import. Imported records now persist `source`, `storageProvider`, `objectKey`, COS `url`, MIME type, provider/license metadata, and type-specific tags in the asset store/database.
 - Added internal scrolling to the external-search modal so large provider result sets can be browsed without overflowing the viewport.
 - Added paged external search (`page`, `perPage`, `hasMore`) and infinite-scroll loading in the modal result pane. Pexels/Pixabay provider requests now pass the requested page to the upstream API.
 - Added a themed scrollbar for the external result pane and a clear loading/end-of-results state at the bottom of the modal.
@@ -143,8 +145,10 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - `corepack pnpm build`
 - Evidence note: `projects/shopclip-ai/evidence/2026-05-26-stock-provider-official-config-toggle.md`
 - `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p1-external-assets.spec.ts`
-  - Starts from Settings, verifies provider configuration UI, opens the asset-page modal, searches mocked Pexels results through routed paged API responses, opens preview details, verifies the modal result area scrolls and loads the next page at the bottom, selects result cards, and verifies one-click frontend-only import feedback.
+  - Starts from Settings, verifies provider configuration UI, opens the asset-page modal, searches mocked Pexels results through routed paged API responses, opens preview details, verifies the modal result area scrolls and loads the next page at the bottom, selects result cards, and verifies one-click COS import feedback.
   - Verifies the no-provider reminder state and disabled modal search button.
+- `corepack pnpm --filter @shopclip/api test -- asset-cos-flow.test.ts p1-flow.test.ts`
+- `corepack pnpm --filter @shopclip/web test:e2e -- p1-external-assets.spec.ts`
 - Screenshot: `projects/shopclip-ai/evidence/p1-13-external-provider-settings.png`
 - Screenshot: `projects/shopclip-ai/evidence/p1-13-external-search-modal.png`
 - Screenshot: `projects/shopclip-ai/evidence/p1-13-external-no-provider.png`
@@ -165,5 +169,5 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 ## Risks And Follow-Ups
 
 - External API rate limits and license terms differ by provider; production import should record license and source at time of use.
-- Current modal import only marks selected provider results as queued in the front end; production storage should download/cache selected files in object storage and persist normalized metadata when the backend database/object-storage path is ready.
+- External imports now download and cache selected provider files in COS. Production rollout should still review provider license terms, rate limits, and whether to store original files or provider-approved previews per source.
 - User-supplied stock API keys are stored in browser localStorage for this deliverable demo; production should move this to encrypted per-user secret storage before multi-user rollout.

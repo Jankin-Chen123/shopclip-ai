@@ -501,4 +501,165 @@ describe("COS-backed asset import contract", () => {
     expect(listedAfterDelete.body.assets).toHaveLength(0);
     expect(listedAfterDelete.body.assetSlices).toHaveLength(0);
   });
+
+  it("downloads selected external assets by type and imports them into COS-backed storage", async () => {
+    const uploadedObjects: Array<{
+      body: Buffer;
+      contentType: string;
+      objectKey: string;
+    }> = [];
+    const app = createApp({
+      externalAssetDownloader: async (asset) => ({
+        body: Buffer.from(`downloaded:${asset.type}:${asset.externalId}`),
+        contentType:
+          asset.type === "image"
+            ? "image/webp"
+            : asset.type === "video"
+              ? "video/mp4"
+              : asset.type === "audio"
+                ? "audio/mpeg"
+                : "text/plain",
+        sourceUrl: asset.downloadUrl ?? asset.previewUrl,
+      }),
+      storageProvider: {
+        createReadUrl: ({ objectKey }) => ({ url: `https://cos.example.test/${objectKey}` }),
+        createUploadIntent: ({ asset, assetId, projectId }) => ({
+          provider: "tencent-cos",
+          bucket: "shopclip-assets",
+          region: "ap-guangzhou",
+          objectKey: projectId
+            ? `projects/${projectId}/raw/${assetId}/source.${asset.mimeType.split("/")[1]}`
+            : `library/raw/${assetId}/source.${asset.mimeType.split("/")[1]}`,
+          uploadUrl: "https://cos.example.test/upload",
+          publicUrl: "https://cos.example.test/pending",
+          method: "PUT",
+          headers: { "content-type": asset.mimeType },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        }),
+        deleteObject: async () => undefined,
+        uploadObject: async ({ body, contentType, objectKey }) => {
+          uploadedObjects.push({ body, contentType, objectKey });
+          return {
+            objectKey,
+            provider: "tencent-cos",
+            publicUrl: `https://cos.example.test/${objectKey}`,
+          };
+        },
+      },
+    });
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = app.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+    const projectId = await createProject(baseUrl);
+
+    const cases = [
+      {
+        type: "image",
+        title: "Water packshot",
+        expectedAssetType: "image",
+        expectedMimeType: "image/webp",
+        expectedTypeTag: "image",
+      },
+      {
+        type: "video",
+        title: "Water surface B-roll",
+        expectedAssetType: "video",
+        expectedMimeType: "video/mp4",
+        expectedTypeTag: "video",
+      },
+      {
+        type: "audio",
+        title: "Water ambience",
+        expectedAssetType: "reference",
+        expectedMimeType: "audio/mpeg",
+        expectedTypeTag: "audio",
+      },
+      {
+        type: "text",
+        title: "Water product script",
+        expectedAssetType: "reference",
+        expectedMimeType: "text/plain",
+        expectedTypeTag: "script",
+      },
+    ] as const;
+
+    for (const externalAsset of cases) {
+      const imported = await request<{
+        asset: {
+          id: string;
+          metadata: Record<string, unknown>;
+          mimeType: string;
+          objectKey: string;
+          source: string;
+          storageProvider: string;
+          tags: string[];
+          type: string;
+          url: string;
+        };
+      }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
+        method: "POST",
+        body: JSON.stringify({
+          id: `pexels:${externalAsset.type}:asset-${externalAsset.type}`,
+          source: "pexels",
+          externalId: `asset-${externalAsset.type}`,
+          type: externalAsset.type,
+          title: externalAsset.title,
+          thumbnailUrl: "https://images.pexels.com/thumb.jpg",
+          previewUrl: `https://images.pexels.com/${externalAsset.type}/preview`,
+          downloadUrl: `https://images.pexels.com/${externalAsset.type}/download`,
+          externalUrl: `https://www.pexels.com/${externalAsset.type}/asset-${externalAsset.type}/`,
+          authorName: "Pexels Creator",
+          authorUrl: "https://www.pexels.com/@creator",
+          licenseLabel: "Pexels License",
+          licenseUrl: "https://www.pexels.com/license/",
+          canUseCommercially: true,
+          requiresAttribution: false,
+          tags: ["water"],
+        }),
+      });
+
+      expect(imported.status).toBe(201);
+      expect(imported.body.asset).toMatchObject({
+        name: externalAsset.title,
+        type: externalAsset.expectedAssetType,
+        mimeType: externalAsset.expectedMimeType,
+        source: "external_provider",
+        storageProvider: "tencent-cos",
+      });
+      expect(imported.body.asset.url).toBe(
+        `https://cos.example.test/${imported.body.asset.objectKey}`,
+      );
+      expect(imported.body.asset.tags).toEqual(
+        expect.arrayContaining([
+          "external",
+          externalAsset.expectedTypeTag,
+          "source-pexels",
+          `external-id-asset-${externalAsset.type}`,
+          "license-pexels-license",
+          "storage-tencent-cos",
+        ]),
+      );
+      expect(imported.body.asset.metadata).toMatchObject({
+        externalAssetImport: true,
+        externalAssetType: externalAsset.type,
+        externalId: `asset-${externalAsset.type}`,
+        externalSource: "pexels",
+        originalDownloadUrl: `https://images.pexels.com/${externalAsset.type}/download`,
+        originalPreviewUrl: `https://images.pexels.com/${externalAsset.type}/preview`,
+      });
+    }
+
+    expect(uploadedObjects).toHaveLength(cases.length);
+    expect(uploadedObjects.map((object) => object.contentType)).toEqual(
+      cases.map((item) => item.expectedMimeType),
+    );
+    expect(uploadedObjects.map((object) => object.body.toString())).toEqual(
+      cases.map((item) => `downloaded:${item.type}:asset-${item.type}`),
+    );
+  });
 });

@@ -44,7 +44,18 @@ describe("P1 asset retrieval and scene editing", () => {
   let baseUrl: string;
 
   beforeEach(async () => {
-    const app = createApp();
+    const app = createApp({
+      externalAssetDownloader: async (asset) => ({
+        body: Buffer.from(`downloaded:${asset.source}:${asset.externalId}`),
+        contentType:
+          asset.type === "video"
+            ? "video/mp4"
+            : asset.type === "audio"
+              ? "audio/mpeg"
+              : "image/jpeg",
+        sourceUrl: asset.downloadUrl ?? asset.previewUrl,
+      }),
+    });
     server = app.listen(0);
     await new Promise<void>((resolve) => {
       server.once("listening", resolve);
@@ -199,6 +210,8 @@ describe("P1 asset retrieval and scene editing", () => {
       asset: {
         id: string;
         name: string;
+        objectKey?: string;
+        storageProvider?: string;
         type: string;
         url: string;
         tags: string[];
@@ -231,16 +244,22 @@ describe("P1 asset retrieval and scene editing", () => {
     expect(imported.body.asset).toMatchObject({
       name: "Desk setup B-roll",
       type: "video",
-      url: "https://videos.pexels.com/video-files/654/download.mp4",
       mimeType: "video/mp4",
+      storageProvider: "mock-cos",
     });
+    expect(imported.body.asset.objectKey).toMatch(
+      new RegExp(`^projects/${projectId}/raw/${imported.body.asset.id}/source\\.mp4$`),
+    );
+    expect(imported.body.asset.url).toContain(imported.body.asset.objectKey ?? "");
     expect(imported.body.asset.tags).toEqual(
       expect.arrayContaining([
         "desk",
         "product",
+        "video",
         "external",
         "source-pexels",
         "license-pexels-license",
+        "storage-mock-cos",
       ]),
     );
 
@@ -260,6 +279,8 @@ describe("P1 asset retrieval and scene editing", () => {
       asset: {
         id: string;
         name: string;
+        objectKey?: string;
+        storageProvider?: string;
         type: string;
         url: string;
         tags: string[];
@@ -292,9 +313,13 @@ describe("P1 asset retrieval and scene editing", () => {
     expect(imported.body.asset).toMatchObject({
       name: "Cash register button click",
       type: "reference",
-      url: "https://cdn.freesound.org/previews/12/12345-hq.mp3",
       mimeType: "audio/mpeg",
+      storageProvider: "mock-cos",
     });
+    expect(imported.body.asset.objectKey).toMatch(
+      new RegExp(`^projects/${projectId}/raw/${imported.body.asset.id}/source\\.mp3$`),
+    );
+    expect(imported.body.asset.url).toContain(imported.body.asset.objectKey ?? "");
     expect(imported.body.asset.tags).toEqual(
       expect.arrayContaining([
         "audio",
@@ -303,6 +328,7 @@ describe("P1 asset retrieval and scene editing", () => {
         "external",
         "source-freesound",
         "license-creative-commons-0",
+        "storage-mock-cos",
       ]),
     );
   });

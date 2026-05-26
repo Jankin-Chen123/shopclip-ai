@@ -2,7 +2,7 @@
 
 ## Summary
 
-Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and Freesound. The latest iteration removes the Demo Stock/mock provider, adds Settings-based provider configuration, keeps third-party results in a dedicated external-search modal, changes provider results to card-based multi-select with a frontend-only one-click import queue, and adds infinite scroll plus full image/video/audio preview.
+Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and Freesound. The latest iteration removes the Demo Stock/mock provider, adds Settings-based provider configuration, keeps third-party results in a dedicated external-search modal, changes provider results to card-based multi-select with one-click COS import plus database persistence, and adds infinite scroll plus full image/video/audio preview.
 
 ## Implementation Notes
 
@@ -16,7 +16,7 @@ Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and 
 - Added provider adapters in `apps/api/src/providers/assets/externalAssetProviders.ts`.
 - Added Pexels, Pixabay, and Freesound normalization tests with fixed payloads.
 - Added API aggregation test using an injected external provider, avoiding live network calls.
-- Added `POST /api/projects/:projectId/assets/import-external` to persist an external result as a project asset reference.
+- Added `POST /api/projects/:projectId/assets/import-external` and `POST /api/assets/import-external` to download selected third-party media, upload it through the configured Tencent COS storage provider, and persist normalized asset metadata in the asset database/store.
 - Added `POST /api/assets/external-search` to search user-selected provider configs sent from the browser.
 - Added Settings UI for Pexels, Pixabay, and Freesound provider configs. User-entered provider API keys are stored in browser localStorage for this deliverable demo.
 - Added Freesound API v2 audio search normalization using high-quality preview URLs for browser playback; original file download remains a future OAuth-enabled enhancement.
@@ -33,7 +33,7 @@ Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and 
 - Video result cards now render provider cover images from `thumbnailUrl` and only fall back to the generic video icon if the provider did not return a cover image.
 - Video results with no provider cover, or a cover image that fails to load, now show a generated "No video cover" fallback image and remain selectable/searchable.
 - Search fields now render as one styled input shell with an embedded icon; the nested native input has no separate border/background.
-- One-click import currently queues selected assets in frontend state and shows confirmation only; production persistence is deferred until backend database/object-storage integration is ready.
+- One-click import now calls the backend import endpoint for each selected result. The backend distinguishes image, video, audio, and text results, uploads the downloaded binary/text to COS, and stores `source`, `storageProvider`, `objectKey`, `url`, `mimeType`, tags, and original provider/license metadata.
 - Added a visible "Third-party stock" entry on the asset library page and enabled search from `/#assets` before a project is loaded.
 - If no user provider is configured, the modal now shows an explicit reminder and disables search instead of using mock results.
 - The front end now renders explicit no-result feedback inside the stock-search modal for configured providers that return no matches.
@@ -43,11 +43,14 @@ Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and 
 ## Verification Commands
 
 - `corepack pnpm --filter @shopclip/shared test`
-  - Result before implementation: failed because `ExternalAssetResultSchema` did not exist.
-  - Result after implementation: passed, 11 tests.
+  - Result after COS import enhancement: passed, 13 tests.
 - `corepack pnpm --filter @shopclip/api test -- externalAssetProviders p1-flow`
   - Result before implementation: failed because provider module and `externalResults` did not exist.
   - Result after implementation: passed, 28 tests.
+- `corepack pnpm --filter @shopclip/api test -- asset-cos-flow.test.ts p1-flow.test.ts`
+  - Result after COS import enhancement: passed, 49 tests.
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
+  - Result after COS import enhancement: passed, 38 tests.
 - `corepack pnpm test`
   - Result: passed. Shared 11 tests, API 28 tests, Web 18 tests.
 - `corepack pnpm typecheck`
@@ -58,10 +61,10 @@ Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and 
   - Result: passed.
 - Browser E2E with local API/Web dev servers and routed Pexels search response
   - Command body: `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p1-external-assets.spec.ts`
-  - Result: passed, 5 tests.
-  - Flow: open Settings, verify "Add third-party library", add a Pexels key, open `/#assets`, search routed Pexels stock in the modal, verify card images use the high-resolution URL, open the preview dialog, verify metadata and high-resolution image URL usage, scroll to the bottom to load the next page, select two result cards, click "Import selected", and verify frontend-only queued confirmation.
+  - Result after COS import enhancement: passed, 6 tests.
+  - Flow: open Settings, verify "Add third-party library", add a Pexels key, open `/#assets`, search routed Pexels stock in the modal, verify card images use the high-resolution URL, open the preview dialog, verify metadata and high-resolution image URL usage, scroll to the bottom to load the next page, select two result cards, click "Import selected", and verify COS import confirmation.
   - Video flow: switch to the Video tab, search routed video results, verify one result uses the provider cover image, verify another result without a provider cover uses the generated fallback image, and confirm the generic video placeholder is not shown for these cases.
-  - Audio flow: switch to the Audio tab, search routed Freesound results, verify the request type is `audio`, open a playable preview dialog, verify duration metadata, select the result card, and confirm frontend-only queued import feedback.
+  - Audio flow: switch to the Audio tab, search routed Freesound results, verify the request type is `audio`, open a playable preview dialog, verify duration metadata, select the result card, and confirm COS import feedback.
   - No-provider flow: open `/#assets` with no stock provider config, open the modal, verify the reminder and disabled search button.
   - Screenshot evidence:
     - `projects/shopclip-ai/evidence/p1-13-external-provider-settings.png`
@@ -75,9 +78,8 @@ Part 013 adds third-party stock asset provider support for Pexels, Pixabay, and 
 - Provider API keys can be read from server-side environment variables or sent in a user-scoped search request from browser-local Settings.
 - Normalized provider results do not include API keys.
 - Front-end code stores user-entered stock provider keys in localStorage for this demo; production should use encrypted per-user secret storage.
-- Imported assets store source/license tags such as `source-pexels`/`source-freesound` and normalized license labels. Audio imports are stored as reference assets with `audio/mpeg` metadata for this schema version.
+- Imported assets store source/license tags such as `source-pexels`/`source-freesound` and normalized license labels. Image and video imports keep first-class asset types; audio imports are stored as reference assets with audio MIME metadata; text imports are stored as reference assets with `text/plain` metadata and a `script` tag for this schema version.
 
 ## Follow-Ups
 
-- Production storage can optionally download/cache selected third-party binaries into object storage instead of keeping only remote URLs.
 - Real provider rollout should review current Pexels/Pixabay/Freesound license terms and API rate limits before enabling keys.

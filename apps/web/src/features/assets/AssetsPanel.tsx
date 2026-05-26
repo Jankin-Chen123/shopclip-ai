@@ -47,7 +47,7 @@ interface AssetsPanelProps {
   onAssetDraftChange: (asset: CreateAssetInput) => void;
   onCategoryChange: (category: AssetCategory) => void;
   onDeleteAssets?: (assetIds: string[]) => void;
-  onImportExternalAsset?: (asset: ExternalAssetResult) => void;
+  onImportExternalAsset?: (asset: ExternalAssetResult) => Promise<void> | void;
   onImportFiles: (files: File[]) => void;
   onRecallAsset?: (assetId: string) => void;
   onSearchExternalAssets?: (
@@ -322,6 +322,7 @@ export const AssetsPanel = ({
   hasSearched,
   language,
   hasProject,
+  onImportExternalAsset,
   onImportFiles,
   onRecallAsset,
   onCategoryChange,
@@ -597,8 +598,24 @@ export const AssetsPanel = ({
     toggleExternalAssetSelection(assetId);
   };
 
-  const handleBulkExternalImport = () => {
-    if (selectedExternalAssetCount === 0) {
+  const handleBulkExternalImport = async () => {
+    if (selectedExternalAssetCount === 0 || !onImportExternalAsset) {
+      return;
+    }
+
+    setExternalImportMessage(language === "zh" ? "正在导入到腾讯 COS..." : "Importing to Tencent COS...");
+    try {
+      for (const asset of selectedExternalAssets) {
+        await onImportExternalAsset(asset);
+      }
+    } catch (error) {
+      setExternalImportMessage(
+        error instanceof Error
+          ? error.message
+          : language === "zh"
+            ? "导入失败，请稍后重试。"
+            : "Import failed. Try again.",
+      );
       return;
     }
 
@@ -609,10 +626,10 @@ export const AssetsPanel = ({
     });
     setExternalImportMessage(
       language === "zh"
-        ? `已将 ${selectedExternalAssetCount} 个素材加入素材库暂存区，后端存储接入后会写入正式素材库。`
+        ? `已将 ${selectedExternalAssetCount} 个素材导入腾讯 COS，并写入正式素材库。`
         : `${selectedExternalAssetCount} asset${
             selectedExternalAssetCount === 1 ? "" : "s"
-          } added to the local import queue. Backend storage is not connected yet.`,
+          } imported to Tencent COS and saved in the asset library.`,
     );
     setSelectedExternalAssetIds(new Set());
   };
@@ -690,11 +707,11 @@ export const AssetsPanel = ({
           <p>
             {hasProject
               ? language === "zh"
-                ? "在悬浮窗中搜索已配置素材库，勾选后可一键加入素材库暂存区。"
-                : "Search configured stock libraries, select results, and add them to the local import queue."
+                ? "在悬浮窗中搜索已配置素材库，勾选后可一键导入腾讯 COS。"
+                : "Search configured stock libraries, select results, and import them to Tencent COS."
               : language === "zh"
-                ? "无需先切回项目页；当前会先把勾选素材加入前端暂存区。"
-                : "No need to switch pages first; selected assets are queued locally for this demo."}
+                ? "无需先切回项目页；勾选素材会直接导入腾讯 COS 并写入素材库。"
+                : "No need to switch pages first; selected assets import directly to Tencent COS."}
           </p>
         </div>
         <Button
@@ -1227,7 +1244,7 @@ export const AssetsPanel = ({
                               <h4 title={result.title}>{result.title}</h4>
                               {isImported ? (
                                 <span className="external-imported-label">
-                                  {language === "zh" ? "已暂存" : "Queued"}
+                                  {language === "zh" ? "已存库" : "Imported"}
                                 </span>
                               ) : null}
                               <p>

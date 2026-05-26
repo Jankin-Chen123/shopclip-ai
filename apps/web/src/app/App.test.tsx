@@ -566,6 +566,7 @@ describe("App", () => {
 
     expect(markup).toContain("Search external stock assets");
     expect(markup).toContain("No need to switch pages first");
+    expect(markup).toContain("selected assets import directly to Tencent COS");
     expect(markup).toContain("Search stock");
   });
 
@@ -865,5 +866,29 @@ describe("App", () => {
     expect(externalAssetMatchesCategory(audioResult, "audio")).toBe(true);
     expect(externalAssetMatchesCategory(audioResult, "image")).toBe(false);
     expect(externalAssetMatchesCategory(audioResult, "video")).toBe(false);
+  });
+
+  it("classifies text external results into the script category", () => {
+    const textResult: ExternalAssetResult = {
+      id: "pexels:text:script-1",
+      source: "pexels",
+      externalId: "script-1",
+      type: "text",
+      title: "Launch script",
+      thumbnailUrl: "",
+      previewUrl: "https://www.pexels.com/script/preview.txt",
+      downloadUrl: "https://www.pexels.com/script/download.txt",
+      externalUrl: "https://www.pexels.com/script/script-1/",
+      authorName: "Script Creator",
+      licenseLabel: "Pexels License",
+      canUseCommercially: true,
+      requiresAttribution: false,
+      tags: ["script"],
+    };
+
+    expect(externalAssetMatchesCategory(textResult, "script")).toBe(true);
+    expect(externalAssetMatchesCategory(textResult, "image")).toBe(false);
+    expect(externalAssetMatchesCategory(textResult, "video")).toBe(false);
+    expect(externalAssetMatchesCategory(textResult, "audio")).toBe(false);
   });
 });

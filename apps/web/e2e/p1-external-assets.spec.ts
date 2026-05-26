@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import type { Route } from "@playwright/test";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const evidenceDir = resolve(currentDir, "../../../projects/shopclip-ai/evidence");
@@ -108,7 +109,60 @@ test.describe("External stock asset flow", () => {
     await mkdir(evidenceDir, { recursive: true });
   });
 
-  test("configures a stock provider, searches in the modal, selects cards, and bulk imports locally", async ({
+  test.beforeEach(async ({ page }) => {
+    const handleImportRoute = async (route: Route) => {
+      const externalAsset = route.request().postDataJSON() as {
+        externalId: string;
+        source: string;
+        tags?: string[];
+        title: string;
+        type: "image" | "video" | "audio" | "text";
+      };
+      const mimeType =
+        externalAsset.type === "video"
+          ? "video/mp4"
+          : externalAsset.type === "audio"
+            ? "audio/mpeg"
+            : externalAsset.type === "text"
+              ? "text/plain"
+              : "image/jpeg";
+      const assetType =
+        externalAsset.type === "image" || externalAsset.type === "video"
+          ? externalAsset.type
+          : "reference";
+      const objectKey = `library/raw/imported-${externalAsset.externalId}/source`;
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          asset: {
+            id: `imported-${externalAsset.externalId}`,
+            type: assetType,
+            status: "ready",
+            source: "external_provider",
+            storageProvider: "tencent-cos",
+            objectKey,
+            url: `https://cos.example.test/${objectKey}`,
+            name: externalAsset.title,
+            mimeType,
+            sizeBytes: 1024,
+            tags: [
+              ...(externalAsset.tags ?? []),
+              "external",
+              externalAsset.type === "text" ? "script" : externalAsset.type,
+              `source-${externalAsset.source}`,
+            ],
+          },
+        }),
+      });
+    };
+
+    await page.route("**/api/assets/import-external", handleImportRoute);
+    await page.route(/\/api\/projects\/[^/]+\/assets\/import-external$/, handleImportRoute);
+  });
+
+  test("configures a stock provider, searches in the modal, selects cards, and imports to COS", async ({
     page,
   }) => {
     await page.route("**/api/assets/external-search", async (route) => {
@@ -149,6 +203,8 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: "Search stock" }).click();
 
     await expect(page.getByRole("dialog", { name: "Search third-party assets" })).toBeVisible();
+    await page.getByLabel("External stock search query").fill("desk product");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(
       page.getByRole("heading", {
         name: /Pexels desk product packshot with an intentionally long title/,
@@ -200,8 +256,8 @@ test.describe("External stock asset flow", () => {
 
     await page.getByRole("button", { name: "Import selected" }).click();
 
-    await expect(page.getByText(/2 assets added to the local import queue/)).toBeVisible();
-    await expect(page.getByText("Queued", { exact: true })).toHaveCount(2);
+    await expect(page.getByText(/2 assets imported to Tencent COS/)).toBeVisible();
+    await expect(page.getByText("Imported", { exact: true })).toHaveCount(2);
     await page.screenshot({
       fullPage: true,
       path: evidencePath("p1-13-external-asset-import.png"),
@@ -240,6 +296,8 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: "搜索第三方素材" }).click();
 
     await expect(page.getByRole("dialog", { name: "搜索第三方素材" })).toBeVisible();
+    await page.getByLabel("第三方素材搜索关键词").fill("desk product");
+    await page.getByRole("button", { name: "搜索", exact: true }).click();
     await expect(
       page.getByRole("heading", {
         name: /Pexels desk product packshot with an intentionally long title/,
@@ -248,7 +306,7 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: /选择 Pexels desk product packshot/ }).click();
     await expect(page.getByText("已选择 1 个素材")).toBeVisible();
     await page.getByRole("button", { name: "一键导入" }).click();
-    await expect(page.getByText(/已将 1 个素材加入素材库暂存区/)).toBeVisible();
+    await expect(page.getByText(/已将 1 个素材导入腾讯 COS/)).toBeVisible();
 
     await page.screenshot({
       fullPage: true,
@@ -283,6 +341,8 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: "Search stock" }).click();
 
     await expect(page.getByRole("dialog", { name: "Search third-party assets" })).toBeVisible();
+    await page.getByLabel("External stock search query").fill("desk video");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Pexels video with provider cover" })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Pixabay video without provider cover" }),
@@ -342,6 +402,8 @@ test.describe("External stock asset flow", () => {
 
     const dialog = page.getByRole("dialog", { name: "Search third-party assets" });
     await expect(dialog).toBeVisible();
+    await dialog.getByLabel("External stock search query").fill("desk product");
+    await dialog.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.getByRole("heading", { name: /Pexels desk product packshot/ })).toBeVisible();
 
     await dialog.getByRole("button", { name: "Video" }).click();
@@ -355,7 +417,7 @@ test.describe("External stock asset flow", () => {
     await expect(dialog.getByLabel("External stock search query")).toHaveValue("desk product");
   });
 
-  test("searches Freesound audio, previews playback, and queues selected audio imports", async ({
+  test("searches Freesound audio, previews playback, and imports selected audio", async ({
     page,
   }) => {
     await page.route("**/api/assets/external-search", async (route) => {
@@ -387,6 +449,8 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: "Search stock" }).click();
 
     await expect(page.getByRole("dialog", { name: "Search third-party assets" })).toBeVisible();
+    await page.getByLabel("External stock search query").fill("cash register");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Cash register button click" })).toBeVisible();
     await expect(page.locator(".external-audio-preview")).toBeVisible();
     await expect(page.locator(".external-provider-summary").getByText("Freesound")).toBeVisible();
@@ -404,7 +468,7 @@ test.describe("External stock asset flow", () => {
     await page.getByRole("button", { name: "Select Cash register button click" }).click();
     await expect(page.getByText("1 selected")).toBeVisible();
     await page.getByRole("button", { name: "Import selected" }).click();
-    await expect(page.getByText(/1 asset added to the local import queue/)).toBeVisible();
+    await expect(page.getByText(/1 asset imported to Tencent COS/)).toBeVisible();
   });
 
   test("reminds users when no third-party stock library is configured", async ({ page }) => {

@@ -618,8 +618,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
   };
 
-  const handleImportExternalAsset = (externalAsset: ExternalAssetResult) => {
-    void runAction("asset", "asset", async () => {
+  const handleImportExternalAsset = async (externalAsset: ExternalAssetResult) => {
+    setBusyState("asset");
+    setErrors((current) => ({ ...current, asset: undefined }));
+    try {
       const asset = await importExternalAsset(undefined, externalAsset);
       setAssetLibrary((current) => ({
         ...current,
@@ -637,7 +639,16 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setExternalAssetSearchResults((current) =>
         current.filter((candidate) => candidate.id !== externalAsset.id),
       );
-    });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Action failed.";
+      setErrors((current) => ({
+        ...current,
+        asset: message,
+      }));
+      throw error;
+    } finally {
+      setBusyState("idle");
+    }
   };
 
   const handleDeleteAssets = (assetIds: string[]) => {

@@ -272,6 +272,27 @@ describe("shared contract schemas", () => {
     ).toBe(true);
   });
 
+  it("validates text external asset results for script imports", () => {
+    expect(
+      ExternalAssetResultSchema.safeParse({
+        id: "pexels:text:script-1",
+        source: "pexels",
+        externalId: "script-1",
+        type: "text",
+        title: "Launch script",
+        thumbnailUrl: "",
+        previewUrl: "https://www.pexels.com/script/preview.txt",
+        downloadUrl: "https://www.pexels.com/script/download.txt",
+        externalUrl: "https://www.pexels.com/script/script-1/",
+        authorName: "Script Creator",
+        licenseLabel: "Pexels License",
+        canUseCommercially: true,
+        requiresAttribution: false,
+        tags: ["script"],
+      }).success,
+    ).toBe(true);
+  });
+
   it("allows asset search responses to include external provider matches", () => {
     expect(
       AssetSearchResponseSchema.safeParse({

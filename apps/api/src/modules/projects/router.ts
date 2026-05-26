@@ -1,7 +1,7 @@
 import { Router, raw } from "express";
 import type { Response } from "express";
 import { randomUUID } from "node:crypto";
-import type { AssetMetadata } from "@shopclip/shared";
+import type { AssetMetadata, AssetUploadIntent, ExternalAssetResult } from "@shopclip/shared";
 import {
   ExternalAssetSearchRequestSchema,
   ProjectBriefSchema,
@@ -64,11 +64,145 @@ const normalizeTag = (value: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
-const assetTypeForExternalAsset = (type: "image" | "video" | "audio") =>
-  type === "audio" ? "reference" : type;
+const assetTypeForExternalAsset = (type: ExternalAssetResult["type"]) =>
+  type === "audio" || type === "text" ? "reference" : type;
 
-const mimeTypeForExternalAsset = (type: "image" | "video" | "audio") =>
-  type === "video" ? "video/mp4" : type === "audio" ? "audio/mpeg" : "image/jpeg";
+const mimeTypeForExternalAsset = (type: ExternalAssetResult["type"]) =>
+  type === "video"
+    ? "video/mp4"
+    : type === "audio"
+      ? "audio/mpeg"
+      : type === "text"
+        ? "text/plain"
+        : "image/jpeg";
+
+const externalAssetTypeTag = (type: ExternalAssetResult["type"]): string =>
+  type === "text" ? "script" : type;
+
+const contentTypeMatchesExternalType = (
+  type: ExternalAssetResult["type"],
+  contentType: string | undefined,
+): boolean => {
+  const normalizedContentType = contentType?.split(";")[0]?.trim().toLowerCase();
+  if (!normalizedContentType) {
+    return false;
+  }
+
+  if (type === "image") {
+    return normalizedContentType.startsWith("image/");
+  }
+  if (type === "video") {
+    return normalizedContentType.startsWith("video/");
+  }
+  if (type === "audio") {
+    return normalizedContentType.startsWith("audio/");
+  }
+
+  return normalizedContentType.startsWith("text/") || normalizedContentType === "application/json";
+};
+
+const contentTypeForExternalAsset = (
+  type: ExternalAssetResult["type"],
+  downloadedContentType: string | undefined,
+): string => {
+  const normalizedContentType = downloadedContentType?.split(";")[0]?.trim().toLowerCase();
+  if (normalizedContentType && contentTypeMatchesExternalType(type, normalizedContentType)) {
+    return normalizedContentType;
+  }
+
+  return mimeTypeForExternalAsset(type);
+};
+
+const extensionForContentType = (contentType: string): string => {
+  if (contentType.includes("png")) {
+    return ".png";
+  }
+  if (contentType.includes("webp")) {
+    return ".webp";
+  }
+  if (contentType.includes("jpeg") || contentType.includes("jpg")) {
+    return ".jpg";
+  }
+  if (contentType.includes("webm")) {
+    return ".webm";
+  }
+  if (contentType.includes("quicktime")) {
+    return ".mov";
+  }
+  if (contentType.includes("mp4")) {
+    return ".mp4";
+  }
+  if (contentType.includes("wav")) {
+    return ".wav";
+  }
+  if (contentType.includes("mpeg") || contentType.includes("mp3")) {
+    return ".mp3";
+  }
+  if (contentType.includes("markdown")) {
+    return ".md";
+  }
+
+  return ".txt";
+};
+
+const fileNameForExternalImport = (title: string, contentType: string): string => {
+  const extension = extensionForContentType(contentType);
+  return title.toLowerCase().endsWith(extension) ? title : `${title}${extension}`;
+};
+
+const allowedDownloadHostsBySource: Record<ExternalAssetResult["source"], string[]> = {
+  freesound: ["freesound.org", "cdn.freesound.org"],
+  pexels: ["pexels.com", "images.pexels.com", "videos.pexels.com"],
+  pixabay: ["pixabay.com", "cdn.pixabay.com"],
+};
+
+const assertAllowedExternalDownloadUrl = (asset: ExternalAssetResult, sourceUrl: string): void => {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(sourceUrl);
+  } catch {
+    throw new Error("External asset download URL is invalid.");
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("External asset downloads must use HTTPS URLs.");
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const allowedHosts = allowedDownloadHostsBySource[asset.source];
+  const allowed = allowedHosts.some(
+    (host) => hostname === host || hostname.endsWith(`.${host}`),
+  );
+  if (!allowed) {
+    throw new Error(`External asset download host is not allowed for ${asset.source}.`);
+  }
+};
+
+export interface ExternalAssetDownloadResult {
+  body: Buffer;
+  contentType?: string;
+  sourceUrl: string;
+}
+
+export type ExternalAssetDownloader = (
+  asset: ExternalAssetResult,
+) => Promise<ExternalAssetDownloadResult>;
+
+const downloadExternalAsset: ExternalAssetDownloader = async (asset) => {
+  const sourceUrl = asset.downloadUrl ?? asset.previewUrl;
+  assertAllowedExternalDownloadUrl(asset, sourceUrl);
+
+  const downloadResponse = await fetch(sourceUrl);
+  if (!downloadResponse.ok) {
+    throw new Error(`External asset download failed with status ${downloadResponse.status}.`);
+  }
+
+  return {
+    body: Buffer.from(await downloadResponse.arrayBuffer()),
+    contentType: downloadResponse.headers.get("content-type") ?? undefined,
+    sourceUrl,
+  };
+};
 
 const assetMatchesCategory = (asset: AssetMetadata, category: string): boolean => {
   const tags = asset.tags.map((tag) => tag.toLowerCase());
@@ -119,16 +253,102 @@ export interface P0RouterOptions {
   cosAssetSearch?: (
     input: CosIntelligentSearchInput,
   ) => Promise<Awaited<ReturnType<typeof searchCosIntelligentAssets>>>;
+  externalAssetDownloader?: ExternalAssetDownloader;
   store?: ProjectStore;
   storageProvider?: StorageProvider;
 }
 
 export const createP0Router = ({
   cosAssetSearch = searchCosIntelligentAssets,
+  externalAssetDownloader = downloadExternalAsset,
   store = new MemoryProjectStore(),
   storageProvider = new CosStorageProvider(),
 }: P0RouterOptions = {}): Router => {
   const router = Router();
+
+  const importExternalAssetToStore = async (
+    projectId: string | undefined,
+    externalAsset: ExternalAssetResult,
+  ): Promise<AssetMetadata | undefined> => {
+    const downloaded = await externalAssetDownloader(externalAsset);
+    const contentType = contentTypeForExternalAsset(externalAsset.type, downloaded.contentType);
+    const assetId = randomUUID();
+    const assetType = assetTypeForExternalAsset(externalAsset.type);
+    const sizeBytes = downloaded.body.length;
+    const uploadIntent: AssetUploadIntent = storageProvider.createUploadIntent({
+      projectId,
+      assetId,
+      asset: {
+        type: assetType,
+        name: fileNameForExternalImport(externalAsset.title, contentType),
+        mimeType: contentType,
+        sizeBytes,
+        source: "external_provider",
+        tags: [
+          ...externalAsset.tags,
+          externalAssetTypeTag(externalAsset.type),
+          "external",
+        ],
+      },
+    });
+    const uploaded = await storageProvider.uploadObject({
+      body: downloaded.body,
+      contentType,
+      objectKey: uploadIntent.objectKey,
+    });
+    const sourceUrl = downloaded.sourceUrl || externalAsset.downloadUrl || externalAsset.previewUrl;
+
+    return store.addAssetWithId(
+      projectId,
+      assetId,
+      {
+        type: assetType,
+        status: "ready",
+        url: uploaded.publicUrl,
+        name: externalAsset.title,
+        mimeType: contentType,
+        sizeBytes,
+        source: "external_provider",
+        storageProvider: uploaded.provider,
+        objectKey: uploaded.objectKey,
+        embeddingText: `${externalAsset.title} ${externalAsset.tags.join(" ")}`,
+        metadata: {
+          bucket: uploadIntent.bucket,
+          region: uploadIntent.region,
+          externalAssetImport: true,
+          externalAssetType: externalAsset.type,
+          externalId: externalAsset.externalId,
+          externalSource: externalAsset.source,
+          externalUrl: externalAsset.externalUrl,
+          originalDownloadUrl: externalAsset.downloadUrl,
+          originalPreviewUrl: externalAsset.previewUrl,
+          downloadedFromUrl: sourceUrl,
+          downloadedBytes: sizeBytes,
+          licenseLabel: externalAsset.licenseLabel,
+          licenseUrl: externalAsset.licenseUrl,
+          requiresAttribution: externalAsset.requiresAttribution,
+          canUseCommercially: externalAsset.canUseCommercially,
+          importedAt: new Date().toISOString(),
+          structuredAssetVersion: "asset-multigranularity-v1",
+        },
+        tags: inferAssetTags({
+          name: externalAsset.title,
+          mimeType: contentType,
+          source: "external_provider",
+          storageProvider: uploaded.provider,
+          tags: [
+            ...externalAsset.tags,
+            externalAssetTypeTag(externalAsset.type),
+            "external",
+            `source-${externalAsset.source}`,
+            `external-id-${externalAsset.externalId}`,
+            `license-${normalizeTag(externalAsset.licenseLabel)}`,
+          ],
+        }),
+      },
+      createAssetSlices,
+    );
+  };
 
   router.post("/projects", async (request, response) => {
     const parsedBrief = ProjectBriefSchema.safeParse(request.body);
@@ -685,30 +905,18 @@ export const createP0Router = ({
       return;
     }
 
-    const externalAsset = parsedExternalAsset.data;
-    const storedAsset = await store.addAsset(
-      undefined,
-      {
-        type: assetTypeForExternalAsset(externalAsset.type),
-        status: "ready",
-        url: externalAsset.downloadUrl ?? externalAsset.previewUrl,
-        name: externalAsset.title,
-        mimeType: mimeTypeForExternalAsset(externalAsset.type),
-        tags: inferAssetTags({
-          name: externalAsset.title,
-          mimeType: mimeTypeForExternalAsset(externalAsset.type),
-          tags: [
-            ...externalAsset.tags,
-            ...(externalAsset.type === "audio" ? ["audio"] : []),
-            "external",
-            `source-${externalAsset.source}`,
-            `external-id-${externalAsset.externalId}`,
-            `license-${normalizeTag(externalAsset.licenseLabel)}`,
-          ],
-        }),
-      },
-      createAssetSlices,
-    );
+    let storedAsset;
+    try {
+      storedAsset = await importExternalAssetToStore(undefined, parsedExternalAsset.data);
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "EXTERNAL_ASSET_IMPORT_FAILED",
+          message: error instanceof Error ? error.message : "External asset import failed.",
+        },
+      });
+      return;
+    }
 
     response.status(201).json({ asset: storedAsset });
   });
@@ -724,30 +932,27 @@ export const createP0Router = ({
       return;
     }
 
-    const externalAsset = parsedExternalAsset.data;
-    const storedAsset = await store.addAsset(
-      request.params.projectId,
-      {
-        type: assetTypeForExternalAsset(externalAsset.type),
-        status: "ready",
-        url: externalAsset.downloadUrl ?? externalAsset.previewUrl,
-        name: externalAsset.title,
-        mimeType: mimeTypeForExternalAsset(externalAsset.type),
-        tags: inferAssetTags({
-          name: externalAsset.title,
-          mimeType: mimeTypeForExternalAsset(externalAsset.type),
-          tags: [
-            ...externalAsset.tags,
-            ...(externalAsset.type === "audio" ? ["audio"] : []),
-            "external",
-            `source-${externalAsset.source}`,
-            `external-id-${externalAsset.externalId}`,
-            `license-${normalizeTag(externalAsset.licenseLabel)}`,
-          ],
-        }),
-      },
-      createAssetSlices,
-    );
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    let storedAsset;
+    try {
+      storedAsset = await importExternalAssetToStore(
+        request.params.projectId,
+        parsedExternalAsset.data,
+      );
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "EXTERNAL_ASSET_IMPORT_FAILED",
+          message: error instanceof Error ? error.message : "External asset import failed.",
+        },
+      });
+      return;
+    }
 
     if (!storedAsset) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
