@@ -278,16 +278,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       ),
     [activeAssetCategory, externalAssetSearchResults],
   );
-  const prepAssets = useMemo(() => {
-    const seenAssetIds = new Set<string>();
-    return [...(project?.assets ?? []), ...assetLibrary.assets].filter((asset) => {
-      if (seenAssetIds.has(asset.id)) {
-        return false;
-      }
-      seenAssetIds.add(asset.id);
-      return true;
-    });
-  }, [assetLibrary.assets, project?.assets]);
   const activeSection: WorkspaceSectionId =
     activePage === "assets"
       ? "assets"
@@ -1016,7 +1006,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
               {activePage === "create" ? (
                 <AssetPrepPanel
-                  assets={prepAssets}
                   disabled={busyState !== "idle"}
                   error={errors.asset ?? errors.script}
                   isGenerating={busyState === "script"}

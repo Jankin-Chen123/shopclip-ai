@@ -7,6 +7,7 @@ import {
   assetMatchesCategory,
   externalAssetMatchesCategory,
 } from "../features/assets/AssetCategoryTabs";
+import { AssetPrepPanel } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import {
   SettingsPanel,
@@ -81,6 +82,26 @@ describe("App", () => {
     expect(storyboardMarkup).toContain("脚本与分镜");
     expect(storyboardMarkup).toContain("分镜待生成");
     expect(storyboardMarkup).toContain("分镜重编辑");
+  });
+
+  it("does not preload existing library assets into asset prep", () => {
+    const markup = renderToStaticMarkup(
+      <AssetPrepPanel
+        assets={[makeAsset({ name: "Existing library packshot", type: "image" })]}
+        disabled={false}
+        isGenerating={false}
+        isImporting={false}
+        language="zh"
+        onBack={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onImportFiles={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("素材准备");
+    expect(markup).toContain("已上传 0/4");
+    expect(markup).not.toContain("Existing library packshot");
+    expect(markup).not.toContain("继续上传");
   });
 
   it("omits the top-right project CTA from asset, inspiration, and creation sections", () => {

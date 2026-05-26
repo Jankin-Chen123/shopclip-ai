@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AssetMetadata } from "@shopclip/shared";
 import {
   ArrowLeft,
@@ -15,10 +16,10 @@ import {
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { Language } from "../../app/i18n";
-import { assetMatchesCategory, type AssetCategory } from "./AssetCategoryTabs";
+import type { AssetCategory } from "./AssetCategoryTabs";
 
 interface AssetPrepPanelProps {
-  assets: AssetMetadata[];
+  assets?: AssetMetadata[];
   disabled: boolean;
   error?: string;
   isGenerating: boolean;
@@ -37,6 +38,12 @@ interface PrepBucket {
   title: string;
   helper: string;
   support: string;
+}
+
+interface ManualPrepUpload {
+  id: string;
+  name: string;
+  size: number;
 }
 
 const text = {
@@ -135,7 +142,6 @@ const formatSize = (bytes?: number) => {
 };
 
 export const AssetPrepPanel = ({
-  assets,
   disabled,
   error,
   isGenerating,
@@ -145,9 +151,33 @@ export const AssetPrepPanel = ({
   onGenerateStoryboard,
   onImportFiles,
 }: AssetPrepPanelProps) => {
+  const [manualUploads, setManualUploads] = useState<Record<string, ManualPrepUpload[]>>({});
   const copy = text[language];
   const buckets = getBuckets(language);
   const inputPrefix = `asset-prep-${language}`;
+  const manualUploadCount = Object.values(manualUploads).reduce(
+    (total, uploads) => total + uploads.length,
+    0,
+  );
+
+  const handleBucketFiles = (bucketId: string, files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    setManualUploads((current) => ({
+      ...current,
+      [bucketId]: [
+        ...(current[bucketId] ?? []),
+        ...files.map((file) => ({
+          id: `${file.name}-${file.size}-${file.lastModified}`,
+          name: file.name,
+          size: file.size,
+        })),
+      ],
+    }));
+    onImportFiles(files);
+  };
 
   return (
     <section className="panel asset-prep-panel" id="asset-prep" aria-labelledby="asset-prep-title">
@@ -157,8 +187,8 @@ export const AssetPrepPanel = ({
           <h2 id="asset-prep-title">{copy.title}</h2>
           <p className="concept-panel-subtitle">{copy.body}</p>
         </div>
-        <StatusPill tone={assets.length > 0 ? "success" : "neutral"}>
-          {assets.length > 0 ? copy.complete : copy.uploaded(0, 4)}
+        <StatusPill tone={manualUploadCount > 0 ? "success" : "neutral"}>
+          {manualUploadCount > 0 ? copy.complete : copy.uploaded(0, 4)}
         </StatusPill>
       </div>
 
@@ -170,9 +200,7 @@ export const AssetPrepPanel = ({
 
       <div className="asset-prep-grid">
         {buckets.map((bucket) => {
-          const bucketAssets = assets
-            .filter((asset) => assetMatchesCategory(asset, bucket.category))
-            .slice(0, bucket.limit);
+          const bucketUploads = (manualUploads[bucket.id] ?? []).slice(0, bucket.limit);
           const Icon = bucket.icon;
           const inputId = `${inputPrefix}-${bucket.id}`;
 
@@ -183,31 +211,34 @@ export const AssetPrepPanel = ({
                   <h3 id={`${bucket.id}-title`}>{bucket.title}</h3>
                   <p>{bucket.helper}</p>
                 </div>
-                <StatusPill tone={bucketAssets.length > 0 ? "success" : "neutral"}>
-                  {copy.uploaded(bucketAssets.length, bucket.limit)}
+                <StatusPill tone={bucketUploads.length > 0 ? "success" : "neutral"}>
+                  {copy.uploaded(bucketUploads.length, bucket.limit)}
                 </StatusPill>
               </div>
               <div className="asset-prep-strip" aria-live="polite">
-                {bucketAssets.length > 0
-                  ? bucketAssets.map((asset) => (
-                      <article className="asset-prep-thumb" key={`${bucket.id}-${asset.id}`}>
+                {bucketUploads.length > 0
+                  ? bucketUploads.map((upload) => (
+                      <article className="asset-prep-thumb" key={`${bucket.id}-${upload.id}`}>
                         <span className="asset-prep-thumb-icon" aria-hidden="true">
                           <Icon size={20} />
                         </span>
-                        <strong title={asset.name}>{asset.name}</strong>
-                        <small>{formatSize(asset.sizeBytes) || asset.mimeType}</small>
+                        <strong title={upload.name}>{upload.name}</strong>
+                        <small>{formatSize(upload.size)}</small>
                         <CheckCircle2 size={16} aria-hidden="true" />
                       </article>
                     ))
                   : null}
                 <label className="asset-prep-upload" htmlFor={inputId}>
                   <Plus size={20} aria-hidden="true" />
-                  <span>{bucketAssets.length > 0 ? copy.addMore : copy.import}</span>
+                  <span>{bucketUploads.length > 0 ? copy.addMore : copy.import}</span>
                   <input
                     disabled={disabled || isImporting}
                     id={inputId}
                     multiple
-                    onChange={(event) => onImportFiles(Array.from(event.target.files ?? []))}
+                    onChange={(event) => {
+                      handleBucketFiles(bucket.id, Array.from(event.target.files ?? []));
+                      event.currentTarget.value = "";
+                    }}
                     type="file"
                   />
                 </label>

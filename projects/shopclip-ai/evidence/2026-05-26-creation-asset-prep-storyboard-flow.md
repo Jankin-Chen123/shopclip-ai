@@ -13,6 +13,13 @@
 - `corepack pnpm --filter @shopclip/web lint`: passed.
 - `corepack pnpm --filter @shopclip/web build`: passed.
 
+## 2026-05-26 Follow-Up
+
+- Updated Step 02 so it does not preload assets from the global asset library or loaded project.
+- Step 02 now only displays files manually selected in the asset prep upload cards during the current prep session.
+- Added regression coverage: `does not preload existing library assets into asset prep`.
+- Fresh verification passed: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build`.
+
 ## Browser Evidence
 
 - `output/playwright/creation-asset-prep-zh.png`
