@@ -240,7 +240,9 @@ export const createCosIntelligentSearchProvider = (
       });
 
       if (!response.ok) {
-        throw new Error(`COS intelligent search failed with HTTP ${response.status}.`);
+        const errorBody = await response.text().catch(() => "");
+        const detail = errorBody.trim() ? `: ${errorBody.trim().slice(0, 500)}` : "";
+        throw new Error(`COS intelligent search failed with HTTP ${response.status}${detail}`);
       }
 
       return normalizeCosHybridSearchResponse(await response.json()).filter(

@@ -158,4 +158,25 @@ describe("COS intelligent search provider", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]?.score).toBe(91);
   });
+
+  it("includes the COS response body when a hybrid search request fails", async () => {
+    const provider = createCosIntelligentSearchProvider(
+      {
+        COS_APP_ID: "1250000000",
+        COS_INTELLIGENT_SEARCH_DATASET: "shopclip-multidata",
+        COS_REGION: "ap-beijing",
+        COS_SECRET_ID: "secret-id",
+        COS_SECRET_KEY: "secret-key",
+      },
+      async () =>
+        new Response("<Error><Code>AccessDenied</Code></Error>", {
+          status: 403,
+          headers: { "content-type": "application/xml" },
+        }),
+    );
+
+    await expect(provider.search({ query: "dog" })).rejects.toThrow(
+      "COS intelligent search failed with HTTP 403: <Error><Code>AccessDenied</Code></Error>",
+    );
+  });
 });

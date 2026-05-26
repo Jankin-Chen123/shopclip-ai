@@ -795,9 +795,17 @@ export const createP0Router = ({
       scenes: [],
       renderTasks: [],
     };
-    const cosMatches = query.trim()
-      ? await cosAssetSearch({ query, limit: 24, matchThreshold: 60 })
-      : undefined;
+    let cosMatches: Awaited<ReturnType<NonNullable<P0RouterOptions["cosAssetSearch"]>>>;
+    if (query.trim()) {
+      try {
+        cosMatches = await cosAssetSearch({ query, limit: 24, matchThreshold: 60 });
+      } catch (error) {
+        console.warn(
+          "[assets/search] COS intelligent search failed; falling back to local search.",
+          error,
+        );
+      }
+    }
     const cosResults = cosMatches
       ? mapCosImageMatchesToAssetResults(cosMatches, searchLibrary)
       : undefined;

@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app";
 
@@ -68,6 +68,7 @@ describe("COS-backed asset import contract", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -214,6 +215,52 @@ describe("COS-backed asset import contract", () => {
     expect(searched.body.results.map((result) => result.asset.id)).not.toContain(
       miss.body.asset.id,
     );
+  });
+
+  it("falls back to local asset search when COS intelligent search fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const app = createApp({
+      cosAssetSearch: async () => {
+        throw new Error("COS intelligent search failed with HTTP 403.");
+      },
+    });
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = app.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const created = await request<{ asset: { id: string } }>(baseUrl, "/api/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Dog product photo.png",
+        mimeType: "image/png",
+        sizeBytes: 180_000,
+        tags: ["dog"],
+      }),
+    });
+    expect(created.status).toBe(201);
+
+    const searched = await request<{
+      results: Array<{ asset: { id: string; name: string } }>;
+    }>(baseUrl, "/api/assets/search?q=dog");
+
+    expect(searched.status).toBe(200);
+    expect(searched.body.results[0]).toMatchObject({
+      asset: {
+        id: created.body.asset.id,
+        name: "Dog product photo.png",
+      },
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[assets/search] COS intelligent search failed; falling back to local search.",
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
   });
 
   it("creates a COS upload intent and stores structured asset metadata without exposing secrets", async () => {
