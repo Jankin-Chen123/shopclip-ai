@@ -3,6 +3,7 @@ import {
   ArrowUp,
   ChevronDown,
   FileText,
+  History,
   Image,
   LoaderCircle,
   SlidersHorizontal,
@@ -55,6 +56,13 @@ const copy = {
     count: "Images",
     aspectRatio: "Aspect ratio",
     quality: "Quality",
+    historyTitle: "Session history",
+    historyDescription: "Previous conversations and generated artifacts",
+    emptyHistory: "Generated sessions will appear here.",
+    viewSession: "View session",
+    artifact: "artifact",
+    artifacts: "artifacts",
+    fallbackHistoryDate: "Just now",
   },
   zh: {
     title: "今天想创作什么？",
@@ -84,6 +92,13 @@ const copy = {
     count: "图片数量",
     aspectRatio: "比例",
     quality: "清晰度",
+    historyTitle: "会话记录",
+    historyDescription: "查看之前的会话和大模型产物",
+    emptyHistory: "生成后的会话会出现在这里。",
+    viewSession: "查看会话",
+    artifact: "个产物",
+    artifacts: "个产物",
+    fallbackHistoryDate: "刚刚",
   },
 } as const;
 
@@ -96,10 +111,93 @@ const assetTypeOptions = [
 const aspectRatioOptions = ["auto", "1:1", "4:3", "3:4", "16:9", "9:16"] as const;
 const videoAspectRatioOptions = ["auto", "1:1", "16:9", "9:16"] as const;
 const qualityOptions = ["standard", "hd", "2k"] as const;
+const inspirationHistoryStorageKey = "shopclip-inspiration-session-history";
+const maxInspirationHistoryItems = 12;
 
-export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps) => {
+export interface InspirationSessionHistoryEntry {
+  savedAt: string;
+  result: InspirationGenerateResponse;
+}
+
+const loadStoredInspirationHistory = (): InspirationSessionHistoryEntry[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const storedHistory = window.localStorage.getItem(inspirationHistoryStorageKey);
+    if (!storedHistory) {
+      return [];
+    }
+    const parsedHistory = JSON.parse(storedHistory) as Partial<InspirationSessionHistoryEntry>[];
+    return parsedHistory
+      .filter(
+        (entry): entry is InspirationSessionHistoryEntry =>
+          typeof entry?.savedAt === "string" &&
+          typeof entry.result?.id === "string" &&
+          typeof entry.result.prompt === "string" &&
+          Array.isArray(entry.result.materials),
+      )
+      .slice(0, maxInspirationHistoryItems);
+  } catch {
+    return [];
+  }
+};
+
+export const appendInspirationSessionHistory = (
+  history: InspirationSessionHistoryEntry[],
+  result: InspirationGenerateResponse,
+  savedAt = new Date().toISOString(),
+): InspirationSessionHistoryEntry[] => [
+  { savedAt, result },
+  ...history.filter((entry) => entry.result.id !== result.id),
+].slice(0, maxInspirationHistoryItems);
+
+export const replaceInspirationSessionHistoryResult = (
+  history: InspirationSessionHistoryEntry[],
+  result: InspirationGenerateResponse,
+): InspirationSessionHistoryEntry[] =>
+  history.map((entry) => (entry.result.id === result.id ? { ...entry, result } : entry));
+
+const saveInspirationHistory = (history: InspirationSessionHistoryEntry[]) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(inspirationHistoryStorageKey, JSON.stringify(history));
+  } catch {
+    // Large generated artifacts can exceed browser storage. Keep the in-memory session usable.
+  }
+};
+
+const formatSessionTime = (savedAt: string, language: Language, fallback: string) => {
+  const savedDate = new Date(savedAt);
+  if (Number.isNaN(savedDate.getTime())) {
+    return fallback;
+  }
+
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(savedDate);
+};
+
+export const InspirationPanel = ({
+  apiConfig,
+  initialHistory,
+  language,
+}: InspirationPanelProps & { initialHistory?: InspirationSessionHistoryEntry[] }) => {
   const text = copy[language];
-  const [assetType, setAssetType] = useState<InspirationAssetType>("image");
+  const [history, setHistory] = useState<InspirationSessionHistoryEntry[]>(
+    () => initialHistory ?? loadStoredInspirationHistory(),
+  );
+  const initialResult = history[0]?.result;
+  const [assetType, setAssetType] = useState<InspirationAssetType>(
+    initialResult?.assetType ?? "image",
+  );
   const [error, setError] = useState<string>();
   const [imageAspectRatio, setImageAspectRatio] = useState<(typeof aspectRatioOptions)[number]>("auto");
   const [imageCount, setImageCount] = useState(1);
@@ -108,11 +206,12 @@ export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps)
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [pollError, setPollError] = useState<string>();
-  const [prompt, setPrompt] = useState("");
-  const [result, setResult] = useState<InspirationGenerateResponse>();
+  const [prompt, setPrompt] = useState(initialResult?.prompt ?? "");
+  const [result, setResult] = useState<InspirationGenerateResponse | undefined>(initialResult);
   const [videoAspectRatio, setVideoAspectRatio] =
     useState<(typeof videoAspectRatioOptions)[number]>("auto");
   const [videoQuality, setVideoQuality] = useState<(typeof qualityOptions)[number]>("standard");
+  const [selectedHistoryId, setSelectedHistoryId] = useState(initialResult?.id);
 
   const selectedTypeOption = assetTypeOptions.find((option) => option.type === assetType) ?? assetTypeOptions[1];
   const SelectedTypeIcon = selectedTypeOption.icon;
@@ -157,9 +256,19 @@ export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps)
     setPollError(undefined);
     setIsGenerating(true);
     try {
-      setResult(
-        await generateInspirationMaterial(trimmedPrompt, assetType, apiConfig, generationOptions),
+      const generatedResult = await generateInspirationMaterial(
+        trimmedPrompt,
+        assetType,
+        apiConfig,
+        generationOptions,
       );
+      setResult(generatedResult);
+      setSelectedHistoryId(generatedResult.id);
+      setHistory((currentHistory) => {
+        const nextHistory = appendInspirationSessionHistory(currentHistory, generatedResult);
+        saveInspirationHistory(nextHistory);
+        return nextHistory;
+      });
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : "Generation failed.");
     } finally {
@@ -177,6 +286,17 @@ export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps)
       : result?.assetType === "text"
         ? text.outputText
         : text.outputImage;
+
+  const restoreHistoryEntry = (entry: InspirationSessionHistoryEntry) => {
+    setAssetType(entry.result.assetType);
+    setError(undefined);
+    setPollError(undefined);
+    setPrompt(entry.result.prompt);
+    setResult(entry.result);
+    setSelectedHistoryId(entry.result.id);
+    setIsCustomOpen(false);
+    setIsTypeMenuOpen(false);
+  };
 
   useEffect(() => {
     const taskId = activeMaterial?.type === "video" ? activeMaterial.taskId : undefined;
@@ -199,14 +319,22 @@ export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps)
         }
 
         setPollError(undefined);
-        setResult((currentResult) =>
-          currentResult?.id === resultId
-            ? {
-                ...currentResult,
-                materials: [material, ...currentResult.materials.slice(1)],
-              }
-            : currentResult,
-        );
+        setResult((currentResult) => {
+          if (currentResult?.id !== resultId) {
+            return currentResult;
+          }
+
+          const nextResult = {
+            ...currentResult,
+            materials: [material, ...currentResult.materials.slice(1)],
+          };
+          setHistory((currentHistory) => {
+            const nextHistory = replaceInspirationSessionHistoryResult(currentHistory, nextResult);
+            saveInspirationHistory(nextHistory);
+            return nextHistory;
+          });
+          return nextResult;
+        });
       } catch (taskError) {
         if (!cancelled) {
           setPollError(taskError instanceof Error ? taskError.message : "Video polling failed.");
@@ -399,6 +527,45 @@ export const InspirationPanel = ({ apiConfig, language }: InspirationPanelProps)
             <span>{text.generateMaterial}</span>
           </button>
         </div>
+        <section className="inspiration-session-history" aria-labelledby="inspiration-history-title">
+          <div className="inspiration-history-heading">
+            <History size={18} aria-hidden="true" />
+            <div>
+              <h3 id="inspiration-history-title">{text.historyTitle}</h3>
+              <p>{text.historyDescription}</p>
+            </div>
+          </div>
+          {history.length > 0 ? (
+            <div className="inspiration-history-list">
+              {history.map((entry) => {
+                const materialCount = entry.result.materials.length;
+                const artifactLabel =
+                  language === "zh"
+                    ? `${materialCount}${text.artifacts}`
+                    : `${materialCount} ${entry.result.assetType} ${
+                        materialCount === 1 ? text.artifact : text.artifacts
+                      }`;
+                return (
+                  <button
+                    aria-label={`${text.viewSession}: ${entry.result.prompt}`}
+                    className={selectedHistoryId === entry.result.id ? "active" : undefined}
+                    key={`${entry.result.id}-${entry.savedAt}`}
+                    onClick={() => restoreHistoryEntry(entry)}
+                    type="button"
+                  >
+                    <span className="history-session-prompt">{entry.result.prompt}</span>
+                    <span className="history-session-meta">
+                      {formatSessionTime(entry.savedAt, language, text.fallbackHistoryDate)} ·{" "}
+                      {artifactLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="inspiration-history-empty">{text.emptyHistory}</p>
+          )}
+        </section>
         {error ? <p className="inline-error">{error}</p> : null}
         {result && activeMaterial ? (
           <section

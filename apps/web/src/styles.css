@@ -2927,6 +2927,90 @@ textarea {
   font-weight: 700;
 }
 
+.inspiration-session-history {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 120px), #15161b;
+}
+
+.inspiration-history-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.inspiration-history-heading svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #67e8f9;
+}
+
+.inspiration-history-heading h3 {
+  margin: 0;
+  text-align: left;
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.inspiration-history-heading p,
+.inspiration-history-empty {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.inspiration-history-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.inspiration-history-list button {
+  display: grid;
+  gap: 6px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.inspiration-history-list button:hover,
+.inspiration-history-list button.active {
+  color: var(--text);
+  border-color: rgba(34, 211, 238, 0.34);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.history-session-prompt {
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-session-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .inspiration-result {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 400px);

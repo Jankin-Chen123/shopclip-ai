@@ -10,6 +10,10 @@ import {
 import { AssetPrepPanel, filterPrepLibraryAssets } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import {
+  InspirationPanel,
+  replaceInspirationSessionHistoryResult,
+} from "../features/inspiration/InspirationPanel";
+import {
   SettingsPanel,
   createDefaultApiConfig,
   sanitizeApiConfig,
@@ -743,6 +747,96 @@ describe("App", () => {
     expect(markup).not.toContain("Auto</button>");
     expect(markup).toContain("Generate material");
     expect(markup).not.toContain("Current routing");
+  });
+
+  it("renders clickable inspiration session history with previous model artifacts", () => {
+    const markup = renderToStaticMarkup(
+      <InspirationPanel
+        apiConfig={createDefaultApiConfig()}
+        language="en"
+        initialHistory={[
+          {
+            savedAt: "2026-05-26T15:00:00.000Z",
+            result: {
+              id: "inspiration-result-1",
+              prompt: "Minimal desk setup product hero image",
+              assetType: "image",
+              model: "seedream-demo",
+              provider: "mock",
+              fallback: { used: false },
+              materials: [
+                {
+                  id: "material-1",
+                  type: "image",
+                  title: "Hero image",
+                  content: "A clean product hero concept",
+                  status: "ready",
+                  url: "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E",
+                },
+              ],
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Session history");
+    expect(markup).toContain("Minimal desk setup product hero image");
+    expect(markup).toContain("1 image artifact");
+    expect(markup).toContain("Previous conversations and generated artifacts");
+    expect(markup).toContain("Generated material");
+  });
+
+  it("updates an inspiration history entry when a generated artifact changes", () => {
+    const history = replaceInspirationSessionHistoryResult(
+      [
+        {
+          savedAt: "2026-05-26T15:00:00.000Z",
+          result: {
+            id: "video-result-1",
+            prompt: "Create a product launch video",
+            assetType: "video",
+            model: "seedance-demo",
+            provider: "mock",
+            fallback: { used: false },
+            materials: [
+              {
+                id: "video-material-1",
+                type: "video",
+                title: "Processing video",
+                content: "Task is still running",
+                status: "processing",
+                taskId: "task-1",
+                progress: 10,
+              },
+            ],
+          },
+        },
+      ],
+      {
+        id: "video-result-1",
+        prompt: "Create a product launch video",
+        assetType: "video",
+        model: "seedance-demo",
+        provider: "mock",
+        fallback: { used: false },
+        materials: [
+          {
+            id: "video-material-1",
+            type: "video",
+            title: "Ready video",
+            content: "Video is ready",
+            status: "ready",
+            url: "https://example.test/video.mp4",
+            progress: 100,
+          },
+        ],
+      },
+    );
+
+    expect(history[0]?.savedAt).toBe("2026-05-26T15:00:00.000Z");
+    expect(history[0]?.result.materials[0]?.status).toBe("ready");
+    expect(history[0]?.result.materials[0]?.url).toBe("https://example.test/video.mp4");
   });
 
   it("renders user API settings with separate model configuration areas", () => {

@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-23
-- Last updated: 2026-05-23
+- Last updated: 2026-05-26
 
 ## Source Of Truth
 
@@ -47,6 +47,7 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 
 - [x] User can select Text, Image, or Video in the Inspiration section.
 - [x] User can submit one prompt and receive a generated material card.
+- [x] User can view prior Inspiration sessions and click a session to restore the prompt and generated artifacts.
 - [x] Text responses identify the Seed model contract.
 - [x] Image responses require a renderable generated image artifact when a real image endpoint is configured.
 - [x] Video responses identify the Seedance model contract.
@@ -65,6 +66,7 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 - The provider path can be overridden with `ARK_VIDEO_GENERATION_PATH` if the Ark video API path changes.
 - Direct image file generation requires a dedicated image-generation endpoint/model; the provided Seed 2.0 Pro text endpoint cannot be used as the final image artifact generator.
 - Generated materials are not yet added to the Asset library; that can be a follow-up if users need to reuse output in Studio.
+- Inspiration session history is browser-local. Very large generated artifacts can exceed localStorage quota; the current session still remains visible in memory if persistence fails.
 
 ## Change Summary
 
@@ -74,8 +76,11 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 - Added `arkInspirationProvider` with Ark real-provider calls and deterministic fallback.
 - Completed `InspirationPanel` with prompt entry, toolbar-based text/image/video selection, custom parameter controls, loading state, error state, cleaned-up material result cards, multi-image layout, automatic video task polling, and real-time progress display.
 - Added placeholder-only Ark environment variables to `.env.example` and README.
+- Added browser-local Inspiration session history with clickable restore for previous prompts and generated model artifacts.
+- Added history synchronization when video polling updates a processing material into a later artifact state.
 
 ## Verification Evidence
 
 - Evidence file: `../evidence/2026-05-23-inspiration-generation.md`.
 - Evidence file: `../evidence/2026-05-24-inspiration-video-polling.md`.
+- Evidence file: `../evidence/2026-05-26-inspiration-session-history.md`.
