@@ -2714,13 +2714,27 @@ textarea {
 .inspiration-composer {
   display: grid;
   gap: 16px;
-  margin-bottom: 18px;
   padding: 6px 0 2px;
 }
 
 .inspiration-composer.standalone {
-  width: min(100%, 1200px);
+  width: 100%;
+  margin: 0;
+}
+
+.inspiration-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 18px;
+  align-items: start;
+  width: min(100%, 1320px);
   margin: 72px auto 0;
+}
+
+.inspiration-main {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
 }
 
 .inspiration-composer h2,
@@ -2937,6 +2951,13 @@ textarea {
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 120px), #15161b;
 }
 
+.inspiration-history-sidebar {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+}
+
 .inspiration-history-toggle {
   display: flex;
   align-items: center;
@@ -3007,6 +3028,10 @@ textarea {
   display: none;
 }
 
+.inspiration-history-list.vertical {
+  grid-template-columns: 1fr;
+}
+
 .inspiration-history-list button {
   display: grid;
   gap: 6px;
@@ -3062,10 +3087,8 @@ textarea {
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 160px), #101010;
 }
 
-.inspiration-result-image {
-  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1fr);
-}
-
+.inspiration-result-image,
+.inspiration-result-video,
 .inspiration-result-text {
   grid-template-columns: 1fr;
 }
@@ -3102,16 +3125,28 @@ textarea {
 
 .image-result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
   align-content: center;
 }
 
 .image-result-grid img {
-  aspect-ratio: 1 / 1;
   min-height: 0;
-  max-height: none;
-  object-fit: cover;
+  max-height: min(72vh, 760px);
+  object-fit: contain;
+}
+
+.inspiration-result video {
+  max-height: min(72vh, 760px);
+}
+
+.text-result-body {
+  min-width: 0;
+}
+
+.inspiration-result-notes {
+  display: grid;
+  gap: 8px;
 }
 
 .video-progress-panel {
@@ -4002,6 +4037,16 @@ textarea {
 
   .workspace-grid {
     grid-template-columns: 1fr;
+  }
+
+  .inspiration-workspace {
+    grid-template-columns: 1fr;
+    margin-top: 36px;
+  }
+
+  .inspiration-history-sidebar {
+    position: static;
+    max-height: none;
   }
 
   .studio-grid {

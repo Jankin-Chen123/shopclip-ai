@@ -780,13 +780,53 @@ describe("App", () => {
       />,
     );
 
+    expect(markup).toContain("inspiration-workspace");
+    expect(markup).toContain("inspiration-history-sidebar");
+    expect(markup).toContain("inspiration-history-list vertical");
     expect(markup).toContain("Session history");
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain("1 session");
     expect(markup).toContain("Minimal desk setup product hero image");
     expect(markup).toContain("1 image artifact");
     expect(markup).toContain("Previous conversations and generated artifacts");
+    expect(markup).not.toContain("Generated material");
+  });
+
+  it("renders inspiration artifacts without output type labels when history is open", () => {
+    const markup = renderToStaticMarkup(
+      <InspirationPanel
+        apiConfig={createDefaultApiConfig()}
+        initialHistoryOpen
+        language="en"
+        initialHistory={[
+          {
+            savedAt: "2026-05-26T15:00:00.000Z",
+            result: {
+              id: "inspiration-result-2",
+              prompt: "Minimal desk setup product hero image",
+              assetType: "image",
+              model: "seedream-demo",
+              provider: "mock",
+              fallback: { used: false },
+              materials: [
+                {
+                  id: "material-2",
+                  type: "image",
+                  title: "Hero image",
+                  content: "A clean product hero concept",
+                  status: "ready",
+                  url: "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E",
+                },
+              ],
+            },
+          },
+        ]}
+      />,
+    );
+
     expect(markup).toContain("Generated material");
+    expect(markup).toContain("image-result-grid");
+    expect(markup).not.toContain("Image output");
   });
 
   it("updates an inspiration history entry when a generated artifact changes", () => {

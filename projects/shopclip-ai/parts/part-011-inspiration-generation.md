@@ -47,7 +47,7 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 
 - [x] User can select Text, Image, or Video in the Inspiration section.
 - [x] User can submit one prompt and receive a generated material card.
-- [x] User can expand/collapse prior Inspiration sessions and click a session to restore the prompt and generated artifacts.
+- [x] User can expand/collapse prior Inspiration sessions and click a session to restore the prompt and generated artifacts; collapsed state hides the artifact preview.
 - [x] Text responses identify the Seed model contract.
 - [x] Image responses require a renderable generated image artifact when a real image endpoint is configured.
 - [x] Video responses identify the Seedance model contract.
@@ -78,6 +78,8 @@ Complete the standalone Inspiration section so a user can enter one text prompt 
 - Added placeholder-only Ark environment variables to `.env.example` and README.
 - Added browser-local Inspiration session history with a collapsed-by-default list and clickable restore for previous prompts and generated model artifacts.
 - Added history synchronization when video polling updates a processing material into a later artifact state.
+- Removed redundant output-type heading blocks from restored artifacts so text, image, and video outputs render directly.
+- Moved session history into a side panel on wide screens and changed historical sessions to a vertical list.
 
 ## Verification Evidence
 

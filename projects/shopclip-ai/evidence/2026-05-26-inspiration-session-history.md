@@ -5,6 +5,9 @@
 - Added a collapsed-by-default session history area to the Inspiration page.
 - Each successful Inspiration generation is saved as a browser-local session containing prompt, asset type, provider/model metadata, and returned materials.
 - Users can expand the session list, then click a session history item to restore the previous prompt and view the model artifact again.
+- Collapsing the session list hides the selected session artifact preview area.
+- Expanded session artifacts render directly without the redundant "text/image/video output" label block.
+- Session history now sits in a side panel on wide screens, with history sessions stacked vertically.
 - Video polling updates the saved history entry when the processing material changes, so later clicks show the latest artifact state.
 
 ## Files Updated

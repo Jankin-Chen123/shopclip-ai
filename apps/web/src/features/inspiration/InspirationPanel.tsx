@@ -22,6 +22,8 @@ import {
 
 interface InspirationPanelProps {
   apiConfig: UserApiConfig;
+  initialHistory?: InspirationSessionHistoryEntry[];
+  initialHistoryOpen?: boolean;
   language: Language;
 }
 
@@ -192,8 +194,9 @@ const formatSessionTime = (savedAt: string, language: Language, fallback: string
 export const InspirationPanel = ({
   apiConfig,
   initialHistory,
+  initialHistoryOpen = false,
   language,
-}: InspirationPanelProps & { initialHistory?: InspirationSessionHistoryEntry[] }) => {
+}: InspirationPanelProps) => {
   const text = copy[language];
   const [history, setHistory] = useState<InspirationSessionHistoryEntry[]>(
     () => initialHistory ?? loadStoredInspirationHistory(),
@@ -208,7 +211,7 @@ export const InspirationPanel = ({
   const [imageQuality, setImageQuality] = useState<(typeof qualityOptions)[number]>("standard");
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(initialHistoryOpen);
   const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [pollError, setPollError] = useState<string>();
   const [prompt, setPrompt] = useState(initialResult?.prompt ?? "");
@@ -286,13 +289,7 @@ export const InspirationPanel = ({
   const materialProgress =
     activeMaterial?.progress ??
     (activeMaterial?.status === "ready" ? 100 : activeMaterial?.status === "processing" ? 0 : 0);
-  const outputTitle =
-    result?.assetType === "video"
-      ? text.outputVideo
-      : result?.assetType === "text"
-        ? text.outputText
-        : text.outputImage;
-
+  const shouldShowResult = Boolean(result && activeMaterial && isHistoryOpen);
   const restoreHistoryEntry = (entry: InspirationSessionHistoryEntry) => {
     setAssetType(entry.result.assetType);
     setError(undefined);
@@ -373,232 +370,197 @@ export const InspirationPanel = ({
 
   return (
     <section className="inspiration-page" aria-labelledby="inspiration-title">
-      <div className="inspiration-composer standalone">
-        <h2 id="inspiration-title">{text.title}</h2>
-        <div className="inspiration-box">
-          <button className="reference-tile" type="button" aria-label={text.uploadReference}>
-            <Upload size={20} aria-hidden="true" />
-          </button>
-          <label className="inspiration-input">
-            <span className="sr-only">{text.title}</span>
-            <textarea
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={text.placeholder}
-              rows={3}
-              value={prompt}
-            />
-          </label>
-          <div className="inspiration-tools" aria-label="Inspiration tools">
-            <div className="inspiration-type-menu">
-              <button
-                className="active"
-                onClick={() => {
-                  setIsTypeMenuOpen((isOpen) => !isOpen);
-                  setIsCustomOpen(false);
-                }}
-                type="button"
-              >
-                <SelectedTypeIcon size={16} aria-hidden="true" />
-                {text[assetType]}
-                <ChevronDown size={14} aria-hidden="true" />
+      <div className="inspiration-workspace">
+        <div className="inspiration-main">
+          <div className="inspiration-composer standalone">
+            <h2 id="inspiration-title">{text.title}</h2>
+            <div className="inspiration-box">
+              <button className="reference-tile" type="button" aria-label={text.uploadReference}>
+                <Upload size={20} aria-hidden="true" />
               </button>
-              {isTypeMenuOpen ? (
-                <div className="inspiration-type-list" role="menu">
-                  {assetTypeOptions.map(({ type, icon: Icon }) => (
-                    <button
-                      aria-checked={assetType === type}
-                      key={type}
-                      onClick={() => {
-                        setAssetType(type);
-                        setIsTypeMenuOpen(false);
-                      }}
-                      role="menuitemradio"
-                      type="button"
-                    >
-                      <Icon size={16} aria-hidden="true" />
-                      {text[type]}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <div className="inspiration-custom-menu">
-              <button
-                className={isCustomOpen ? "active" : undefined}
-                onClick={() => {
-                  setIsCustomOpen((isOpen) => !isOpen);
-                  setIsTypeMenuOpen(false);
-                }}
-                type="button"
-              >
-                <SlidersHorizontal size={16} aria-hidden="true" />
-                {text.custom}
-                <ChevronDown size={14} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-          <div className="inspiration-dropdown-layer">
-            {isCustomOpen ? (
-              <div className="inspiration-custom-panel">
-                {assetType === "image" ? (
-                  <>
-                    <label>
-                      {text.count}
-                      <input
-                        max={4}
-                        min={1}
-                        onChange={(event) => setImageCount(Number(event.target.value))}
-                        type="number"
-                        value={imageCount}
-                      />
-                    </label>
-                    <label>
-                      {text.aspectRatio}
-                      <select
-                        onChange={(event) =>
-                          setImageAspectRatio(event.target.value as typeof imageAspectRatio)
-                        }
-                        value={imageAspectRatio}
-                      >
-                        {aspectRatioOptions.map((ratio) => (
-                          <option key={ratio} value={ratio}>
-                            {ratio}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      {text.quality}
-                      <select
-                        onChange={(event) => setImageQuality(event.target.value as typeof imageQuality)}
-                        value={imageQuality}
-                      >
-                        {qualityOptions.map((quality) => (
-                          <option key={quality} value={quality}>
-                            {quality}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </>
-                ) : assetType === "video" ? (
-                  <>
-                    <label>
-                      {text.aspectRatio}
-                      <select
-                        onChange={(event) =>
-                          setVideoAspectRatio(event.target.value as typeof videoAspectRatio)
-                        }
-                        value={videoAspectRatio}
-                      >
-                        {videoAspectRatioOptions.map((ratio) => (
-                          <option key={ratio} value={ratio}>
-                            {ratio}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      {text.quality}
-                      <select
-                        onChange={(event) => setVideoQuality(event.target.value as typeof videoQuality)}
-                        value={videoQuality}
-                      >
-                        {qualityOptions.map((quality) => (
-                          <option key={quality} value={quality}>
-                            {quality}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </>
-                ) : (
-                  <p>{text.outputText}</p>
-                )}
-              </div>
-            ) : null}
-          </div>
-          <button
-            className="inspiration-submit"
-            disabled={isGenerating}
-            onClick={() => void handleGenerate()}
-            type="button"
-            aria-label={text.generateMaterial}
-          >
-            {isGenerating ? (
-              <LoaderCircle className="spin" size={18} aria-hidden="true" />
-            ) : (
-              <ArrowUp size={18} aria-hidden="true" />
-            )}
-            <span>{text.generateMaterial}</span>
-          </button>
-        </div>
-        <section className="inspiration-session-history" aria-labelledby="inspiration-history-title">
-          <button
-            aria-controls="inspiration-history-list"
-            aria-expanded={isHistoryOpen}
-            className="inspiration-history-toggle"
-            onClick={() => setIsHistoryOpen((isOpen) => !isOpen)}
-            type="button"
-          >
-            <span className="inspiration-history-icon">
-              <History size={18} aria-hidden="true" />
-            </span>
-            <div>
-              <h3 id="inspiration-history-title">{text.historyTitle}</h3>
-              <p>{text.historyDescription}</p>
-            </div>
-            <span className="inspiration-history-count">
-              {language === "zh"
-                ? `${history.length}${text.sessions}`
-                : `${history.length} ${history.length === 1 ? text.session : text.sessions}`}
-            </span>
-            <ChevronDown
-              className={isHistoryOpen ? "history-chevron open" : "history-chevron"}
-              size={16}
-              aria-hidden="true"
-            />
-          </button>
-          {history.length > 0 ? (
-            <div className="inspiration-history-list" hidden={!isHistoryOpen} id="inspiration-history-list">
-              {history.map((entry) => {
-                const materialCount = entry.result.materials.length;
-                const artifactLabel =
-                  language === "zh"
-                    ? `${materialCount}${text.artifacts}`
-                    : `${materialCount} ${entry.result.assetType} ${
-                        materialCount === 1 ? text.artifact : text.artifacts
-                      }`;
-                return (
+              <label className="inspiration-input">
+                <span className="sr-only">{text.title}</span>
+                <textarea
+                  onChange={(event) => setPrompt(event.target.value)}
+                  placeholder={text.placeholder}
+                  rows={3}
+                  value={prompt}
+                />
+              </label>
+              <div className="inspiration-tools" aria-label="Inspiration tools">
+                <div className="inspiration-type-menu">
                   <button
-                    aria-label={`${text.viewSession}: ${entry.result.prompt}`}
-                    className={selectedHistoryId === entry.result.id ? "active" : undefined}
-                    key={`${entry.result.id}-${entry.savedAt}`}
-                    onClick={() => restoreHistoryEntry(entry)}
+                    className="active"
+                    onClick={() => {
+                      setIsTypeMenuOpen((isOpen) => !isOpen);
+                      setIsCustomOpen(false);
+                    }}
                     type="button"
                   >
-                    <span className="history-session-prompt">{entry.result.prompt}</span>
-                    <span className="history-session-meta">
-                      {formatSessionTime(entry.savedAt, language, text.fallbackHistoryDate)} ·{" "}
-                      {artifactLabel}
-                    </span>
+                    <SelectedTypeIcon size={16} aria-hidden="true" />
+                    {text[assetType]}
+                    <ChevronDown size={14} aria-hidden="true" />
                   </button>
-                );
-              })}
+                  {isTypeMenuOpen ? (
+                    <div className="inspiration-type-list" role="menu">
+                      {assetTypeOptions.map(({ type, icon: Icon }) => (
+                        <button
+                          aria-checked={assetType === type}
+                          key={type}
+                          onClick={() => {
+                            setAssetType(type);
+                            setIsTypeMenuOpen(false);
+                          }}
+                          role="menuitemradio"
+                          type="button"
+                        >
+                          <Icon size={16} aria-hidden="true" />
+                          {text[type]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="inspiration-custom-menu">
+                  <button
+                    className={isCustomOpen ? "active" : undefined}
+                    onClick={() => {
+                      setIsCustomOpen((isOpen) => !isOpen);
+                      setIsTypeMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <SlidersHorizontal size={16} aria-hidden="true" />
+                    {text.custom}
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <div className="inspiration-dropdown-layer">
+                {isCustomOpen ? (
+                  <div className="inspiration-custom-panel">
+                    {assetType === "image" ? (
+                      <>
+                        <label>
+                          {text.count}
+                          <input
+                            max={4}
+                            min={1}
+                            onChange={(event) => setImageCount(Number(event.target.value))}
+                            type="number"
+                            value={imageCount}
+                          />
+                        </label>
+                        <label>
+                          {text.aspectRatio}
+                          <select
+                            onChange={(event) =>
+                              setImageAspectRatio(event.target.value as typeof imageAspectRatio)
+                            }
+                            value={imageAspectRatio}
+                          >
+                            {aspectRatioOptions.map((ratio) => (
+                              <option key={ratio} value={ratio}>
+                                {ratio}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          {text.quality}
+                          <select
+                            onChange={(event) =>
+                              setImageQuality(event.target.value as typeof imageQuality)
+                            }
+                            value={imageQuality}
+                          >
+                            {qualityOptions.map((quality) => (
+                              <option key={quality} value={quality}>
+                                {quality}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </>
+                    ) : assetType === "video" ? (
+                      <>
+                        <label>
+                          {text.aspectRatio}
+                          <select
+                            onChange={(event) =>
+                              setVideoAspectRatio(event.target.value as typeof videoAspectRatio)
+                            }
+                            value={videoAspectRatio}
+                          >
+                            {videoAspectRatioOptions.map((ratio) => (
+                              <option key={ratio} value={ratio}>
+                                {ratio}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          {text.quality}
+                          <select
+                            onChange={(event) =>
+                              setVideoQuality(event.target.value as typeof videoQuality)
+                            }
+                            value={videoQuality}
+                          >
+                            {qualityOptions.map((quality) => (
+                              <option key={quality} value={quality}>
+                                {quality}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </>
+                    ) : (
+                      <p>{text.outputText}</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                className="inspiration-submit"
+                disabled={isGenerating}
+                onClick={() => void handleGenerate()}
+                type="button"
+                aria-label={text.generateMaterial}
+              >
+                {isGenerating ? (
+                  <LoaderCircle className="spin" size={18} aria-hidden="true" />
+                ) : (
+                  <ArrowUp size={18} aria-hidden="true" />
+                )}
+                <span>{text.generateMaterial}</span>
+              </button>
             </div>
-          ) : (
-            <p className="inspiration-history-empty">{text.emptyHistory}</p>
-          )}
-        </section>
-        {error ? <p className="inline-error">{error}</p> : null}
-        {result && activeMaterial ? (
-          <section
-            className={`inspiration-result inspiration-result-${result.assetType}`}
-            aria-label={text.resultTitle}
-          >
-            <div className="result-copy">
-              <h3>{outputTitle}</h3>
-              {result.assetType === "video" ? (
+          </div>
+          {error ? <p className="inline-error">{error}</p> : null}
+          {shouldShowResult && result && activeMaterial ? (
+            <section
+              className={`inspiration-result inspiration-result-${result.assetType}`}
+              aria-label={text.resultTitle}
+            >
+              {result.assetType === "text" ? (
+                <div className="text-result-body">
+                  <p>{activeMaterial.content}</p>
+                </div>
+              ) : null}
+              {result.assetType === "image" ? (
+                <div className="image-result-grid">
+                  {result.materials.map((material) =>
+                    material.url ? (
+                      <img alt={material.title || text.outputImage} key={material.id} src={material.url} />
+                    ) : null,
+                  )}
+                </div>
+              ) : null}
+              {activeMaterial.type === "video" && activeMaterial.url ? (
+                <video aria-label={text.outputVideo} controls src={activeMaterial.url} />
+              ) : null}
+              {result.assetType === "video" && !activeMaterial.url ? (
                 <div className="video-progress-panel">
                   <div className="video-progress-header">
                     <span>
@@ -631,30 +593,84 @@ export const InspirationPanel = ({
                     </a>
                   ) : null}
                 </div>
-              ) : result.assetType === "text" ? (
-                <p>{activeMaterial.content}</p>
               ) : null}
-              {pollError ? <p className="fallback-note">{pollError}</p> : null}
-              {result.fallback.reason ? (
-                <p className="fallback-note">
-                  {text.fallbackReason}: {result.fallback.reason}
-                </p>
+              {pollError || result.fallback.reason ? (
+                <div className="inspiration-result-notes">
+                  {pollError ? <p className="fallback-note">{pollError}</p> : null}
+                  {result.fallback.reason ? (
+                    <p className="fallback-note">
+                      {text.fallbackReason}: {result.fallback.reason}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
+            </section>
+          ) : null}
+        </div>
+        <aside
+          className="inspiration-session-history inspiration-history-sidebar"
+          aria-labelledby="inspiration-history-title"
+        >
+          <button
+            aria-controls="inspiration-history-list"
+            aria-expanded={isHistoryOpen}
+            className="inspiration-history-toggle"
+            onClick={() => setIsHistoryOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            <span className="inspiration-history-icon">
+              <History size={18} aria-hidden="true" />
+            </span>
+            <div>
+              <h3 id="inspiration-history-title">{text.historyTitle}</h3>
+              <p>{text.historyDescription}</p>
             </div>
-            {result.assetType === "image" ? (
-              <div className="image-result-grid">
-                {result.materials.map((material) =>
-                  material.url ? (
-                    <img alt={text.outputImage} key={material.id} src={material.url} />
-                  ) : null,
-                )}
-              </div>
-            ) : null}
-            {activeMaterial.type === "video" && activeMaterial.url ? (
-              <video aria-label={text.outputVideo} controls src={activeMaterial.url} />
-            ) : null}
-          </section>
-        ) : null}
+            <span className="inspiration-history-count">
+              {language === "zh"
+                ? `${history.length}${text.sessions}`
+                : `${history.length} ${history.length === 1 ? text.session : text.sessions}`}
+            </span>
+            <ChevronDown
+              className={isHistoryOpen ? "history-chevron open" : "history-chevron"}
+              size={16}
+              aria-hidden="true"
+            />
+          </button>
+          {history.length > 0 ? (
+            <div
+              className="inspiration-history-list vertical"
+              hidden={!isHistoryOpen}
+              id="inspiration-history-list"
+            >
+              {history.map((entry) => {
+                const materialCount = entry.result.materials.length;
+                const artifactLabel =
+                  language === "zh"
+                    ? `${materialCount}${text.artifacts}`
+                    : `${materialCount} ${entry.result.assetType} ${
+                        materialCount === 1 ? text.artifact : text.artifacts
+                      }`;
+                return (
+                  <button
+                    aria-label={`${text.viewSession}: ${entry.result.prompt}`}
+                    className={selectedHistoryId === entry.result.id ? "active" : undefined}
+                    key={`${entry.result.id}-${entry.savedAt}`}
+                    onClick={() => restoreHistoryEntry(entry)}
+                    type="button"
+                  >
+                    <span className="history-session-prompt">{entry.result.prompt}</span>
+                    <span className="history-session-meta">
+                      {formatSessionTime(entry.savedAt, language, text.fallbackHistoryDate)} ·{" "}
+                      {artifactLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="inspiration-history-empty">{text.emptyHistory}</p>
+          )}
+        </aside>
       </div>
     </section>
   );
