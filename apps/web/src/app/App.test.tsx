@@ -29,8 +29,10 @@ import {
 } from "../features/settings/SettingsPanel";
 import {
   App,
+  createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
   getCreationAssetLibraryRefreshCategory,
+  getPreparedAssetsByBucket,
   hasUsableStockProviderCredential,
 } from "./App";
 import { copy } from "./i18n";
@@ -381,6 +383,92 @@ describe("App", () => {
     expect(markup).toContain("/api/assets/asset-packshot/content");
     expect(markup).toContain('aria-label="GlowGrip demo.mp4"');
     expect(markup).toContain("/api/assets/asset-demo/content");
+  });
+
+  it("maps loaded project assets into asset prep buckets for historical projects", () => {
+    expect(
+      getPreparedAssetsByBucket([
+        makeAsset({
+          id: "asset-packshot",
+          name: "GlowGrip packshot.png",
+          type: "image",
+          mimeType: "image/png",
+        }),
+        makeAsset({
+          id: "asset-detail",
+          name: "GlowGrip detail.png",
+          type: "image",
+          mimeType: "image/png",
+        }),
+        makeAsset({
+          id: "asset-demo",
+          name: "GlowGrip demo.mp4",
+          type: "video",
+          mimeType: "video/mp4",
+        }),
+        makeAsset({
+          id: "asset-script",
+          name: "Campaign copy.txt",
+          type: "reference",
+          mimeType: "text/plain",
+          tags: ["script"],
+        }),
+      ]),
+    ).toEqual({
+      hero: [
+        expect.objectContaining({
+          id: "asset-packshot",
+        }),
+      ],
+      scene: [
+        expect.objectContaining({
+          id: "asset-detail",
+        }),
+      ],
+      demo: [
+        expect.objectContaining({
+          id: "asset-demo",
+        }),
+      ],
+      brand: [
+        expect.objectContaining({
+          id: "asset-script",
+        }),
+      ],
+    });
+  });
+
+  it("creates an asset prep snapshot from loaded project assets", () => {
+    const snapshot = createAssetPrepSnapshotFromProjectAssets([
+      makeAsset({
+        id: "asset-packshot",
+        name: "GlowGrip packshot.png",
+        type: "image",
+        mimeType: "image/png",
+      }),
+      makeAsset({
+        id: "asset-demo",
+        name: "GlowGrip demo.mp4",
+        type: "video",
+        mimeType: "video/mp4",
+      }),
+    ]);
+
+    expect(snapshot.assetIds).toEqual(["asset-packshot", "asset-demo"]);
+    expect(snapshot.materials).toEqual([
+      expect.objectContaining({
+        assetId: "asset-packshot",
+        bucketId: "hero",
+        name: "GlowGrip packshot.png",
+        source: "library",
+      }),
+      expect.objectContaining({
+        assetId: "asset-demo",
+        bucketId: "demo",
+        name: "GlowGrip demo.mp4",
+        source: "library",
+      }),
+    ]);
   });
 
   it("requests all asset library categories for creation asset prep", () => {

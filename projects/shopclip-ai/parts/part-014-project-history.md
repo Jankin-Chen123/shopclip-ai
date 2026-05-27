@@ -41,10 +41,14 @@ Support browsing historical creation projects from the creation/project setup ar
 - RED: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` failed because `GET /api/projects` returned 404.
 - RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because the project setup panel did not render historical projects.
 - RED: `corepack pnpm --filter @shopclip/api test -- prisma-migrations.test.ts` failed because no migration created the `StoryboardScene.imageUrl` column required by Prisma project loading.
+- RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because loaded project assets were not mapped into asset prep buckets or restored into the script-generation asset prep snapshot.
 - GREEN: `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts` passed: 2 files, 15 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed: 13 files, 51 tests.
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed: 1 file, 52 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- prisma-migrations.test.ts` passed: 14 files, 52 tests.
+- GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after restoring historical project assets into asset prep: 1 file, 55 tests.
+- Typecheck: `corepack pnpm --filter @shopclip/web typecheck` passed.
+- Lint: `corepack pnpm --filter @shopclip/web lint` passed.
 - Typecheck: `corepack pnpm typecheck` passed for shared, API, and web.
 - Lint: `corepack pnpm --filter @shopclip/shared lint`, `corepack pnpm --filter @shopclip/api lint`, and `corepack pnpm --filter @shopclip/web lint` passed.
 - Prisma schema: `apps/api/node_modules/.bin/prisma.CMD validate --schema apps/api/prisma/schema.prisma` passed locally.
@@ -60,6 +64,7 @@ Support browsing historical creation projects from the creation/project setup ar
 - Added `listProjects()` to the web API client.
 - Added a historical projects panel to the creation/project setup page.
 - Selecting a historical project uses the existing full project snapshot loader and restores settings, assets, scripts, scenes, render state, and workspace selection.
+- Restored loaded project assets into the step 02 asset prep buckets and the script-generation asset prep snapshot, so historical imported images/videos/reference assets are visible and reused.
 - Kept manual project ID loading available.
 
 ## Risks And Follow-Up

@@ -221,6 +221,62 @@ export const getCreationAssetLibraryRefreshCategory = (
   page: WorkspacePageId,
 ): AssetLibraryCategory | undefined => (page === "create" ? "all" : undefined);
 
+type PreparedAssetBucketId = "hero" | "scene" | "demo" | "brand";
+
+export const getPreparedAssetsByBucket = (
+  assets: AssetMetadata[],
+): Record<string, AssetMetadata[]> => {
+  const preparedAssetsByBucket: Record<PreparedAssetBucketId, AssetMetadata[]> = {
+    hero: [],
+    scene: [],
+    demo: [],
+    brand: [],
+  };
+
+  assets.forEach((asset) => {
+    if (asset.type === "image" || asset.mimeType?.startsWith("image/")) {
+      const bucketId = preparedAssetsByBucket.hero.length === 0 ? "hero" : "scene";
+      preparedAssetsByBucket[bucketId].push(asset);
+      return;
+    }
+
+    if (asset.type === "video" || asset.mimeType?.startsWith("video/")) {
+      preparedAssetsByBucket.demo.push(asset);
+      return;
+    }
+
+    preparedAssetsByBucket.brand.push(asset);
+  });
+
+  return Object.fromEntries(
+    Object.entries(preparedAssetsByBucket).filter(([, bucketAssets]) => bucketAssets.length > 0),
+  );
+};
+
+export const createAssetPrepSnapshotFromProjectAssets = (
+  assets: AssetMetadata[],
+): AssetPrepSnapshot => {
+  const preparedAssetsByBucket = getPreparedAssetsByBucket(assets);
+  const materials = Object.entries(preparedAssetsByBucket).flatMap(([bucketId, bucketAssets]) =>
+    bucketAssets.map((asset) => ({
+      assetId: asset.id,
+      bucketId,
+      mimeType: asset.mimeType,
+      name: asset.name,
+      sizeBytes: asset.sizeBytes,
+      source: "library" as const,
+      tags: asset.tags,
+      type: asset.type,
+    })),
+  );
+
+  return {
+    assetIds: materials.map((material) => material.assetId),
+    keywords: [],
+    materials,
+  };
+};
+
 interface AppProps {
   initialLanguage?: Language;
   initialPage?: WorkspacePageId;
@@ -287,6 +343,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
     return [...assetsById.values()];
   }, [assetLibrary.assets, project?.assets]);
+  const preparedProjectAssetsByBucket = useMemo(
+    () => getPreparedAssetsByBucket(project?.assets ?? []),
+    [project?.assets],
+  );
   const activeAssetSearchResults = useMemo(
     () =>
       assetSearchResults.filter((result) =>
@@ -503,6 +563,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setAssetSearchResults([]);
       setExternalAssetSearchResults([]);
       setEditingSuggestions([]);
+      setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
       setSelectedSceneId(undefined);
       setDirtySceneIds(new Set());
       refreshProjectHistory();
@@ -531,6 +592,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setAssetSearchResults([]);
     setExternalAssetSearchResults([]);
     setEditingSuggestions([]);
+    setAssetPrepSnapshot(createAssetPrepSnapshotFromProjectAssets(loadedProject.assets));
     setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
     setDirtySceneIds(new Set());
   };
@@ -1123,12 +1185,14 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     error={errors.asset}
                     isGenerating={busyState === "script"}
                     isImporting={busyState === "asset"}
+                    key={project?.id ?? "projectless-asset-prep"}
                     language={language}
                     libraryAssets={[...(project?.assets ?? []), ...assetLibrary.assets]}
                     onBack={() => handlePageChange("project")}
                     onGenerateStoryboard={handleContinueToScript}
                     onImportFiles={handleImportFiles}
                     onPreparationChange={handleAssetPrepChange}
+                    preparedLibraryAssetsByBucket={preparedProjectAssetsByBucket}
                   />
                   <ScriptPanel
                     copy={text.script}
