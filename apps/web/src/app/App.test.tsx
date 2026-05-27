@@ -214,6 +214,30 @@ describe("App", () => {
     });
   });
 
+  it("uses official server model settings for one-click script generation when no browser API key is set", () => {
+    const payload = createScriptGenerationRequestPayload(
+      {
+        assetIds: ["asset-product-main"],
+        keywords: ["portable"],
+        materials: [
+          {
+            assetId: "asset-product-main",
+            name: "Product main image",
+            type: "image",
+          },
+        ],
+      },
+      "",
+      createDefaultApiConfig(),
+    );
+
+    expect(payload.apiConfig?.general).toMatchObject({
+      credentialSource: "official",
+      provider: "volcengine-ark",
+    });
+    expect(payload.apiConfig?.general?.apiKey).toBeUndefined();
+  });
+
   it("places the step 03 scene list before the centered preview workspace", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="studio" />);
 

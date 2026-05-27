@@ -96,6 +96,22 @@ const createDefaultAsset = (language: Language): CreateAssetInput => ({
   sizeBytes: defaultAssetSizeBytes,
 });
 
+const createScriptGenerationApiConfig = (apiConfig: UserApiConfig): UserApiConfig => {
+  const generalConfig = apiConfig.general;
+  if (generalConfig?.credentialSource === "official" || generalConfig?.apiKey?.trim()) {
+    return apiConfig;
+  }
+
+  return {
+    ...apiConfig,
+    general: {
+      ...generalConfig,
+      credentialSource: "official",
+      apiKey: undefined,
+    },
+  };
+};
+
 export const createScriptGenerationRequestPayload = (
   assetPrepSnapshot: Pick<AssetPrepSnapshot, "assetIds" | "keywords" | "materials">,
   scriptDraft: string,
@@ -105,7 +121,7 @@ export const createScriptGenerationRequestPayload = (
   draftScript: scriptDraft.trim() || undefined,
   keywords: assetPrepSnapshot.keywords,
   materials: assetPrepSnapshot.materials,
-  apiConfig,
+  apiConfig: createScriptGenerationApiConfig(apiConfig),
 });
 
 export const createAssetInputFromFile = (file: File, language: Language): CreateAssetInput => {

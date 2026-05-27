@@ -235,6 +235,7 @@ describe("ark inspiration provider", () => {
 
   it("uses complete server API configuration when official configuration is requested", async () => {
     configureArkEnv();
+    process.env.AI_GENERAL_API_KEY = "general-official-key";
     const fetchMock = vi.fn(async () =>
       Response.json({
         output_text: "Official configured text response.",
@@ -262,9 +263,44 @@ describe("ark inspiration provider", () => {
       "https://ark.example.test/api/v3/responses",
       expect.objectContaining({
         headers: expect.objectContaining({
-          authorization: "Bearer ark-shared-key",
+          authorization: "Bearer general-official-key",
         }),
         body: expect.stringContaining('"model":"ep-text-test"'),
+      }),
+    );
+  });
+
+  it("falls back to ARK_API_KEY and the default text model when role-specific text env is blank", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "ark-shared-key";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        output_text: "Official default model response.",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const generated = await generateInspiration({
+      prompt: "Create a launch concept for a fold-flat phone stand.",
+      assetType: "text",
+      apiConfig: {
+        general: {
+          credentialSource: "official",
+          provider: "volcengine-ark",
+        },
+      },
+    });
+
+    expect(generated.fallback.used).toBe(false);
+    expect(generated.model).toBe("doubao-seed2.0-pro");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://ark.example.test/api/v3/responses",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer ark-shared-key",
+        }),
+        body: expect.stringContaining('"model":"doubao-seed2.0-pro"'),
       }),
     );
   });

@@ -239,9 +239,9 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
   const userConfig = getUserConfigForAssetType(request);
   if (userConfig?.credentialSource === "official") {
     const apiKey = getEnvironmentApiKey(request.assetType);
-    const model = getEnvironmentModel(request.assetType);
+    const model = getEnvironmentModel(request.assetType) ?? getDefaultModelName(request.assetType);
 
-    if (!apiKey || !model) {
+    if (!apiKey) {
       return undefined;
     }
 
@@ -267,9 +267,9 @@ const getRequiredConfig = (request: InspirationGenerateRequest): ProviderConfig 
   }
 
   const apiKey = getEnvironmentApiKey(request.assetType);
-  const model = getEnvironmentModel(request.assetType);
+  const model = getEnvironmentModel(request.assetType) ?? getDefaultModelName(request.assetType);
 
-  if (!apiKey || !model) {
+  if (!apiKey) {
     return undefined;
   }
 

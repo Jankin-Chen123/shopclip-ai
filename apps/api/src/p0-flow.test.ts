@@ -48,7 +48,13 @@ describe("P0 backend lifecycle", () => {
     vi.unstubAllGlobals();
     delete process.env.AI_PROVIDER_MODE;
     delete process.env.ARK_API_KEY;
+    delete process.env.AI_GENERAL_API_KEY;
+    delete process.env.AI_GENERAL_MODEL_ID;
+    delete process.env.AI_TEXT_MODEL_ID;
+    delete process.env.AI_IMAGE_API_KEY;
     delete process.env.AI_IMAGE_MODEL_ID;
+    delete process.env.AI_VIDEO_API_KEY;
+    delete process.env.AI_VIDEO_MODEL_ID;
     delete process.env.ARK_API_BASE_URL;
   });
 
@@ -620,6 +626,99 @@ describe("P0 backend lifecycle", () => {
     expect(body.messages[1].content).toContain("已准备素材：小猫水杯主图");
     expect(body.messages[1].content).toContain("关键词：便携、防漏");
     expect(body.messages[1].content).toContain("用户草稿：强调小包装得下和通勤防漏。");
+  });
+
+  it("uses official server text settings when one-click rewriting receives no browser API key", async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
+    process.env.ARK_API_KEY = "ark-fallback-key";
+    process.env.AI_GENERAL_API_KEY = "general-api-key";
+    process.env.AI_GENERAL_MODEL_ID = "ep-general-script";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    delete process.env.AI_TEXT_MODEL_ID;
+
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        output_text:
+          "| Time | Voiceover | Subtitle | Visual |\n|---|---|---|---|\n| 0-3s | Server model line | Server subtitle | Keep product appearance consistent with user assets |",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Official one click script",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat", "stable shots"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const asset = await request<{ asset: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Fold Stand packshot",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["stand"],
+        }),
+      },
+    );
+
+    const rewritten = await request<{
+      fallback: { used: boolean; provider: string };
+      scriptText: string;
+    }>(baseUrl, `/api/projects/${created.body.project.id}/rewrite-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+        draftScript: "Show desk portability.",
+        keywords: ["portable", "stable"],
+        materials: [
+          {
+            assetId: asset.body.asset.id,
+            name: "Fold Stand packshot",
+            type: "image",
+          },
+        ],
+        apiConfig: {
+          general: {
+            credentialSource: "official",
+            provider: "volcengine-ark",
+          },
+        },
+      }),
+    });
+
+    expect(rewritten.status).toBe(201);
+    expect(rewritten.body.fallback.used).toBe(false);
+    expect(rewritten.body.scriptText).toContain("Server model line");
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://ark.example.test"),
+    );
+    expect(externalCalls).toHaveLength(1);
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.model).toBe("ep-general-script");
+    expect(body.input[1].content[0].text).toContain("产品：Fold Stand");
+    expect(externalCalls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer general-api-key",
+        }),
+      }),
+    );
   });
 
   it("structures storyboard scene fields from the current script draft table", async () => {
