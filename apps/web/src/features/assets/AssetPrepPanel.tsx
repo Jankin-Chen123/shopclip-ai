@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AssetMetadata } from "@shopclip/shared";
 import {
   ArrowLeft,
@@ -35,6 +35,7 @@ interface AssetPrepPanelProps {
   onBack: () => void;
   onGenerateStoryboard: () => void;
   onImportFiles: (files: File[]) => void;
+  onPreparationChange?: (snapshot: AssetPrepSnapshot) => void;
 }
 
 interface PrepBucket {
@@ -55,6 +56,23 @@ interface ManualPrepUpload {
   name: string;
   size: number;
   source: "file" | "library";
+}
+
+export interface AssetPrepMaterial {
+  assetId?: string;
+  bucketId: string;
+  mimeType?: string;
+  name: string;
+  sizeBytes?: number;
+  source: "file" | "library";
+  tags: string[];
+  type?: string;
+}
+
+export interface AssetPrepSnapshot {
+  assetIds: string[];
+  keywords: string[];
+  materials: AssetPrepMaterial[];
 }
 
 const text = {
@@ -86,7 +104,7 @@ const text = {
     removeKeyword: (keyword: string) => `Remove keyword: ${keyword}`,
     keywordList: ["portable", "foldable", "desktop stable", "anti-slip base", "aluminum", "TikTok vertical"],
     back: "Back",
-    generate: "Generate storyboard",
+    generate: "Continue to script",
     estimate: "AI analysis usually takes 1-2 minutes. Use clear, complete materials for better results.",
     buckets: {
       hero: {
@@ -139,7 +157,7 @@ const text = {
     removeKeyword: (keyword: string) => `删除关键词：${keyword}`,
     keywordList: ["便携", "可折叠", "桌面稳定", "防滑底座", "铝合金材质", "TikTok 竖屏"],
     back: "返回上一步",
-    generate: "生成分镜",
+    generate: "继续脚本生成",
     estimate: "AI 分析预计需要 1-2 分钟，请确保已上传清晰、完整的素材以获得更佳效果。",
     buckets: {
       hero: {
@@ -234,6 +252,7 @@ export const AssetPrepPanel = ({
   onBack,
   onGenerateStoryboard,
   onImportFiles,
+  onPreparationChange,
   libraryAssets = [],
   preparedLibraryAssetsByBucket = {},
 }: AssetPrepPanelProps) => {
@@ -353,6 +372,28 @@ export const AssetPrepPanel = ({
           selectedLibraryAssetIds.has(asset.id),
       )
     : [];
+
+  useEffect(() => {
+    onPreparationChange?.({
+      assetIds: Object.values(manualUploads)
+        .flat()
+        .map((upload) => upload.asset?.id)
+        .filter((assetId): assetId is string => Boolean(assetId)),
+      keywords: keywords.map((keyword) => keyword.trim()).filter(Boolean),
+      materials: Object.entries(manualUploads).flatMap(([bucketId, uploads]) =>
+        uploads.map((upload) => ({
+          assetId: upload.asset?.id,
+          bucketId,
+          mimeType: upload.mimeType,
+          name: upload.name,
+          sizeBytes: upload.size || undefined,
+          source: upload.source,
+          tags: upload.asset?.tags ?? [],
+          type: upload.asset?.type,
+        })),
+      ),
+    });
+  }, [keywords, manualUploads, onPreparationChange]);
 
   return (
     <section className="panel asset-prep-panel" id="asset-prep" aria-labelledby="asset-prep-title">

@@ -268,6 +268,24 @@ export const ScriptResultSchema = z
     }
   });
 
+export const ScriptGenerationMaterialSchema = z.object({
+  assetId: z.string().trim().min(1).optional(),
+  bucketId: z.string().trim().min(1).optional(),
+  mimeType: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1),
+  sizeBytes: z.number().int().positive().optional(),
+  source: z.enum(["file", "library"]).optional(),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  type: z.string().trim().min(1).optional(),
+});
+
+export const ScriptGenerationRequestSchema = z.object({
+  assetIds: z.array(z.string().trim().min(1)).max(50).default([]),
+  draftScript: z.string().trim().max(5000).optional(),
+  keywords: z.array(z.string().trim().min(1)).max(40).default([]),
+  materials: z.array(ScriptGenerationMaterialSchema).max(80).default([]),
+});
+
 export const SceneUpdateSchema = z
   .object({
     durationSeconds: z.number().positive().max(15).optional(),

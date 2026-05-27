@@ -1,5 +1,6 @@
+import type { ChangeEvent } from "react";
 import type { ScriptResult } from "@shopclip/shared";
-import { Loader2, WandSparkles } from "lucide-react";
+import { ArrowRight, Loader2, WandSparkles } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -11,8 +12,12 @@ interface ScriptPanelProps {
   error?: string;
   fallbackProvider?: string;
   isLoading: boolean;
+  isStoryboardGenerating: boolean;
   onGenerateScript: () => void;
+  onGenerateStoryboard: () => void;
+  onScriptDraftChange: (scriptDraft: string) => void;
   script?: ScriptResult;
+  scriptDraft: string;
 }
 
 export const ScriptPanel = ({
@@ -21,61 +26,86 @@ export const ScriptPanel = ({
   error,
   fallbackProvider,
   isLoading,
+  isStoryboardGenerating,
   onGenerateScript,
+  onGenerateStoryboard,
+  onScriptDraftChange,
   script,
-}: ScriptPanelProps) => (
-  <section className="panel" id="script" aria-labelledby="script-title">
+  scriptDraft,
+}: ScriptPanelProps) => {
+  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    onScriptDraftChange(event.target.value);
+  };
+
+  return (
+    <section className="panel script-generation-panel" id="script" aria-labelledby="script-title">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">{copy.step}</p>
           <h2 id="script-title">{copy.title}</h2>
+          <p className="concept-panel-subtitle">{copy.body}</p>
         </div>
-        <StatusPill tone={script ? "success" : "neutral"}>
-          {script ? copy.sceneCount(script.scenes.length) : copy.notGenerated}
+        <StatusPill tone={scriptDraft.trim() ? "success" : "neutral"}>
+          {scriptDraft.trim() ? copy.ready : copy.draft}
         </StatusPill>
       </div>
 
-    <Button
-      disabled={disabled || isLoading}
-      icon={isLoading ? <Loader2 className="spin" size={18} /> : <WandSparkles size={18} />}
-      onClick={onGenerateScript}
-      variant="primary"
-    >
-      {copy.generate}
-    </Button>
+      <label className="script-draft-editor">
+        <span>{copy.editorLabel}</span>
+        <textarea
+          onChange={handleDraftChange}
+          placeholder={copy.placeholder}
+          rows={8}
+          value={scriptDraft}
+        />
+      </label>
 
-    {error ? (
-      <p className="inline-error" role="alert">
-        {error}
-      </p>
-    ) : null}
+      <div className="script-generation-actions">
+        <Button
+          disabled={disabled || isLoading}
+          icon={isLoading ? <Loader2 className="spin" size={18} /> : <WandSparkles size={18} />}
+          onClick={onGenerateScript}
+          variant="primary"
+        >
+          {copy.oneClickGenerate}
+        </Button>
+        <Button
+          disabled={disabled || isLoading || isStoryboardGenerating}
+          icon={
+            isStoryboardGenerating ? (
+              <Loader2 className="spin" size={18} />
+            ) : (
+              <WandSparkles size={18} />
+            )
+          }
+          onClick={onGenerateStoryboard}
+        >
+          {copy.generateStoryboard}
+          <ArrowRight size={18} aria-hidden="true" />
+        </Button>
+      </div>
 
-    {script ? (
+      {error ? (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
       <div className="script-result">
-        <div>
-          <span className="section-label">{copy.hook}</span>
-          <p>{script.hook}</p>
-        </div>
-        <div>
-          <span className="section-label">{copy.narrative}</span>
-          <p>{script.narrative}</p>
-        </div>
-        <div className="constraint-list">
-          {script.constraints.map((constraint) => (
-            <StatusPill key={constraint} tone="info">
-              {constraint}
-            </StatusPill>
-          ))}
-        </div>
+        {script ? (
+          <div className="constraint-list">
+            <StatusPill tone="info">{copy.sceneCount(script.scenes.length)}</StatusPill>
+            {script.constraints.slice(0, 2).map((constraint) => (
+              <StatusPill key={constraint} tone="info">
+                {constraint}
+              </StatusPill>
+            ))}
+          </div>
+        ) : null}
         {fallbackProvider ? (
           <p className="fallback-note">{copy.fallback(fallbackProvider)}</p>
         ) : null}
       </div>
-    ) : (
-      <div className="empty-state">
-        <strong>{copy.emptyTitle}</strong>
-        <span>{copy.emptyBody}</span>
-      </div>
-    )}
-  </section>
-);
+    </section>
+  );
+};

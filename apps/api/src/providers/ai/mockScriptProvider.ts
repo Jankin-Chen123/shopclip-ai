@@ -1,17 +1,67 @@
 import type { ProjectSnapshot } from "../../modules/projects/projectStore.js";
-import type { ScriptResult } from "@shopclip/shared";
+import type { AssetMetadata, ScriptGenerationRequest, ScriptResult } from "@shopclip/shared";
 
 export interface ScriptProviderResult {
   fallback: {
     used: boolean;
-    provider: "mock-script-provider";
+    provider: string;
   };
   script: Omit<ScriptResult, "id" | "projectId">;
 }
 
-export const generateFallbackScript = (project: ProjectSnapshot): ScriptProviderResult => {
+export interface ScriptGenerationContext {
+  assets?: AssetMetadata[];
+  request?: ScriptGenerationRequest;
+}
+
+const compactList = (values: Array<string | undefined>, fallback: string) => {
+  const compacted = values.map((value) => value?.trim()).filter((value): value is string => Boolean(value));
+  return compacted.length > 0 ? compacted.join(", ") : fallback;
+};
+
+export const rewriteFallbackScript = (
+  project: ProjectSnapshot,
+  context: ScriptGenerationContext = {},
+): { fallback: { used: boolean; provider: string }; scriptText: string } => {
+  const request = context.request;
+  const draftScript = request?.draftScript?.trim();
+  const materialNames = compactList(
+    [
+      ...(context.assets ?? []).map((asset) => asset.name),
+      ...(request?.materials ?? []).map((material) => material.name),
+    ].slice(0, 6),
+    "prepared product materials",
+  );
+  const keywordLine = compactList(
+    [...(request?.keywords ?? []), ...project.sellingPoints].slice(0, 8),
+    "clear product benefit",
+  );
+
+  return {
+    fallback: {
+      used: true,
+      provider: "mock-script-provider",
+    },
+    scriptText: [
+      `Hook: Stop scrolling past ${project.productName}; show the buyer problem in the first second.`,
+      `Body: ${draftScript || `Use ${materialNames} to demonstrate ${keywordLine}.`}`,
+      `Proof: Highlight ${keywordLine} with close-up details from ${materialNames}.`,
+      `CTA: Keep the final line direct for ${project.audience}: try ${project.productName} today.`,
+    ].join("\n"),
+  };
+};
+
+export const generateFallbackScript = (
+  project: ProjectSnapshot,
+  context: ScriptGenerationContext = {},
+): ScriptProviderResult => {
   const primaryAsset = project.assets[0];
   const assetId = primaryAsset?.id;
+  const draftScript = context.request?.draftScript?.trim();
+  const keywordSummary = compactList(
+    [...(context.request?.keywords ?? []), ...project.sellingPoints].slice(0, 4),
+    project.sellingPoints[0] ?? "clear product benefit",
+  );
 
   return {
     fallback: {
@@ -20,11 +70,14 @@ export const generateFallbackScript = (project: ProjectSnapshot): ScriptProvider
     },
     script: {
       hook: `Stop scrolling past ${project.productName}.`,
-      narrative: `Show the buyer pain, demonstrate ${project.productName}, then close with a clear TikTok Shop export moment.`,
+      narrative:
+        draftScript ||
+        `Show the buyer pain, demonstrate ${project.productName}, then close with a clear TikTok Shop export moment.`,
       constraints: [
         "Use deterministic fallback copy",
         "Keep the full storyboard within 15 seconds",
         "Do not call external AI providers without server configuration",
+        `Reference prepared keywords: ${keywordSummary}`,
       ],
       scenes: [
         {

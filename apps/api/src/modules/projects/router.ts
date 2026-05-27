@@ -6,6 +6,7 @@ import type {
   AssetProcessingJob,
   AssetUploadIntent,
   ExternalAssetResult,
+  ScriptGenerationRequest,
 } from "@shopclip/shared";
 import {
   ExternalAssetSearchRequestSchema,
@@ -13,6 +14,7 @@ import {
   ExternalAssetResultSchema,
   RenderRequestSchema,
   SceneUpdateSchema,
+  ScriptGenerationRequestSchema,
   ScriptResultSchema,
 } from "@shopclip/shared";
 
@@ -38,12 +40,16 @@ import {
   generateEditingSuggestions,
   regenerateSceneFallback,
 } from "../../providers/ai/editingAgentProvider.js";
-import { generateFallbackScript } from "../../providers/ai/mockScriptProvider.js";
+import { generateInspiration } from "../../providers/ai/arkInspirationProvider.js";
+import {
+  generateFallbackScript,
+  rewriteFallbackScript,
+} from "../../providers/ai/mockScriptProvider.js";
 import { renderFallbackPreview } from "../../providers/renderer/mockRenderer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { MemoryProjectStore } from "./memoryStore.js";
-import type { ProjectStore } from "./projectStore.js";
+import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
 const sendNotFound = (response: Response, code: string, message: string) => {
   response.status(404).json({
@@ -61,6 +67,58 @@ const sendInvalidRequest = (response: Response, code: string, message: string) =
       message,
     },
   });
+};
+
+const scriptGenerationPrompt = (
+  project: ProjectSnapshot,
+  request: ScriptGenerationRequest,
+  assets: AssetMetadata[],
+) => {
+  const materialLines = [
+    ...assets.map((asset) => `${asset.name} (${asset.mimeType ?? asset.type})`),
+    ...request.materials.map(
+      (material) => `${material.name} (${material.mimeType ?? material.type ?? "material"})`,
+    ),
+  ];
+
+  return [
+    "Rewrite this ecommerce short-video script. Keep it concise, conversion-oriented, and ready for storyboard generation.",
+    `Product: ${project.productName}`,
+    `Audience: ${project.audience}`,
+    `Tone: ${project.tone}`,
+    `Selling points: ${project.sellingPoints.join(", ")}`,
+    `Prepared materials: ${materialLines.slice(0, 10).join("; ") || "none"}`,
+    `Keywords: ${request.keywords.join(", ") || "none"}`,
+    `User draft: ${request.draftScript || "No draft provided. Create a strong draft."}`,
+  ].join("\n");
+};
+
+const rewriteScriptWithConfiguredProvider = async (
+  project: ProjectSnapshot,
+  request: ScriptGenerationRequest,
+  assets: AssetMetadata[],
+) => {
+  const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
+  if (!["ark", "doubao", "real"].includes(providerMode)) {
+    return rewriteFallbackScript(project, { assets, request });
+  }
+
+  const generated = await generateInspiration({
+    assetType: "text",
+    prompt: scriptGenerationPrompt(project, request, assets),
+  });
+  const material = generated.materials.find((candidate) => candidate.status === "ready");
+  if (!generated.fallback.used && material?.content) {
+    return {
+      fallback: {
+        used: false,
+        provider: generated.provider,
+      },
+      scriptText: material.content,
+    };
+  }
+
+  return rewriteFallbackScript(project, { assets, request });
 };
 
 const normalizeTag = (value: string): string =>
@@ -1128,6 +1186,30 @@ export const createP0Router = ({
     });
   });
 
+  router.post("/projects/:projectId/rewrite-script", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRequest.success) {
+      sendInvalidRequest(response, "INVALID_SCRIPT_REQUEST", "Script generation request is invalid.");
+      return;
+    }
+
+    const requestedAssetIds = new Set(parsedRequest.data.assetIds);
+    const preparedAssets = project.assets.filter((asset) => requestedAssetIds.has(asset.id));
+    const providerResult = await rewriteScriptWithConfiguredProvider(
+      project,
+      parsedRequest.data,
+      preparedAssets,
+    );
+
+    response.status(201).json(providerResult);
+  });
+
   router.post("/projects/:projectId/generate-script", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
@@ -1135,7 +1217,13 @@ export const createP0Router = ({
       return;
     }
 
-    const providerResult = generateFallbackScript(project);
+    const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRequest.success) {
+      sendInvalidRequest(response, "INVALID_SCRIPT_REQUEST", "Script generation request is invalid.");
+      return;
+    }
+
+    const providerResult = generateFallbackScript(project, { request: parsedRequest.data });
     const storedScript = await store.addScript(project.id, providerResult.script);
     if (!storedScript) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");

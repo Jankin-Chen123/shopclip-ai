@@ -22,6 +22,7 @@ import type {
   RenderRequest,
   RenderTask,
   SceneUpdate,
+  ScriptGenerationRequest,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
@@ -270,9 +271,24 @@ export const searchExternalStockAssets = async (
 
 export const generateScript = async (
   projectId: string,
+  request: ScriptGenerationRequest = {
+    assetIds: [],
+    keywords: [],
+    materials: [],
+  },
 ): Promise<{ fallback: { used: boolean; provider: string }; script: ScriptResult }> =>
   requestJson(`/projects/${projectId}/generate-script`, {
     method: "POST",
+    body: JSON.stringify(request),
+  });
+
+export const rewriteScript = async (
+  projectId: string,
+  request: ScriptGenerationRequest,
+): Promise<{ fallback: { used: boolean; provider: string }; scriptText: string }> =>
+  requestJson(`/projects/${projectId}/rewrite-script`, {
+    method: "POST",
+    body: JSON.stringify(request),
   });
 
 export const generateInspirationMaterial = async (

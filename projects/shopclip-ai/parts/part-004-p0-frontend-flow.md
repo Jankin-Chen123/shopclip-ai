@@ -97,6 +97,7 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-26 searchable asset prep library update: changed the Step 02 asset-library selector into a searchable media picker with reusable asset-library card previews, selected-asset import, inline image/video thumbnails after import, and post-import preview actions.
 - 2026-05-26 video prep update: Step 02 now refreshes the full asset library for creation prep so the demo video bucket can import videos without requiring a prior visit to the Asset library video tab; local demo uploads are constrained to MP4/MOV inputs.
 - 2026-05-26 asset prep category alignment: Step 02 asset-library import now uses the same category rules as the Asset library section, preventing hidden `type=reference` image assets from appearing in image prep buckets.
+- 2026-05-27 script generation relocation: moved the editable script-generation panel into Step 02, added one-click backend script polishing with prepared materials/keywords/draft script payload, and kept Step 03 focused on storyboard re-editing after "Generate storyboard".
 
 ## Verification Evidence
 
@@ -125,3 +126,4 @@ Build the user-facing P0 flow from project setup through preview/export using th
 - 2026-05-26 searchable asset prep library verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-library-search-preview-zh.png`, `../../output/playwright/creation-asset-prep-imported-inline-thumbnail-zh.png`, and `../../output/playwright/creation-asset-prep-imported-preview-zh.png`.
 - 2026-05-26 video prep verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; browser screenshots captured at `../../output/playwright/creation-asset-prep-video-library-import-zh.png` and `../../output/playwright/creation-asset-prep-video-preview-zh.png`.
 - 2026-05-26 asset prep category alignment verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, `typecheck`, `lint`, and `build` passed; regression confirms `type=reference` image assets are excluded from image prep import results.
+- 2026-05-27 Step 02 script generation verification: `corepack pnpm --filter @shopclip/shared build`, `corepack pnpm --filter @shopclip/web test -- App.test.tsx`, and `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed; evidence recorded in `../evidence/2026-05-27-step-02-script-generation.md`.

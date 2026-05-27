@@ -86,11 +86,43 @@ describe("P0 backend lifecycle", () => {
       type: "image",
     });
 
+    const rewritten = await request<{
+      fallback: { used: boolean; provider: string };
+      scriptText: string;
+    }>(baseUrl, `/api/projects/${projectId}/rewrite-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+        draftScript: "show the stand on a desk",
+        keywords: ["foldable", "stable"],
+        materials: [
+          {
+            bucketId: "hero",
+            name: "Packshot",
+            type: "image",
+          },
+        ],
+      }),
+    });
+
+    expect(rewritten.status).toBe(201);
+    expect(rewritten.body.fallback).toEqual({
+      used: true,
+      provider: "mock-script-provider",
+    });
+    expect(rewritten.body.scriptText).toContain("GlowGrip Phone Stand");
+    expect(rewritten.body.scriptText).toContain("show the stand on a desk");
+
     const generated = await request<{
       fallback: { used: boolean; provider: string };
       script: { hook: string; scenes: Array<{ durationSeconds: number }> };
     }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
       method: "POST",
+      body: JSON.stringify({
+        draftScript: rewritten.body.scriptText,
+        assetIds: [asset.body.asset.id],
+        keywords: ["foldable", "stable"],
+      }),
     });
 
     expect(generated.status).toBe(201);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -22,7 +22,7 @@ import {
   getAssetDraftDefaults,
   type AssetCategory,
 } from "../features/assets/AssetCategoryTabs";
-import { AssetPrepPanel } from "../features/assets/AssetPrepPanel";
+import { AssetPrepPanel, type AssetPrepSnapshot } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { InspirationPanel } from "../features/inspiration/InspirationPanel";
@@ -56,6 +56,7 @@ import {
   regenerateScene,
   reorderScenes,
   retryRenderTask,
+  rewriteScript,
   searchAssets,
   searchExternalStockAssets,
   startRender,
@@ -251,6 +252,11 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [fallbackProvider, setFallbackProvider] = useState<string>();
   const [forceRenderFailure, setForceRenderFailure] = useState(false);
   const [editingSuggestions, setEditingSuggestions] = useState<EditingSuggestion[]>([]);
+  const [assetPrepSnapshot, setAssetPrepSnapshot] = useState<AssetPrepSnapshot>({
+    assetIds: [],
+    keywords: [],
+    materials: [],
+  });
   const [assetLibrary, setAssetLibrary] = useState<{
     assets: AssetMetadata[];
     assetSlices: AssetSlice[];
@@ -260,6 +266,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [projectIdToLoad, setProjectIdToLoad] = useState("");
   const [renderTask, setRenderTask] = useState<RenderTask>();
   const [script, setScript] = useState<ScriptResult>();
+  const [scriptDraft, setScriptDraft] = useState("");
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
   const text = copy[language];
@@ -360,6 +367,16 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
   };
 
+  const handleAssetPrepChange = useCallback((snapshot: AssetPrepSnapshot) => {
+    setAssetPrepSnapshot(snapshot);
+  }, []);
+
+  const handleContinueToScript = () => {
+    if (typeof document !== "undefined") {
+      document.getElementById("script")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  };
+
   const handleAssetCategoryChange = (category: AssetCategory) => {
     setActiveAssetCategory(category);
     setAssetDraft((current) => ({
@@ -443,6 +460,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       const createdProject = await createProject(brief);
       setProject(createdProject);
       setScript(undefined);
+      setScriptDraft("");
       setRenderTask(undefined);
       setTraceEvents([]);
       setDashboard(undefined);
@@ -471,6 +489,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         targetDurationSeconds: loadedProject.targetDurationSeconds,
       });
       setScript(latestScript);
+      setScriptDraft(latestScript?.narrative ?? "");
       setRenderTask(latestRender);
       setTraceEvents([]);
       setDashboard(undefined);
@@ -718,6 +737,26 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
+  const createScriptGenerationRequest = () => ({
+    assetIds: assetPrepSnapshot.assetIds,
+    draftScript: scriptDraft.trim() || undefined,
+    keywords: assetPrepSnapshot.keywords,
+    materials: assetPrepSnapshot.materials,
+  });
+
+  const handleRewriteScript = () => {
+    if (!project) {
+      setErrors((current) => ({ ...current, script: "Create or load a project first." }));
+      return;
+    }
+
+    void runAction("script", "script", async () => {
+      const rewritten = await rewriteScript(project.id, createScriptGenerationRequest());
+      setFallbackProvider(rewritten.fallback.provider);
+      setScriptDraft(rewritten.scriptText);
+    });
+  };
+
   const handleGenerateScript = (nextPage?: WorkspacePageId) => {
     if (!project) {
       setErrors((current) => ({ ...current, script: "Create or load a project first." }));
@@ -725,10 +764,11 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
 
     void runAction("script", "script", async () => {
-      const generated = await generateScript(project.id);
+      const generated = await generateScript(project.id, createScriptGenerationRequest());
       setFallbackProvider(generated.fallback.provider);
       setDashboard(undefined);
       setScript(generated.script);
+      setScriptDraft(generated.script.narrative);
       setSelectedSceneId(generated.script.scenes[0]?.id);
       setDirtySceneIds(new Set());
       setProject((current) =>
@@ -1028,30 +1068,37 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               ) : null}
 
               {activePage === "create" ? (
-                <AssetPrepPanel
-                  disabled={busyState !== "idle"}
-                  error={errors.asset ?? errors.script}
-                  isGenerating={busyState === "script"}
-                  isImporting={busyState === "asset"}
-                  language={language}
-                  libraryAssets={[...(project?.assets ?? []), ...assetLibrary.assets]}
-                  onBack={() => handlePageChange("project")}
-                  onGenerateStoryboard={() => handleGenerateScript("studio")}
-                  onImportFiles={handleImportFiles}
-                />
-              ) : null}
-
-              {activePage === "studio" ? (
-                <section className="script-storyboard-workspace">
+                <>
+                  <AssetPrepPanel
+                    disabled={busyState !== "idle"}
+                    error={errors.asset}
+                    isGenerating={busyState === "script"}
+                    isImporting={busyState === "asset"}
+                    language={language}
+                    libraryAssets={[...(project?.assets ?? []), ...assetLibrary.assets]}
+                    onBack={() => handlePageChange("project")}
+                    onGenerateStoryboard={handleContinueToScript}
+                    onImportFiles={handleImportFiles}
+                    onPreparationChange={handleAssetPrepChange}
+                  />
                   <ScriptPanel
                     copy={text.script}
                     disabled={busyState !== "idle"}
                     error={errors.script}
                     fallbackProvider={fallbackProvider}
                     isLoading={busyState === "script"}
-                    onGenerateScript={() => handleGenerateScript()}
+                    isStoryboardGenerating={busyState === "script"}
+                    onGenerateScript={handleRewriteScript}
+                    onGenerateStoryboard={() => handleGenerateScript("studio")}
+                    onScriptDraftChange={setScriptDraft}
                     script={script}
+                    scriptDraft={scriptDraft}
                   />
+                </>
+              ) : null}
+
+              {activePage === "studio" ? (
+                <section className="script-storyboard-workspace">
                   <StudioWorkspace
                     assets={project?.assets ?? assetLibrary.assets}
                     copy={text.studio}

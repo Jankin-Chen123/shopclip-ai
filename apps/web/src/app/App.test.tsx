@@ -93,6 +93,15 @@ describe("App", () => {
     expect(storyboardMarkup).toContain("分镜重编辑");
   });
 
+  it("renders script generation controls inside step 02 asset prep", () => {
+    const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="create" />);
+
+    expect(markup).toContain("Script generation");
+    expect(markup).toContain("Write or paste your draft script");
+    expect(markup).toContain("One-click generate");
+    expect(markup).toContain("Generate storyboard");
+  });
+
   it("does not preload existing library assets into asset prep", () => {
     const markup = renderToStaticMarkup(
       <AssetPrepPanel

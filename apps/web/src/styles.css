@@ -3619,6 +3619,35 @@ textarea {
   margin-top: 16px;
 }
 
+.script-generation-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.script-draft-editor {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.script-draft-editor textarea {
+  min-height: 220px;
+  line-height: 1.55;
+}
+
+.script-generation-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
 .script-result p {
   margin: 6px 0 0;
   color: var(--text);
