@@ -222,6 +222,14 @@ const scriptGenerationPrompt = (
   ].join("\n");
 };
 
+const hasConfiguredTextProviderEnvironment = (): boolean =>
+  Boolean(
+    process.env.AI_GENERAL_API_KEY?.trim() ||
+      process.env.AI_TEXT_API_KEY?.trim() ||
+      process.env.AI_GENERAL_MODEL_ID?.trim() ||
+      process.env.AI_TEXT_MODEL_ID?.trim(),
+  );
+
 const rewriteScriptWithConfiguredProvider = async (
   project: ProjectSnapshot,
   request: ScriptGenerationRequest,
@@ -230,7 +238,7 @@ const rewriteScriptWithConfiguredProvider = async (
   const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
   if (
     !request.apiConfig?.general &&
-    !["ark", "doubao", "real"].includes(providerMode)
+    (!["ark", "doubao", "real"].includes(providerMode) || !hasConfiguredTextProviderEnvironment())
   ) {
     return rewriteFallbackScript(project, { assets, request });
   }
@@ -1626,9 +1634,19 @@ export const createP0Router = ({
     }
 
     const preparedAssets = await resolvePreparedAssets(project, parsedRequest.data);
+    const textProviderResult = await rewriteScriptWithConfiguredProvider(
+      project,
+      parsedRequest.data,
+      preparedAssets,
+    );
     const providerResult = generateFallbackScript(project, {
       assets: preparedAssets,
-      request: parsedRequest.data,
+      request: {
+        ...parsedRequest.data,
+        draftScript: textProviderResult.fallback.used
+          ? parsedRequest.data.draftScript
+          : textProviderResult.scriptText,
+      },
     });
     const scriptWithSceneImages = await renderStoryboardSceneImages(
       project,
@@ -1654,7 +1672,7 @@ export const createP0Router = ({
     }
 
     response.status(201).json({
-      fallback: providerResult.fallback,
+      fallback: textProviderResult.fallback,
       script: parsedScript.data,
     });
   });

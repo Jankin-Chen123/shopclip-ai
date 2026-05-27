@@ -888,6 +888,118 @@ describe("P0 backend lifecycle", () => {
     );
   });
 
+  it("uses configured text model settings when generating storyboard text", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: [
+                "| Time | Voiceover | Subtitle | Visual |",
+                "|---|---|---|---|",
+                "| 0-3s | Model generated hook | Model hook subtitle | Model generated product close-up with user asset consistency |",
+                "| 3-7s | Model generated proof | Model proof subtitle | Model generated usage scene with user asset consistency |",
+              ].join("\n"),
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Real storyboard text",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const asset = await request<{ asset: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Fold Stand packshot",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["stand"],
+        }),
+      },
+    );
+
+    const generated = await request<{
+      fallback: { used: boolean; provider: string };
+      script: {
+        narrative: string;
+        scenes: Array<{
+          durationSeconds: number;
+          subtitle: string;
+          voiceover: string;
+          visualPrompt: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+        draftScript: "Focus on desk portability.",
+        keywords: ["portable", "stable"],
+        materials: [
+          {
+            assetId: asset.body.asset.id,
+            name: "Fold Stand packshot",
+            type: "image",
+          },
+        ],
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+        },
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.fallback).toEqual({
+      used: false,
+      provider: "openai-compatible",
+    });
+    expect(generated.body.script.narrative).toContain("Model generated hook");
+    expect(generated.body.script.scenes).toHaveLength(2);
+    expect(generated.body.script.scenes[0]).toMatchObject({
+      durationSeconds: 3,
+      subtitle: "Model hook subtitle",
+      voiceover: "Model generated hook",
+    });
+    expect(generated.body.script.scenes[0]?.visualPrompt).toContain(
+      "Model generated product close-up",
+    );
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    expect(externalCalls).toHaveLength(1);
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.model).toBe("custom-text-model");
+    expect(body.messages[1].content).toContain("产品：Fold Stand");
+    expect(body.messages[1].content).toContain("用户草稿：Focus on desk portability.");
+  });
+
   it("structures storyboard scene fields from the current script draft table", async () => {
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",
