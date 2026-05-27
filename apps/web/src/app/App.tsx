@@ -105,18 +105,19 @@ const documentMimeTypesByExtension: Record<string, string> = {
 };
 
 const createScriptGenerationApiConfig = (apiConfig: UserApiConfig): UserApiConfig => {
-  const generalConfig = apiConfig.general;
-  if (generalConfig?.credentialSource === "official" || generalConfig?.apiKey?.trim()) {
-    return apiConfig;
-  }
+  const useOfficialWhenMissingKey = (roleConfig: UserApiConfig["general"]) =>
+    roleConfig?.credentialSource === "official" || roleConfig?.apiKey?.trim()
+      ? roleConfig
+      : {
+          ...roleConfig,
+          credentialSource: "official" as const,
+          apiKey: undefined,
+        };
 
   return {
     ...apiConfig,
-    general: {
-      ...generalConfig,
-      credentialSource: "official",
-      apiKey: undefined,
-    },
+    general: useOfficialWhenMissingKey(apiConfig.general),
+    image: useOfficialWhenMissingKey(apiConfig.image),
   };
 };
 

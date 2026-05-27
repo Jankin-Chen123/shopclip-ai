@@ -236,6 +236,11 @@ describe("App", () => {
       provider: "volcengine-ark",
     });
     expect(payload.apiConfig?.general?.apiKey).toBeUndefined();
+    expect(payload.apiConfig?.image).toMatchObject({
+      credentialSource: "official",
+      provider: "volcengine-ark",
+    });
+    expect(payload.apiConfig?.image?.apiKey).toBeUndefined();
   });
 
   it("places the step 03 scene list before the centered preview workspace", () => {
