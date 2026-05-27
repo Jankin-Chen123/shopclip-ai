@@ -378,9 +378,10 @@ const generateStoryboardSceneImageUrl = async (
       assets,
       videoFrameExtractor,
     );
+    const prompt = buildStoryboardImagePrompt(project, scene, request, assets, referenceImageUrls);
     const generated = await generateInspiration({
       assetType: "image",
-      prompt: buildStoryboardImagePrompt(project, scene, request, assets, referenceImageUrls),
+      prompt,
       apiConfig: request?.apiConfig,
       options: {
         image: {
@@ -396,6 +397,40 @@ const generateStoryboardSceneImageUrl = async (
     );
     if (material?.url) {
       return material.url;
+    }
+    const fallbackReason = generated.fallback.reason ?? "";
+    const shouldRetryWithoutReferences =
+      referenceImageUrls.length > 0 &&
+      !fallbackReason.includes("AI_PROVIDER_MODE is mock") &&
+      !fallbackReason.includes("environment variables are incomplete") &&
+      !fallbackReason.includes("User API settings are incomplete");
+    if (shouldRetryWithoutReferences) {
+      console.warn(
+        "[storyboard] image generation with reference images did not return a URL; retrying text-only generation.",
+        {
+          fallback: generated.fallback,
+          referenceImageCount: referenceImageUrls.length,
+          sceneId: scene.id,
+        },
+      );
+      const retried = await generateInspiration({
+        assetType: "image",
+        prompt,
+        apiConfig: request?.apiConfig,
+        options: {
+          image: {
+            aspectRatio: "9:16",
+            count: 1,
+            quality: "standard",
+          },
+        },
+      });
+      const retriedMaterial = retried.materials.find(
+        (candidate) => candidate.status === "ready" && candidate.url,
+      );
+      if (retriedMaterial?.url) {
+        return retriedMaterial.url;
+      }
     }
   } catch (error) {
     console.warn("[storyboard] image generation failed; using deterministic fallback.", error);

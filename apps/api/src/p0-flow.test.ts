@@ -623,6 +623,89 @@ describe("P0 backend lifecycle", () => {
     );
   });
 
+  it("retries storyboard scene image generation without reference images when Ark rejects them", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "ark-test-key";
+    process.env.AI_IMAGE_MODEL_ID = "doubao-seedream-test";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      const body = JSON.parse(String(init?.body));
+      if (Array.isArray(body.image)) {
+        return Response.json(
+          {
+            error: {
+              message: "reference image URL is not accessible",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      return Response.json({
+        data: [
+          {
+            url: "https://cdn.example.test/storyboard-text-retry.png",
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Reference retry clip",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat", "stable shots"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const asset = await request<{ asset: { id: string; url: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Fold Stand packshot",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["stand"],
+        }),
+      },
+    );
+
+    const generated = await request<{
+      script: { scenes: Array<{ imageUrl?: string }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.scenes[0]?.imageUrl).toBe(
+      "https://cdn.example.test/storyboard-text-retry.png",
+    );
+    const bodies = fetchMock.mock.calls
+      .filter(([url]) =>
+        String(url instanceof Request ? url.url : url).startsWith("https://ark.example.test"),
+      )
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    expect(bodies[0]?.image).toEqual([asset.body.asset.url]);
+    expect(bodies.some((body) => body.image === undefined)).toBe(true);
+  });
+
   it("uses configured text model settings when one-click rewriting a script", async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {

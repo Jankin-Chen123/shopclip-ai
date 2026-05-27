@@ -18,6 +18,8 @@
 - `corepack pnpm typecheck` (2026-05-27 second follow-up)
 - `corepack pnpm lint` (2026-05-27 second follow-up)
 - `corepack pnpm build` (2026-05-27 second follow-up)
+- 2026-05-27 third follow-up: Compared the storyboard image path with the working Inspiration image path. The failing difference is the storyboard path sends bound product reference images, while Inspiration is plain text-to-image. Added a retry path: when Ark/Seedream rejects reference-image generation or returns no URL, the backend logs the fallback reason and retries the same storyboard prompt without `referenceImages` before using the deterministic SVG fallback.
+- `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` (2026-05-27 third follow-up: 14 API test files passed, 63 tests passed)
 - `corepack pnpm --filter @shopclip/shared build`
 - `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts`
 - `corepack pnpm --filter @shopclip/api db:generate`
