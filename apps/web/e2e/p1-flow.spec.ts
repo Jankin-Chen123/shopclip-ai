@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
+import { generateStoryboardFromPreparedAssets, importLocalAssets } from "./helpers";
+
 const evidenceDir = resolve(process.cwd(), "../../projects/shopclip-ai/evidence");
 
 const evidencePath = (filename: string) => resolve(evidenceDir, filename);
@@ -18,9 +20,7 @@ test.describe("P1 browser flow", () => {
 
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page.getByText("Project loaded")).toBeVisible();
-    await page.getByRole("link", { name: /Asset library/ }).click();
-    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
-    await page.getByLabel("Local image files").setInputFiles([
+    await importLocalAssets(page, [
       {
         name: "GlowGrip packshot.png",
         mimeType: "image/png",
@@ -32,27 +32,26 @@ test.describe("P1 browser flow", () => {
         buffer: Buffer.from("demo-webp"),
       },
     ]);
-    await page.getByRole("button", { name: "Import selected" }).click();
 
-    await page.getByRole("link", { name: /Create/ }).click();
-    await page.getByRole("button", { name: "Create", exact: true }).click();
-    await page.getByRole("button", { name: "Generate storyboard" }).click();
-    await expect(page.getByText("4 scenes", { exact: true })).toBeVisible();
+    await generateStoryboardFromPreparedAssets(page);
 
     await page.getByRole("link", { name: /Asset library/ }).click();
     await page.getByLabel("Search image library").fill("stable creator table");
     await page.getByRole("button", { name: "Search library" }).click();
-    const searchResult = page.getByRole("button", {
-      name: /Hands free desk lifestyle demo.*Score/,
-    });
-    await expect(searchResult).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Hands free desk lifestyle demo.webp" }).first(),
+    ).toBeVisible();
     await page.screenshot({
       fullPage: true,
       path: evidencePath("p1-06-asset-search.png"),
     });
 
-    await searchResult.click();
-    await expect(page.getByRole("heading", { name: "Studio editor" })).toBeVisible();
+    await page
+      .getByRole("button", { name: /Open details for Hands free desk lifestyle demo/ })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Use in selected scene" }).click();
+    await expect(page.getByRole("heading", { name: "Storyboard re-edit" })).toBeVisible();
     await page.getByRole("button", { name: "Save local edit" }).click();
     await expect(page.getByText("Stable")).toBeVisible();
 

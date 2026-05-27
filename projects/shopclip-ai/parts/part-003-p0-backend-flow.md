@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Implementation Complete
 - Created: 2026-05-21
-- Last updated: 2026-05-21
+- Last updated: 2026-05-27
 
 ## Source Of Truth
 
@@ -77,10 +77,13 @@ Implement the backend APIs for the P0 end-to-end flow: project creation, asset i
 - Added deterministic mock script provider and mock renderer provider.
 - Added P0 asset metadata validation for image type, MIME type, and size.
 - Added API integration tests covering the full backend P0 lifecycle and invalid asset rejection.
+- Updated script/storyboard generation so Step 02 prepared `assetIds` are resolved through the shared asset store before provider execution. This keeps globally prepared or library-imported assets attached to generated storyboard scenes instead of falling back to `project.assets[0]`.
 
 ## Verification Evidence
 
 - Evidence file: `../evidence/part-003-verification.md`
+- Full-chain regression evidence: `../evidence/2026-05-27-full-chain-scene-regeneration.md`
 - `corepack pnpm --filter @shopclip/api test`: passed.
+- `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`: passed after the regression failed before the fix.
 - `corepack pnpm --filter @shopclip/api typecheck`: passed.
 - `corepack pnpm --filter @shopclip/api build`: passed.

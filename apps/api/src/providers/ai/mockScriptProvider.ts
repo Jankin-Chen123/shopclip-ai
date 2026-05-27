@@ -55,7 +55,7 @@ export const generateFallbackScript = (
   project: ProjectSnapshot,
   context: ScriptGenerationContext = {},
 ): ScriptProviderResult => {
-  const primaryAsset = project.assets[0];
+  const primaryAsset = context.assets?.[0] ?? project.assets[0];
   const assetId = primaryAsset?.id;
   const draftScript = context.request?.draftScript?.trim();
   const keywordSummary = compactList(

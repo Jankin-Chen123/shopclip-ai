@@ -329,6 +329,22 @@ export const createP0Router = ({
 }: P0RouterOptions = {}): Router => {
   const router = Router();
 
+  const resolvePreparedAssets = async (
+    project: ProjectSnapshot,
+    request: ScriptGenerationRequest,
+  ): Promise<AssetMetadata[]> => {
+    const requestedAssetIds = [...new Set(request.assetIds)];
+    const requestedAssets = (
+      await Promise.all(requestedAssetIds.map((assetId) => store.getAsset(assetId)))
+    ).filter((asset): asset is AssetMetadata => Boolean(asset));
+
+    if (requestedAssets.length > 0) {
+      return requestedAssets;
+    }
+
+    return project.assets;
+  };
+
   const buildExternalImportTags = (
     externalAsset: ExternalAssetResult,
     contentType: string,
@@ -1199,8 +1215,7 @@ export const createP0Router = ({
       return;
     }
 
-    const requestedAssetIds = new Set(parsedRequest.data.assetIds);
-    const preparedAssets = project.assets.filter((asset) => requestedAssetIds.has(asset.id));
+    const preparedAssets = await resolvePreparedAssets(project, parsedRequest.data);
     const providerResult = await rewriteScriptWithConfiguredProvider(
       project,
       parsedRequest.data,
@@ -1223,7 +1238,11 @@ export const createP0Router = ({
       return;
     }
 
-    const providerResult = generateFallbackScript(project, { request: parsedRequest.data });
+    const preparedAssets = await resolvePreparedAssets(project, parsedRequest.data);
+    const providerResult = generateFallbackScript(project, {
+      assets: preparedAssets,
+      request: parsedRequest.data,
+    });
     const storedScript = await store.addScript(project.id, providerResult.script);
     if (!storedScript) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");

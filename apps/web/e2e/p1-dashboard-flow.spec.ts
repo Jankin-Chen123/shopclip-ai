@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
+import { generateStoryboardFromPreparedAssets, importLocalAssets } from "./helpers";
+
 const evidenceDir = resolve(process.cwd(), "../../projects/shopclip-ai/evidence");
 
 const evidencePath = (filename: string) => resolve(evidenceDir, filename);
@@ -16,19 +18,14 @@ test.describe("P1 dashboard flow", () => {
 
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page.getByText("Project loaded")).toBeVisible();
-    await page.getByRole("link", { name: /Asset library/ }).click();
-    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
-    await page.getByLabel("Local image files").setInputFiles({
+    await importLocalAssets(page, {
       name: "GlowGrip packshot.png",
       mimeType: "image/png",
       buffer: Buffer.from("demo-image"),
     });
-    await page.getByRole("button", { name: "Import selected" }).click();
-    await page.getByRole("link", { name: /Create/ }).click();
-    await page.getByRole("button", { name: "Create", exact: true }).click();
-    await page.getByRole("button", { name: "Generate storyboard" }).click();
+    await generateStoryboardFromPreparedAssets(page);
 
-    await page.getByRole("button", { name: "Dashboard" }).click();
+    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
     await page.getByRole("button", { name: "Load dashboard" }).click();
 
     await expect(page.getByRole("heading", { name: "Mock analytics" })).toBeVisible();

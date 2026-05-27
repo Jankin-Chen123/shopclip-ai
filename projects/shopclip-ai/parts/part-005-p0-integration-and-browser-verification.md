@@ -7,7 +7,7 @@
 - Owner role: `quality-security-engineer`
 - Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-21
+- Last updated: 2026-05-27
 
 ## Source Of Truth
 
@@ -72,16 +72,20 @@ Verify the P0 end-to-end demo path and create evidence before any P1 implementat
 - Captured screenshots in `projects/shopclip-ai/evidence/`.
 - Fixed one lint-only type import issue in `apps/api/src/p0-flow.test.ts`.
 - P0 gate result: passed. P1 work can start from Part 006 onward.
+- Re-verified the expanded full chain on 2026-05-27:
+  create project -> prepare/import a library asset in Step 02 -> write a draft script -> one-click script generation -> generate storyboard -> edit/save Scene 1 -> regenerate Scene 2 -> confirm Scene 1 remained edited and Scene 2 changed.
 
 ## Verification Evidence
 
 - Evidence summary: `projects/shopclip-ai/evidence/p0-browser-verification.md`
+- Full-chain evidence: `projects/shopclip-ai/evidence/2026-05-27-full-chain-scene-regeneration.md`
 - Screenshots:
   - `projects/shopclip-ai/evidence/p0-00-recoverable-error-state.png`
   - `projects/shopclip-ai/evidence/p0-01-project-created.png`
   - `projects/shopclip-ai/evidence/p0-02-assets-and-storyboard.png`
   - `projects/shopclip-ai/evidence/p0-03-studio-edit.png`
   - `projects/shopclip-ai/evidence/p0-04-delivery-export.png`
+  - `output/playwright/full-chain-studio-regenerated-scene.png`
 
 ## Verified Commands
 
@@ -90,5 +94,6 @@ Verify the P0 end-to-end demo path and create evidence before any P1 implementat
 - `corepack pnpm build`
 - `corepack pnpm lint`
 - `corepack pnpm --filter @shopclip/web test:e2e`
+- `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`
 - API health: `http://localhost:4000/health`
 - Web health: `http://localhost:5173/#project`

@@ -276,6 +276,13 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     () => assetLibrary.assets.filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
     [activeAssetCategory, assetLibrary.assets],
   );
+  const studioAssets = useMemo(() => {
+    const assetsById = new Map<string, AssetMetadata>();
+    [...(project?.assets ?? []), ...assetLibrary.assets].forEach((asset) => {
+      assetsById.set(asset.id, asset);
+    });
+    return [...assetsById.values()];
+  }, [assetLibrary.assets, project?.assets]);
   const activeAssetSearchResults = useMemo(
     () =>
       assetSearchResults.filter((result) =>
@@ -1100,7 +1107,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               {activePage === "studio" ? (
                 <section className="script-storyboard-workspace">
                   <StudioWorkspace
-                    assets={project?.assets ?? assetLibrary.assets}
+                    assets={studioAssets}
                     copy={text.studio}
                     dirtySceneIds={dirtySceneIds}
                     isBusy={busyState === "scene"}

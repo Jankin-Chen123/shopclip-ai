@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-22
+- Last updated: 2026-05-27
 
 ## Source Of Truth
 
@@ -59,6 +59,7 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-07-scene-agent-regeneration.png`
   - `projects/shopclip-ai/evidence/part-007-verification.md`
+- Added 2026-05-27 regression coverage that edits Scene 1, regenerates only Scene 2, and reloads the project to verify the edited and untouched scenes keep their prior values.
 
 ## Verification Evidence
 
@@ -67,6 +68,9 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - `corepack pnpm lint`
 - `corepack pnpm build`
 - `corepack pnpm --filter @shopclip/web test:e2e`
+- `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`
+- `projects/shopclip-ai/evidence/2026-05-27-full-chain-scene-regeneration.md`
+- `output/playwright/full-chain-studio-regenerated-scene.png`
 
 ## Verification Plan
 

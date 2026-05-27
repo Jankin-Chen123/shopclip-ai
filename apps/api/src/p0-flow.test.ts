@@ -227,4 +227,138 @@ describe("P0 backend lifecycle", () => {
     expect(rejected.status).toBe(400);
     expect(rejected.body.error.code).toBe("INVALID_ASSET");
   });
+
+  it("uses prepared assets for storyboard generation and regenerates only the selected scene", async () => {
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Desk launch clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const projectId = created.body.project.id;
+
+    const preparedAsset = await request<{
+      asset: { id: string; name: string };
+    }>(baseUrl, "/api/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Prepared hero packshot",
+        mimeType: "image/png",
+        sizeBytes: 200_000,
+        tags: ["product", "hero"],
+      }),
+    });
+
+    const generated = await request<{
+      script: {
+        scenes: Array<{
+          assetId?: string;
+          id: string;
+          subtitle: string;
+          voiceover: string;
+          visualPrompt: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [preparedAsset.body.asset.id],
+        draftScript: "show the prepared hero packshot on a desk",
+        keywords: ["foldable", "stable"],
+        materials: [
+          {
+            assetId: preparedAsset.body.asset.id,
+            bucketId: "hero",
+            name: preparedAsset.body.asset.name,
+            type: "image",
+          },
+        ],
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.scenes.map((scene) => scene.assetId)).toEqual([
+      preparedAsset.body.asset.id,
+      preparedAsset.body.asset.id,
+      preparedAsset.body.asset.id,
+      preparedAsset.body.asset.id,
+    ]);
+
+    const [firstScene, secondScene] = generated.body.script.scenes;
+    expect(firstScene).toBeDefined();
+    expect(secondScene).toBeDefined();
+
+    const edited = await request<{
+      scene: { id: string; status: string; subtitle: string; voiceover: string };
+    }>(baseUrl, `/api/scenes/${firstScene!.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        subtitle: "Edited hook subtitle",
+        voiceover: "Edited hook voiceover",
+        status: "edited",
+      }),
+    });
+
+    expect(edited.status).toBe(200);
+    expect(edited.body.scene).toMatchObject({
+      id: firstScene!.id,
+      status: "edited",
+      subtitle: "Edited hook subtitle",
+      voiceover: "Edited hook voiceover",
+    });
+
+    const regenerated = await request<{
+      scene: { id: string; status: string; subtitle: string };
+      traceEvent: { step: string; status: string };
+    }>(baseUrl, `/api/scenes/${secondScene!.id}/regenerate`, {
+      method: "POST",
+    });
+
+    expect(regenerated.status).toBe(200);
+    expect(regenerated.body.scene).toMatchObject({
+      id: secondScene!.id,
+      status: "generated",
+    });
+    expect(regenerated.body.scene.subtitle).toContain("Regenerated:");
+    expect(regenerated.body.traceEvent).toMatchObject({
+      step: "scene-regenerated",
+      status: "completed",
+    });
+
+    const loadedProject = await request<{
+      project: {
+        scenes: Array<{
+          id: string;
+          subtitle: string;
+          voiceover: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    const loadedFirstScene = loadedProject.body.project.scenes.find(
+      (scene) => scene.id === firstScene!.id,
+    );
+    const loadedSecondScene = loadedProject.body.project.scenes.find(
+      (scene) => scene.id === secondScene!.id,
+    );
+    const untouchedScenes = loadedProject.body.project.scenes.filter(
+      (scene) => scene.id !== firstScene!.id && scene.id !== secondScene!.id,
+    );
+
+    expect(loadedFirstScene).toMatchObject({
+      subtitle: "Edited hook subtitle",
+      voiceover: "Edited hook voiceover",
+    });
+    expect(loadedSecondScene?.subtitle).toContain("Regenerated:");
+    expect(untouchedScenes.map((scene) => scene.subtitle)).toEqual([
+      "Prove the benefit",
+      "Export to TikTok Shop",
+    ]);
+  });
 });

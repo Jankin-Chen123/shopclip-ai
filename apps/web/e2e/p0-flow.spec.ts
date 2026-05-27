@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
+import { generateStoryboardFromPreparedAssets, importLocalAssets } from "./helpers";
+
 const evidenceDir = resolve(process.cwd(), "../../projects/shopclip-ai/evidence");
 
 const evidencePath = (filename: string) => resolve(evidenceDir, filename);
@@ -27,37 +29,27 @@ test.describe("P0 browser flow", () => {
     });
 
     await page.getByRole("button", { name: "Create project" }).click();
-    await expect(page.getByText(/GlowGrip Phone Stand/)).toBeVisible();
+    await expect(page.getByLabel("Product name")).toHaveValue("GlowGrip Phone Stand");
     await expect(page.getByText("Project loaded")).toBeVisible();
     await page.screenshot({
       fullPage: true,
       path: evidencePath("p0-01-project-created.png"),
     });
 
-    await page.getByRole("link", { name: /Asset library/ }).click();
-    await expect(page.getByRole("heading", { name: "Image library" })).toBeVisible();
-    await page.locator(".asset-library-toolbar").getByRole("button", { name: "Import images" }).click();
-    await page.getByLabel("Local image files").setInputFiles({
+    await importLocalAssets(page, {
       name: "GlowGrip packshot.png",
       mimeType: "image/png",
       buffer: Buffer.from("demo-image"),
     });
-    await page.getByRole("button", { name: "Import selected" }).click();
-    await expect(page.getByText("GlowGrip packshot.png")).toBeVisible();
-    await expect(page.getByText("ready", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "GlowGrip packshot.png" }).first()).toBeVisible();
 
-    await page.getByRole("link", { name: /Create/ }).click();
-    await page.getByRole("button", { name: "Create", exact: true }).click();
-    await page.getByRole("button", { name: "Generate storyboard" }).click();
-    await expect(page.getByText(/Generated with deterministic fallback/)).toBeVisible();
-    await expect(page.getByText("4 scenes", { exact: true })).toBeVisible();
+    await generateStoryboardFromPreparedAssets(page);
     await page.screenshot({
       fullPage: true,
       path: evidencePath("p0-02-assets-and-storyboard.png"),
     });
 
-    await page.getByRole("button", { name: "Studio" }).click();
-    await expect(page.getByRole("heading", { name: "Studio editor" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Storyboard re-edit" })).toBeVisible();
     await expect(page.getByLabel("9 by 16 preview")).toBeVisible();
     await page.getByLabel("Subtitle").fill("Fold it flat, then lock in a clean desk shot.");
     await expect(page.getByText("1 unsaved")).toBeVisible();
@@ -68,8 +60,8 @@ test.describe("P0 browser flow", () => {
       path: evidencePath("p0-03-studio-edit.png"),
     });
 
-    await page.getByRole("button", { name: "Delivery" }).click();
-    await expect(page.getByRole("heading", { name: "Render trace" })).toBeVisible();
+    await page.getByRole("button", { name: "Delivery", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Video preview and download" })).toBeVisible();
     await page.getByRole("button", { name: "Start render" }).click();
     await expect(page.getByText("completed").first()).toBeVisible();
     await expect(page.getByText("preview-created")).toBeVisible();

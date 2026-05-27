@@ -86,9 +86,11 @@ describe("App", () => {
     expect(assetPrepMarkup).toContain("产品主图");
     expect(assetPrepMarkup).toContain("生成分镜");
     expect(assetPrepMarkup).not.toContain("脚本和分镜");
+    expect(assetPrepMarkup).not.toContain("脚本与分镜");
 
     expect(storyboardMarkup).toContain("步骤 03");
-    expect(storyboardMarkup).toContain("脚本与分镜");
+    expect(storyboardMarkup).toContain("分镜编辑");
+    expect(storyboardMarkup).not.toContain("脚本与分镜");
     expect(storyboardMarkup).toContain("分镜待生成");
     expect(storyboardMarkup).toContain("分镜重编辑");
   });

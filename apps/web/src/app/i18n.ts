@@ -35,8 +35,8 @@ export const copy = {
       },
       studio: {
         label: "Studio",
-        title: "Script and storyboard",
-        description: "Generate storyboard scenes and edit images, copy, and voiceover.",
+        title: "Storyboard editor",
+        description: "Edit generated scenes, assets, copy, and voiceover.",
         scenesMetric: (sceneCount: number, dirtySceneCount: number) =>
           `${sceneCount} scenes / ${dirtySceneCount} edited`,
       },
@@ -250,8 +250,8 @@ export const copy = {
       },
       studio: {
         label: "工作室",
-        title: "脚本与分镜",
-        description: "生成分镜并编辑图片、脚本和旁白。",
+        title: "分镜编辑",
+        description: "编辑已生成的分镜、素材、脚本和旁白。",
         scenesMetric: (sceneCount: number, dirtySceneCount: number) =>
           `${sceneCount} 个分镜 / ${dirtySceneCount} 个已编辑`,
       },
