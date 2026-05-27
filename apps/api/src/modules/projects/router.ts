@@ -381,6 +381,7 @@ const generateStoryboardSceneImageUrl = async (
     const generated = await generateInspiration({
       assetType: "image",
       prompt: buildStoryboardImagePrompt(project, scene, request, assets, referenceImageUrls),
+      apiConfig: request?.apiConfig,
       options: {
         image: {
           aspectRatio: "9:16",

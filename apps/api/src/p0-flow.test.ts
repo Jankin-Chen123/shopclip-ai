@@ -539,6 +539,90 @@ describe("P0 backend lifecycle", () => {
     ]);
   });
 
+  it("uses configured image model settings when generating storyboard scene images", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        data: [
+          {
+            url: "https://cdn.custom-image.test/storyboard-scene.png",
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Custom image model clip",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat", "stable shots"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const asset = await request<{ asset: { id: string; url: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Fold Stand packshot",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["stand"],
+        }),
+      },
+    );
+
+    const generated = await request<{
+      script: { scenes: Array<{ imageUrl?: string }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+        apiConfig: {
+          image: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.custom-image.test/v1",
+            model: "custom-image-model",
+            apiKey: "custom-image-key",
+          },
+        },
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.scenes[0]?.imageUrl).toBe(
+      "https://cdn.custom-image.test/storyboard-scene.png",
+    );
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith(
+        "https://api.custom-image.test",
+      ),
+    );
+    expect(externalCalls.length).toBeGreaterThan(0);
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.model).toBe("custom-image-model");
+    expect(body.image).toEqual([asset.body.asset.url]);
+    expect(externalCalls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer custom-image-key",
+        }),
+      }),
+    );
+  });
+
   it("uses configured text model settings when one-click rewriting a script", async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
