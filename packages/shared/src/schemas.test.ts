@@ -12,6 +12,7 @@ import {
   ProjectBriefSchema,
   ProjectSummarySchema,
   RenderTaskSchema,
+  ScriptGenerationRequestSchema,
   ScriptResultSchema,
   StoryboardSceneSchema,
   TraceEventSchema,
@@ -266,6 +267,34 @@ describe("shared contract schemas", () => {
     });
 
     expect(rejected.success).toBe(false);
+  });
+
+  it("accepts user API settings for script generation requests", () => {
+    const parsed = ScriptGenerationRequestSchema.safeParse({
+      assetIds: ["asset-product-main"],
+      draftScript: "请基于素材生成脚本。",
+      keywords: ["便携", "防漏"],
+      materials: [
+        {
+          assetId: "asset-product-main",
+          name: "产品主图",
+          type: "image",
+        },
+      ],
+      apiConfig: {
+        general: {
+          provider: "openai-compatible",
+          apiBaseUrl: "https://api.example.test/v1",
+          model: "custom-text-model",
+          apiKey: "user-api-key",
+        },
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.apiConfig?.general?.model : undefined).toBe(
+      "custom-text-model",
+    );
   });
 
   it("validates normalized external asset search results", () => {

@@ -298,6 +298,7 @@ export const ScriptGenerationRequestSchema = z.object({
   draftScript: z.string().trim().max(5000).optional(),
   keywords: z.array(z.string().trim().min(1)).max(40).default([]),
   materials: z.array(ScriptGenerationMaterialSchema).max(80).default([]),
+  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
 });
 
 export const SceneUpdateSchema = z

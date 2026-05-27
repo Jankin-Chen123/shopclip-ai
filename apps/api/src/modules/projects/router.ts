@@ -228,13 +228,17 @@ const rewriteScriptWithConfiguredProvider = async (
   assets: AssetMetadata[],
 ) => {
   const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
-  if (!["ark", "doubao", "real"].includes(providerMode)) {
+  if (
+    !request.apiConfig?.general &&
+    !["ark", "doubao", "real"].includes(providerMode)
+  ) {
     return rewriteFallbackScript(project, { assets, request });
   }
 
   const generated = await generateInspiration({
     assetType: "text",
     prompt: scriptGenerationPrompt(project, request, assets),
+    apiConfig: request.apiConfig,
   });
   const material = generated.materials.find((candidate) => candidate.status === "ready");
   if (!generated.fallback.used && material?.content) {

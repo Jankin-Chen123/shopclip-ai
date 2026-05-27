@@ -533,6 +533,95 @@ describe("P0 backend lifecycle", () => {
     ]);
   });
 
+  it("uses configured text model settings when one-click rewriting a script", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: "| 时间 | 旁白 | 字幕 | 画面 |\n|---|---|---|---|\n| 0-3s | 测试旁白 | 测试字幕 | 测试画面，产品外观必须与用户素材一致 |",
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "One click script",
+        productName: "小猫水杯",
+        audience: "通勤女生",
+        sellingPoints: ["小包可放", "防漏"],
+        tone: "轻快",
+        style: "电商短视频",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const asset = await request<{ asset: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "小猫水杯主图",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["pink", "cup"],
+        }),
+      },
+    );
+
+    const rewritten = await request<{
+      fallback: { used: boolean; provider: string };
+      scriptText: string;
+    }>(baseUrl, `/api/projects/${created.body.project.id}/rewrite-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+        draftScript: "强调小包装得下和通勤防漏。",
+        keywords: ["便携", "防漏"],
+        materials: [
+          {
+            assetId: asset.body.asset.id,
+            name: "小猫水杯主图",
+            type: "image",
+          },
+        ],
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+        },
+      }),
+    });
+
+    expect(rewritten.status).toBe(201);
+    expect(rewritten.body.fallback.used).toBe(false);
+    expect(rewritten.body.scriptText).toContain("测试旁白");
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    expect(externalCalls).toHaveLength(1);
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.messages[1].content).toContain("产品：小猫水杯");
+    expect(body.messages[1].content).toContain("目标人群：通勤女生");
+    expect(body.messages[1].content).toContain("已准备素材：小猫水杯主图");
+    expect(body.messages[1].content).toContain("关键词：便携、防漏");
+    expect(body.messages[1].content).toContain("用户草稿：强调小包装得下和通勤防漏。");
+  });
+
   it("structures storyboard scene fields from the current script draft table", async () => {
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",

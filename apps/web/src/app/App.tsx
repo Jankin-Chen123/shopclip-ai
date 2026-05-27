@@ -5,6 +5,7 @@ import type {
   DashboardResponse,
   ProjectBrief,
   RenderTask,
+  ScriptGenerationRequest,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
@@ -93,6 +94,18 @@ const defaultAssetSizeBytes = 220_000;
 const createDefaultAsset = (language: Language): CreateAssetInput => ({
   ...getAssetDraftDefaults("image", language),
   sizeBytes: defaultAssetSizeBytes,
+});
+
+export const createScriptGenerationRequestPayload = (
+  assetPrepSnapshot: Pick<AssetPrepSnapshot, "assetIds" | "keywords" | "materials">,
+  scriptDraft: string,
+  apiConfig: UserApiConfig,
+): ScriptGenerationRequest => ({
+  assetIds: assetPrepSnapshot.assetIds,
+  draftScript: scriptDraft.trim() || undefined,
+  keywords: assetPrepSnapshot.keywords,
+  materials: assetPrepSnapshot.materials,
+  apiConfig,
 });
 
 export const createAssetInputFromFile = (file: File, language: Language): CreateAssetInput => {
@@ -899,12 +912,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
-  const createScriptGenerationRequest = () => ({
-    assetIds: assetPrepSnapshot.assetIds,
-    draftScript: scriptDraft.trim() || undefined,
-    keywords: assetPrepSnapshot.keywords,
-    materials: assetPrepSnapshot.materials,
-  });
+  const createScriptGenerationRequest = () =>
+    createScriptGenerationRequestPayload(assetPrepSnapshot, scriptDraft, apiConfig);
 
   const handleRewriteScript = () => {
     if (!project) {

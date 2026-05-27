@@ -73,6 +73,16 @@
 
 如果文本框没有可识别的分镜表格，才会回到确定性 fallback 分镜。解析出的 `visualPrompt` 会自动补充“产品外观必须与绑定素材一致”约束。
 
+## One Click Model Invocation
+
+`一键生成` 现在会把步骤一项目资料和步骤二资料一起传给文本模型：
+
+- 步骤一项目资料：产品名称、目标人群、语气、核心卖点。
+- 步骤二资料：文本框草稿、素材准备区的 `assetIds`、关键词、素材名称、素材类型。
+- 设置页模型配置：`apiConfig.general`，包括用户自定义或官方文本模型配置。
+
+后端 `/rewrite-script` 在收到 `apiConfig.general` 时，即使 `AI_PROVIDER_MODE` 仍是默认 `mock`，也会调用配置的文本模型；只有没有可用模型配置时才使用确定性 fallback。
+
 ## Verification
 
 - `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts`
@@ -81,6 +91,10 @@
   - Result: pass, API test command ran 14 test files / 55 tests.
 - `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts arkInspirationProvider.test.ts`
   - Result: pass, API test command ran 14 test files / 57 tests.
+- `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`
+  - Result: pass, API test command ran 14 test files / 58 tests.
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
+  - Result: pass, 57 tests.
 - `corepack pnpm typecheck`
   - Result: pass.
 - `corepack pnpm lint`

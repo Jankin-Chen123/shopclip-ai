@@ -29,6 +29,7 @@ import {
 } from "../features/settings/SettingsPanel";
 import {
   App,
+  createScriptGenerationRequestPayload,
   createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
   getCreationAssetLibraryRefreshCategory,
@@ -177,6 +178,40 @@ describe("App", () => {
     expect(markup).toContain("Write or paste your draft script");
     expect(markup).toContain("One-click generate");
     expect(markup).toContain("Generate storyboard");
+  });
+
+  it("includes model API settings in one-click script generation requests", () => {
+    const apiConfig = {
+      general: {
+        provider: "openai-compatible",
+        apiBaseUrl: "https://api.example.test/v1",
+        model: "custom-text-model",
+        apiKey: "user-api-key",
+      },
+    };
+
+    expect(
+      createScriptGenerationRequestPayload(
+        {
+          assetIds: ["asset-product-main"],
+          keywords: ["便携"],
+          materials: [
+            {
+              assetId: "asset-product-main",
+              name: "产品主图",
+              type: "image",
+            },
+          ],
+        },
+        "强调通勤便携。",
+        apiConfig,
+      ),
+    ).toMatchObject({
+      assetIds: ["asset-product-main"],
+      draftScript: "强调通勤便携。",
+      keywords: ["便携"],
+      apiConfig,
+    });
   });
 
   it("places the step 03 scene list before the centered preview workspace", () => {
