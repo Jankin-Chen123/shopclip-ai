@@ -72,6 +72,76 @@ describe("ark inspiration provider", () => {
     );
   });
 
+  it("sends Seedream reference images and disables sequential generation", async () => {
+    configureArkEnv();
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        data: [
+          {
+            url: "https://cdn.example.test/generated-reference-frame.png",
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const generated = await generateInspiration({
+      prompt: "根据参考图生成一张产品分镜图。",
+      assetType: "image",
+      options: {
+        image: {
+          aspectRatio: "9:16",
+          count: 1,
+          quality: "standard",
+          referenceImages: [
+            "https://cdn.example.test/product-main.png",
+            "https://cdn.example.test/video-frame-001.png",
+          ],
+        },
+      },
+    });
+
+    expect(generated.fallback.used).toBe(false);
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body).toMatchObject({
+      image: [
+        "https://cdn.example.test/product-main.png",
+        "https://cdn.example.test/video-frame-001.png",
+      ],
+      model: "ep-image-test",
+      prompt: "根据参考图生成一张产品分镜图。",
+      response_format: "url",
+      sequential_image_generation: "disabled",
+      size: "1440x2560",
+      watermark: false,
+    });
+  });
+
+  it("constrains text generation to a Chinese storyboard-ready table", async () => {
+    configureArkEnv();
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        output_text: "脚本文案",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await generateInspiration({
+      prompt: "请生成脚本。",
+      assetType: "text",
+    });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    const systemText = body.input[0].content[0].text;
+    expect(systemText).toContain("中文");
+    expect(systemText).toContain("Markdown 表格");
+    expect(systemText).toContain("时间");
+    expect(systemText).toContain("旁白");
+    expect(systemText).toContain("字幕");
+    expect(systemText).toContain("画面");
+    expect(systemText).toContain("产品外观必须与用户素材一致");
+  });
+
   it("uses the image API key override for Seedream image generation", async () => {
     configureArkEnv();
     process.env.AI_IMAGE_API_KEY = "image-api-key";

@@ -47,6 +47,11 @@ import {
   generateFallbackScript,
   rewriteFallbackScript,
 } from "../../providers/ai/mockScriptProvider.js";
+import {
+  extractVideoReferenceFrames,
+  type VideoFrameExtractor,
+  type VideoReferenceFrame,
+} from "../../providers/media/videoFrameExtractor.js";
 import { renderFallbackPreview } from "../../providers/renderer/mockRenderer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
@@ -71,6 +76,113 @@ const sendInvalidRequest = (response: Response, code: string, message: string) =
   });
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getMetadataRecord = (asset: AssetMetadata): Record<string, unknown> =>
+  isRecord(asset.metadata) ? asset.metadata : {};
+
+const getAppearanceAnchorLines = (asset: AssetMetadata | undefined): string[] => {
+  if (!asset) {
+    return ["素材不足：未绑定可用素材。"];
+  }
+
+  const metadata = getMetadataRecord(asset);
+  const anchors = isRecord(metadata.appearanceAnchors) ? metadata.appearanceAnchors : {};
+  const lines = [
+    typeof anchors.color === "string" ? `颜色：${anchors.color}` : undefined,
+    typeof anchors.shape === "string" ? `形状：${anchors.shape}` : undefined,
+    typeof anchors.material === "string" ? `材质：${anchors.material}` : undefined,
+    typeof anchors.logoText === "string" ? `Logo/文字：${anchors.logoText}` : undefined,
+    typeof anchors.packaging === "string" ? `包装：${anchors.packaging}` : undefined,
+    Array.isArray(anchors.accessories) ? `配件：${anchors.accessories.join("、")}` : undefined,
+    Array.isArray(anchors.distinctiveFeatures)
+      ? `显著特征：${anchors.distinctiveFeatures.join("、")}`
+      : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+  if (lines.length > 0) {
+    return lines;
+  }
+
+  return [
+    `素材名称：${asset.name}`,
+    `素材标签：${asset.tags.join("、") || "未提供"}`,
+    "素材未提供结构化外观锚点，必须优先保持参考图中的产品外观。",
+  ];
+};
+
+const storedVideoReferenceFrames = (asset: AssetMetadata): VideoReferenceFrame[] => {
+  const frames = getMetadataRecord(asset).videoReferenceFrames;
+  if (!Array.isArray(frames)) {
+    return [];
+  }
+
+  return frames
+    .map((frame, index): VideoReferenceFrame | undefined => {
+      if (!isRecord(frame) || typeof frame.imageUrl !== "string" || !frame.imageUrl.trim()) {
+        return undefined;
+      }
+
+      return {
+        frameId:
+          typeof frame.frameId === "string" && frame.frameId.trim()
+            ? frame.frameId.trim()
+            : `${asset.id}-stored-frame-${index + 1}`,
+        imageUrl: frame.imageUrl.trim(),
+        purpose:
+          frame.purpose === "cover" ||
+          frame.purpose === "product-closeup" ||
+          frame.purpose === "usage-scene"
+            ? frame.purpose
+            : "product-closeup",
+        timestampSeconds:
+          typeof frame.timestampSeconds === "number" && Number.isFinite(frame.timestampSeconds)
+            ? frame.timestampSeconds
+            : 0,
+      };
+    })
+    .filter((frame): frame is VideoReferenceFrame => Boolean(frame));
+};
+
+const resolveSceneBoundAsset = (
+  scene: Pick<StoryboardScene, "assetId">,
+  assets: AssetMetadata[],
+): AssetMetadata | undefined =>
+  (scene.assetId ? assets.find((asset) => asset.id === scene.assetId) : undefined) ?? assets[0];
+
+const resolveStoryboardReferenceImageUrls = async (
+  scene: StoryboardScene,
+  assets: AssetMetadata[],
+  videoFrameExtractor: VideoFrameExtractor,
+): Promise<string[]> => {
+  const boundAsset = resolveSceneBoundAsset(scene, assets);
+  if (!boundAsset) {
+    return [];
+  }
+
+  if (boundAsset.type === "image") {
+    return [boundAsset.url];
+  }
+
+  if (boundAsset.type === "video") {
+    const storedFrames = storedVideoReferenceFrames(boundAsset);
+    if (storedFrames.length > 0) {
+      return storedFrames.map((frame) => frame.imageUrl).slice(0, 3);
+    }
+
+    try {
+      return (await videoFrameExtractor({ assetId: boundAsset.id, maxFrames: 3, videoUrl: boundAsset.url }))
+        .map((frame) => frame.imageUrl)
+        .slice(0, 3);
+    } catch (error) {
+      console.warn("[storyboard] video frame extraction failed; continuing without frames.", error);
+    }
+  }
+
+  return [];
+};
+
 const collectStorageObjectKeys = (assets: AssetMetadata[]): Set<string> => {
   const objectKeys = new Set<string>();
   assets.forEach((asset) => {
@@ -92,19 +204,21 @@ const scriptGenerationPrompt = (
   const materialLines = [
     ...assets.map((asset) => `${asset.name} (${asset.mimeType ?? asset.type})`),
     ...request.materials.map(
-      (material) => `${material.name} (${material.mimeType ?? material.type ?? "material"})`,
+      (material) => `${material.name} (${material.mimeType ?? material.type ?? "素材"})`,
     ),
   ];
 
   return [
-    "Rewrite this ecommerce short-video script. Keep it concise, conversion-oriented, and ready for storyboard generation.",
-    `Product: ${project.productName}`,
-    `Audience: ${project.audience}`,
-    `Tone: ${project.tone}`,
-    `Selling points: ${project.sellingPoints.join(", ")}`,
-    `Prepared materials: ${materialLines.slice(0, 10).join("; ") || "none"}`,
-    `Keywords: ${request.keywords.join(", ") || "none"}`,
-    `User draft: ${request.draftScript || "No draft provided. Create a strong draft."}`,
+    "请改写电商短视频脚本。必须使用中文输出，内容要简洁、转化导向，并可直接用于分镜生成。",
+    "输出格式必须是 Markdown 表格，表头固定为：| 时间 | 旁白 | 字幕 | 画面 |。",
+    "每一行代表一个分镜，总时长不得超过 15 秒；画面列必须包含素材外观一致性要求。",
+    `产品：${project.productName}`,
+    `目标人群：${project.audience}`,
+    `语气：${project.tone}`,
+    `核心卖点：${project.sellingPoints.join("、")}`,
+    `已准备素材：${materialLines.slice(0, 10).join("；") || "无"}`,
+    `关键词：${request.keywords.join("、") || "无"}`,
+    `用户草稿：${request.draftScript || "未提供草稿，请直接生成一个强脚本。"}`,
   ].join("\n");
 };
 
@@ -194,25 +308,56 @@ const buildStoryboardImagePrompt = (
   scene: StoryboardScene,
   request: ScriptGenerationRequest | undefined,
   assets: AssetMetadata[],
+  referenceImageUrls: string[],
 ): string => {
+  const boundAsset = resolveSceneBoundAsset(scene, assets);
   const materialNames = [
-    ...assets.map((asset) => asset.name),
+    ...(boundAsset ? [boundAsset.name] : []),
+    ...assets.filter((asset) => asset.id !== boundAsset?.id).map((asset) => asset.name),
     ...(request?.materials ?? []).map((material) => material.name),
-  ]
-    .slice(0, 8)
-    .join(", ");
+  ].slice(0, 8);
+  const appearanceAnchorLines = getAppearanceAnchorLines(boundAsset);
 
   return [
-    "Create a vertical ecommerce storyboard frame for a short-video ad.",
-    `Product: ${project.productName}`,
-    `Audience: ${project.audience}`,
-    `Selling points: ${project.sellingPoints.join(", ")}`,
-    `Scene ${scene.order}: ${scene.subtitle}`,
-    `Visual direction: ${scene.visualPrompt}`,
-    `Voiceover context: ${scene.voiceover}`,
-    `Prepared materials: ${materialNames || "none"}`,
-    `Keywords: ${request?.keywords.join(", ") || "none"}`,
-    "Use a clean product-focused composition, no unreadable text, 9:16 aspect ratio.",
+    "你正在为电商短视频生成 9:16 竖版分镜图。",
+    "",
+    "【全局硬性规则】",
+    "- 必须使用中文理解以下内容。",
+    "- 画面中的产品必须严格匹配绑定素材和参考图，不得重新设计产品。",
+    "- 不得改变产品颜色、形状、材质、Logo、包装、结构、配件和可见文字。",
+    "- 如果素材信息不足，只能弱化背景或镜头动作，不能虚构产品外观。",
+    "",
+    "【视频脚本上下文】",
+    `产品名称：${project.productName}`,
+    `目标人群：${project.audience}`,
+    `核心卖点：${project.sellingPoints.join("、")}`,
+    `视频语气：${project.tone}`,
+    `视频风格：${project.style}`,
+    `关键词：${request?.keywords.join("、") || "无"}`,
+    "",
+    "【本镜头信息】",
+    `镜头序号：${scene.order}`,
+    `镜头目标：${scene.subtitle}`,
+    `时长：${scene.durationSeconds} 秒`,
+    `旁白：${scene.voiceover}`,
+    `字幕：${scene.subtitle}`,
+    `画面描述：${scene.visualPrompt}`,
+    "",
+    "【绑定素材】",
+    `素材 ID：${boundAsset?.id ?? "未绑定"}`,
+    `素材名称：${boundAsset?.name ?? "未绑定"}`,
+    `素材类型：${boundAsset?.type ?? "未知"}`,
+    `参考图数量：${referenceImageUrls.length}`,
+    `已准备素材：${materialNames.join("、") || "无"}`,
+    `产品外观锚点：${appearanceAnchorLines.join("；")}`,
+    "",
+    "【禁止改变】",
+    "- 禁止更换产品颜色、形状、品牌、Logo、包装、材质、屏幕内容、结构和配件数量。",
+    "- 禁止添加参考图中不存在的品牌元素。",
+    "- 禁止生成海报大字、乱码或不可读文字。",
+    "",
+    "【生成要求】",
+    "生成一张 9:16 电商短视频分镜图。画面主体是绑定素材中的同一款产品。构图、背景、光线、人物手部或使用场景可以服务本镜头目标，但产品外观必须与绑定素材一致。",
   ].join("\n");
 };
 
@@ -221,16 +366,23 @@ const generateStoryboardSceneImageUrl = async (
   scene: StoryboardScene,
   request: ScriptGenerationRequest | undefined,
   assets: AssetMetadata[],
+  videoFrameExtractor: VideoFrameExtractor,
 ): Promise<string> => {
   try {
+    const referenceImageUrls = await resolveStoryboardReferenceImageUrls(
+      scene,
+      assets,
+      videoFrameExtractor,
+    );
     const generated = await generateInspiration({
       assetType: "image",
-      prompt: buildStoryboardImagePrompt(project, scene, request, assets),
+      prompt: buildStoryboardImagePrompt(project, scene, request, assets, referenceImageUrls),
       options: {
         image: {
           aspectRatio: "9:16",
           count: 1,
           quality: "standard",
+          referenceImages: referenceImageUrls,
         },
       },
     });
@@ -252,12 +404,19 @@ const renderStoryboardSceneImages = async (
   script: Omit<ScriptResult, "id" | "projectId">,
   request: ScriptGenerationRequest | undefined,
   assets: AssetMetadata[],
+  videoFrameExtractor: VideoFrameExtractor,
 ): Promise<Omit<ScriptResult, "id" | "projectId">> => ({
   ...script,
   scenes: await Promise.all(
     script.scenes.map(async (scene) => ({
       ...scene,
-      imageUrl: await generateStoryboardSceneImageUrl(project, scene, request, assets),
+      imageUrl: await generateStoryboardSceneImageUrl(
+        project,
+        scene,
+        request,
+        assets,
+        videoFrameExtractor,
+      ),
     })),
   ),
 });
@@ -460,6 +619,7 @@ export interface P0RouterOptions {
   externalAssetDownloader?: ExternalAssetDownloader;
   store?: ProjectStore;
   storageProvider?: StorageProvider;
+  videoFrameExtractor?: VideoFrameExtractor;
 }
 
 export const createP0Router = ({
@@ -467,6 +627,7 @@ export const createP0Router = ({
   externalAssetDownloader = downloadExternalAsset,
   store = new MemoryProjectStore(),
   storageProvider = new CosStorageProvider(),
+  videoFrameExtractor = extractVideoReferenceFrames,
 }: P0RouterOptions = {}): Router => {
   const router = Router();
 
@@ -1434,6 +1595,7 @@ export const createP0Router = ({
       providerResult.script,
       parsedRequest.data,
       preparedAssets,
+      videoFrameExtractor,
     );
     const storedScript = await store.addScript(project.id, scriptWithSceneImages);
     if (!storedScript) {
@@ -1647,6 +1809,7 @@ export const createP0Router = ({
       regeneratedScene,
       undefined,
       linkedAsset ? [linkedAsset] : context.project.assets,
+      videoFrameExtractor,
     );
     const storedScene = await store.updateScene(context.scene.id, {
       ...regeneratedScene,
@@ -1660,7 +1823,7 @@ export const createP0Router = ({
     const traceEvent = await store.appendTraceEvent(`scene:${context.scene.id}`, {
       status: "completed",
       step: "scene-regenerated",
-      message: `Regenerated scene ${context.scene.order} with deterministic editing fallback.`,
+      message: `已使用确定性编辑 fallback 重生成第 ${context.scene.order} 个镜头。`,
     });
 
     response.json({

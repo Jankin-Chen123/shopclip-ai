@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 
 import { createApp } from "./app";
@@ -45,6 +45,11 @@ describe("P0 backend lifecycle", () => {
         resolve();
       });
     });
+    vi.unstubAllGlobals();
+    delete process.env.AI_PROVIDER_MODE;
+    delete process.env.ARK_API_KEY;
+    delete process.env.AI_IMAGE_MODEL_ID;
+    delete process.env.ARK_API_BASE_URL;
   });
 
   it("lists historical projects as compact summaries ordered by latest update", async () => {
@@ -393,6 +398,211 @@ describe("P0 backend lifecycle", () => {
     expect(rejected.body.error.code).toBe("INVALID_ASSET");
   });
 
+  it("passes bound image assets and video keyframes to Seedream storyboard generation", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "ark-test-key";
+    process.env.AI_IMAGE_MODEL_ID = "doubao-seedream-test";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        data: [
+          {
+            url: "https://cdn.example.test/generated-storyboard.png",
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const getArkRequestBodies = () =>
+      fetchMock.mock.calls
+        .filter(([url]) => {
+          const requestUrl = url instanceof Request ? url.url : String(url);
+          return requestUrl.startsWith("https://ark.example.test");
+        })
+        .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Reference-bound clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const projectId = created.body.project.id;
+
+    const imageAsset = await request<{
+      asset: { id: string; url: string };
+    }>(baseUrl, `/api/projects/${projectId}/assets`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "GlowGrip silver packshot.png",
+        mimeType: "image/png",
+        sizeBytes: 200_000,
+        tags: ["silver", "packshot", "rounded"],
+        metadata: {
+          appearanceAnchors: {
+            color: "银灰色",
+            shape: "圆角折叠支架",
+            material: "磨砂金属",
+            logoText: "无明显 Logo",
+          },
+        },
+      }),
+    });
+
+    const imageGenerated = await request<{
+      script: { scenes: Array<{ visualPrompt: string; voiceover: string; subtitle: string }> };
+    }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [imageAsset.body.asset.id],
+        keywords: ["银灰色", "折叠支架"],
+      }),
+    });
+
+    expect(imageGenerated.status).toBe(201);
+    expect(imageGenerated.body.script.scenes[0]?.visualPrompt).toContain("产品外观必须与绑定素材一致");
+    expect(imageGenerated.body.script.scenes[0]?.subtitle).toContain("痛点");
+    expect(imageGenerated.body.script.scenes[0]?.voiceover).toContain("还在");
+
+    const firstImageBody = getArkRequestBodies()[0];
+    expect(firstImageBody.image).toEqual([imageAsset.body.asset.url]);
+    expect(firstImageBody.prompt).toContain("【全局硬性规则】");
+    expect(firstImageBody.prompt).toContain("【绑定素材】");
+    expect(firstImageBody.prompt).toContain("【禁止改变】");
+    expect(firstImageBody.prompt).toContain("银灰色");
+    expect(firstImageBody.sequential_image_generation).toBe("disabled");
+
+    const videoProject = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Video reference clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const videoAsset = await request<{
+      asset: { id: string };
+    }>(baseUrl, `/api/projects/${videoProject.body.project.id}/assets`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "video",
+        name: "GlowGrip usage demo.mp4",
+        mimeType: "video/mp4",
+        sizeBytes: 3_000_000,
+        tags: ["usage", "demo"],
+        metadata: {
+          videoReferenceFrames: [
+            {
+              frameId: "frame-product-closeup",
+              timestampSeconds: 1.2,
+              imageUrl: "https://cdn.example.test/glowgrip-closeup-frame.png",
+              purpose: "product-closeup",
+            },
+          ],
+        },
+      }),
+    });
+
+    await request(baseUrl, `/api/projects/${videoProject.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [videoAsset.body.asset.id],
+      }),
+    });
+
+    const videoBodies = getArkRequestBodies().filter((body) => Array.isArray(body.image));
+    expect(videoBodies.at(-1)?.image).toEqual([
+      "https://cdn.example.test/glowgrip-closeup-frame.png",
+    ]);
+  });
+
+  it("structures storyboard scene fields from the current script draft table", async () => {
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Cup launch clip",
+        productName: "小猫水杯",
+        audience: "通勤女生",
+        sellingPoints: ["小包可放", "防漏"],
+        tone: "轻快",
+        style: "电商短视频",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const asset = await request<{ asset: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "小猫水杯主图",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["product"],
+        }),
+      },
+    );
+
+    const generated = await request<{
+      script: {
+        narrative: string;
+        scenes: Array<{
+          durationSeconds: number;
+          subtitle: string;
+          voiceover: string;
+          visualPrompt: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+        draftScript: [
+          "| 时间 | 旁白 | 字幕 | 画面 |",
+          "|---|---|---|---|",
+          "| 0-3s | 小包塞不下水杯？ | 小包塞不下？ | 手拿小包和小猫水杯做尺寸对比 |",
+          "| 3-7s | 这只小猫水杯轻松放进口袋 | 轻松塞进口袋 | 展示水杯放入随身小包 |",
+          "| 7-11s | 防漏防滑，通勤更安心 | 防漏防滑 | 近景展示杯盖和防漏结构 |",
+        ].join("\n"),
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.narrative).toContain("小包塞不下水杯");
+    expect(generated.body.script.scenes).toHaveLength(3);
+    expect(generated.body.script.scenes[0]).toMatchObject({
+      durationSeconds: 3,
+      subtitle: "小包塞不下？",
+      voiceover: "小包塞不下水杯？",
+    });
+    expect(generated.body.script.scenes[0]?.visualPrompt).toContain(
+      "手拿小包和小猫水杯做尺寸对比",
+    );
+    expect(generated.body.script.scenes[1]).toMatchObject({
+      durationSeconds: 4,
+      subtitle: "轻松塞进口袋",
+      voiceover: "这只小猫水杯轻松放进口袋",
+    });
+  });
+
   it("uses prepared assets for storyboard generation and regenerates only the selected scene", async () => {
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",
@@ -494,7 +704,7 @@ describe("P0 backend lifecycle", () => {
       id: secondScene!.id,
       status: "generated",
     });
-    expect(regenerated.body.scene.subtitle).toContain("Regenerated:");
+    expect(regenerated.body.scene.subtitle).toContain("重生成：");
     expect(regenerated.body.scene.imageUrl).toEqual(expect.stringMatching(/^data:image\/svg\+xml,/));
     expect(regenerated.body.traceEvent).toMatchObject({
       step: "scene-regenerated",
@@ -524,10 +734,10 @@ describe("P0 backend lifecycle", () => {
       subtitle: "Edited hook subtitle",
       voiceover: "Edited hook voiceover",
     });
-    expect(loadedSecondScene?.subtitle).toContain("Regenerated:");
+    expect(loadedSecondScene?.subtitle).toContain("重生成：");
     expect(untouchedScenes.map((scene) => scene.subtitle)).toEqual([
-      "Prove the benefit",
-      "Export to TikTok Shop",
+      "证明核心卖点",
+      "行动号召",
     ]);
   });
 });

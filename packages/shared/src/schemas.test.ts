@@ -233,6 +233,41 @@ describe("shared contract schemas", () => {
     ).toBe(true);
   });
 
+  it("accepts up to 14 reference images for image generation requests", () => {
+    const accepted = InspirationGenerateRequestSchema.safeParse({
+      prompt: "用参考图生成一张产品分镜图。",
+      assetType: "image",
+      options: {
+        image: {
+          referenceImages: Array.from(
+            { length: 14 },
+            (_, index) => `https://cdn.example.test/reference-${index + 1}.png`,
+          ),
+        },
+      },
+    });
+
+    expect(accepted.success).toBe(true);
+    expect(accepted.success ? accepted.data.options?.image?.referenceImages : undefined).toHaveLength(
+      14,
+    );
+
+    const rejected = InspirationGenerateRequestSchema.safeParse({
+      prompt: "用参考图生成一张产品分镜图。",
+      assetType: "image",
+      options: {
+        image: {
+          referenceImages: Array.from(
+            { length: 15 },
+            (_, index) => `https://cdn.example.test/reference-${index + 1}.png`,
+          ),
+        },
+      },
+    });
+
+    expect(rejected.success).toBe(false);
+  });
+
   it("validates normalized external asset search results", () => {
     expect(
       ExternalAssetResultSchema.safeParse({

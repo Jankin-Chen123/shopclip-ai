@@ -11,6 +11,15 @@ const IMAGE_MODEL_NAME = "doubao-seedream";
 const SEEDANCE_MODEL_NAME = "doubao-seedance1.5-pro";
 const DEFAULT_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 const MIN_ARK_IMAGE_PIXELS = 3_686_400;
+const TEXT_STORYBOARD_SYSTEM_PROMPT = [
+  "你是电商短视频脚本策划，只能使用中文输出。",
+  "必须返回可直接用于分镜生成的 Markdown 表格，不要输出解释性段落。",
+  "表格列必须包含：时间、旁白、字幕、画面。",
+  "每行代表一个分镜，整条视频总时长不得超过 15 秒。",
+  "旁白、字幕和画面描述必须紧扣用户素材、产品卖点和目标人群。",
+  "画面描述必须写清主体、镜头、场景和动作，并包含：产品外观必须与用户素材一致。",
+  "禁止虚构用户素材中不存在的产品颜色、形状、Logo、包装、结构、配件或可见文字。",
+].join("\n");
 
 const ARK_MODEL_ALIASES = new Map<string, string>([
   ["doubao-seed-2.0-pro", "doubao-seed-2-0-pro-260215"],
@@ -386,7 +395,7 @@ const generateTextWithArk = async (
             content: [
               {
                 type: "input_text",
-                text: "You create concise ecommerce short-video inspiration. Return practical copy, visual direction, and CTA.",
+                text: TEXT_STORYBOARD_SYSTEM_PROMPT,
               },
             ],
           },
@@ -407,8 +416,7 @@ const generateTextWithArk = async (
         messages: [
           {
             role: "system",
-            content:
-              "You create concise ecommerce short-video inspiration. Return practical copy, visual direction, and CTA.",
+            content: TEXT_STORYBOARD_SYSTEM_PROMPT,
           },
           {
             role: "user",
@@ -492,13 +500,21 @@ const generateImageWithArk = async (
   config: ProviderConfig,
 ): Promise<InspirationMaterial[]> => {
   const count = request.options?.image?.count ?? 1;
-  const body = await postArkJson("/images/generations", config.apiKey, config.baseUrl, {
+  const referenceImages = request.options?.image?.referenceImages?.filter(Boolean) ?? [];
+  const requestBody: Record<string, unknown> = {
     model: config.model,
     prompt: request.prompt,
     size: imageSizeFromOptions(request),
     n: count,
     response_format: "url",
-  });
+    sequential_image_generation: "disabled",
+    watermark: false,
+  };
+  if (referenceImages.length > 0) {
+    requestBody.image = referenceImages;
+  }
+
+  const body = await postArkJson("/images/generations", config.apiKey, config.baseUrl, requestBody);
 
   const data = isRecord(body) && Array.isArray(body.data) ? body.data : [];
   const imageUrls = data

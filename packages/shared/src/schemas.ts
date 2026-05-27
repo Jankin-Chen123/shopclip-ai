@@ -190,6 +190,7 @@ export const InspirationGenerateRequestSchema = z.object({
           count: z.number().int().min(1).max(4).default(1),
           aspectRatio: z.enum(["auto", "1:1", "4:3", "3:4", "16:9", "9:16"]).default("auto"),
           quality: z.enum(["standard", "hd", "2k"]).default("standard"),
+          referenceImages: z.array(z.string().trim().min(1)).max(14).default([]).optional(),
         })
         .optional(),
       video: z

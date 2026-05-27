@@ -527,7 +527,7 @@ describe("P1 asset retrieval and scene editing", () => {
       id: firstScene.id,
       status: "generated",
     });
-    expect(regenerated.body.scene.subtitle).toContain("Regenerated");
+    expect(regenerated.body.scene.subtitle).toContain("重生成：");
     expect(regenerated.body.traceEvent.step).toBe("scene-regenerated");
 
     const afterRegen = await request<{
