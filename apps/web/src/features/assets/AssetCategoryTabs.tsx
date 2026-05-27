@@ -28,6 +28,14 @@ const categoryIcons = {
   script: FileText,
 } as const;
 
+const documentScriptMimeTypes = new Set([
+  "application/msword",
+  "application/pdf",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
 const draftDefaults: Record<
   Language,
   Record<AssetCategory, Pick<CreateAssetInput, "type" | "mimeType" | "name" | "tags">>
@@ -113,6 +121,7 @@ export const assetMatchesCategory = (asset: AssetMetadata, category: AssetCatego
 
   return (
     asset.mimeType === "text/plain" ||
+    (asset.mimeType ? documentScriptMimeTypes.has(asset.mimeType) : false) ||
     tags.some((tag) => tag === "script" || tag === "copy" || tag === "剧本" || tag === "文案")
   );
 };

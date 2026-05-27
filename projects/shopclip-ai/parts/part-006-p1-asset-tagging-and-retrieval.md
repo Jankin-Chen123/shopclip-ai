@@ -85,6 +85,10 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
   - the asset library search UI now renders search matches directly in the existing asset grid instead of a separate result strip.
   - COS provider failures are logged server-side and return an empty result set so the UI does not show local `score: 0` fallback rows as matches.
   - COS XML authorization now signs only method, path, query parameters, and signed headers, avoiding `signature calculated is different from client signature` errors caused by including the request body in `HttpString`.
+- Fixed Step 02 document upload regression:
+  - Brand materials advertised PDF/DOCX/PPTX support, but upload-intent validation rejected document MIME types with `400 Bad Request`;
+  - API reference assets now accept PDF, DOC/DOCX, and PPT/PPTX MIME types;
+  - web upload inference and asset library script filtering now classify those document files as reference/script assets.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-06-asset-search.png`
   - `projects/shopclip-ai/evidence/part-006-verification.md`
@@ -127,6 +131,9 @@ Add asset tags, slice metadata, and keyword/tag/vector-like retrieval for storyb
 - `corepack pnpm --filter @shopclip/api test -- asset-cos-flow` on 2026-05-26: API COS flow tests passed, including provider failure empty-result behavior.
 - `corepack pnpm --filter @shopclip/api test -- cosIntelligentSearchProvider` on 2026-05-26: provider tests passed, including request-body-not-signed regression coverage.
 - Evidence note: `projects/shopclip-ai/evidence/2026-05-26-cos-intelligent-search.md`
+- `corepack pnpm --filter @shopclip/api test -- asset-cos-flow` on 2026-05-27: passed, including project-level `.docx` upload-intent regression coverage.
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx` on 2026-05-27: passed, including document MIME classification coverage.
+- Evidence note: `projects/shopclip-ai/evidence/2026-05-27-step-02-document-upload-fix.md`
 
 ## Verification Plan
 

@@ -167,6 +167,49 @@ describe("COS-backed asset import contract", () => {
     expect(searched.body.results[0]?.asset.id).toBe(created.body.asset.id);
   });
 
+  it("creates an upload intent for project brand document assets", async () => {
+    const projectId = await createProject(baseUrl);
+
+    const created = await request<{
+      asset: {
+        id: string;
+        mimeType: string;
+        objectKey: string;
+        status: string;
+        tags: string[];
+        type: string;
+      };
+      upload: {
+        headers: Record<string, string>;
+        objectKey: string;
+      };
+    }>(baseUrl, `/api/projects/${projectId}/assets/upload-intent`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "reference",
+        name: "Brand campaign brief.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 48_000,
+        tags: ["script", "brand"],
+      }),
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.asset).toMatchObject({
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      status: "uploaded",
+      type: "reference",
+    });
+    expect(created.body.asset.objectKey).toMatch(
+      new RegExp(`^projects/${projectId}/raw/${created.body.asset.id}/source\\.docx$`),
+    );
+    expect(created.body.asset.tags).toEqual(expect.arrayContaining(["script", "brand"]));
+    expect(created.body.upload.objectKey).toBe(created.body.asset.objectKey);
+    expect(created.body.upload.headers).toEqual({
+      "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  });
+
   it("returns COS intelligent image matches as the asset search results", async () => {
     const app = createApp({
       cosAssetSearch: async ({ query }) =>

@@ -899,6 +899,14 @@ describe("App", () => {
       { name: "script.md", type: "", size: 4000 } as File,
       "en",
     );
+    const wordAsset = createAssetInputFromFile(
+      {
+        name: "Brand campaign brief.docx",
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        size: 5000,
+      } as File,
+      "en",
+    );
 
     expect(imageAsset).toMatchObject({
       type: "image",
@@ -916,8 +924,14 @@ describe("App", () => {
       name: "script.md",
       mimeType: "text/markdown",
     });
+    expect(wordAsset).toMatchObject({
+      type: "reference",
+      name: "Brand campaign brief.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
     expect(audioAsset.tags).toContain("audio");
     expect(scriptAsset.tags).toContain("script");
+    expect(wordAsset.tags).toContain("script");
   });
 
   it("places asset type tabs below the asset search toolbar", () => {
@@ -1440,7 +1454,15 @@ describe("App", () => {
     );
     expect(assetMatchesCategory(makeAsset({ mimeType: "audio/mpeg" }), "audio")).toBe(true);
     expect(assetMatchesCategory(makeAsset({ tags: ["剧本"] }), "script")).toBe(true);
-    expect(assetMatchesCategory(makeAsset({ mimeType: "application/pdf" }), "script")).toBe(false);
+    expect(assetMatchesCategory(makeAsset({ mimeType: "application/pdf" }), "script")).toBe(true);
+    expect(
+      assetMatchesCategory(
+        makeAsset({
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }),
+        "script",
+      ),
+    ).toBe(true);
   });
 
   it("classifies Freesound audio results into the audio category", () => {

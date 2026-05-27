@@ -92,7 +92,16 @@ export const hasSearchableStockProviderCredential = (provider: StockProviderConf
   (provider.credentialSource === "official" || Boolean(provider.apiKey?.trim()));
 
 const externalSearchPageSize = 12;
-const supportedUploadAccept = "image/*,video/*,audio/*,.txt,.md,text/plain";
+const supportedUploadAccept =
+  "image/*,video/*,audio/*,.txt,.md,.pdf,.doc,.docx,.ppt,.pptx,text/plain";
+
+const documentScriptMimeTypes = new Set([
+  "application/msword",
+  "application/pdf",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
 
 const videoCoverFallbackUrl =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1920' height='1080' viewBox='0 0 1920 1080'%3E%3Cdefs%3E%3CradialGradient id='g' cx='28%25' cy='22%25' r='58%25'%3E%3Cstop offset='0' stop-color='%2322d3ee' stop-opacity='.25'/%3E%3Cstop offset='1' stop-color='%23070b10'/%3E%3C/radialGradient%3E%3ClinearGradient id='p' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%230b1220'/%3E%3Cstop offset='1' stop-color='%23111111'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1920' height='1080' fill='url(%23p)'/%3E%3Crect x='90' y='70' width='1740' height='940' rx='48' fill='url(%23g)' stroke='%2322d3ee' stroke-opacity='.38' stroke-width='4'/%3E%3Crect x='760' y='360' width='400' height='260' rx='48' fill='%23152538' stroke='%238dd7ff' stroke-opacity='.35' stroke-width='3'/%3E%3Cpath d='M910 430v120l105-60-105-60z' fill='%23dbeafe'/%3E%3Ctext x='960' y='720' text-anchor='middle' fill='%23cffafe' font-family='Arial, sans-serif' font-size='54' font-weight='700'%3ENo video cover%3C/text%3E%3Ctext x='960' y='790' text-anchor='middle' fill='%2394a3b8' font-family='Arial, sans-serif' font-size='34'%3EPreview image unavailable from provider%3C/text%3E%3C/svg%3E";
@@ -124,6 +133,7 @@ const isAudioAsset = (asset: AssetMetadata) =>
 const isScriptAsset = (asset: AssetMetadata) =>
   asset.mimeType?.startsWith("text/") ||
   asset.mimeType === "text/markdown" ||
+  (asset.mimeType ? documentScriptMimeTypes.has(asset.mimeType) : false) ||
   asset.tags.some((tag) => ["script", "copy", "text", "脚本"].includes(tag.toLowerCase()));
 
 const assetSourceLabel = (asset: AssetMetadata, language: Language) => {
@@ -242,7 +252,7 @@ const categoryUi: Record<
       importAria: "Import scripts",
       dialogTitle: "Import scripts",
       fileLabel: "Local script files",
-      fileAccept: ".txt,.md,text/plain",
+      fileAccept: ".txt,.md,.pdf,.doc,.docx,.ppt,.pptx,text/plain",
       searchLabel: "Search script library",
       searchPlaceholder: "Search script library",
       emptyTitle: "No scripts yet",
@@ -300,7 +310,7 @@ const categoryUi: Record<
       importAria: "导入剧本素材",
       dialogTitle: "导入剧本素材",
       fileLabel: "本机剧本文件",
-      fileAccept: ".txt,.md,text/plain",
+      fileAccept: ".txt,.md,.pdf,.doc,.docx,.ppt,.pptx,text/plain",
       searchLabel: "搜索剧本素材库",
       searchPlaceholder: "搜索剧本素材库",
       emptyTitle: "暂无剧本素材",

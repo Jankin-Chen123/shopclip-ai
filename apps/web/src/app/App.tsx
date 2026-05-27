@@ -96,6 +96,14 @@ const createDefaultAsset = (language: Language): CreateAssetInput => ({
   sizeBytes: defaultAssetSizeBytes,
 });
 
+const documentMimeTypesByExtension: Record<string, string> = {
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".pdf": "application/pdf",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+
 const createScriptGenerationApiConfig = (apiConfig: UserApiConfig): UserApiConfig => {
   const generalConfig = apiConfig.general;
   if (generalConfig?.credentialSource === "official" || generalConfig?.apiKey?.trim()) {
@@ -126,18 +134,25 @@ export const createScriptGenerationRequestPayload = (
 
 export const createAssetInputFromFile = (file: File, language: Language): CreateAssetInput => {
   const lowerName = file.name.toLowerCase();
+  const documentMimeType = Object.entries(documentMimeTypesByExtension).find(([extension]) =>
+    lowerName.endsWith(extension),
+  )?.[1];
   const inferredCategory: AssetCategory = file.type.startsWith("image/")
     ? "image"
     : file.type.startsWith("video/")
       ? "video"
       : file.type.startsWith("audio/")
         ? "audio"
-        : file.type.startsWith("text/") || lowerName.endsWith(".txt") || lowerName.endsWith(".md")
+        : file.type.startsWith("text/") ||
+            lowerName.endsWith(".txt") ||
+            lowerName.endsWith(".md") ||
+            Boolean(documentMimeType)
           ? "script"
           : "script";
   const defaults = getAssetDraftDefaults(inferredCategory, language);
   const inferredMimeType =
     file.type ||
+    documentMimeType ||
     (lowerName.endsWith(".md")
       ? "text/markdown"
       : lowerName.endsWith(".txt")
