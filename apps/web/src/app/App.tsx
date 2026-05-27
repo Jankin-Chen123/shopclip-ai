@@ -44,6 +44,7 @@ import {
   createProject,
   createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
+  deleteProject as deleteProjectRequest,
   deleteScene,
   exportProject,
   generateScript,
@@ -569,6 +570,25 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       refreshProjectHistory();
     });
 
+  const clearCurrentWorkspace = () => {
+    setProject(undefined);
+    setBrief(defaultBrief);
+    setScript(undefined);
+    setScriptDraft("");
+    setRenderTask(undefined);
+    setTraceEvents([]);
+    setDashboard(undefined);
+    setExportResult(undefined);
+    setFallbackProvider(undefined);
+    setHasAssetSearchRun(false);
+    setAssetSearchResults([]);
+    setExternalAssetSearchResults([]);
+    setEditingSuggestions([]);
+    setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
+    setSelectedSceneId(undefined);
+    setDirtySceneIds(new Set());
+  };
+
   const applyLoadedProject = (loadedProject: ProjectSnapshot) => {
     const latestScript = loadedProject.scripts.at(-1);
     const latestRender = loadedProject.renderTasks.at(-1);
@@ -609,6 +629,40 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setProjectIdToLoad(projectId);
       applyLoadedProject(loadedProject);
     });
+
+  const handleDeleteProjectFromHistory = (projectId: string) => {
+    const historyProject = projectHistory.find((candidate) => candidate.id === projectId);
+    const projectTitle = historyProject?.title ?? projectId;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(text.project.deleteHistoryProjectConfirm(projectTitle))
+    ) {
+      return;
+    }
+
+    void runAction("project", "project", async () => {
+      const response = await deleteProjectRequest(projectId);
+      const deletedAssetIds = new Set(response.deletedAssets.map((asset) => asset.id));
+
+      setProjectHistory((current) => current.filter((candidate) => candidate.id !== projectId));
+      setAssetLibrary((current) => ({
+        assets: current.assets.filter(
+          (asset) => asset.projectId !== projectId && !deletedAssetIds.has(asset.id),
+        ),
+        assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
+      }));
+      setAssetSearchResults((current) =>
+        current.filter((result) => !deletedAssetIds.has(result.asset.id)),
+      );
+      setProjectIdToLoad((current) => (current === projectId ? "" : current));
+
+      if (project?.id === projectId) {
+        clearCurrentWorkspace();
+      }
+
+      refreshProjectHistory();
+    });
+  };
 
   const replaceSceneInState = (updatedScene: StoryboardScene) => {
     setScript((current) =>
@@ -666,7 +720,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const handleUploadAsset = () => {
     void runAction("asset", "asset", async () => {
-      const asset = await addAsset(undefined, assetDraft);
+      const asset = await addAsset(project?.id, assetDraft);
       setAssetLibrary((current) => ({
         ...current,
         assets: [...current.assets, asset],
@@ -691,7 +745,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       const importedAssets = await Promise.all(
         files.map(async (file) => {
           const uploadIntent = await createAssetUploadIntent(
-            undefined,
+            project?.id,
             createAssetInputFromFile(file, language),
           );
           const uploaded = await uploadAssetFileToStorage(uploadIntent.asset.id, file);
@@ -763,7 +817,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const handleImportExternalAsset = async (externalAsset: ExternalAssetResult) => {
     setErrors((current) => ({ ...current, asset: undefined }));
     try {
-      const { asset } = await importExternalAsset(undefined, externalAsset);
+      const { asset } = await importExternalAsset(project?.id, externalAsset);
       setAssetLibrary((current) => ({
         ...current,
         assets: [...current.assets, asset],
@@ -1169,6 +1223,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                   isLoading={busyState === "project"}
                   onBriefChange={setBrief}
                   onCreateProject={handleCreateProject}
+                  onDeleteProjectFromHistory={handleDeleteProjectFromHistory}
                   onLoadProject={handleLoadProject}
                   onLoadProjectFromHistory={handleLoadProjectFromHistory}
                   onProjectIdToLoadChange={setProjectIdToLoad}
@@ -1185,6 +1240,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     error={errors.asset}
                     isGenerating={busyState === "script"}
                     isImporting={busyState === "asset"}
+                    initialSnapshot={assetPrepSnapshot}
                     key={project?.id ?? "projectless-asset-prep"}
                     language={language}
                     libraryAssets={[...(project?.assets ?? []), ...assetLibrary.assets]}

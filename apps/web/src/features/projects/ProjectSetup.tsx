@@ -10,6 +10,7 @@ import {
   Loader2,
   Plus,
   Smile,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ interface ProjectSetupProps {
   projectIdToLoad: string;
   onBriefChange: (brief: ProjectBrief) => void;
   onCreateProject: () => void;
+  onDeleteProjectFromHistory: (projectId: string) => void;
   onLoadProject: () => void;
   onLoadProjectFromHistory: (projectId: string) => void;
   onProjectIdToLoadChange: (projectId: string) => void;
@@ -50,6 +52,7 @@ export const ProjectSetup = ({
   isLoading,
   onBriefChange,
   onCreateProject,
+  onDeleteProjectFromHistory,
   onLoadProject,
   onLoadProjectFromHistory,
   onProjectIdToLoadChange,
@@ -210,24 +213,40 @@ export const ProjectSetup = ({
         {projectHistory.length > 0 ? (
           <div className="project-history-list">
             {projectHistory.map((historyProject) => (
-              <button
-                className={project?.id === historyProject.id ? "active" : undefined}
-                disabled={disabled || isHistoryLoading}
+              <div
+                className={`project-history-item${
+                  project?.id === historyProject.id ? " active" : ""
+                }`}
                 key={historyProject.id}
-                onClick={() => onLoadProjectFromHistory(historyProject.id)}
-                type="button"
               >
-                <span className="project-history-main">
-                  <strong>{historyProject.title}</strong>
-                  <span>{historyProject.productName}</span>
-                </span>
-                <span className="project-history-meta">
-                  <span>{historyProject.status}</span>
-                  <span>{copy.assetCount(historyProject.assetCount)}</span>
-                  <span>{copy.sceneCount(historyProject.sceneCount)}</span>
-                  <span>{copy.updatedAt(formatUpdatedAt(historyProject.updatedAt))}</span>
-                </span>
-              </button>
+                <button
+                  className="project-history-load"
+                  disabled={disabled || isHistoryLoading}
+                  onClick={() => onLoadProjectFromHistory(historyProject.id)}
+                  type="button"
+                >
+                  <span className="project-history-main">
+                    <strong>{historyProject.title}</strong>
+                    <span>{historyProject.productName}</span>
+                  </span>
+                  <span className="project-history-meta">
+                    <span>{historyProject.status}</span>
+                    <span>{copy.assetCount(historyProject.assetCount)}</span>
+                    <span>{copy.sceneCount(historyProject.sceneCount)}</span>
+                    <span>{copy.updatedAt(formatUpdatedAt(historyProject.updatedAt))}</span>
+                  </span>
+                </button>
+                <Button
+                  aria-label={copy.deleteHistoryProject(historyProject.title)}
+                  className="project-history-delete"
+                  disabled={disabled || isHistoryLoading}
+                  icon={<Trash2 size={16} />}
+                  onClick={() => onDeleteProjectFromHistory(historyProject.id)}
+                  variant="danger"
+                >
+                  <span className="sr-only">{copy.deleteHistoryProject(historyProject.title)}</span>
+                </Button>
+              </div>
             ))}
           </div>
         ) : (

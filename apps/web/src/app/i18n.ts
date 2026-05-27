@@ -74,6 +74,9 @@ export const copy = {
       historyLoading: "Loading history",
       historyEmpty: "No historical projects yet.",
       historyCount: (count: number) => `${count} projects`,
+      deleteHistoryProject: (title: string) => `Delete history project ${title}`,
+      deleteHistoryProjectConfirm: (title: string) =>
+        `Delete historical project "${title}"? This removes the project snapshot and project-owned backend assets. Assets imported from the shared library stay in the asset library.`,
       assetCount: (count: number) => `${count} assets`,
       sceneCount: (count: number) => `${count} scenes`,
       updatedAt: (value: string) => `Updated ${value}`,
@@ -297,6 +300,9 @@ export const copy = {
       historyLoading: "正在加载历史项目",
       historyEmpty: "还没有历史项目。",
       historyCount: (count: number) => `${count} 个项目`,
+      deleteHistoryProject: (title: string) => `删除历史项目 ${title}`,
+      deleteHistoryProjectConfirm: (title: string) =>
+        `确认删除历史项目「${title}」？这会删除项目快照和该项目自己的后端素材；从共享素材库导入的素材仍会保留在素材库。`,
       assetCount: (count: number) => `${count} 个素材`,
       sceneCount: (count: number) => `${count} 个分镜`,
       updatedAt: (value: string) => `更新于 ${value}`,

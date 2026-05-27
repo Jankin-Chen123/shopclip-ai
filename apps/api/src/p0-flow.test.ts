@@ -117,6 +117,97 @@ describe("P0 backend lifecycle", () => {
     });
   });
 
+  it("deletes historical project data while preserving global asset library assets", async () => {
+    const globalAsset = await request<{
+      asset: { id: string; name: string; projectId?: string };
+    }>(baseUrl, "/api/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Reusable library packshot",
+        mimeType: "image/png",
+        sizeBytes: 120_000,
+        tags: ["library", "hero"],
+      }),
+    });
+    expect(globalAsset.status).toBe(201);
+    expect(globalAsset.body.asset.projectId).toBeUndefined();
+
+    const created = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Project to delete",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const projectId = created.body.project.id;
+
+    const projectAsset = await request<{
+      asset: { id: string; projectId: string };
+    }>(baseUrl, `/api/projects/${projectId}/assets`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Project-only packshot",
+        mimeType: "image/png",
+        sizeBytes: 200_000,
+        tags: ["project-only"],
+      }),
+    });
+    expect(projectAsset.status).toBe(201);
+    expect(projectAsset.body.asset.projectId).toBe(projectId);
+
+    const generated = await request<{
+      script: { scenes: Array<{ assetId?: string }> };
+    }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [globalAsset.body.asset.id],
+        materials: [
+          {
+            assetId: globalAsset.body.asset.id,
+            bucketId: "hero",
+            name: globalAsset.body.asset.name,
+            source: "library",
+            tags: ["library", "hero"],
+            type: "image",
+          },
+        ],
+      }),
+    });
+    expect(generated.status).toBe(201);
+
+    const deleted = await request<{
+      deletedAssets: Array<{ id: string }>;
+      deletedProject: { id: string };
+    }>(baseUrl, `/api/projects/${projectId}`, {
+      method: "DELETE",
+    });
+
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.deletedProject.id).toBe(projectId);
+    expect(deleted.body.deletedAssets.map((asset) => asset.id)).toEqual([projectAsset.body.asset.id]);
+
+    const loadedProject = await request(baseUrl, `/api/projects/${projectId}`);
+    expect(loadedProject.status).toBe(404);
+
+    const history = await request<{ projects: Array<{ id: string }> }>(baseUrl, "/api/projects");
+    expect(history.body.projects.map((project) => project.id)).not.toContain(projectId);
+
+    const library = await request<{
+      assets: Array<{ id: string; projectId?: string }>;
+    }>(baseUrl, "/api/assets?category=all");
+    expect(library.body.assets.map((asset) => asset.id)).toContain(globalAsset.body.asset.id);
+    expect(library.body.assets.map((asset) => asset.id)).not.toContain(projectAsset.body.asset.id);
+  });
+
   it("creates a project, accepts an image asset, generates storyboard, renders, and exposes export", async () => {
     const created = await request<{
       project: { id: string; productName: string };

@@ -71,6 +71,19 @@ const sendInvalidRequest = (response: Response, code: string, message: string) =
   });
 };
 
+const collectStorageObjectKeys = (assets: AssetMetadata[]): Set<string> => {
+  const objectKeys = new Set<string>();
+  assets.forEach((asset) => {
+    if (asset.objectKey) {
+      objectKeys.add(asset.objectKey);
+    }
+    if (asset.thumbnailKey) {
+      objectKeys.add(asset.thumbnailKey);
+    }
+  });
+  return objectKeys;
+};
+
 const scriptGenerationPrompt = (
   project: ProjectSnapshot,
   request: ScriptGenerationRequest,
@@ -674,6 +687,53 @@ export const createP0Router = ({
     response.json({ project });
   });
 
+  router.delete("/projects/:projectId", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const objectKeys = collectStorageObjectKeys(project.assets);
+    try {
+      await Promise.all(
+        [...objectKeys].map((objectKey) =>
+          storageProvider.deleteObject({
+            objectKey,
+          }),
+        ),
+      );
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "STORAGE_DELETE_FAILED",
+          message: error instanceof Error ? error.message : "Storage delete failed.",
+        },
+      });
+      return;
+    }
+
+    const deleted = await store.deleteProject(project.id);
+    if (!deleted) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.json({
+      deletedProject: {
+        id: project.id,
+        title: project.title,
+        productName: project.productName,
+        status: project.status,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        assetCount: project.assets.length,
+        sceneCount: project.scenes.length,
+      },
+      deletedAssets: project.assets,
+    });
+  });
+
   router.get("/projects/:projectId/dashboard", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
@@ -1148,15 +1208,7 @@ export const createP0Router = ({
       return;
     }
 
-    const objectKeys = new Set<string>();
-    assets.forEach((asset) => {
-      if (asset.objectKey) {
-        objectKeys.add(asset.objectKey);
-      }
-      if (asset.thumbnailKey) {
-        objectKeys.add(asset.thumbnailKey);
-      }
-    });
+    const objectKeys = collectStorageObjectKeys(assets);
 
     try {
       await Promise.all(

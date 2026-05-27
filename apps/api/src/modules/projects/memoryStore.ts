@@ -210,6 +210,39 @@ export class MemoryProjectStore implements ProjectStore {
     return deletedAssets;
   }
 
+  deleteProject(projectId: string): boolean {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      return false;
+    }
+
+    const deletedAssetIds = new Set(project.assets.map((asset) => asset.id));
+    for (const renderTask of project.renderTasks) {
+      this.traceEvents.delete(renderTask.id);
+    }
+    this.projects.delete(projectId);
+
+    if (deletedAssetIds.size > 0) {
+      for (const remainingProject of this.projects.values()) {
+        remainingProject.scenes = remainingProject.scenes.map((scene) =>
+          scene.assetId && deletedAssetIds.has(scene.assetId)
+            ? { ...scene, assetId: undefined }
+            : scene,
+        );
+        remainingProject.scripts = remainingProject.scripts.map((script) => ({
+          ...script,
+          scenes: script.scenes.map((scene) =>
+            scene.assetId && deletedAssetIds.has(scene.assetId)
+              ? { ...scene, assetId: undefined }
+              : scene,
+          ),
+        }));
+      }
+    }
+
+    return true;
+  }
+
   addAssetProcessingJob(
     projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,

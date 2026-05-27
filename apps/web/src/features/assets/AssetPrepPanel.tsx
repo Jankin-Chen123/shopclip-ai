@@ -25,6 +25,7 @@ import { assetMatchesCategory, type AssetCategory } from "./AssetCategoryTabs";
 
 interface AssetPrepPanelProps {
   defaultOpenLibraryBucketId?: string;
+  initialSnapshot?: AssetPrepSnapshot;
   libraryAssets?: AssetMetadata[];
   preparedLibraryAssetsByBucket?: Record<string, AssetMetadata[]>;
   disabled: boolean;
@@ -223,6 +224,42 @@ const createLibraryPrepUpload = (asset: AssetMetadata): ManualPrepUpload => ({
   source: "library",
 });
 
+const createInitialManualUploads = (
+  preparedLibraryAssetsByBucket: Record<string, AssetMetadata[]>,
+  initialSnapshot: AssetPrepSnapshot | undefined,
+  libraryAssets: AssetMetadata[],
+): Record<string, ManualPrepUpload[]> => {
+  if (initialSnapshot?.materials.length) {
+    const assetsById = new Map(libraryAssets.map((asset) => [asset.id, asset]));
+    return initialSnapshot.materials.reduce<Record<string, ManualPrepUpload[]>>(
+      (uploadsByBucket, material) => {
+        const asset = material.assetId ? assetsById.get(material.assetId) : undefined;
+        const upload: ManualPrepUpload = {
+          id: asset?.id ?? material.assetId ?? `${material.bucketId}-${material.name}`,
+          asset,
+          mimeType: asset?.mimeType ?? material.mimeType,
+          name: asset?.name ?? material.name,
+          size: asset?.sizeBytes ?? material.sizeBytes ?? 0,
+          source: asset ? "library" : material.source,
+        };
+
+        return {
+          ...uploadsByBucket,
+          [material.bucketId]: [...(uploadsByBucket[material.bucketId] ?? []), upload],
+        };
+      },
+      {},
+    );
+  }
+
+  return Object.fromEntries(
+    Object.entries(preparedLibraryAssetsByBucket).map(([bucketId, assets]) => [
+      bucketId,
+      assets.map(createLibraryPrepUpload),
+    ]),
+  );
+};
+
 export const filterPrepLibraryAssets = (
   assets: AssetMetadata[],
   category: AssetCategory,
@@ -246,6 +283,7 @@ export const AssetPrepPanel = ({
   defaultOpenLibraryBucketId,
   disabled,
   error,
+  initialSnapshot,
   isGenerating,
   isImporting,
   language,
@@ -257,12 +295,7 @@ export const AssetPrepPanel = ({
   preparedLibraryAssetsByBucket = {},
 }: AssetPrepPanelProps) => {
   const [manualUploads, setManualUploads] = useState<Record<string, ManualPrepUpload[]>>(() =>
-    Object.fromEntries(
-      Object.entries(preparedLibraryAssetsByBucket).map(([bucketId, assets]) => [
-        bucketId,
-        assets.map(createLibraryPrepUpload),
-      ]),
-    ),
+    createInitialManualUploads(preparedLibraryAssetsByBucket, initialSnapshot, libraryAssets),
   );
   const [activeLibraryBucketId, setActiveLibraryBucketId] = useState<string | undefined>(
     defaultOpenLibraryBucketId,
@@ -272,7 +305,9 @@ export const AssetPrepPanel = ({
     () => new Set(),
   );
   const [previewAsset, setPreviewAsset] = useState<AssetMetadata>();
-  const [keywords, setKeywords] = useState<string[]>(() => [...text[language].keywordList]);
+  const [keywords, setKeywords] = useState<string[]>(() =>
+    initialSnapshot?.keywords.length ? [...initialSnapshot.keywords] : [...text[language].keywordList],
+  );
   const [newKeyword, setNewKeyword] = useState("");
   const copy = text[language];
   const buckets = getBuckets(language);

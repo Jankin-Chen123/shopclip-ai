@@ -125,6 +125,7 @@ describe("App", () => {
         isLoading={false}
         onBriefChange={() => undefined}
         onCreateProject={() => undefined}
+        onDeleteProjectFromHistory={() => undefined}
         onLoadProject={() => undefined}
         onLoadProjectFromHistory={() => undefined}
         onProjectIdToLoadChange={() => undefined}
@@ -146,6 +147,7 @@ describe("App", () => {
     expect(markup).toContain("Desk Halo Lamp");
     expect(markup).toContain("3 assets");
     expect(markup).toContain("4 scenes");
+    expect(markup).toContain('aria-label="Delete history project Lamp holiday clip"');
   });
 
   it("routes the creation workflow through asset prep before script and storyboard", () => {
@@ -383,6 +385,38 @@ describe("App", () => {
     expect(markup).toContain("/api/assets/asset-packshot/content");
     expect(markup).toContain('aria-label="GlowGrip demo.mp4"');
     expect(markup).toContain("/api/assets/asset-demo/content");
+  });
+
+  it("restores file-sourced prep materials when returning to asset prep", () => {
+    const markup = renderToStaticMarkup(
+      <AssetPrepPanel
+        disabled={false}
+        initialSnapshot={{
+          assetIds: [],
+          keywords: ["portable"],
+          materials: [
+            {
+              bucketId: "hero",
+              mimeType: "image/png",
+              name: "Uploaded packshot.png",
+              sizeBytes: 1024,
+              source: "file",
+              tags: [],
+              type: "image",
+            },
+          ],
+        }}
+        isGenerating={false}
+        isImporting={false}
+        language="zh"
+        onBack={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onImportFiles={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("已上传 1/4");
+    expect(markup).toContain("Uploaded packshot.png");
   });
 
   it("maps loaded project assets into asset prep buckets for historical projects", () => {

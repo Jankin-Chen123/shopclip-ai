@@ -144,6 +144,13 @@ export const listProjects = async (): Promise<ProjectSummary[]> => {
   return response.projects;
 };
 
+export const deleteProject = async (
+  projectId: string,
+): Promise<{ deletedProject: ProjectSummary; deletedAssets: AssetMetadata[] }> =>
+  requestJson(`/projects/${projectId}`, {
+    method: "DELETE",
+  });
+
 export const addAsset = async (
   projectId: string | undefined,
   asset: CreateAssetInput,

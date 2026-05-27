@@ -878,25 +878,45 @@ a {
   gap: 8px;
 }
 
-.project-history-list button {
+.project-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-align: left;
+  background: rgba(16, 16, 16, 0.82);
+}
+
+.project-history-item:hover,
+.project-history-item.active {
+  border-color: rgba(34, 211, 238, 0.38);
+  background: rgba(17, 24, 39, 0.92);
+}
+
+.project-history-load {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, auto);
   gap: 12px;
   align-items: center;
   min-height: 72px;
   padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
+  border: 0;
+  color: inherit;
   text-align: left;
-  background: rgba(16, 16, 16, 0.82);
+  background: transparent;
   cursor: pointer;
 }
 
-.project-history-list button:hover,
-.project-history-list button.active {
-  border-color: rgba(34, 211, 238, 0.38);
-  background: rgba(17, 24, 39, 0.92);
+.project-history-delete {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  justify-self: center;
 }
 
 .project-history-main,

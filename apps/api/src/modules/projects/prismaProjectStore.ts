@@ -366,6 +366,26 @@ export class PrismaProjectStore implements ProjectStore {
     });
   }
 
+  async deleteProject(projectId: string): Promise<boolean> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
+    if (!project) {
+      return false;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.asset.deleteMany({
+        where: { projectId },
+      }),
+      this.prisma.project.delete({
+        where: { id: projectId },
+      }),
+    ]);
+    return true;
+  }
+
   async addAssetProcessingJob(
     projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,

@@ -42,12 +42,22 @@ Support browsing historical creation projects from the creation/project setup ar
 - RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because the project setup panel did not render historical projects.
 - RED: `corepack pnpm --filter @shopclip/api test -- prisma-migrations.test.ts` failed because no migration created the `StoryboardScene.imageUrl` column required by Prisma project loading.
 - RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because loaded project assets were not mapped into asset prep buckets or restored into the script-generation asset prep snapshot.
+- RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because step 02 did not restore file-sourced asset prep materials from the parent snapshot after navigating to step 03 and back.
+- RED: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` failed because `DELETE /api/projects/:projectId` returned 404.
+- RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because historical project rows did not render a delete action.
 - GREEN: `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts` passed: 2 files, 15 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed: 13 files, 51 tests.
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed: 1 file, 52 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- prisma-migrations.test.ts` passed: 14 files, 52 tests.
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after restoring historical project assets into asset prep: 1 file, 55 tests.
+- GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after restoring step 02 from `assetPrepSnapshot`: 1 file, 56 tests.
+- GREEN: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed after adding project deletion: 14 files, 53 tests.
+- GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after adding the history delete action: 1 file, 56 tests.
 - Typecheck: `corepack pnpm --filter @shopclip/web typecheck` passed.
+- Typecheck: `corepack pnpm --filter @shopclip/api typecheck` passed.
+- Typecheck: `corepack pnpm --filter @shopclip/web typecheck` passed.
+- Lint: `corepack pnpm --filter @shopclip/web lint` passed.
+- Lint: `corepack pnpm --filter @shopclip/api lint` passed.
 - Lint: `corepack pnpm --filter @shopclip/web lint` passed.
 - Typecheck: `corepack pnpm typecheck` passed for shared, API, and web.
 - Lint: `corepack pnpm --filter @shopclip/shared lint`, `corepack pnpm --filter @shopclip/api lint`, and `corepack pnpm --filter @shopclip/web lint` passed.
@@ -65,6 +75,13 @@ Support browsing historical creation projects from the creation/project setup ar
 - Added a historical projects panel to the creation/project setup page.
 - Selecting a historical project uses the existing full project snapshot loader and restores settings, assets, scripts, scenes, render state, and workspace selection.
 - Restored loaded project assets into the step 02 asset prep buckets and the script-generation asset prep snapshot, so historical imported images/videos/reference assets are visible and reused.
+- Step 02 now initializes from the parent `assetPrepSnapshot`, so navigating to storyboard generation and back preserves already prepared file uploads and keywords.
+- Asset creation/import paths now attach new assets to the current project when one is loaded, so project snapshots keep the imported materials available across step and project switches.
+- Added `ProjectStore.deleteProject()` and memory/Prisma implementations.
+- Added `DELETE /api/projects/:projectId`; it deletes the project snapshot and project-owned assets, and deletes object storage keys only for those project-owned assets.
+- Preserved shared/global asset library materials when deleting a project, including assets imported into a project's asset prep from the shared library.
+- Added a delete action to historical project rows with a confirmation that explains project-owned backend data is removed while shared library assets remain.
+- Clearing the currently loaded project after deletion resets the creation workspace state and refreshes project history.
 - Kept manual project ID loading available.
 
 ## Risks And Follow-Up
@@ -72,3 +89,4 @@ Support browsing historical creation projects from the creation/project setup ar
 - Memory store history is process-local and disappears after service restart.
 - Prisma history is persistent when `DATABASE_URL` is configured and `PROJECT_STORE_MODE` is not `memory`.
 - Current history rows are scoped to all demo projects because the product still runs without user accounts or permissions.
+- If object storage deletion fails, `DELETE /api/projects/:projectId` returns `STORAGE_DELETE_FAILED` and leaves database rows intact so backend metadata does not point at partially deleted files.
