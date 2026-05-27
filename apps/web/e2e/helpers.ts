@@ -28,4 +28,5 @@ export const generateStoryboardFromPreparedAssets = async (
   await page.getByRole("button", { name: "Generate storyboard" }).click();
   await expect(page.getByRole("heading", { name: "Storyboard re-edit" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Scene 1/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Scene 1 generated visual/ })).toBeVisible();
 };

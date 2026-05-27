@@ -106,6 +106,7 @@ const toScene = (scene: ProjectWithRelations["scenes"][number]): StoryboardScene
   subtitle: scene.subtitle,
   voiceover: scene.voiceover,
   visualPrompt: scene.visualPrompt,
+  imageUrl: scene.imageUrl ?? undefined,
   assetId: scene.assetId ?? undefined,
   status: scene.status,
 });
@@ -418,6 +419,7 @@ export class PrismaProjectStore implements ProjectStore {
             subtitle: scene.subtitle,
             voiceover: scene.voiceover,
             visualPrompt: scene.visualPrompt,
+            imageUrl: scene.imageUrl,
             assetId: scene.assetId,
             status: scene.status,
           })),
@@ -492,6 +494,7 @@ export class PrismaProjectStore implements ProjectStore {
         subtitle: update.subtitle,
         voiceover: update.voiceover,
         visualPrompt: update.visualPrompt,
+        imageUrl: update.imageUrl,
         assetId: update.assetId === null ? null : update.assetId,
         status: update.status ?? "edited",
       },

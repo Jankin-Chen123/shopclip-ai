@@ -78,11 +78,13 @@ Implement the backend APIs for the P0 end-to-end flow: project creation, asset i
 - Added P0 asset metadata validation for image type, MIME type, and size.
 - Added API integration tests covering the full backend P0 lifecycle and invalid asset rejection.
 - Updated script/storyboard generation so Step 02 prepared `assetIds` are resolved through the shared asset store before provider execution. This keeps globally prepared or library-imported assets attached to generated storyboard scenes instead of falling back to `project.assets[0]`.
+- 2026-05-27 storyboard image update: every generated storyboard scene now receives an `imageUrl` from the image-generation provider path, with a deterministic SVG data URL fallback when mock mode or provider failure cannot return a renderable image.
 
 ## Verification Evidence
 
 - Evidence file: `../evidence/part-003-verification.md`
 - Full-chain regression evidence: `../evidence/2026-05-27-full-chain-scene-regeneration.md`
+- Storyboard image preview evidence: `../evidence/2026-05-27-storyboard-scene-image-preview.md`
 - `corepack pnpm --filter @shopclip/api test`: passed.
 - `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`: passed after the regression failed before the fix.
 - `corepack pnpm --filter @shopclip/api typecheck`: passed.

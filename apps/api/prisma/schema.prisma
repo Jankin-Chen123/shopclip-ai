@@ -163,6 +163,7 @@ model StoryboardScene {
   subtitle        String
   voiceover       String
   visualPrompt    String
+  imageUrl        String?
   status          SceneStatus @default(draft)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

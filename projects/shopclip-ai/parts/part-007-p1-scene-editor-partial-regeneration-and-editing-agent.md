@@ -56,6 +56,7 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - Added deterministic editing Agent fallback provider with explainable suggestions.
 - Updated Studio UI with save, keyboard-accessible move buttons, delete, regenerate, suggestion apply, and suggestion dismiss actions.
 - Added trace events for scene regeneration and Agent suggestion application.
+- 2026-05-27 update: single-scene regeneration now refreshes that scene's generated `imageUrl` while preserving the rest of the storyboard.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-07-scene-agent-regeneration.png`
   - `projects/shopclip-ai/evidence/part-007-verification.md`
@@ -70,6 +71,7 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - `corepack pnpm --filter @shopclip/web test:e2e`
 - `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`
 - `projects/shopclip-ai/evidence/2026-05-27-full-chain-scene-regeneration.md`
+- `projects/shopclip-ai/evidence/2026-05-27-storyboard-scene-image-preview.md`
 - `output/playwright/full-chain-studio-regenerated-scene.png`
 
 ## Verification Plan

@@ -240,6 +240,7 @@ export const StoryboardSceneSchema = z.object({
   subtitle: z.string().trim().min(1),
   voiceover: z.string().trim().min(1),
   visualPrompt: z.string().trim().min(1),
+  imageUrl: z.string().trim().min(1).optional(),
   assetId: z.string().trim().min(1).optional(),
   status: SceneStatusSchema,
 });
@@ -292,6 +293,7 @@ export const SceneUpdateSchema = z
     subtitle: z.string().trim().min(1).optional(),
     voiceover: z.string().trim().min(1).optional(),
     visualPrompt: z.string().trim().min(1).optional(),
+    imageUrl: z.string().trim().min(1).optional(),
     assetId: z.string().trim().min(1).nullable().optional(),
     status: SceneStatusSchema.optional(),
   })

@@ -1,4 +1,4 @@
-import type { AssetMetadata, ExternalAssetResult } from "@shopclip/shared";
+import type { AssetMetadata, ExternalAssetResult, StoryboardScene } from "@shopclip/shared";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +13,7 @@ import {
   InspirationPanel,
   replaceInspirationSessionHistoryResult,
 } from "../features/inspiration/InspirationPanel";
+import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import {
   SettingsPanel,
   createDefaultApiConfig,
@@ -112,6 +113,46 @@ describe("App", () => {
     expect(markup.indexOf('class="scene-track"')).toBeLessThan(
       markup.indexOf('class="phone-preview"'),
     );
+  });
+
+  it("renders generated storyboard scene images in the step 03 preview frame", () => {
+    const scenes = [
+      {
+        id: "scene-1",
+        projectId: "project-1",
+        order: 1,
+        durationSeconds: 4,
+        subtitle: "Open with the desk problem",
+        voiceover: "Open with the desk problem",
+        visualPrompt: "Vertical product image",
+        imageUrl: "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E",
+        status: "generated",
+      },
+    ] as unknown as StoryboardScene[];
+    const markup = renderToStaticMarkup(
+      <StudioWorkspace
+        assets={[]}
+        copy={copy.en.studio}
+        dirtySceneIds={new Set()}
+        isBusy={false}
+        onApplySuggestion={() => undefined}
+        onDeleteScene={() => undefined}
+        onDismissSuggestion={() => undefined}
+        onLoadSuggestions={() => undefined}
+        onRegenerateScene={() => undefined}
+        onSceneChange={() => undefined}
+        onSceneMove={() => undefined}
+        onSceneSave={() => undefined}
+        onSelectedSceneChange={() => undefined}
+        scenes={scenes}
+        selectedSceneId="scene-1"
+        suggestions={[]}
+      />,
+    );
+
+    expect(markup).toContain('class="preview-image"');
+    expect(markup).toContain('src="data:image/svg+xml');
+    expect(markup).toContain('alt="Scene 1 generated visual: Open with the desk problem"');
   });
 
   it("does not preload existing library assets into asset prep", () => {

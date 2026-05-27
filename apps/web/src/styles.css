@@ -3731,6 +3731,8 @@ textarea {
 }
 
 .preview-time {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   gap: 6px;
   align-items: center;
@@ -3743,6 +3745,8 @@ textarea {
 }
 
 .preview-art {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   align-self: center;
@@ -3755,7 +3759,19 @@ textarea {
   background: rgba(0, 0, 0, 0.28);
 }
 
+.preview-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0b0b0b;
+}
+
 .phone-frame p {
+  position: relative;
+  z-index: 1;
   align-self: end;
   margin: 0;
   padding: 10px;

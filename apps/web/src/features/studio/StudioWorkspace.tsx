@@ -115,9 +115,17 @@ export const StudioWorkspace = ({
               <Clock3 size={14} aria-hidden="true" />
               {selectedScene ? `${selectedScene.durationSeconds}s` : "0s"}
             </span>
-            <div className="preview-art">
-              <Video size={42} aria-hidden="true" />
-            </div>
+            {selectedScene?.imageUrl ? (
+              <img
+                alt={`Scene ${selectedScene.order} generated visual: ${selectedScene.subtitle}`}
+                className="preview-image"
+                src={selectedScene.imageUrl}
+              />
+            ) : (
+              <div className="preview-art">
+                <Video size={42} aria-hidden="true" />
+              </div>
+            )}
             <p>{selectedScene?.subtitle ?? copy.emptyPreview}</p>
           </div>
         </div>

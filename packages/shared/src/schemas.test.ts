@@ -121,6 +121,24 @@ describe("shared contract schemas", () => {
     ).toBe(false);
   });
 
+  it("accepts generated image URLs on storyboard scenes", () => {
+    const result = StoryboardSceneSchema.safeParse({
+      id: "scene_1",
+      projectId: "project_demo",
+      order: 1,
+      durationSeconds: 4,
+      subtitle: "Snap it open",
+      voiceover: "Snap it open",
+      visualPrompt: "Close-up product demo",
+      imageUrl: "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E",
+      assetId: "asset_demo_1",
+      status: "generated",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.imageUrl : undefined).toContain("data:image/svg+xml");
+  });
+
   it("validates trace events and dashboard responses", () => {
     expect(
       TraceEventSchema.safeParse({

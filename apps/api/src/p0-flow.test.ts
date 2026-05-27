@@ -115,7 +115,7 @@ describe("P0 backend lifecycle", () => {
 
     const generated = await request<{
       fallback: { used: boolean; provider: string };
-      script: { hook: string; scenes: Array<{ durationSeconds: number }> };
+      script: { hook: string; scenes: Array<{ durationSeconds: number; imageUrl?: string }> };
     }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
       method: "POST",
       body: JSON.stringify({
@@ -134,6 +134,10 @@ describe("P0 backend lifecycle", () => {
     expect(
       generated.body.script.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
     ).toBeLessThanOrEqual(15);
+    expect(generated.body.script.scenes.every((scene) => scene.imageUrl)).toBe(true);
+    expect(generated.body.script.scenes[0]?.imageUrl).toEqual(
+      expect.stringMatching(/^data:image\/svg\+xml,/),
+    );
 
     const render = await request<{
       renderTask: {
@@ -261,6 +265,7 @@ describe("P0 backend lifecycle", () => {
         scenes: Array<{
           assetId?: string;
           id: string;
+          imageUrl?: string;
           subtitle: string;
           voiceover: string;
           visualPrompt: string;
@@ -290,6 +295,8 @@ describe("P0 backend lifecycle", () => {
       preparedAsset.body.asset.id,
       preparedAsset.body.asset.id,
     ]);
+    expect(generated.body.script.scenes.map((scene) => scene.imageUrl)).toHaveLength(4);
+    expect(generated.body.script.scenes.every((scene) => scene.imageUrl)).toBe(true);
 
     const [firstScene, secondScene] = generated.body.script.scenes;
     expect(firstScene).toBeDefined();
@@ -315,7 +322,7 @@ describe("P0 backend lifecycle", () => {
     });
 
     const regenerated = await request<{
-      scene: { id: string; status: string; subtitle: string };
+      scene: { id: string; imageUrl?: string; status: string; subtitle: string };
       traceEvent: { step: string; status: string };
     }>(baseUrl, `/api/scenes/${secondScene!.id}/regenerate`, {
       method: "POST",
@@ -327,6 +334,7 @@ describe("P0 backend lifecycle", () => {
       status: "generated",
     });
     expect(regenerated.body.scene.subtitle).toContain("Regenerated:");
+    expect(regenerated.body.scene.imageUrl).toEqual(expect.stringMatching(/^data:image\/svg\+xml,/));
     expect(regenerated.body.traceEvent).toMatchObject({
       step: "scene-regenerated",
       status: "completed",
