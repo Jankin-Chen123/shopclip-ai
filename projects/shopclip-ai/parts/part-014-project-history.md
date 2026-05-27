@@ -40,11 +40,14 @@ Support browsing historical creation projects from the creation/project setup ar
 - RED: `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts` failed because `ProjectSummarySchema` was undefined.
 - RED: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` failed because `GET /api/projects` returned 404.
 - RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because the project setup panel did not render historical projects.
+- RED: `corepack pnpm --filter @shopclip/api test -- prisma-migrations.test.ts` failed because no migration created the `StoryboardScene.imageUrl` column required by Prisma project loading.
 - GREEN: `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts` passed: 2 files, 15 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed: 13 files, 51 tests.
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed: 1 file, 52 tests.
+- GREEN: `corepack pnpm --filter @shopclip/api test -- prisma-migrations.test.ts` passed: 14 files, 52 tests.
 - Typecheck: `corepack pnpm typecheck` passed for shared, API, and web.
 - Lint: `corepack pnpm --filter @shopclip/shared lint`, `corepack pnpm --filter @shopclip/api lint`, and `corepack pnpm --filter @shopclip/web lint` passed.
+- Prisma schema: `apps/api/node_modules/.bin/prisma.CMD validate --schema apps/api/prisma/schema.prisma` passed locally.
 - Diff hygiene: `git diff --check` passed.
 - Memory safety: `git ls-files .agents/memory` returned no tracked files.
 
@@ -53,6 +56,7 @@ Support browsing historical creation projects from the creation/project setup ar
 - Added `ProjectSummarySchema` and `ProjectSummary` for compact project history rows.
 - Added `ProjectStore.listProjects()` and implementations for memory and Prisma stores.
 - Added `GET /api/projects`, returning summaries sorted by `updatedAt` descending.
+- Added a Prisma migration for nullable `StoryboardScene.imageUrl`, which is required when loading full historical project snapshots.
 - Added `listProjects()` to the web API client.
 - Added a historical projects panel to the creation/project setup page.
 - Selecting a historical project uses the existing full project snapshot loader and restores settings, assets, scripts, scenes, render state, and workspace selection.

@@ -95,6 +95,16 @@ describe("App", () => {
     expect(markup).toContain('creation-stepper-index">05');
   });
 
+  it("omits standalone section title bars from asset and inspiration workspaces", () => {
+    const assetMarkup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
+    const inspirationMarkup = renderToStaticMarkup(
+      <App initialLanguage="zh" initialPage="inspiration" />,
+    );
+
+    expect(assetMarkup).not.toContain('class="topbar"><div class="section-title"');
+    expect(inspirationMarkup).not.toContain('class="topbar"><div class="section-title"');
+  });
+
   it("renders historical projects in the project setup panel", () => {
     const markup = renderToStaticMarkup(
       <ProjectSetup

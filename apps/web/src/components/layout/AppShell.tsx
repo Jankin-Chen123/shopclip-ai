@@ -111,6 +111,8 @@ export const AppShell = ({
   onPageChange,
   onSectionChange,
 }: AppShellProps) => {
+  const showTopbar = activeSection === "create" || activeSection === "settings";
+
   const getSectionText = (section: WorkspaceSectionId) => {
     if (section === "assets") {
       return {
@@ -195,34 +197,36 @@ export const AppShell = ({
       </aside>
 
       <main className="workspace-main" id="workspace-content">
-        <header className="topbar">
-          {activeSection === "create" ? (
-            <nav className="flow-tabs" aria-label="Creation workflow">
-              {workspacePages.map((page) => {
-                const Icon = page.icon;
-                const pageCopy = copy.pages[page.id];
-                const isActive = activePage === page.id;
-                return (
-                  <button
-                    aria-pressed={isActive}
-                    className={isActive ? "active" : undefined}
-                    key={page.id}
-                    onClick={() => onPageChange(page.id)}
-                    type="button"
-                  >
-                    <Icon size={16} aria-hidden="true" />
-                    <span>{pageCopy.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          ) : (
-            <div className="section-title">
-              <strong>{getSectionText(activeSection).label}</strong>
-              <span>{getSectionText(activeSection).title}</span>
-            </div>
-          )}
-        </header>
+        {showTopbar ? (
+          <header className="topbar">
+            {activeSection === "create" ? (
+              <nav className="flow-tabs" aria-label="Creation workflow">
+                {workspacePages.map((page) => {
+                  const Icon = page.icon;
+                  const pageCopy = copy.pages[page.id];
+                  const isActive = activePage === page.id;
+                  return (
+                    <button
+                      aria-pressed={isActive}
+                      className={isActive ? "active" : undefined}
+                      key={page.id}
+                      onClick={() => onPageChange(page.id)}
+                      type="button"
+                    >
+                      <Icon size={16} aria-hidden="true" />
+                      <span>{pageCopy.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            ) : (
+              <div className="section-title">
+                <strong>{getSectionText(activeSection).label}</strong>
+                <span>{getSectionText(activeSection).title}</span>
+              </div>
+            )}
+          </header>
+        ) : null}
         {activeSection === "create" ? (
           <nav className="creation-stepper" aria-label="Creation progress">
             {workspacePages.map((page, index) => {
