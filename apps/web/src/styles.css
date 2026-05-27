@@ -836,6 +836,104 @@ a {
   background: transparent;
 }
 
+.project-history-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.project-history-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.project-history-heading h3,
+.project-history-heading p {
+  margin: 0;
+}
+
+.project-history-heading p,
+.project-history-empty {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.project-history-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
+  color: #a5f3fc;
+  background: rgba(8, 47, 73, 0.24);
+}
+
+.project-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.project-history-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, auto);
+  gap: 12px;
+  align-items: center;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  text-align: left;
+  background: rgba(16, 16, 16, 0.82);
+  cursor: pointer;
+}
+
+.project-history-list button:hover,
+.project-history-list button.active {
+  border-color: rgba(34, 211, 238, 0.38);
+  background: rgba(17, 24, 39, 0.92);
+}
+
+.project-history-main,
+.project-history-meta {
+  display: flex;
+  min-width: 0;
+}
+
+.project-history-main {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.project-history-main strong,
+.project-history-main span {
+  overflow-wrap: anywhere;
+}
+
+.project-history-main span,
+.project-history-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.project-history-meta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.project-history-meta span {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .creation-main input,
 .creation-main textarea,
 .creation-main select {
@@ -1795,9 +1893,9 @@ textarea {
 .asset-card {
   position: relative;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   background: rgba(16, 18, 22, 0.88);
@@ -1814,17 +1912,17 @@ textarea {
 .asset-card-actions {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .asset-selection-control,
 .asset-card-delete {
   display: inline-grid;
-  width: 34px;
-  height: 34px;
+  width: 26px;
+  height: 26px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  border-radius: 7px;
   color: rgba(248, 250, 252, 0.92);
   background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
@@ -2742,17 +2840,20 @@ textarea {
 
 .inspiration-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-  gap: 18px;
-  align-items: start;
-  width: min(100%, 1320px);
-  margin: 72px auto 0;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 410px);
+  gap: 24px;
+  align-items: stretch;
+  width: 100%;
+  min-height: calc(100dvh - 108px);
+  margin: 0;
 }
 
 .inspiration-main {
   display: grid;
   min-width: 0;
+  align-content: start;
   gap: 16px;
+  padding-top: 72px;
 }
 
 .inspiration-composer h2,
@@ -2770,9 +2871,14 @@ textarea {
   gap: 14px;
   min-height: 166px;
   padding: 18px 18px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.14);
   border-radius: 8px;
-  background: #1b1c21;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.06), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140px), var(--surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 22px 54px rgba(0, 0, 0, 0.24);
 }
 
 .reference-tile,
@@ -2800,7 +2906,10 @@ textarea {
   height: 68px;
   transform: rotate(-8deg);
   color: #dbeafe;
-  background: #252832;
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(145deg, rgba(96, 165, 250, 0.14), rgba(236, 72, 153, 0.08)),
+    var(--surface-2);
 }
 
 .inspiration-input {
@@ -2960,19 +3069,39 @@ textarea {
 }
 
 .inspiration-session-history {
+  position: relative;
   display: grid;
+  align-content: start;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 100%;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.18);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 120px), #15161b;
+    linear-gradient(180deg, rgba(34, 211, 238, 0.1), transparent 180px),
+    linear-gradient(135deg, rgba(236, 72, 153, 0.08), transparent 46%),
+    rgba(15, 17, 22, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 20px 58px rgba(0, 0, 0, 0.26);
+}
+
+.inspiration-session-history::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.58), rgba(236, 72, 153, 0.42));
+  content: "";
 }
 
 .inspiration-history-sidebar {
   position: sticky;
   top: 24px;
-  max-height: calc(100dvh - 48px);
+  height: 100%;
+  max-height: calc(100dvh - 108px);
   overflow: auto;
 }
 
@@ -2982,16 +3111,36 @@ textarea {
   gap: 10px;
   width: 100%;
   min-height: 56px;
-  padding: 0;
-  border: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   color: var(--text);
   text-align: left;
-  background: transparent;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035), rgba(34, 211, 238, 0.035)),
+    rgba(255, 255, 255, 0.025);
   cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.inspiration-history-toggle:hover {
+  border-color: rgba(34, 211, 238, 0.28);
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.08), rgba(236, 72, 153, 0.05)),
+    rgba(255, 255, 255, 0.035);
 }
 
 .inspiration-history-icon {
-  display: inline-flex;
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.08);
 }
 
 .inspiration-history-icon svg {
@@ -3016,11 +3165,11 @@ textarea {
 
 .inspiration-history-count {
   margin-left: auto;
-  padding: 4px 8px;
-  border: 1px solid rgba(34, 211, 238, 0.24);
+  padding: 6px 10px;
+  border: 1px solid rgba(34, 211, 238, 0.3);
   border-radius: 999px;
   color: #bae6fd;
-  background: rgba(34, 211, 238, 0.08);
+  background: rgba(34, 211, 238, 0.12);
   font-size: 0.76rem;
   font-weight: 800;
   white-space: nowrap;
@@ -3039,7 +3188,10 @@ textarea {
 .inspiration-history-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .inspiration-history-list[hidden] {
@@ -3055,11 +3207,11 @@ textarea {
   gap: 6px;
   min-height: 64px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 8px;
   color: var(--muted);
   text-align: left;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.035);
   cursor: pointer;
   transition:
     background 180ms ease,
@@ -3070,8 +3222,10 @@ textarea {
 .inspiration-history-list button:hover,
 .inspiration-history-list button.active {
   color: var(--text);
-  border-color: rgba(34, 211, 238, 0.34);
-  background: rgba(34, 211, 238, 0.08);
+  border-color: rgba(34, 211, 238, 0.4);
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.1), rgba(96, 165, 250, 0.06)),
+    rgba(34, 211, 238, 0.06);
 }
 
 .history-session-prompt {
@@ -4104,11 +4258,17 @@ textarea {
 
   .inspiration-workspace {
     grid-template-columns: 1fr;
+    min-height: auto;
     margin-top: 36px;
+  }
+
+  .inspiration-main {
+    padding-top: 0;
   }
 
   .inspiration-history-sidebar {
     position: static;
+    height: auto;
     max-height: none;
   }
 

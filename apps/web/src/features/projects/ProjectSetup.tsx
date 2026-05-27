@@ -1,6 +1,17 @@
 import type { ChangeEvent } from "react";
-import type { ProjectBrief } from "@shopclip/shared";
-import { Box, Clock3, FileText, FolderOpen, Gem, Loader2, Plus, Smile, Users } from "lucide-react";
+import type { ProjectBrief, ProjectSummary } from "@shopclip/shared";
+import {
+  Box,
+  Clock3,
+  FileText,
+  FolderOpen,
+  Gem,
+  History,
+  Loader2,
+  Plus,
+  Smile,
+  Users,
+} from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -12,12 +23,15 @@ interface ProjectSetupProps {
   copy: AppCopy["project"];
   disabled: boolean;
   error?: string;
+  isHistoryLoading: boolean;
   isLoading: boolean;
   project?: ProjectSnapshot;
+  projectHistory: ProjectSummary[];
   projectIdToLoad: string;
   onBriefChange: (brief: ProjectBrief) => void;
   onCreateProject: () => void;
   onLoadProject: () => void;
+  onLoadProjectFromHistory: (projectId: string) => void;
   onProjectIdToLoadChange: (projectId: string) => void;
 }
 
@@ -32,12 +46,15 @@ export const ProjectSetup = ({
   copy,
   disabled,
   error,
+  isHistoryLoading,
   isLoading,
   onBriefChange,
   onCreateProject,
   onLoadProject,
+  onLoadProjectFromHistory,
   onProjectIdToLoadChange,
   project,
+  projectHistory,
   projectIdToLoad,
 }: ProjectSetupProps) => {
   const updateField =
@@ -176,6 +193,50 @@ export const ProjectSetup = ({
         </div>
       </div>
 
+      <section className="project-history-panel" aria-labelledby="project-history-title">
+        <div className="project-history-heading">
+          <span className="project-history-icon" aria-hidden="true">
+            <History size={18} />
+          </span>
+          <div>
+            <h3 id="project-history-title">{copy.historyTitle}</h3>
+            <p>{copy.historyDescription}</p>
+          </div>
+          <StatusPill tone={projectHistory.length > 0 ? "success" : "neutral"}>
+            {isHistoryLoading ? copy.historyLoading : copy.historyCount(projectHistory.length)}
+          </StatusPill>
+        </div>
+
+        {projectHistory.length > 0 ? (
+          <div className="project-history-list">
+            {projectHistory.map((historyProject) => (
+              <button
+                className={project?.id === historyProject.id ? "active" : undefined}
+                disabled={disabled || isHistoryLoading}
+                key={historyProject.id}
+                onClick={() => onLoadProjectFromHistory(historyProject.id)}
+                type="button"
+              >
+                <span className="project-history-main">
+                  <strong>{historyProject.title}</strong>
+                  <span>{historyProject.productName}</span>
+                </span>
+                <span className="project-history-meta">
+                  <span>{historyProject.status}</span>
+                  <span>{copy.assetCount(historyProject.assetCount)}</span>
+                  <span>{copy.sceneCount(historyProject.sceneCount)}</span>
+                  <span>{copy.updatedAt(formatUpdatedAt(historyProject.updatedAt))}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="project-history-empty">
+            {isHistoryLoading ? copy.historyLoading : copy.historyEmpty}
+          </p>
+        )}
+      </section>
+
       {project ? (
         <dl className="meta-list">
           <div>
@@ -190,4 +251,15 @@ export const ProjectSetup = ({
       ) : null}
     </section>
   );
+};
+
+const formatUpdatedAt = (value: string): string => {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
 };

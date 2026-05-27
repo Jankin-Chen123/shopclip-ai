@@ -658,6 +658,12 @@ export const createP0Router = ({
     });
   });
 
+  router.get("/projects", async (_request, response) => {
+    response.json({
+      projects: await store.listProjects(),
+    });
+  });
+
   router.get("/projects/:projectId", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {

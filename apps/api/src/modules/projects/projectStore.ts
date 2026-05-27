@@ -5,6 +5,7 @@ import type {
   EditingSuggestion,
   Project,
   ProjectBrief,
+  ProjectSummary,
   RenderTask,
   SceneUpdate,
   ScriptResult,
@@ -59,6 +60,7 @@ export interface ProjectStore {
   getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;
   getLatestAssetProcessingJob(assetId: string): MaybePromise<AssetProcessingJob | undefined>;
   getProject(id: string): MaybePromise<ProjectSnapshot | undefined>;
+  listProjects(): MaybePromise<ProjectSummary[]>;
   listAssets(): MaybePromise<{ assets: AssetMetadata[]; assetSlices: AssetSlice[] }>;
   getRenderTask(
     renderTaskId: string,

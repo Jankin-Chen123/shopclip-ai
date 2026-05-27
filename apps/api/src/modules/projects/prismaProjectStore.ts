@@ -7,6 +7,7 @@ import type {
   AssetSlice,
   EditingSuggestion,
   ProjectBrief,
+  ProjectSummary,
   RenderTask,
   SceneUpdate,
   ScriptResult,
@@ -192,6 +193,37 @@ export class PrismaProjectStore implements ProjectStore {
       include: projectInclude,
     });
     return project ? toProjectSnapshot(project) : undefined;
+  }
+
+  async listProjects(): Promise<ProjectSummary[]> {
+    const projects = await this.prisma.project.findMany({
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        productName: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            assets: true,
+            scenes: true,
+          },
+        },
+      },
+    });
+
+    return projects.map((project) => ({
+      id: project.id,
+      title: project.title,
+      productName: project.productName,
+      status: project.status,
+      createdAt: toIso(project.createdAt),
+      updatedAt: toIso(project.updatedAt),
+      assetCount: project._count.assets,
+      sceneCount: project._count.scenes,
+    }));
   }
 
   async addAsset(

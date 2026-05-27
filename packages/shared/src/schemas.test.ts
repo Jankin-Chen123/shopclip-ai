@@ -10,6 +10,7 @@ import {
   InspirationGenerateRequestSchema,
   InspirationGenerateResponseSchema,
   ProjectBriefSchema,
+  ProjectSummarySchema,
   RenderTaskSchema,
   ScriptResultSchema,
   StoryboardSceneSchema,
@@ -43,6 +44,21 @@ describe("shared contract schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts compact project history summaries", () => {
+    const result = ProjectSummarySchema.safeParse({
+      id: "project_demo",
+      title: "Desk launch clip",
+      productName: "GlowGrip Phone Stand",
+      status: "ready",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      updatedAt: "2026-05-21T00:05:00.000Z",
+      assetCount: 2,
+      sceneCount: 4,
+    });
+
+    expect(result.success).toBe(true);
   });
 
   it("rejects invalid enum statuses and asset types", () => {

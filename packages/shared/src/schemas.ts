@@ -48,6 +48,18 @@ export const ProjectSchema = ProjectBriefSchema.extend({
   updatedAt: IsoDateTimeSchema,
 });
 
+export const ProjectSummarySchema = ProjectSchema.pick({
+  id: true,
+  title: true,
+  productName: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  assetCount: z.number().int().nonnegative(),
+  sceneCount: z.number().int().nonnegative(),
+});
+
 export const AssetMetadataSchema = z.object({
   id: z.string().trim().min(1),
   projectId: z.string().trim().min(1).optional(),

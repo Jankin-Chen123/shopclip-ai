@@ -1,4 +1,10 @@
-import type { AssetMetadata, ExternalAssetResult, StoryboardScene } from "@shopclip/shared";
+import type {
+  AssetMetadata,
+  ExternalAssetResult,
+  ProjectSummary,
+  StoryboardScene,
+} from "@shopclip/shared";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +19,7 @@ import {
   InspirationPanel,
   replaceInspirationSessionHistoryResult,
 } from "../features/inspiration/InspirationPanel";
+import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import {
   SettingsPanel,
@@ -38,6 +45,18 @@ const makeAsset = (asset: Partial<AssetMetadata>): AssetMetadata => ({
   mimeType: "text/plain",
   tags: [],
   ...asset,
+});
+
+const makeProjectSummary = (project: Partial<ProjectSummary>): ProjectSummary => ({
+  id: "project-history-1",
+  title: "Desk launch clip",
+  productName: "GlowGrip Phone Stand",
+  status: "ready",
+  createdAt: "2026-05-21T00:00:00.000Z",
+  updatedAt: "2026-05-21T00:05:00.000Z",
+  assetCount: 2,
+  sceneCount: 4,
+  ...project,
 });
 
 describe("App", () => {
@@ -74,6 +93,47 @@ describe("App", () => {
     expect(markup).not.toContain("creation-assistant");
     expect(markup).toContain("Step 01");
     expect(markup).toContain('creation-stepper-index">05');
+  });
+
+  it("renders historical projects in the project setup panel", () => {
+    const markup = renderToStaticMarkup(
+      <ProjectSetup
+        brief={{
+          title: "New clip",
+          productName: "New product",
+          audience: "Creators",
+          sellingPoints: ["fast setup"],
+          tone: "confident",
+          style: "fast desk demo",
+          targetDurationSeconds: 15,
+        }}
+        copy={copy.en.project}
+        disabled={false}
+        isHistoryLoading={false}
+        isLoading={false}
+        onBriefChange={() => undefined}
+        onCreateProject={() => undefined}
+        onLoadProject={() => undefined}
+        onLoadProjectFromHistory={() => undefined}
+        onProjectIdToLoadChange={() => undefined}
+        projectHistory={[
+          makeProjectSummary({
+            id: "project-history-2",
+            title: "Lamp holiday clip",
+            productName: "Desk Halo Lamp",
+            assetCount: 3,
+            sceneCount: 4,
+          }),
+        ]}
+        projectIdToLoad=""
+      />,
+    );
+
+    expect(markup).toContain("Historical projects");
+    expect(markup).toContain("Lamp holiday clip");
+    expect(markup).toContain("Desk Halo Lamp");
+    expect(markup).toContain("3 assets");
+    expect(markup).toContain("4 scenes");
   });
 
   it("routes the creation workflow through asset prep before script and storyboard", () => {
@@ -611,6 +671,16 @@ describe("App", () => {
     expect(markup).not.toContain("status-pill");
   });
 
+  it("keeps asset card action controls compact so previews get more space", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(/\.asset-card\s*\{[^}]*gap:\s*8px;[^}]*padding:\s*8px;/s);
+    expect(styles).toMatch(/\.asset-card-actions\s*\{[^}]*gap:\s*6px;/s);
+    expect(styles).toMatch(
+      /\.asset-selection-control,\s*\.asset-card-delete\s*\{[^}]*width:\s*26px;[^}]*height:\s*26px;/s,
+    );
+  });
+
   it("uses one import entry for every asset category", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
 
@@ -852,6 +922,18 @@ describe("App", () => {
     expect(markup).toContain("1 image artifact");
     expect(markup).toContain("Previous conversations and generated artifacts");
     expect(markup).not.toContain("Generated material");
+  });
+
+  it("keeps inspiration session history as a full-height right rail", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(
+      /\.inspiration-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(340px,\s*410px\);[^}]*min-height:\s*calc\(100dvh - 108px\);/s,
+    );
+    expect(styles).toMatch(
+      /\.inspiration-history-sidebar\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*calc\(100dvh - 108px\);/s,
+    );
+    expect(styles).toMatch(/\.inspiration-session-history\s*\{[^}]*min-height:\s*100%;/s);
   });
 
   it("renders inspiration artifacts without output type labels when history is open", () => {

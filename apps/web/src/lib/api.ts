@@ -19,6 +19,7 @@ import type {
   MediaSettings,
   Project,
   ProjectBrief,
+  ProjectSummary,
   RenderRequest,
   RenderTask,
   SceneUpdate,
@@ -35,6 +36,8 @@ export interface ProjectSnapshot extends Project {
   scenes: StoryboardScene[];
   renderTasks: RenderTask[];
 }
+
+export type { ProjectSummary };
 
 export interface RenderSnapshot {
   renderTask: RenderTask;
@@ -134,6 +137,11 @@ export const createProject = async (brief: ProjectBrief): Promise<ProjectSnapsho
 export const loadProject = async (projectId: string): Promise<ProjectSnapshot> => {
   const response = await requestJson<{ project: ProjectSnapshot }>(`/projects/${projectId}`);
   return response.project;
+};
+
+export const listProjects = async (): Promise<ProjectSummary[]> => {
+  const response = await requestJson<{ projects: ProjectSummary[] }>("/projects");
+  return response.projects;
 };
 
 export const addAsset = async (

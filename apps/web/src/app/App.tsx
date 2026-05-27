@@ -49,6 +49,7 @@ import {
   generateScript,
   importExternalAsset,
   loadDashboard,
+  listProjects,
   loadSceneSuggestions,
   loadProject,
   loadProjectAssets,
@@ -70,6 +71,7 @@ import {
   type ExternalAssetResult,
   type ExternalAssetSearchResponse,
   type MediaSettings,
+  type ProjectSummary,
   type ProjectSnapshot,
   type StockProviderConfig,
   type UserApiConfig,
@@ -263,6 +265,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   }>({ assets: [], assetSlices: [] });
   const [mediaSettings, setMediaSettings] = useState<MediaSettings>(defaultMediaSettings);
   const [project, setProject] = useState<ProjectSnapshot>();
+  const [projectHistory, setProjectHistory] = useState<ProjectSummary[]>([]);
+  const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
   const [projectIdToLoad, setProjectIdToLoad] = useState("");
   const [renderTask, setRenderTask] = useState<RenderTask>();
   const [script, setScript] = useState<ScriptResult>();
@@ -450,6 +454,23 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
+  const refreshProjectHistory = () => {
+    setIsProjectHistoryLoading(true);
+    void listProjects()
+      .then((projects) => {
+        setProjectHistory(projects);
+      })
+      .catch((error) => {
+        setErrors((current) => ({
+          ...current,
+          project: error instanceof Error ? error.message : "Project history failed to load.",
+        }));
+      })
+      .finally(() => {
+        setIsProjectHistoryLoading(false);
+      });
+  };
+
   useEffect(() => {
     if (activePage === "assets") {
       refreshAssetLibrary(activeAssetCategory);
@@ -461,6 +482,12 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       refreshAssetLibrary(creationAssetLibraryRefreshCategory);
     }
   }, [activePage, activeAssetCategory]);
+
+  useEffect(() => {
+    if (activePage === "project") {
+      refreshProjectHistory();
+    }
+  }, [activePage]);
 
   const handleCreateProject = () =>
     runAction("project", "project", async () => {
@@ -478,35 +505,47 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setEditingSuggestions([]);
       setSelectedSceneId(undefined);
       setDirtySceneIds(new Set());
+      refreshProjectHistory();
     });
+
+  const applyLoadedProject = (loadedProject: ProjectSnapshot) => {
+    const latestScript = loadedProject.scripts.at(-1);
+    const latestRender = loadedProject.renderTasks.at(-1);
+    setProject(loadedProject);
+    setBrief({
+      title: loadedProject.title,
+      productName: loadedProject.productName,
+      audience: loadedProject.audience,
+      sellingPoints: loadedProject.sellingPoints,
+      tone: loadedProject.tone,
+      style: loadedProject.style,
+      targetDurationSeconds: loadedProject.targetDurationSeconds,
+    });
+    setScript(latestScript);
+    setScriptDraft(latestScript?.narrative ?? "");
+    setRenderTask(latestRender);
+    setTraceEvents([]);
+    setDashboard(undefined);
+    setExportResult(undefined);
+    setHasAssetSearchRun(false);
+    setAssetSearchResults([]);
+    setExternalAssetSearchResults([]);
+    setEditingSuggestions([]);
+    setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
+    setDirtySceneIds(new Set());
+  };
 
   const handleLoadProject = () =>
     runAction("project", "project", async () => {
       const loadedProject = await loadProject(projectIdToLoad.trim());
-      const latestScript = loadedProject.scripts.at(-1);
-      const latestRender = loadedProject.renderTasks.at(-1);
-      setProject(loadedProject);
-      setBrief({
-        title: loadedProject.title,
-        productName: loadedProject.productName,
-        audience: loadedProject.audience,
-        sellingPoints: loadedProject.sellingPoints,
-        tone: loadedProject.tone,
-        style: loadedProject.style,
-        targetDurationSeconds: loadedProject.targetDurationSeconds,
-      });
-      setScript(latestScript);
-      setScriptDraft(latestScript?.narrative ?? "");
-      setRenderTask(latestRender);
-      setTraceEvents([]);
-      setDashboard(undefined);
-      setExportResult(undefined);
-      setHasAssetSearchRun(false);
-      setAssetSearchResults([]);
-      setExternalAssetSearchResults([]);
-      setEditingSuggestions([]);
-      setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
-      setDirtySceneIds(new Set());
+      applyLoadedProject(loadedProject);
+    });
+
+  const handleLoadProjectFromHistory = (projectId: string) =>
+    runAction("project", "project", async () => {
+      const loadedProject = await loadProject(projectId);
+      setProjectIdToLoad(projectId);
+      applyLoadedProject(loadedProject);
     });
 
   const replaceSceneInState = (updatedScene: StoryboardScene) => {
@@ -1064,12 +1103,15 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                   copy={text.project}
                   disabled={busyState !== "idle"}
                   error={errors.project}
+                  isHistoryLoading={isProjectHistoryLoading}
                   isLoading={busyState === "project"}
                   onBriefChange={setBrief}
                   onCreateProject={handleCreateProject}
                   onLoadProject={handleLoadProject}
+                  onLoadProjectFromHistory={handleLoadProjectFromHistory}
                   onProjectIdToLoadChange={setProjectIdToLoad}
                   project={project}
+                  projectHistory={projectHistory}
                   projectIdToLoad={projectIdToLoad}
                 />
               ) : null}

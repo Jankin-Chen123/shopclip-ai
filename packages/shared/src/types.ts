@@ -29,6 +29,7 @@ import type {
   ProjectBriefSchema,
   ProjectSchema,
   ProjectStatusSchema,
+  ProjectSummarySchema,
   RenderRequestSchema,
   RenderTaskSchema,
   RenderTaskStatusSchema,
@@ -55,6 +56,7 @@ export type TraceEventStatus = z.infer<typeof TraceEventStatusSchema>;
 
 export type ProjectBrief = z.infer<typeof ProjectBriefSchema>;
 export type Project = z.infer<typeof ProjectSchema>;
+export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;
 export type AssetUploadIntent = z.infer<typeof AssetUploadIntentSchema>;
 export type AssetProcessingJob = z.infer<typeof AssetProcessingJobSchema>;

@@ -47,6 +47,76 @@ describe("P0 backend lifecycle", () => {
     });
   });
 
+  it("lists historical projects as compact summaries ordered by latest update", async () => {
+    const first = await request<{
+      project: { id: string; title: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "First launch clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const second = await request<{
+      project: { id: string; title: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Second launch clip",
+        productName: "Desk Halo Lamp",
+        audience: "home office shoppers",
+        sellingPoints: ["soft light"],
+        tone: "warm",
+        style: "premium product closeups",
+        targetDurationSeconds: 12,
+      }),
+    });
+
+    await request(baseUrl, `/api/projects/${second.body.project.id}/assets`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Lamp packshot",
+        mimeType: "image/png",
+        sizeBytes: 200_000,
+        tags: ["lamp"],
+      }),
+    });
+    await request(baseUrl, `/api/projects/${second.body.project.id}/generate-script`, {
+      method: "POST",
+    });
+
+    const history = await request<{
+      projects: Array<{
+        id: string;
+        title: string;
+        productName: string;
+        status: string;
+        assetCount: number;
+        sceneCount: number;
+        updatedAt: string;
+      }>;
+    }>(baseUrl, "/api/projects");
+
+    expect(history.status).toBe(200);
+    expect(history.body.projects.map((project) => project.id)).toEqual([
+      second.body.project.id,
+      first.body.project.id,
+    ]);
+    expect(history.body.projects[0]).toMatchObject({
+      title: "Second launch clip",
+      productName: "Desk Halo Lamp",
+      status: "ready",
+      assetCount: 1,
+      sceneCount: 4,
+    });
+  });
+
   it("creates a project, accepts an image asset, generates storyboard, renders, and exposes export", async () => {
     const created = await request<{
       project: { id: string; productName: string };

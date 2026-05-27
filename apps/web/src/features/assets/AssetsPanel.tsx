@@ -798,7 +798,7 @@ export const AssetsPanel = ({
                     onClick={() => toggleAssetSelection(asset.id)}
                     type="button"
                   >
-                    {isSelected ? <Check size={15} aria-hidden="true" /> : null}
+                    {isSelected ? <Check size={13} aria-hidden="true" /> : null}
                   </button>
                   <button
                     aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
@@ -807,7 +807,7 @@ export const AssetsPanel = ({
                     onClick={() => handleDeleteAsset(asset.id)}
                     type="button"
                   >
-                    <Trash2 size={15} aria-hidden="true" />
+                    <Trash2 size={13} aria-hidden="true" />
                   </button>
                 </div>
                 <button

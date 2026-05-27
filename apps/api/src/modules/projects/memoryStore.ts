@@ -5,6 +5,7 @@ import type {
   AssetSlice,
   EditingSuggestion,
   ProjectBrief,
+  ProjectSummary,
   RenderTask,
   SceneUpdate,
   ScriptResult,
@@ -44,6 +45,21 @@ export class MemoryProjectStore implements ProjectStore {
 
   getProject(id: string): ProjectSnapshot | undefined {
     return this.projects.get(id);
+  }
+
+  listProjects(): ProjectSummary[] {
+    return [...this.projects.values()]
+      .map((project) => ({
+        id: project.id,
+        title: project.title,
+        productName: project.productName,
+        status: project.status,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        assetCount: project.assets.length,
+        sceneCount: project.scenes.length,
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
   addAsset(
