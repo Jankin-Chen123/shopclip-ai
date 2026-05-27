@@ -867,7 +867,25 @@ a {
 }
 
 .creation-shell-studio .studio-grid {
-  grid-template-columns: minmax(240px, 330px) minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-columns: minmax(220px, 300px) minmax(360px, 1fr) minmax(300px, 380px);
+}
+
+.creation-shell-studio .scene-track {
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+.creation-shell-studio .scene-card {
+  min-height: 118px;
+}
+
+.creation-shell-studio .phone-preview {
+  align-self: start;
+  justify-items: center;
+}
+
+.creation-shell-studio .phone-frame {
+  width: min(100%, 360px);
 }
 
 .creation-shell-studio .inspector {
@@ -4082,6 +4100,14 @@ textarea {
     grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   }
 
+  .creation-shell-studio .studio-grid {
+    grid-template-columns: minmax(220px, 300px) minmax(320px, 1fr);
+  }
+
+  .creation-shell-studio .phone-frame {
+    width: min(100%, 340px);
+  }
+
   .dashboard-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4160,6 +4186,18 @@ textarea {
   .asset-prep-grid,
   .studio-grid {
     grid-template-columns: 1fr;
+  }
+
+  .creation-shell-studio .studio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .creation-shell-studio .phone-preview {
+    order: -1;
+  }
+
+  .creation-shell-studio .phone-frame {
+    width: min(100%, 320px);
   }
 
   .upload-zone {

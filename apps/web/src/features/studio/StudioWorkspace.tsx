@@ -87,19 +87,6 @@ export const StudioWorkspace = ({
       </div>
 
       <div className="studio-grid">
-        <div className="phone-preview" aria-label={copy.previewLabel}>
-          <div className="phone-frame">
-            <span className="preview-time">
-              <Clock3 size={14} aria-hidden="true" />
-              {selectedScene ? `${selectedScene.durationSeconds}s` : "0s"}
-            </span>
-            <div className="preview-art">
-              <Video size={42} aria-hidden="true" />
-            </div>
-            <p>{selectedScene?.subtitle ?? copy.emptyPreview}</p>
-          </div>
-        </div>
-
         <div className="scene-track" aria-label={copy.timelineLabel}>
           {scenes.length === 0 ? (
             <div className="empty-state">
@@ -120,6 +107,19 @@ export const StudioWorkspace = ({
               </button>
             ))
           )}
+        </div>
+
+        <div className="phone-preview" aria-label={copy.previewLabel}>
+          <div className="phone-frame">
+            <span className="preview-time">
+              <Clock3 size={14} aria-hidden="true" />
+              {selectedScene ? `${selectedScene.durationSeconds}s` : "0s"}
+            </span>
+            <div className="preview-art">
+              <Video size={42} aria-hidden="true" />
+            </div>
+            <p>{selectedScene?.subtitle ?? copy.emptyPreview}</p>
+          </div>
         </div>
 
         <aside className="inspector" aria-label={copy.inspectorLabel}>

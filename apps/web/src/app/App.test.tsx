@@ -102,6 +102,16 @@ describe("App", () => {
     expect(markup).toContain("Generate storyboard");
   });
 
+  it("places the step 03 scene list before the centered preview workspace", () => {
+    const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="studio" />);
+
+    expect(markup.indexOf('class="scene-track"')).toBeGreaterThan(-1);
+    expect(markup.indexOf('class="phone-preview"')).toBeGreaterThan(-1);
+    expect(markup.indexOf('class="scene-track"')).toBeLessThan(
+      markup.indexOf('class="phone-preview"'),
+    );
+  });
+
   it("does not preload existing library assets into asset prep", () => {
     const markup = renderToStaticMarkup(
       <AssetPrepPanel
