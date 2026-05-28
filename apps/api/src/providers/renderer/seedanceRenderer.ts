@@ -206,18 +206,21 @@ const buildSeedanceRequestBody = (
   config: SeedanceConfig,
   videoSettings: SeedanceVideoSettings,
 ) => {
+  const includeReferenceImages = parseBooleanEnv("AI_VIDEO_REFERENCE_IMAGES", false);
   const content: Array<Record<string, unknown>> = [
     {
       type: "text",
       text: promptForProject(project),
     },
-    ...uniquePublicImageAssets(project).map((asset) => ({
-      type: "image_url",
-      role: "reference_image",
-      image_url: {
-        url: asset.url,
-      },
-    })),
+    ...(includeReferenceImages
+      ? uniquePublicImageAssets(project).map((asset) => ({
+          type: "image_url",
+          role: "reference_image",
+          image_url: {
+            url: asset.url,
+          },
+        }))
+      : []),
   ];
 
   return {

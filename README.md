@@ -93,6 +93,7 @@ corepack pnpm dev
 | `AI_IMAGE_MODEL_ID`    | API    | 图片生成才需要       | 图片生成模型的方舟 endpoint ID 或可调用 model ID。           |
 | `ARK_IMAGE_SIZE`       | API    | 可选                 | 图片生成尺寸，默认 `1024x1024`。                           |
 | `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID 或可调用 model ID；生产建议填写方舟控制台中的 `ep-...` endpoint ID，后端会原样提交该值。 |
+| `AI_VIDEO_REFERENCE_IMAGES` | API | 可选            | 默认 `false`，Seedance 渲染只提交文本内容以走 text-to-video；只有 endpoint 支持参考图 / r2v 时才设为 `true`。 |
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
@@ -156,7 +157,7 @@ flowchart TD
 - Editing Agent 建议是可解释的确定性建议。
 - TTS、字幕、BGM 和看板指标均为 metadata-backed mock 输出。
 - 渲染产物默认使用 mock 输出；只有显式设置 `VIDEO_RENDER_PROVIDER_MODE=seedance` 且配置服务端视频密钥/模型后，才调用 Seedance。TTS 声线不会控制 Seedance 画面效果。
-- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。
+- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认不向 Seedance 请求体发送参考图，避免不支持 r2v 的视频 endpoint 失败；如确认 endpoint 支持参考图，再设置 `AI_VIDEO_REFERENCE_IMAGES=true`。
 - UI 支持失败渲染模拟和重试，不会丢失项目数据。
 - 真实 provider 密钥只能放在服务端环境变量中，浏览器不会直接调用模型或 TTS provider。
 

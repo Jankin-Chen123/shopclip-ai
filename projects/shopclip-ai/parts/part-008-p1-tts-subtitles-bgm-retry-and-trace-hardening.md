@@ -62,12 +62,14 @@ Add P1 media controls and make generation failures recoverable and observable.
 - 2026-05-28 follow-up: Reverted backend Seedance model alias normalization. Render submission now uses the exact `.env` model configuration from `AI_VIDEO_MODEL_ID` / `AI_VIDEO_ENDPOINT_ID`; production should configure the Ark `ep-...` endpoint ID for the video role.
 - 2026-05-28 follow-up: API startup now loads the local `.env` with override enabled so stale process-level values cannot keep an old video model active when the server `.env` has been updated.
 - 2026-05-28 follow-up: API `.env` loading now searches upward from the process cwd, so deployments that start the package from `apps/api` still load the workspace root `.env`.
+- 2026-05-28 follow-up: Seedance render requests now omit reference images by default to avoid triggering unsupported `r2v` tasks on text-to-video endpoints. Reference images can be re-enabled with `AI_VIDEO_REFERENCE_IMAGES=true` when using an endpoint that supports them.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
   - `projects/shopclip-ai/evidence/part-008-verification.md`
   - `projects/shopclip-ai/evidence/2026-05-28-seedance-env-model-config.md`
   - `projects/shopclip-ai/evidence/2026-05-28-env-override-for-video-model.md`
+  - `projects/shopclip-ai/evidence/2026-05-28-seedance-reference-image-toggle.md`
 
 ## Verification Evidence
 
