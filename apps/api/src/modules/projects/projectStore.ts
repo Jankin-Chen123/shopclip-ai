@@ -98,5 +98,10 @@ export interface ProjectStore {
     jobId: string,
     update: Partial<Pick<AssetProcessingJob, "message" | "status" | "steps">>,
   ): MaybePromise<AssetProcessingJob | undefined>;
+  updateRenderTask(
+    renderTaskId: string,
+    update: Partial<Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">>,
+    traceEvents?: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>,
+  ): MaybePromise<{ renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined>;
   updateScene(sceneId: string, update: SceneUpdate): MaybePromise<StoryboardScene | undefined>;
 }

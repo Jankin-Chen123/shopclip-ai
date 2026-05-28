@@ -28,6 +28,7 @@ import type {
   ScriptResult,
   StoryboardScene,
   TraceEvent,
+  VideoGenerationSettings,
 } from "@shopclip/shared";
 
 export interface ProjectSnapshot extends Project {
@@ -348,6 +349,12 @@ export const startRender = async (
       subtitlesEnabled: true,
       ttsVoice: "clear-host",
     },
+    videoSettings: {
+      ratio: "9:16",
+      resolution: "720p",
+      generateAudio: false,
+      watermark: false,
+    },
     simulateFailure: false,
   },
 ): Promise<RenderSnapshot> =>
@@ -443,4 +450,5 @@ export type {
   InspirationMaterial,
   MediaSettings,
   RenderRequest,
+  VideoGenerationSettings,
 };

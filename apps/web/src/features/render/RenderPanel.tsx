@@ -1,4 +1,9 @@
-import type { MediaSettings, RenderTask, TraceEvent } from "@shopclip/shared";
+import type {
+  MediaSettings,
+  RenderTask,
+  TraceEvent,
+  VideoGenerationSettings,
+} from "@shopclip/shared";
 import { Download, Loader2, Play, RotateCw, Volume2 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -14,9 +19,11 @@ interface RenderPanelProps {
   isExporting: boolean;
   isRendering: boolean;
   mediaSettings: MediaSettings;
+  videoSettings: VideoGenerationSettings;
   onForceFailureChange: (enabled: boolean) => void;
   onExport: () => void;
   onMediaSettingsChange: (settings: MediaSettings) => void;
+  onVideoSettingsChange: (settings: VideoGenerationSettings) => void;
   onRefreshRender: () => void;
   onRetryRender: () => void;
   onStartRender: () => void;
@@ -38,6 +45,21 @@ const statusTone = (status?: string) => {
   return "neutral";
 };
 
+export const defaultVideoSettings: VideoGenerationSettings = {
+  ratio: "9:16",
+  resolution: "720p",
+  generateAudio: false,
+  watermark: false,
+};
+
+const seedFromInput = (value: string) => {
+  if (!value.trim()) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 export const RenderPanel = ({
   copy,
   disabled,
@@ -47,9 +69,11 @@ export const RenderPanel = ({
   isExporting,
   isRendering,
   mediaSettings,
+  videoSettings,
   onForceFailureChange,
   onExport,
   onMediaSettingsChange,
+  onVideoSettingsChange,
   onRefreshRender,
   onRetryRender,
   onStartRender,
@@ -68,6 +92,7 @@ export const RenderPanel = ({
     </div>
 
     <div className="media-controls" aria-label={copy.mediaControls}>
+      <h3 className="media-controls-title">{copy.postProductionSettings}</h3>
       <label>
         {copy.ttsVoice}
         <select
@@ -137,6 +162,85 @@ export const RenderPanel = ({
           onChange={(event) => onForceFailureChange(event.target.checked)}
         />
         {copy.simulateFailure}
+      </label>
+      <h3 className="media-controls-title">{copy.videoGenerationSettings}</h3>
+      <label>
+        {copy.aspectRatio}
+        <select
+          value={videoSettings.ratio}
+          onChange={(event) =>
+            onVideoSettingsChange({
+              ...videoSettings,
+              ratio: event.target.value as VideoGenerationSettings["ratio"],
+            })
+          }
+        >
+          <option value="9:16">{copy.aspectRatios.vertical}</option>
+          <option value="16:9">{copy.aspectRatios.landscape}</option>
+          <option value="1:1">{copy.aspectRatios.square}</option>
+          <option value="4:3">{copy.aspectRatios.standard}</option>
+          <option value="3:4">{copy.aspectRatios.portrait}</option>
+          <option value="21:9">{copy.aspectRatios.wide}</option>
+        </select>
+      </label>
+      <label>
+        {copy.resolution}
+        <select
+          value={videoSettings.resolution}
+          onChange={(event) =>
+            onVideoSettingsChange({
+              ...videoSettings,
+              resolution: event.target.value as VideoGenerationSettings["resolution"],
+            })
+          }
+        >
+          <option value="480p">480p</option>
+          <option value="720p">720p</option>
+          <option value="1080p">1080p</option>
+        </select>
+      </label>
+      <label>
+        {copy.seed}
+        <input
+          inputMode="numeric"
+          min={-1}
+          max={2_147_483_647}
+          placeholder={copy.seedPlaceholder}
+          type="number"
+          value={videoSettings.seed ?? ""}
+          onChange={(event) =>
+            onVideoSettingsChange({
+              ...videoSettings,
+              seed: seedFromInput(event.target.value),
+            })
+          }
+        />
+      </label>
+      <label className="toggle-row">
+        <input
+          checked={videoSettings.generateAudio}
+          type="checkbox"
+          onChange={(event) =>
+            onVideoSettingsChange({
+              ...videoSettings,
+              generateAudio: event.target.checked,
+            })
+          }
+        />
+        {copy.generateAudio}
+      </label>
+      <label className="toggle-row">
+        <input
+          checked={videoSettings.watermark}
+          type="checkbox"
+          onChange={(event) =>
+            onVideoSettingsChange({
+              ...videoSettings,
+              watermark: event.target.checked,
+            })
+          }
+        />
+        {copy.watermark}
       </label>
     </div>
 

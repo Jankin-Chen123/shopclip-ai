@@ -14,6 +14,7 @@ import type {
   StoryboardScene,
   TraceEvent,
 } from "@shopclip/shared";
+import { MediaSettingsSchema, VideoGenerationSettingsSchema } from "@shopclip/shared";
 
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
@@ -129,6 +130,15 @@ const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): Render
   previewUrl: task.previewUrl ?? undefined,
   exportUrl: task.exportUrl ?? undefined,
   errorMessage: task.errorMessage ?? undefined,
+  provider: task.provider ?? undefined,
+  providerTaskId: task.providerTaskId ?? undefined,
+  mediaSettings: MediaSettingsSchema.safeParse(task.mediaSettings).success
+    ? MediaSettingsSchema.parse(task.mediaSettings)
+    : undefined,
+  videoSettings: VideoGenerationSettingsSchema.safeParse(task.videoSettings).success
+    ? VideoGenerationSettingsSchema.parse(task.videoSettings)
+    : undefined,
+  retryOfRenderTaskId: task.retryOfRenderTaskId ?? undefined,
   createdAt: toIso(task.createdAt),
   updatedAt: toIso(task.updatedAt),
 });
@@ -139,6 +149,7 @@ const toTraceEvent = (event: RenderTaskWithRelations["traceEvents"][number]): Tr
   status: event.status,
   step: event.step,
   message: event.message,
+  retryOfTraceEventId: event.retryOfTraceEventId ?? undefined,
   createdAt: toIso(event.createdAt),
 });
 
@@ -505,12 +516,18 @@ export class PrismaProjectStore implements ProjectStore {
         previewUrl: renderTask.previewUrl,
         exportUrl: renderTask.exportUrl,
         errorMessage: renderTask.errorMessage,
+        provider: renderTask.provider,
+        providerTaskId: renderTask.providerTaskId,
+        mediaSettings: renderTask.mediaSettings,
+        videoSettings: renderTask.videoSettings,
+        retryOfRenderTaskId: renderTask.retryOfRenderTaskId,
         traceEvents: {
           create: traceEvents.map((event) => ({
             id: randomUUID(),
             status: event.status,
             step: event.step,
             message: event.message,
+            retryOfTraceEventId: event.retryOfTraceEventId,
           })),
         },
       },
@@ -641,9 +658,68 @@ export class PrismaProjectStore implements ProjectStore {
         status: event.status,
         step: event.step,
         message: event.message,
+        retryOfTraceEventId: event.retryOfTraceEventId,
       },
     });
     return toTraceEvent(created);
+  }
+
+  async updateRenderTask(
+    renderTaskId: string,
+    update: Partial<Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">>,
+    traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [],
+  ): Promise<{ renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined> {
+    const current = await this.prisma.renderTask.findUnique({
+      where: { id: renderTaskId },
+      include: {
+        project: true,
+      },
+    });
+    if (!current) {
+      return undefined;
+    }
+
+    const updated = await this.prisma.renderTask.update({
+      where: { id: renderTaskId },
+      data: {
+        status: update.status,
+        progress: update.progress,
+        previewUrl: update.previewUrl,
+        exportUrl: update.exportUrl,
+        errorMessage: update.errorMessage,
+        provider: update.provider,
+        providerTaskId: update.providerTaskId,
+        mediaSettings: update.mediaSettings,
+        videoSettings: update.videoSettings,
+        retryOfRenderTaskId: update.retryOfRenderTaskId,
+        traceEvents: {
+          create: traceEvents.map((event) => ({
+            id: randomUUID(),
+            status: event.status,
+            step: event.step,
+            message: event.message,
+            retryOfTraceEventId: event.retryOfTraceEventId,
+          })),
+        },
+      },
+      include: { traceEvents: true },
+    });
+    await this.prisma.project.update({
+      where: { id: current.projectId },
+      data: {
+        status:
+          updated.status === "completed"
+            ? "completed"
+            : updated.status === "failed"
+              ? "failed"
+              : "rendering",
+      },
+    });
+
+    return {
+      renderTask: toRenderTask(updated),
+      traceEvents: updated.traceEvents.map(toTraceEvent),
+    };
   }
 
   getStoredSuggestion(

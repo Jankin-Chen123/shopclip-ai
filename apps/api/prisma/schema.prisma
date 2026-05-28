@@ -184,6 +184,11 @@ model RenderTask {
   previewUrl   String?
   exportUrl    String?
   errorMessage String?
+  provider     String?
+  providerTaskId String?
+  mediaSettings Json?
+  videoSettings Json?
+  retryOfRenderTaskId String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -198,6 +203,7 @@ model TraceEvent {
   status       TraceEventStatus
   step         String
   message      String
+  retryOfTraceEventId String?
   createdAt    DateTime         @default(now())
   renderTask   RenderTask       @relation(fields: [renderTaskId], references: [id], onDelete: Cascade)
 

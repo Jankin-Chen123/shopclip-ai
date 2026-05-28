@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-22
+- Last updated: 2026-05-28
 
 ## Source Of Truth
 
@@ -58,6 +58,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - Added mock TTS provider and extended mock renderer with TTS, subtitle, BGM, failure, and retry trace events.
 - Added render retry endpoint: `POST /api/render-tasks/:renderTaskId/retry`.
 - Added Delivery UI controls for TTS voice, subtitle style, BGM track, subtitle toggle, forced failure, and retry.
+- Added Delivery UI controls for Seedance video settings: aspect ratio, resolution, generate audio, watermark, and optional seed. These values are sent in the render request and are not required as `.env` values.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
@@ -70,6 +71,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - `corepack pnpm lint`
 - `corepack pnpm build`
 - `corepack pnpm --filter @shopclip/web test:e2e`
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
 
 ## Verification Plan
 

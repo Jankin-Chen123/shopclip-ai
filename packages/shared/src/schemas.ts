@@ -336,12 +336,26 @@ export const MediaSettingsSchema = z.object({
   bgmTrack: z.enum(["none", "creator-pop", "soft-lift", "tech-pulse"]).default("creator-pop"),
 });
 
+export const VideoGenerationSettingsSchema = z.object({
+  ratio: z.enum(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9"]).default("9:16"),
+  resolution: z.enum(["480p", "720p", "1080p"]).default("720p"),
+  generateAudio: z.boolean().default(false),
+  watermark: z.boolean().default(false),
+  seed: z.number().int().min(-1).max(2_147_483_647).optional(),
+});
+
 export const RenderRequestSchema = z.object({
   mediaSettings: MediaSettingsSchema.default({
     bgmTrack: "creator-pop",
     subtitleStyle: "clean-lower-third",
     subtitlesEnabled: true,
     ttsVoice: "clear-host",
+  }),
+  videoSettings: VideoGenerationSettingsSchema.default({
+    ratio: "9:16",
+    resolution: "720p",
+    generateAudio: false,
+    watermark: false,
   }),
   simulateFailure: z.boolean().default(false),
 });
@@ -354,7 +368,10 @@ export const RenderTaskSchema = z.object({
   previewUrl: z.string().trim().min(1).optional(),
   exportUrl: z.string().trim().min(1).optional(),
   errorMessage: z.string().trim().min(1).optional(),
+  provider: z.string().trim().min(1).optional(),
+  providerTaskId: z.string().trim().min(1).optional(),
   mediaSettings: MediaSettingsSchema.optional(),
+  videoSettings: VideoGenerationSettingsSchema.optional(),
   retryOfRenderTaskId: z.string().trim().min(1).optional(),
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,

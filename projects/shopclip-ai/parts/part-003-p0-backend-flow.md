@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Implementation Complete
 - Created: 2026-05-21
-- Last updated: 2026-05-27
+- Last updated: 2026-05-28
 
 ## Source Of Truth
 
@@ -75,6 +75,7 @@ Implement the backend APIs for the P0 end-to-end flow: project creation, asset i
 - Added P0 API routes under `/api` for projects, assets, script generation, render tasks, render task polling, and export fallback.
 - Added in-memory project repository to support API lifecycle tests without external services.
 - Added deterministic mock script provider and mock renderer provider.
+- Added opt-in Seedance render provider for real video generation. When `VIDEO_RENDER_PROVIDER_MODE=seedance`, render requests submit `/contents/generations/tasks`, pass frontend `videoSettings`, store the provider task id, and poll the task from `GET /api/render-tasks/:renderTaskId` until a video URL is available.
 - Added P0 asset metadata validation for image type, MIME type, and size.
 - Added API integration tests covering the full backend P0 lifecycle and invalid asset rejection.
 - Updated script/storyboard generation so Step 02 prepared `assetIds` are resolved through the shared asset store before provider execution. This keeps globally prepared or library-imported assets attached to generated storyboard scenes instead of falling back to `project.assets[0]`.
@@ -85,7 +86,10 @@ Implement the backend APIs for the P0 end-to-end flow: project creation, asset i
 - Evidence file: `../evidence/part-003-verification.md`
 - Full-chain regression evidence: `../evidence/2026-05-27-full-chain-scene-regeneration.md`
 - Storyboard image preview evidence: `../evidence/2026-05-27-storyboard-scene-image-preview.md`
+- Seedance real render evidence: `../evidence/2026-05-28-seedance-render-provider.md`
 - `corepack pnpm --filter @shopclip/api test`: passed.
 - `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts`: passed after the regression failed before the fix.
+- `corepack pnpm --filter @shopclip/api test -- seedance-render-flow.test.ts`: passed after the route-level RED failure confirmed render still used mock.
+- `corepack pnpm --filter @shopclip/api test -- seedanceRenderer.test.ts seedance-render-flow.test.ts`: passed after request-level video settings replaced env-only Seedance parameter defaults.
 - `corepack pnpm --filter @shopclip/api typecheck`: passed.
 - `corepack pnpm --filter @shopclip/api build`: passed.

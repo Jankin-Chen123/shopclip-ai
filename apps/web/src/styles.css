@@ -4021,6 +4021,13 @@ textarea {
   background: #101010;
 }
 
+.media-controls-title {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;

@@ -27,7 +27,7 @@ import { AssetPrepPanel, type AssetPrepSnapshot } from "../features/assets/Asset
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { InspirationPanel } from "../features/inspiration/InspirationPanel";
-import { RenderPanel } from "../features/render/RenderPanel";
+import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import {
   createDefaultStockProviderConfigs,
@@ -77,6 +77,7 @@ import {
   type ProjectSnapshot,
   type StockProviderConfig,
   type UserApiConfig,
+  type VideoGenerationSettings,
 } from "../lib/api";
 
 const defaultBrief: ProjectBrief = {
@@ -366,6 +367,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     assetSlices: AssetSlice[];
   }>({ assets: [], assetSlices: [] });
   const [mediaSettings, setMediaSettings] = useState<MediaSettings>(defaultMediaSettings);
+  const [videoSettings, setVideoSettings] =
+    useState<VideoGenerationSettings>(defaultVideoSettings);
   const [project, setProject] = useState<ProjectSnapshot>();
   const [projectHistory, setProjectHistory] = useState<ProjectSummary[]>([]);
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
@@ -1129,6 +1132,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     void runAction("render", "render", async () => {
       const render = await startRender(project.id, {
         mediaSettings,
+        videoSettings,
         simulateFailure: forceRenderFailure,
       });
       setDashboard(undefined);
@@ -1154,6 +1158,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     void runAction("render", "render", async () => {
       const render = await retryRenderTask(renderTask.id, {
         mediaSettings,
+        videoSettings,
         simulateFailure: false,
       });
       setDashboard(undefined);
@@ -1349,9 +1354,11 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                   isExporting={busyState === "export"}
                   isRendering={busyState === "render"}
                   mediaSettings={mediaSettings}
+                  videoSettings={videoSettings}
                   onForceFailureChange={setForceRenderFailure}
                   onExport={handleExport}
                   onMediaSettingsChange={setMediaSettings}
+                  onVideoSettingsChange={setVideoSettings}
                   onRefreshRender={handleRefreshRender}
                   onRetryRender={handleRetryRender}
                   onStartRender={handleStartRender}

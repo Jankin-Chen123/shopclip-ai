@@ -24,6 +24,7 @@ import {
   replaceInspirationSessionHistoryResult,
 } from "../features/inspiration/InspirationPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
+import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import {
   SettingsPanel,
@@ -187,6 +188,40 @@ describe("App", () => {
     expect(markup).toContain("Write or paste your draft script");
     expect(markup).toContain("One-click generate");
     expect(markup).toContain("Generate storyboard");
+  });
+
+  it("renders video generation settings in the render panel", () => {
+    const markup = renderToStaticMarkup(
+      <RenderPanel
+        copy={copy.en.render}
+        disabled={false}
+        forceRenderFailure={false}
+        isExporting={false}
+        isRendering={false}
+        mediaSettings={{
+          bgmTrack: "creator-pop",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        onExport={() => undefined}
+        onForceFailureChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onRefreshRender={() => undefined}
+        onRetryRender={() => undefined}
+        onStartRender={() => undefined}
+        onVideoSettingsChange={() => undefined}
+        traceEvents={[]}
+        videoSettings={defaultVideoSettings}
+      />,
+    );
+
+    expect(markup).toContain("Video generation settings");
+    expect(markup).toContain("Aspect ratio");
+    expect(markup).toContain("Resolution");
+    expect(markup).toContain("Generate audio");
+    expect(markup).toContain("Watermark");
+    expect(markup).toContain("Seed");
   });
 
   it("includes model API settings in one-click script generation requests", () => {

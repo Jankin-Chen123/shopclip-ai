@@ -52,7 +52,10 @@ import {
   type VideoFrameExtractor,
   type VideoReferenceFrame,
 } from "../../providers/media/videoFrameExtractor.js";
-import { renderFallbackPreview } from "../../providers/renderer/mockRenderer.js";
+import {
+  createSeedanceRenderProvider,
+  renderWithConfiguredVideoProvider,
+} from "../../providers/renderer/seedanceRenderer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { MemoryProjectStore } from "./memoryStore.js";
@@ -1699,7 +1702,7 @@ export const createP0Router = ({
       return;
     }
 
-    const renderResult = renderFallbackPreview(project, parsedRenderRequest.data);
+    const renderResult = await renderWithConfiguredVideoProvider(project, parsedRenderRequest.data);
     const storedRender = await store.addRenderTask(
       project.id,
       renderResult.renderTask,
@@ -1718,6 +1721,49 @@ export const createP0Router = ({
     if (!renderTask) {
       sendNotFound(response, "RENDER_TASK_NOT_FOUND", "Render task was not found.");
       return;
+    }
+
+    if (
+      renderTask.renderTask.provider === "volcengine-seedance" &&
+      renderTask.renderTask.providerTaskId &&
+      !["completed", "failed"].includes(renderTask.renderTask.status)
+    ) {
+      try {
+        const providerResult = await createSeedanceRenderProvider().loadTask(
+          renderTask.renderTask.providerTaskId,
+        );
+        const updated = await store.updateRenderTask(
+          renderTask.renderTask.id,
+          providerResult.renderTask,
+          providerResult.traceEvents,
+        );
+        if (updated) {
+          response.json(updated);
+          return;
+        }
+      } catch (error) {
+        const storedTrace = await store.updateRenderTask(
+          renderTask.renderTask.id,
+          {
+            status: "failed",
+            progress: renderTask.renderTask.progress,
+            errorMessage:
+              error instanceof Error ? error.message : "Seedance render polling failed.",
+          },
+          [
+            {
+              status: "failed",
+              step: "seedance-task-poll-failed",
+              message:
+                error instanceof Error ? error.message : "Seedance render polling failed.",
+            },
+          ],
+        );
+        if (storedTrace) {
+          response.json(storedTrace);
+          return;
+        }
+      }
     }
 
     response.json({
@@ -1751,7 +1797,7 @@ export const createP0Router = ({
     const failedTrace = [...previousRender.traceEvents]
       .reverse()
       .find((event) => event.status === "failed");
-    const renderResult = renderFallbackPreview(previousRender.project, {
+    const renderResult = await renderWithConfiguredVideoProvider(previousRender.project, {
       ...parsedRenderRequest.data,
       retryOfRenderTaskId: previousRender.renderTask.id,
       retryOfTraceEventId: failedTrace?.id,

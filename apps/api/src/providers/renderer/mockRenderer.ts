@@ -1,5 +1,5 @@
 import type { ProjectSnapshot } from "../../modules/projects/projectStore.js";
-import type { MediaSettings, RenderTask, TraceEvent } from "@shopclip/shared";
+import type { MediaSettings, RenderTask, TraceEvent, VideoGenerationSettings } from "@shopclip/shared";
 import { synthesizeMockVoiceover } from "../tts/mockTtsProvider.js";
 
 export interface RenderProviderResult {
@@ -9,6 +9,7 @@ export interface RenderProviderResult {
 
 export interface RenderFallbackOptions {
   mediaSettings: MediaSettings;
+  videoSettings?: VideoGenerationSettings;
   retryOfRenderTaskId?: string;
   retryOfTraceEventId?: string;
   simulateFailure?: boolean;
@@ -81,7 +82,9 @@ export const renderFallbackPreview = (
         progress: 72,
         errorMessage:
           "Simulated renderer failure after media layers were prepared. Retry is available.",
+        provider: "mock-renderer",
         mediaSettings: options.mediaSettings,
+        videoSettings: options.videoSettings,
         retryOfRenderTaskId: options.retryOfRenderTaskId,
       },
       traceEvents: [
@@ -103,7 +106,9 @@ export const renderFallbackPreview = (
       progress: 100,
       previewUrl: `/demo-exports/${project.id}/preview.mp4?${query}`,
       exportUrl: `/demo-exports/${project.id}/export.mp4?${query}`,
+      provider: "mock-renderer",
       mediaSettings: options.mediaSettings,
+      videoSettings: options.videoSettings,
       retryOfRenderTaskId: options.retryOfRenderTaskId,
     },
     traceEvents: [

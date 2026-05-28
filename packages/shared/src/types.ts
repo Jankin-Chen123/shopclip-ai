@@ -42,6 +42,7 @@ import type {
   StoryboardSceneSchema,
   TraceEventSchema,
   TraceEventStatusSchema,
+  VideoGenerationSettingsSchema,
 } from "./schemas.js";
 
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
@@ -82,6 +83,7 @@ export type SceneUpdate = z.infer<typeof SceneUpdateSchema>;
 export type SceneRegenerationRequest = z.infer<typeof SceneRegenerationRequestSchema>;
 export type EditingSuggestion = z.infer<typeof EditingSuggestionSchema>;
 export type MediaSettings = z.infer<typeof MediaSettingsSchema>;
+export type VideoGenerationSettings = z.infer<typeof VideoGenerationSettingsSchema>;
 export type RenderRequest = z.infer<typeof RenderRequestSchema>;
 export type RenderTask = z.infer<typeof RenderTaskSchema>;
 export type TraceEvent = z.infer<typeof TraceEventSchema>;

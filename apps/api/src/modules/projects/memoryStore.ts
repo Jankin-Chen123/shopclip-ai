@@ -526,6 +526,54 @@ export class MemoryProjectStore implements ProjectStore {
     return undefined;
   }
 
+  updateRenderTask(
+    renderTaskId: string,
+    update: Partial<Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">>,
+    traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [],
+  ): { renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined {
+    for (const project of this.projects.values()) {
+      const renderTaskIndex = project.renderTasks.findIndex(
+        (candidate) => candidate.id === renderTaskId,
+      );
+      if (renderTaskIndex === -1) {
+        continue;
+      }
+
+      const timestamp = now();
+      const current = project.renderTasks[renderTaskIndex]!;
+      const updatedRenderTask: RenderTask = {
+        ...current,
+        ...update,
+        updatedAt: timestamp,
+      };
+      project.renderTasks[renderTaskIndex] = updatedRenderTask;
+      const storedTraceEvents: TraceEvent[] = traceEvents.map((event) => ({
+        ...event,
+        id: randomUUID(),
+        renderTaskId,
+        createdAt: now(),
+      }));
+      this.traceEvents.set(renderTaskId, [
+        ...(this.traceEvents.get(renderTaskId) ?? []),
+        ...storedTraceEvents,
+      ]);
+      project.status =
+        updatedRenderTask.status === "completed"
+          ? "completed"
+          : updatedRenderTask.status === "failed"
+            ? "failed"
+            : "rendering";
+      project.updatedAt = timestamp;
+
+      return {
+        renderTask: updatedRenderTask,
+        traceEvents: this.traceEvents.get(renderTaskId) ?? [],
+      };
+    }
+
+    return undefined;
+  }
+
   listAssets(): { assets: AssetMetadata[]; assetSlices: AssetSlice[] } {
     const projectAssets = [...this.projects.values()].flatMap((project) => project.assets);
     const projectSlices = [...this.projects.values()].flatMap((project) => project.assetSlices);
