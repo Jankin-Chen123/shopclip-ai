@@ -372,6 +372,63 @@ describe("P0 backend lifecycle", () => {
     expect(loadedProject.body.project.renderTasks).toHaveLength(1);
   });
 
+  it("replaces current storyboard scenes when generating a new script for the same project", async () => {
+    const created = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Repeated storyboard generation",
+        productName: "小猫水杯",
+        audience: "通勤女生",
+        sellingPoints: ["小包可放", "防漏"],
+        tone: "轻快",
+        style: "电商短视频",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const projectId = created.body.project.id;
+
+    const firstGenerated = await request<{
+      script: { scenes: Array<{ id: string; subtitle: string }> };
+    }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        draftScript: "第一版脚本。",
+      }),
+    });
+    const secondGenerated = await request<{
+      script: { scenes: Array<{ id: string; subtitle: string }> };
+    }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        draftScript: "第二版脚本，替换当前分镜。",
+      }),
+    });
+
+    expect(firstGenerated.status).toBe(201);
+    expect(secondGenerated.status).toBe(201);
+    expect(firstGenerated.body.script.scenes).toHaveLength(4);
+    expect(secondGenerated.body.script.scenes).toHaveLength(4);
+
+    const loadedProject = await request<{
+      project: {
+        scripts: Array<{ scenes: Array<{ id: string }> }>;
+        scenes: Array<{ id: string }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    const history = await request<{
+      projects: Array<{ id: string; sceneCount: number }>;
+    }>(baseUrl, "/api/projects");
+
+    expect(loadedProject.body.project.scripts).toHaveLength(2);
+    expect(loadedProject.body.project.scenes.map((scene) => scene.id)).toEqual(
+      secondGenerated.body.script.scenes.map((scene) => scene.id),
+    );
+    expect(loadedProject.body.project.scenes).toHaveLength(4);
+    expect(history.body.projects.find((project) => project.id === projectId)?.sceneCount).toBe(4);
+  });
+
   it("rejects invalid assets before storing metadata", async () => {
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",

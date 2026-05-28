@@ -364,7 +364,7 @@ export class MemoryProjectStore implements ProjectStore {
     };
 
     project.scripts.push(storedScript);
-    project.scenes.push(...storedScript.scenes);
+    project.scenes = storedScript.scenes;
     project.status = "ready";
     project.updatedAt = now();
     return storedScript;

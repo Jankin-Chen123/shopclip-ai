@@ -475,33 +475,39 @@ export class PrismaProjectStore implements ProjectStore {
       return undefined;
     }
     const scriptId = randomUUID();
-    const created = await this.prisma.script.create({
-      data: {
-        id: scriptId,
-        projectId,
-        hook: script.hook,
-        narrative: script.narrative,
-        constraints: script.constraints,
-        scenes: {
-          create: script.scenes.map((scene) => ({
-            id: randomUUID(),
-            projectId,
-            order: scene.order,
-            durationSeconds: scene.durationSeconds,
-            subtitle: scene.subtitle,
-            voiceover: scene.voiceover,
-            visualPrompt: scene.visualPrompt,
-            imageUrl: scene.imageUrl,
-            assetId: scene.assetId,
-            status: scene.status,
-          })),
+    const created = await this.prisma.$transaction(async (prisma) => {
+      await prisma.storyboardScene.deleteMany({
+        where: { projectId },
+      });
+      const nextScript = await prisma.script.create({
+        data: {
+          id: scriptId,
+          projectId,
+          hook: script.hook,
+          narrative: script.narrative,
+          constraints: script.constraints,
+          scenes: {
+            create: script.scenes.map((scene) => ({
+              id: randomUUID(),
+              projectId,
+              order: scene.order,
+              durationSeconds: scene.durationSeconds,
+              subtitle: scene.subtitle,
+              voiceover: scene.voiceover,
+              visualPrompt: scene.visualPrompt,
+              imageUrl: scene.imageUrl,
+              assetId: scene.assetId,
+              status: scene.status,
+            })),
+          },
         },
-      },
-      include: { scenes: true },
-    });
-    await this.prisma.project.update({
-      where: { id: projectId },
-      data: { status: "ready" },
+        include: { scenes: true },
+      });
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: "ready" },
+      });
+      return nextScript;
     });
     return toScript(created);
   }
