@@ -1,7 +1,7 @@
 import { createApp } from "./app.js";
 import { loadLocalEnvFile } from "./env.js";
 
-loadLocalEnvFile();
+loadLocalEnvFile(undefined, { override: true });
 const port = Number.parseInt(process.env.PORT ?? "4000", 10);
 const app = createApp();
 

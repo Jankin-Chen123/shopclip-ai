@@ -60,11 +60,13 @@ Add P1 media controls and make generation failures recoverable and observable.
 - Added Delivery UI controls for TTS voice, subtitle style, BGM track, subtitle toggle, forced failure, and retry.
 - Added Delivery UI controls for Seedance video settings: aspect ratio, resolution, generate audio, watermark, and optional seed. These values are sent in the render request and are not required as `.env` values.
 - 2026-05-28 follow-up: Reverted backend Seedance model alias normalization. Render submission now uses the exact `.env` model configuration from `AI_VIDEO_MODEL_ID` / `AI_VIDEO_ENDPOINT_ID`; production should configure the Ark `ep-...` endpoint ID for the video role.
+- 2026-05-28 follow-up: API startup now loads the local `.env` with override enabled so stale process-level values cannot keep an old video model active when the server `.env` has been updated.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
   - `projects/shopclip-ai/evidence/part-008-verification.md`
   - `projects/shopclip-ai/evidence/2026-05-28-seedance-env-model-config.md`
+  - `projects/shopclip-ai/evidence/2026-05-28-env-override-for-video-model.md`
 
 ## Verification Evidence
 
@@ -75,6 +77,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - `corepack pnpm --filter @shopclip/web test:e2e`
 - `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
 - `corepack pnpm --filter @shopclip/api test -- seedanceRenderer.test.ts`
+- `corepack pnpm --filter @shopclip/api test -- env.test.ts`
 
 ## Verification Plan
 

@@ -12,7 +12,14 @@ const parseEnvValue = (value: string) => {
   return trimmed;
 };
 
-export const loadLocalEnvFile = (path = resolve(process.cwd(), ".env")) => {
+type LoadLocalEnvFileOptions = {
+  override?: boolean;
+};
+
+export const loadLocalEnvFile = (
+  path = resolve(process.cwd(), ".env"),
+  options: LoadLocalEnvFileOptions = {},
+) => {
   if (!existsSync(path)) {
     return;
   }
@@ -30,7 +37,7 @@ export const loadLocalEnvFile = (path = resolve(process.cwd(), ".env")) => {
     }
 
     const key = trimmedLine.slice(0, separatorIndex).trim();
-    if (!key || process.env[key] !== undefined) {
+    if (!key || (!options.override && process.env[key] !== undefined)) {
       continue;
     }
 
