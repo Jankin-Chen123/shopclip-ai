@@ -7,6 +7,7 @@ import { createApp } from "./app";
 const touchedKeys = [
   "ARK_API_BASE_URL",
   "AI_VIDEO_API_KEY",
+  "AI_VIDEO_SCENE_SUBMIT_DELAY_MS",
   "AI_VIDEO_MODEL_ID",
   "FFMPEG_PATH",
   "VIDEO_RENDER_PROVIDER_MODE",
@@ -28,6 +29,11 @@ const request = async <T>(
   const body = (await response.json()) as T;
   return { body, status: response.status };
 };
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 
 describe("Seedance render API flow", () => {
   let server: Server;
@@ -153,17 +159,58 @@ describe("Seedance render API flow", () => {
 
     expect(render.status).toBe(201);
     expect(render.body.renderTask).toMatchObject({
-      status: "running",
+      status: "queued",
       provider: "volcengine-seedance",
-      providerTaskId: "seedance-scene-task-1,seedance-scene-task-2,seedance-scene-task-3,seedance-scene-task-4",
     });
     expect(render.body.renderTask.sceneClips).toHaveLength(4);
-    expect(render.body.renderTask.sceneClips.map((clip) => clip.providerTaskId)).toEqual([
-      "seedance-scene-task-1",
-      "seedance-scene-task-2",
-      "seedance-scene-task-3",
-      "seedance-scene-task-4",
+    expect(render.body.renderTask.sceneClips.map((clip) => clip.status)).toEqual([
+      "queued",
+      "queued",
+      "queued",
+      "queued",
     ]);
+
+    let polled: {
+      status: number;
+      body: {
+        renderTask: {
+          status: string;
+          progress: number;
+          previewUrl: string;
+          exportUrl: string;
+          providerTaskId: string;
+          sceneClips: Array<{
+            status: string;
+            videoUrl: string;
+          }>;
+        };
+        traceEvents: Array<{ step: string; status: string }>;
+      };
+    } | undefined;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      polled = await request<{
+        renderTask: {
+          status: string;
+          progress: number;
+          previewUrl: string;
+          exportUrl: string;
+          providerTaskId: string;
+          sceneClips: Array<{
+            status: string;
+            videoUrl: string;
+          }>;
+        };
+        traceEvents: Array<{ step: string; status: string }>;
+      }>(baseUrl, `/api/render-tasks/${render.body.renderTask.id}`);
+      if (polled.body.renderTask.status === "completed") {
+        break;
+      }
+      await wait(10);
+    }
+
+    expect(polled?.body.renderTask.providerTaskId).toBe(
+      "seedance-scene-task-1,seedance-scene-task-2,seedance-scene-task-3,seedance-scene-task-4",
+    );
     const seedanceCreateCalls = fetchMock.mock.calls.filter(([url]) =>
       String(url instanceof Request ? url.url : url).endsWith("/contents/generations/tasks"),
     );
@@ -177,36 +224,109 @@ describe("Seedance render API flow", () => {
       seed: 77,
     });
 
-    const polled = await request<{
-      renderTask: {
-        status: string;
-        progress: number;
-        previewUrl: string;
-        exportUrl: string;
-        sceneClips: Array<{
-          status: string;
-          videoUrl: string;
-        }>;
-      };
-      traceEvents: Array<{ step: string; status: string }>;
-    }>(baseUrl, `/api/render-tasks/${render.body.renderTask.id}`);
-
-    expect(polled.status).toBe(200);
-    expect(polled.body.renderTask).toMatchObject({
+    expect(polled?.status).toBe(200);
+    expect(polled?.body.renderTask).toMatchObject({
       status: "completed",
       progress: 100,
       previewUrl: "https://cdn.example.test/seedance-scene-task-1.mp4",
       exportUrl: "https://cdn.example.test/seedance-scene-task-1.mp4",
     });
-    expect(polled.body.renderTask.sceneClips.map((clip) => clip.videoUrl)).toEqual([
+    expect(polled?.body.renderTask.sceneClips.map((clip) => clip.videoUrl)).toEqual([
       "https://cdn.example.test/seedance-scene-task-1.mp4",
       "https://cdn.example.test/seedance-scene-task-2.mp4",
       "https://cdn.example.test/seedance-scene-task-3.mp4",
       "https://cdn.example.test/seedance-scene-task-4.mp4",
     ]);
-    expect(polled.body.traceEvents.map((event) => event.step)).toContain("seedance-scene-clips-ready");
-    expect(polled.body.traceEvents.map((event) => event.step)).toContain(
+    expect(polled?.body.traceEvents.map((event) => event.step)).toContain("seedance-scene-clips-ready");
+    expect(polled?.body.traceEvents.map((event) => event.step)).toContain(
       "ffmpeg-scene-compose-failed",
     );
+  });
+
+  it("returns a queued render task before slow Seedance scene submission completes", async () => {
+    const originalFetch = globalThis.fetch;
+    const pendingSeedanceRequests: Array<() => void> = [];
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+      if (requestUrl.endsWith("/contents/generations/tasks")) {
+        await new Promise<void>((resolve) => {
+          pendingSeedanceRequests.push(resolve);
+        });
+        return Response.json({
+          id: `seedance-scene-task-${pendingSeedanceRequests.length}`,
+          status: "queued",
+        });
+      }
+      return Response.json({ status: "queued" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Slow Seedance launch clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+    const asset = await request<{ asset: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "GlowGrip packshot",
+          url: "https://cdn.example.test/product.png",
+          mimeType: "image/png",
+          sizeBytes: 220_000,
+          tags: ["product", "desk"],
+        }),
+      },
+    );
+    await request(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [asset.body.asset.id],
+      }),
+    });
+
+    const renderPromise = request<{
+      renderTask: {
+        status: string;
+        sceneClips: Array<{ status: string }>;
+      };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/render`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const result = await Promise.race([
+      renderPromise,
+      wait(40).then(() => "timed-out" as const),
+    ]);
+    pendingSeedanceRequests.forEach((resolve) => resolve());
+
+    expect(result).not.toBe("timed-out");
+    expect(result).toMatchObject({
+      status: 201,
+      body: {
+        renderTask: {
+          status: "queued",
+          sceneClips: [
+            { status: "queued" },
+            { status: "queued" },
+            { status: "queued" },
+            { status: "queued" },
+          ],
+        },
+      },
+    });
   });
 });

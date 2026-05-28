@@ -394,6 +394,29 @@ const errorMessageFromBody = (body: unknown) => {
   );
 };
 
+const queuedSceneClips = (project: ProjectSnapshot): SceneRenderClip[] =>
+  [...project.scenes]
+    .sort((left, right) => left.order - right.order)
+    .map((scene) => ({
+      sceneId: scene.id,
+      order: scene.order,
+      subtitle: scene.subtitle,
+      status: "queued",
+      progress: 0,
+    }));
+
+const providerTaskIdFromClips = (sceneClips: SceneRenderClip[]) => {
+  const providerTaskIds = sceneClips
+    .map((clip) => clip.providerTaskId)
+    .filter((taskId): taskId is string => Boolean(taskId));
+  return providerTaskIds.length > 0 ? providerTaskIds.join(",") : undefined;
+};
+
+const aggregateSceneClipProgress = (sceneClips: SceneRenderClip[]) =>
+  sceneClips.length > 0
+    ? Math.round(sceneClips.reduce((sum, clip) => sum + clip.progress, 0) / sceneClips.length)
+    : 0;
+
 export const createSeedanceRenderProvider = () => {
   const config = getSeedanceConfig();
   if (!config) {
@@ -616,7 +639,249 @@ export const createSeedanceRenderProvider = () => {
         ],
       };
     },
+
+    async loadRenderTask(
+      project: ProjectSnapshot,
+      renderTask: RenderTask,
+    ): Promise<SeedanceTaskUpdate> {
+      if (!renderTask.sceneClips || renderTask.sceneClips.length === 0) {
+        if (!renderTask.providerTaskId) {
+          return {
+            renderTask: {
+              status: "failed",
+              progress: 0,
+              errorMessage: "Seedance render task does not contain scene clips or provider task id.",
+            },
+            traceEvents: [
+              {
+                status: "failed",
+                step: "seedance-task-state-invalid",
+                message: "Seedance render task does not contain scene clips or provider task id.",
+              },
+            ],
+          };
+        }
+        return this.loadTask(renderTask.providerTaskId);
+      }
+
+      const updatedClips = [...renderTask.sceneClips].sort((left, right) => left.order - right.order);
+      const queuedClip = updatedClips.find(
+        (clip) => clip.status === "queued" && !clip.providerTaskId,
+      );
+      const traceEvents: SeedanceTaskUpdate["traceEvents"] = [];
+
+      if (queuedClip) {
+        const scene = project.scenes.find((candidate) => candidate.id === queuedClip.sceneId);
+        if (!scene) {
+          const failedClip = {
+            ...queuedClip,
+            status: "failed" as const,
+            progress: 0,
+            errorMessage: `Storyboard scene ${queuedClip.sceneId} was not found.`,
+          };
+          updatedClips[updatedClips.indexOf(queuedClip)] = failedClip;
+        } else {
+          try {
+            const body = await requestArkJson(
+              "POST",
+              config,
+              config.path,
+              buildSeedanceRequestBody(
+                project,
+                config,
+                resolveVideoSettings(renderTask.videoSettings),
+                scene,
+              ),
+            );
+            const providerTaskId = taskIdFromBody(body);
+            const videoUrl = collectVideoUrls(body)[0];
+            if (!providerTaskId && !videoUrl) {
+              throw new Error(
+                `Seedance did not return a task id or video URL for scene ${scene.order}.`,
+              );
+            }
+            updatedClips[updatedClips.indexOf(queuedClip)] = {
+              ...queuedClip,
+              status: videoUrl ? "completed" : "running",
+              progress: videoUrl ? 100 : 15,
+              providerTaskId,
+              videoUrl,
+              coverUrl: videoUrl,
+            };
+            traceEvents.push({
+              status: videoUrl ? "completed" : "running",
+              step: "seedance-scene-task-submitted",
+              message: `Seedance scene ${scene.order} task submitted: ${providerTaskId || "immediate-video-url"}.`,
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : `Seedance scene ${scene.order} task submission failed.`;
+            updatedClips[updatedClips.indexOf(queuedClip)] = {
+              ...queuedClip,
+              status: "failed",
+              progress: 0,
+              errorMessage: message,
+            };
+            traceEvents.push({
+              status: "failed",
+              step: "seedance-scene-task-submit-failed",
+              message,
+            });
+          }
+        }
+      }
+
+      const polledClips = await Promise.all(
+        updatedClips.map(async (clip) => {
+          if (clip.status === "completed" || clip.status === "failed" || !clip.providerTaskId) {
+            return clip;
+          }
+          const body = await requestArkJson(
+            "GET",
+            config,
+            `${config.path}/${encodeURIComponent(clip.providerTaskId)}`,
+          );
+          const status = statusFromBody(body);
+          const videoUrl = collectVideoUrls(body)[0];
+          const materializedStatus = videoUrl ? "completed" : status;
+          return {
+            ...clip,
+            status: materializedStatus,
+            progress: progressFromBody(body, materializedStatus, Boolean(videoUrl)),
+            videoUrl: videoUrl ?? clip.videoUrl,
+            coverUrl: videoUrl ?? clip.coverUrl,
+            errorMessage:
+              materializedStatus === "failed"
+                ? (errorMessageFromBody(body) ?? "Seedance scene video generation failed.")
+                : clip.errorMessage,
+          };
+        }),
+      );
+
+      const failedClip = polledClips.find((clip) => clip.status === "failed");
+      const completedClips = polledClips.filter((clip) => clip.status === "completed");
+      const allCompleted = completedClips.length === polledClips.length;
+      const firstVideoUrl = completedClips[0]?.videoUrl;
+      const progress = aggregateSceneClipProgress(polledClips);
+
+      if (failedClip) {
+        return {
+          renderTask: {
+            status: "failed",
+            progress,
+            errorMessage: failedClip.errorMessage ?? "Seedance scene video generation failed.",
+            providerTaskId: providerTaskIdFromClips(polledClips),
+            sceneClips: polledClips,
+          },
+          traceEvents:
+            traceEvents.length > 0
+              ? traceEvents
+              : [
+                  {
+                    status: "failed",
+                    step: "seedance-scene-video-failed",
+                    message:
+                      failedClip.errorMessage ?? "Seedance scene video generation failed.",
+                  },
+                ],
+        };
+      }
+
+      return {
+        renderTask: {
+          status: allCompleted ? "completed" : "running",
+          progress: allCompleted ? 100 : Math.max(5, Math.min(95, progress)),
+          previewUrl: firstVideoUrl,
+          exportUrl: firstVideoUrl,
+          providerTaskId: providerTaskIdFromClips(polledClips),
+          sceneClips: polledClips,
+        },
+        traceEvents: [
+          ...traceEvents,
+          {
+            status: allCompleted ? "completed" : "running",
+            step: allCompleted ? "seedance-scene-clips-ready" : "seedance-scene-tasks-polled",
+            message: allCompleted
+              ? "All Seedance scene clips are ready."
+              : "Seedance scene clips are still processing.",
+          },
+        ],
+      };
+    },
   };
+};
+
+export const createQueuedSeedanceRenderTask = (
+  project: ProjectSnapshot,
+  options: RenderFallbackOptions,
+): RenderProviderResult => {
+  const config = getSeedanceConfig();
+  if (!config) {
+    throw new Error("Seedance render provider requires AI_VIDEO_API_KEY or ARK_API_KEY.");
+  }
+
+  return {
+    renderTask: {
+      status: "queued",
+      progress: 0,
+      provider: "volcengine-seedance",
+      sceneClips: queuedSceneClips(project),
+      mediaSettings: options.mediaSettings,
+      videoSettings: resolveVideoSettings(options.videoSettings),
+      retryOfRenderTaskId: options.retryOfRenderTaskId,
+    },
+    traceEvents: [
+      ...(options.retryOfRenderTaskId
+        ? [
+            {
+              status: "retrying" as const,
+              step: "render-retry-started",
+              message: `Retrying failed render task ${options.retryOfRenderTaskId}.`,
+              retryOfTraceEventId: options.retryOfTraceEventId,
+            },
+          ]
+        : []),
+      {
+        status: "queued",
+        step: "seedance-scene-render-queued",
+        message: "Seedance scene video generation will be submitted during render polling.",
+      },
+    ],
+  };
+};
+
+export const createQueuedRenderWithConfiguredVideoProvider = (
+  project: ProjectSnapshot,
+  options: RenderFallbackOptions,
+): RenderProviderResult => {
+  if (!isSeedanceRenderEnabled()) {
+    return renderFallbackPreview(project, options);
+  }
+
+  try {
+    return createQueuedSeedanceRenderTask(project, options);
+  } catch (error) {
+    const fallbackResult = renderFallbackPreview(project, options);
+    return {
+      renderTask: {
+        ...fallbackResult.renderTask,
+        provider: "mock-renderer",
+      },
+      traceEvents: [
+        {
+          status: "failed",
+          step: "seedance-task-queue-failed",
+          message:
+            error instanceof Error
+              ? `${error.message} Deterministic mock render fallback used.`
+              : "Seedance task queueing failed. Deterministic mock render fallback used.",
+        },
+        ...fallbackResult.traceEvents,
+      ],
+    };
+  }
 };
 
 export const renderWithConfiguredVideoProvider = async (

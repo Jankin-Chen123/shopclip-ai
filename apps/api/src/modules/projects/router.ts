@@ -54,7 +54,7 @@ import {
 } from "../../providers/media/videoFrameExtractor.js";
 import {
   createSeedanceRenderProvider,
-  renderWithConfiguredVideoProvider,
+  createQueuedRenderWithConfiguredVideoProvider,
 } from "../../providers/renderer/seedanceRenderer.js";
 import { composeSceneClipsWithFfmpeg } from "../../providers/renderer/ffmpegComposer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
@@ -1703,7 +1703,10 @@ export const createP0Router = ({
       return;
     }
 
-    const renderResult = await renderWithConfiguredVideoProvider(project, parsedRenderRequest.data);
+    const renderResult = createQueuedRenderWithConfiguredVideoProvider(
+      project,
+      parsedRenderRequest.data,
+    );
     const storedRender = await store.addRenderTask(
       project.id,
       renderResult.renderTask,
@@ -1726,13 +1729,13 @@ export const createP0Router = ({
 
     if (
       renderTask.renderTask.provider === "volcengine-seedance" &&
-      renderTask.renderTask.providerTaskId &&
       !["completed", "failed"].includes(renderTask.renderTask.status)
     ) {
       try {
-        const providerResult = await createSeedanceRenderProvider().loadTask(
-          renderTask.renderTask.providerTaskId,
-          renderTask.renderTask.sceneClips,
+        const provider = createSeedanceRenderProvider();
+        const providerResult = await provider.loadRenderTask(
+          renderTask.project,
+          renderTask.renderTask,
         );
         if (
           providerResult.renderTask.status === "completed" &&
@@ -1823,7 +1826,7 @@ export const createP0Router = ({
     const failedTrace = [...previousRender.traceEvents]
       .reverse()
       .find((event) => event.status === "failed");
-    const renderResult = await renderWithConfiguredVideoProvider(previousRender.project, {
+    const renderResult = createQueuedRenderWithConfiguredVideoProvider(previousRender.project, {
       ...parsedRenderRequest.data,
       retryOfRenderTaskId: previousRender.renderTask.id,
       retryOfTraceEventId: failedTrace?.id,
