@@ -59,12 +59,12 @@ Add P1 media controls and make generation failures recoverable and observable.
 - Added render retry endpoint: `POST /api/render-tasks/:renderTaskId/retry`.
 - Added Delivery UI controls for TTS voice, subtitle style, BGM track, subtitle toggle, forced failure, and retry.
 - Added Delivery UI controls for Seedance video settings: aspect ratio, resolution, generate audio, watermark, and optional seed. These values are sent in the render request and are not required as `.env` values.
-- 2026-05-28 follow-up: Fixed Seedance render submission for common model aliases such as `doubao-seedance-1-5-pro`. The backend now normalizes these aliases to versioned model IDs before creating render tasks, preventing Ark `InvalidParameter` errors for `task_type r2v` caused by unversioned model names.
+- 2026-05-28 follow-up: Reverted backend Seedance model alias normalization. Render submission now uses the exact `.env` model configuration from `AI_VIDEO_MODEL_ID` / `AI_VIDEO_ENDPOINT_ID`; production should configure the Ark `ep-...` endpoint ID for the video role.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
   - `projects/shopclip-ai/evidence/part-008-verification.md`
-  - `projects/shopclip-ai/evidence/2026-05-28-seedance-model-alias-fix.md`
+  - `projects/shopclip-ai/evidence/2026-05-28-seedance-env-model-config.md`
 
 ## Verification Evidence
 

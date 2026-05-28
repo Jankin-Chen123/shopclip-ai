@@ -194,7 +194,7 @@ describe("Seedance renderer provider", () => {
     });
   });
 
-  it("normalizes common Seedance model aliases before submitting render tasks", async () => {
+  it("submits the configured video model id verbatim from the environment", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "doubao-seedance-1-5-pro";
@@ -218,7 +218,7 @@ describe("Seedance renderer provider", () => {
     });
 
     const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-    expect(requestBody.model).toBe("doubao-seedance-1-5-pro-251215");
+    expect(requestBody.model).toBe("doubao-seedance-1-5-pro");
   });
 
   it("polls a Seedance task and maps the returned video URL to preview and export URLs", async () => {
