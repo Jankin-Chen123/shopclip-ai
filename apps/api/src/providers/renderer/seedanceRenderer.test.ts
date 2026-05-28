@@ -241,7 +241,7 @@ describe("Seedance renderer provider", () => {
     );
 
     const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-    expect(requestBody.duration).toBe(15);
+    expect(requestBody.duration).toBe(12);
   });
 
   it("prefers render request video settings over environment defaults", async () => {

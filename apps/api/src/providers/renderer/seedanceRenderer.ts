@@ -14,7 +14,7 @@ const DEFAULT_VIDEO_MODEL = "doubao-seedance-2-0-260128";
 const DEFAULT_VIDEO_PATH = "/contents/generations/tasks";
 const DEFAULT_VIDEO_RATIO = "9:16";
 const DEFAULT_VIDEO_RESOLUTION = "720p";
-const DEFAULT_VIDEO_DURATIONS = [5, 10, 15];
+const DEFAULT_VIDEO_DURATIONS = [5, 10, 12];
 
 type SeedanceConfig = {
   apiKey: string;
@@ -212,7 +212,7 @@ const uniquePublicImageAssets = (project: ProjectSnapshot): AssetMetadata[] => {
 
 const totalDurationSeconds = (project: ProjectSnapshot) =>
   Math.min(
-    15,
+    Math.max(...DEFAULT_VIDEO_DURATIONS),
     Math.max(1, Math.round(project.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0))),
   );
 

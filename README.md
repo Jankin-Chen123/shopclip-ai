@@ -95,7 +95,7 @@ corepack pnpm dev
 | `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID 或可调用 model ID；生产建议填写方舟控制台中的 `ep-...` endpoint ID，后端会原样提交该值。 |
 | `AI_VIDEO_REFERENCE_IMAGES` | API | 可选            | 默认 `false`，Seedance 渲染只提交文本内容以走 text-to-video；只有 endpoint 支持参考图 / r2v 时才设为 `true`。 |
 | `AI_VIDEO_DURATION`    | API    | 可选                 | Seedance 目标视频时长覆盖值；为空时按分镜总时长自动计算。 |
-| `AI_VIDEO_ALLOWED_DURATIONS` | API | 可选           | Seedance 可接受的离散时长列表，默认 `5,10,15`；分镜总时长会向上规整到最近可用值。 |
+| `AI_VIDEO_ALLOWED_DURATIONS` | API | 可选           | Seedance 可接受的离散时长列表，默认 `5,10,12`；分镜总时长会向上规整到最近可用值。 |
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |

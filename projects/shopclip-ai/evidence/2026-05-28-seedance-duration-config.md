@@ -11,7 +11,7 @@ The renderer was sending raw storyboard scene totals. For one project that produ
 ## Change
 
 - Seedance render requests now derive `duration` from storyboard scene durations.
-- Raw storyboard totals are rounded up to the nearest value in `AI_VIDEO_ALLOWED_DURATIONS`, defaulting to `5,10,15`.
+- Raw storyboard totals are rounded up to the nearest value in `AI_VIDEO_ALLOWED_DURATIONS`, defaulting to `5,10,12`.
 - Added `AI_VIDEO_DURATION` so the server can force a specific value if the selected endpoint requires it.
 - Updated `.env.example`, `README.md`, and Part 008 notes.
 
