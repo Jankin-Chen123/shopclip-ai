@@ -194,6 +194,33 @@ describe("Seedance renderer provider", () => {
     });
   });
 
+  it("normalizes common Seedance model aliases before submitting render tasks", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "doubao-seedance-1-5-pro";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "seedance-task-normalized-model",
+        status: "queued",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderWithConfiguredVideoProvider(project, {
+      mediaSettings: {
+        ttsVoice: "clear-host",
+        subtitleStyle: "clean-lower-third",
+        subtitlesEnabled: true,
+        bgmTrack: "creator-pop",
+      },
+    });
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody.model).toBe("doubao-seedance-1-5-pro-251215");
+  });
+
   it("polls a Seedance task and maps the returned video URL to preview and export URLs", async () => {
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";

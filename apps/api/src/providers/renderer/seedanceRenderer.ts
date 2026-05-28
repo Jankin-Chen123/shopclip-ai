@@ -15,6 +15,17 @@ const DEFAULT_VIDEO_PATH = "/contents/generations/tasks";
 const DEFAULT_VIDEO_RATIO = "9:16";
 const DEFAULT_VIDEO_RESOLUTION = "720p";
 
+const SEEDANCE_MODEL_ALIASES = new Map<string, string>([
+  ["doubao-seedance1.5-pro", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1.5-pro", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1-5-pro", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance-1-5-pro-251215", "doubao-seedance-1-5-pro-251215"],
+  ["doubao-seedance2.0", "doubao-seedance-2-0-260128"],
+  ["doubao-seedance-2.0", "doubao-seedance-2-0-260128"],
+  ["doubao-seedance-2-0", "doubao-seedance-2-0-260128"],
+  ["doubao-seedance-2-0-260128", "doubao-seedance-2-0-260128"],
+]);
+
 type SeedanceConfig = {
   apiKey: string;
   baseUrl: string;
@@ -75,6 +86,11 @@ const parseResolutionEnv = (): VideoGenerationSettings["resolution"] => {
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/$/, "");
 
+const normalizeSeedanceModel = (model: string) => {
+  const trimmedModel = model.trim();
+  return SEEDANCE_MODEL_ALIASES.get(trimmedModel.toLowerCase()) ?? trimmedModel;
+};
+
 const getSeedanceConfig = (): SeedanceConfig | undefined => {
   const apiKey = firstEnv("AI_VIDEO_API_KEY", "ARK_API_KEY", "AI_API_KEY");
   if (!apiKey) {
@@ -84,7 +100,9 @@ const getSeedanceConfig = (): SeedanceConfig | undefined => {
   return {
     apiKey,
     baseUrl: normalizeBaseUrl(process.env.ARK_API_BASE_URL ?? DEFAULT_ARK_BASE_URL),
-    model: firstEnv("AI_VIDEO_MODEL_ID", "AI_VIDEO_ENDPOINT_ID") ?? DEFAULT_VIDEO_MODEL,
+    model: normalizeSeedanceModel(
+      firstEnv("AI_VIDEO_MODEL_ID", "AI_VIDEO_ENDPOINT_ID") ?? DEFAULT_VIDEO_MODEL,
+    ),
     path: firstEnv("ARK_VIDEO_GENERATION_PATH") ?? DEFAULT_VIDEO_PATH,
   };
 };

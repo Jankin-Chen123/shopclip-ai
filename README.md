@@ -92,7 +92,7 @@ corepack pnpm dev
 | `AI_GENERAL_MODEL_ID`  | API    | 真实 provider 才需要 | 通用/文案模型的方舟 endpoint ID 或可调用 model ID。          |
 | `AI_IMAGE_MODEL_ID`    | API    | 图片生成才需要       | 图片生成模型的方舟 endpoint ID 或可调用 model ID。           |
 | `ARK_IMAGE_SIZE`       | API    | 可选                 | 图片生成尺寸，默认 `1024x1024`。                           |
-| `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID 或可调用 model ID。           |
+| `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID、可调用 model ID，或常见 Seedance 别名；渲染 provider 会把 `doubao-seedance-1-5-pro` 这类短别名归一化为版本化 ID。 |
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
