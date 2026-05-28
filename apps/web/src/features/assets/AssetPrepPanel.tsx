@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import type { AssetMetadata } from "@shopclip/shared";
 import {
   ArrowLeft,
@@ -260,6 +260,29 @@ const createInitialManualUploads = (
   );
 };
 
+export const createAssetPrepSnapshotFromUploads = (
+  manualUploads: Record<string, ManualPrepUpload[]>,
+  keywords: string[],
+): AssetPrepSnapshot => ({
+  assetIds: Object.values(manualUploads)
+    .flat()
+    .map((upload) => upload.asset?.id)
+    .filter((assetId): assetId is string => Boolean(assetId)),
+  keywords: keywords.map((keyword) => keyword.trim()).filter(Boolean),
+  materials: Object.entries(manualUploads).flatMap(([bucketId, uploads]) =>
+    uploads.map((upload) => ({
+      assetId: upload.asset?.id,
+      bucketId,
+      mimeType: upload.mimeType,
+      name: upload.name,
+      sizeBytes: upload.size || undefined,
+      source: upload.source,
+      tags: upload.asset?.tags ?? [],
+      type: upload.asset?.type,
+    })),
+  ),
+});
+
 export const filterPrepLibraryAssets = (
   assets: AssetMetadata[],
   category: AssetCategory,
@@ -408,26 +431,11 @@ export const AssetPrepPanel = ({
       )
     : [];
 
-  useEffect(() => {
-    onPreparationChange?.({
-      assetIds: Object.values(manualUploads)
-        .flat()
-        .map((upload) => upload.asset?.id)
-        .filter((assetId): assetId is string => Boolean(assetId)),
-      keywords: keywords.map((keyword) => keyword.trim()).filter(Boolean),
-      materials: Object.entries(manualUploads).flatMap(([bucketId, uploads]) =>
-        uploads.map((upload) => ({
-          assetId: upload.asset?.id,
-          bucketId,
-          mimeType: upload.mimeType,
-          name: upload.name,
-          sizeBytes: upload.size || undefined,
-          source: upload.source,
-          tags: upload.asset?.tags ?? [],
-          type: upload.asset?.type,
-        })),
-      ),
-    });
+  const useAssetPrepSnapshotEffect =
+    typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+  useAssetPrepSnapshotEffect(() => {
+    onPreparationChange?.(createAssetPrepSnapshotFromUploads(manualUploads, keywords));
   }, [keywords, manualUploads, onPreparationChange]);
 
   return (

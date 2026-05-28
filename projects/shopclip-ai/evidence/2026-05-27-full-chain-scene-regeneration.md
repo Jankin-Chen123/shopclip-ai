@@ -14,11 +14,19 @@
 - `apps/api/src/modules/projects/router.ts`
 - `apps/api/src/providers/ai/mockScriptProvider.ts`
 - `apps/api/src/p0-flow.test.ts`
+- `apps/api/src/p1-flow.test.ts`
+- `apps/web/src/app/App.test.tsx`
 - `apps/web/src/app/App.tsx`
+- `apps/web/src/features/studio/StudioWorkspace.tsx`
+- `apps/web/src/lib/api.ts`
+- `packages/shared/src/schemas.ts`
+- `packages/shared/src/types.ts`
 
 ## Regression Fixed
 
 The storyboard generation endpoint previously relied on `project.assets[0]` when assigning scene assets. Step 02 can prepare assets from the global asset library, so generated scenes could lose the prepared asset reference. The backend now resolves requested `assetIds` through the shared store and passes those assets into the script provider.
+
+2026-05-28 follow-up: Single-scene regeneration previously called the editing fallback provider, which rewrote subtitle, voiceover, and visual prompt text before refreshing the image. The flow now accepts the current inspector scene fields from the frontend and calls the image-generation path directly. Regeneration stores the current duration, subtitle, voiceover, visual prompt, and asset slot, refreshes only `imageUrl`, and leaves other scenes unchanged.
 
 ## Automated Verification
 
@@ -28,6 +36,13 @@ The storyboard generation endpoint previously relied on `project.assets[0]` when
 - `corepack pnpm lint`: passed.
 - `corepack pnpm build`: passed.
 - `corepack pnpm --filter @shopclip/web test:e2e`: passed after updating the browser specs to the current Step 02 script-generation and Step 03 storyboard-editing UI.
+- `corepack pnpm --filter @shopclip/shared build`: passed.
+- `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts -t "uses prepared assets for storyboard generation and regenerates only the selected scene"`: passed, including the regression that current scene fields are preserved after regeneration.
+- `corepack pnpm --filter @shopclip/api test -- p1-flow.test.ts -t "updates, reorders, deletes, regenerates scenes"`: passed.
+- `corepack pnpm --filter @shopclip/web test -- App.test.tsx -t "sends current scene fields and API settings when regenerating one scene image"`: passed.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm build`: passed.
 
 ## Browser Verification
 

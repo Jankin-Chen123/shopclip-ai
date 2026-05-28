@@ -22,6 +22,7 @@ import type {
   ProjectSummary,
   RenderRequest,
   RenderTask,
+  SceneRegenerationRequest,
   SceneUpdate,
   ScriptGenerationRequest,
   ScriptResult,
@@ -407,9 +408,11 @@ export const deleteScene = async (sceneId: string): Promise<StoryboardScene[]> =
 
 export const regenerateScene = async (
   sceneId: string,
+  request?: SceneRegenerationRequest,
 ): Promise<{ scene: StoryboardScene; traceEvent: TraceEvent }> =>
   requestJson(`/scenes/${sceneId}/regenerate`, {
     method: "POST",
+    body: JSON.stringify(request ?? {}),
   });
 
 export const loadSceneSuggestions = async (sceneId: string): Promise<EditingSuggestion[]> => {

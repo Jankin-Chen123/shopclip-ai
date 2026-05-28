@@ -57,6 +57,7 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - Updated Studio UI with save, keyboard-accessible move buttons, delete, regenerate, suggestion apply, and suggestion dismiss actions.
 - Added trace events for scene regeneration and Agent suggestion application.
 - 2026-05-27 update: single-scene regeneration now refreshes that scene's generated `imageUrl` while preserving the rest of the storyboard.
+- 2026-05-28 update: single-scene regeneration now uses the current inspector fields directly for image generation. It no longer rewrites subtitle, voiceover, or visual prompt through the editing fallback provider; the frontend posts the current scene fields and API settings, and the backend refreshes only the image while persisting those current fields.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-07-scene-agent-regeneration.png`
   - `projects/shopclip-ai/evidence/part-007-verification.md`

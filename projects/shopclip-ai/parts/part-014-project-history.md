@@ -45,6 +45,7 @@ Support browsing historical creation projects from the creation/project setup ar
 - RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because step 02 did not restore file-sourced asset prep materials from the parent snapshot after navigating to step 03 and back.
 - RED: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` failed because `DELETE /api/projects/:projectId` returned 404.
 - RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because historical project rows did not render a delete action.
+- RED: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` failed because `createAssetPrepSnapshotFromUploads` was missing, leaving the latest edited prep keywords dependent on async effect timing before step switches.
 - GREEN: `corepack pnpm --filter @shopclip/shared test -- schemas.test.ts` passed: 2 files, 15 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed: 13 files, 51 tests.
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed: 1 file, 52 tests.
@@ -53,12 +54,15 @@ Support browsing historical creation projects from the creation/project setup ar
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after restoring step 02 from `assetPrepSnapshot`: 1 file, 56 tests.
 - GREEN: `corepack pnpm --filter @shopclip/api test -- p0-flow.test.ts` passed after adding project deletion: 14 files, 53 tests.
 - GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after adding the history delete action: 1 file, 56 tests.
+- GREEN: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed after extracting asset prep snapshot creation and syncing prep keywords through a browser layout effect: 1 file, 60 tests.
 - Typecheck: `corepack pnpm --filter @shopclip/web typecheck` passed.
 - Typecheck: `corepack pnpm --filter @shopclip/api typecheck` passed.
 - Typecheck: `corepack pnpm --filter @shopclip/web typecheck` passed.
+- Typecheck: `corepack pnpm --filter @shopclip/web typecheck` passed after the step-switch keyword persistence fix.
 - Lint: `corepack pnpm --filter @shopclip/web lint` passed.
 - Lint: `corepack pnpm --filter @shopclip/api lint` passed.
 - Lint: `corepack pnpm --filter @shopclip/web lint` passed.
+- Lint: `corepack pnpm --filter @shopclip/web lint` passed after the step-switch keyword persistence fix.
 - Typecheck: `corepack pnpm typecheck` passed for shared, API, and web.
 - Lint: `corepack pnpm --filter @shopclip/shared lint`, `corepack pnpm --filter @shopclip/api lint`, and `corepack pnpm --filter @shopclip/web lint` passed.
 - Prisma schema: `apps/api/node_modules/.bin/prisma.CMD validate --schema apps/api/prisma/schema.prisma` passed locally.
@@ -76,6 +80,7 @@ Support browsing historical creation projects from the creation/project setup ar
 - Selecting a historical project uses the existing full project snapshot loader and restores settings, assets, scripts, scenes, render state, and workspace selection.
 - Restored loaded project assets into the step 02 asset prep buckets and the script-generation asset prep snapshot, so historical imported images/videos/reference assets are visible and reused.
 - Step 02 now initializes from the parent `assetPrepSnapshot`, so navigating to storyboard generation and back preserves already prepared file uploads and keywords.
+- Step 02 now creates the parent asset prep snapshot through a shared helper and syncs it with a browser layout effect, so the latest edited keyword tags are committed before the component is unmounted by a step switch.
 - Asset creation/import paths now attach new assets to the current project when one is loaded, so project snapshots keep the imported materials available across step and project switches.
 - Added `ProjectStore.deleteProject()` and memory/Prisma implementations.
 - Added `DELETE /api/projects/:projectId`; it deletes the project snapshot and project-owned assets, and deletes object storage keys only for those project-owned assets.

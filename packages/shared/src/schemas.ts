@@ -315,6 +315,11 @@ export const SceneUpdateSchema = z
     message: "At least one scene field is required.",
   });
 
+export const SceneRegenerationRequestSchema = z.object({
+  scene: SceneUpdateSchema.optional(),
+  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
+});
+
 export const EditingSuggestionSchema = z.object({
   id: z.string().trim().min(1),
   title: z.string().trim().min(1),

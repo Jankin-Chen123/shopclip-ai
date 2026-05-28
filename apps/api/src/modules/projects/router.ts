@@ -15,6 +15,7 @@ import {
   ProjectBriefSchema,
   ExternalAssetResultSchema,
   RenderRequestSchema,
+  SceneRegenerationRequestSchema,
   SceneUpdateSchema,
   ScriptGenerationRequestSchema,
   ScriptResultSchema,
@@ -40,7 +41,6 @@ import {
 } from "../../providers/assets/externalAssetProviders.js";
 import {
   generateEditingSuggestions,
-  regenerateSceneFallback,
 } from "../../providers/ai/editingAgentProvider.js";
 import { generateInspiration } from "../../providers/ai/arkInspirationProvider.js";
 import {
@@ -1852,25 +1852,56 @@ export const createP0Router = ({
   });
 
   router.post("/scenes/:sceneId/regenerate", async (request, response) => {
+    const parsedRegeneration = SceneRegenerationRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRegeneration.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCENE_REGENERATION_REQUEST",
+        "Scene regeneration request is invalid.",
+      );
+      return;
+    }
+
     const context = await store.getSceneContext(request.params.sceneId);
     if (!context) {
       sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
       return;
     }
 
-    const regeneratedScene = regenerateSceneFallback(context.project, context.scene);
-    const linkedAsset = regeneratedScene.assetId
-      ? await store.getAsset(regeneratedScene.assetId)
+    const sceneUpdate = parsedRegeneration.data.scene;
+    const nextAssetId =
+      sceneUpdate?.assetId === null ? undefined : (sceneUpdate?.assetId ?? context.scene.assetId);
+    const sceneForImage = {
+      ...context.scene,
+      durationSeconds: sceneUpdate?.durationSeconds ?? context.scene.durationSeconds,
+      subtitle: sceneUpdate?.subtitle ?? context.scene.subtitle,
+      voiceover: sceneUpdate?.voiceover ?? context.scene.voiceover,
+      visualPrompt: sceneUpdate?.visualPrompt ?? context.scene.visualPrompt,
+      assetId: nextAssetId,
+      status: "generated" as const,
+    };
+    const linkedAsset = sceneForImage.assetId
+      ? await store.getAsset(sceneForImage.assetId)
       : undefined;
     const imageUrl = await generateStoryboardSceneImageUrl(
       context.project,
-      regeneratedScene,
-      undefined,
+      sceneForImage,
+      {
+        assetIds: sceneForImage.assetId ? [sceneForImage.assetId] : [],
+        keywords: [],
+        materials: [],
+        apiConfig: parsedRegeneration.data.apiConfig,
+      },
       linkedAsset ? [linkedAsset] : context.project.assets,
       videoFrameExtractor,
     );
     const storedScene = await store.updateScene(context.scene.id, {
-      ...regeneratedScene,
+      durationSeconds: sceneForImage.durationSeconds,
+      subtitle: sceneForImage.subtitle,
+      voiceover: sceneForImage.voiceover,
+      visualPrompt: sceneForImage.visualPrompt,
+      assetId: sceneUpdate?.assetId === null ? null : sceneForImage.assetId,
+      status: "generated",
       imageUrl,
     });
     if (!storedScene) {
@@ -1881,7 +1912,7 @@ export const createP0Router = ({
     const traceEvent = await store.appendTraceEvent(`scene:${context.scene.id}`, {
       status: "completed",
       step: "scene-regenerated",
-      message: `已使用确定性编辑 fallback 重生成第 ${context.scene.order} 个镜头。`,
+      message: `已根据当前分镜字段重生成第 ${context.scene.order} 个镜头图片。`,
     });
 
     response.json({

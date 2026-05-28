@@ -518,16 +518,29 @@ describe("P1 asset retrieval and scene editing", () => {
     expect(untouchedBefore).toBeDefined();
 
     const regenerated = await request<{
-      scene: { id: string; subtitle: string; status: string };
+      scene: { id: string; subtitle: string; voiceover: string; visualPrompt: string; status: string };
       traceEvent: { step: string; message: string };
-    }>(baseUrl, `/api/scenes/${firstScene.id}/regenerate`, { method: "POST" });
+    }>(baseUrl, `/api/scenes/${firstScene.id}/regenerate`, {
+      method: "POST",
+      body: JSON.stringify({
+        scene: {
+          durationSeconds: 5,
+          subtitle: "Current inspector subtitle",
+          voiceover: "Current inspector voiceover",
+          visualPrompt: "Current inspector visual prompt for image regeneration",
+          assetId: asset.body.asset.id,
+        },
+      }),
+    });
 
     expect(regenerated.status).toBe(200);
     expect(regenerated.body.scene).toMatchObject({
       id: firstScene.id,
       status: "generated",
+      subtitle: "Current inspector subtitle",
+      voiceover: "Current inspector voiceover",
+      visualPrompt: "Current inspector visual prompt for image regeneration",
     });
-    expect(regenerated.body.scene.subtitle).toContain("重生成：");
     expect(regenerated.body.traceEvent.step).toBe("scene-regenerated");
 
     const afterRegen = await request<{

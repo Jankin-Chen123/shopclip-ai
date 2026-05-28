@@ -1070,14 +1070,23 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
-  const handleRegenerateScene = (sceneId: string) => {
+  const handleRegenerateScene = (scene: StoryboardScene) => {
     void runAction("studio", "scene", async () => {
-      const regenerated = await regenerateScene(sceneId);
+      const regenerated = await regenerateScene(scene.id, {
+        scene: {
+          durationSeconds: scene.durationSeconds,
+          subtitle: scene.subtitle,
+          voiceover: scene.voiceover,
+          visualPrompt: scene.visualPrompt,
+          assetId: scene.assetId ?? null,
+        },
+        apiConfig,
+      });
       replaceSceneInState(regenerated.scene);
       setTraceEvents((current) => [...current, regenerated.traceEvent]);
       setDirtySceneIds((current) => {
         const next = new Set(current);
-        next.delete(sceneId);
+        next.delete(scene.id);
         return next;
       });
       setEditingSuggestions([]);

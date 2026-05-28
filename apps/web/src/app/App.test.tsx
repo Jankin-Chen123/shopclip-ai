@@ -6,14 +6,18 @@ import type {
 } from "@shopclip/shared";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AssetCategoryTabs,
   assetMatchesCategory,
   externalAssetMatchesCategory,
 } from "../features/assets/AssetCategoryTabs";
-import { AssetPrepPanel, filterPrepLibraryAssets } from "../features/assets/AssetPrepPanel";
+import {
+  AssetPrepPanel,
+  createAssetPrepSnapshotFromUploads,
+  filterPrepLibraryAssets,
+} from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import {
   InspirationPanel,
@@ -37,6 +41,11 @@ import {
   hasUsableStockProviderCredential,
 } from "./App";
 import { copy } from "./i18n";
+import { regenerateScene } from "../lib/api";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const makeAsset = (asset: Partial<AssetMetadata>): AssetMetadata => ({
   id: "asset-1",
@@ -241,6 +250,54 @@ describe("App", () => {
       provider: "volcengine-ark",
     });
     expect(payload.apiConfig?.image?.apiKey).toBeUndefined();
+  });
+
+  it("sends current scene fields and API settings when regenerating one scene image", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        scene: {
+          id: "scene-1",
+          projectId: "project-1",
+          order: 1,
+          durationSeconds: 4,
+          subtitle: "Current edited subtitle",
+          voiceover: "Current edited voiceover",
+          visualPrompt: "Current edited visual prompt",
+          assetId: "asset-1",
+          status: "generated",
+        },
+        traceEvent: {
+          id: "trace-1",
+          taskId: "scene:scene-1",
+          step: "scene-regenerated",
+          status: "completed",
+          message: "Image regenerated.",
+          timestamp: "2026-05-28T00:00:00.000Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await regenerateScene("scene-1", {
+      scene: {
+        durationSeconds: 4,
+        subtitle: "Current edited subtitle",
+        voiceover: "Current edited voiceover",
+        visualPrompt: "Current edited visual prompt",
+        assetId: "asset-1",
+      },
+      apiConfig: createDefaultApiConfig(),
+    });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.scene).toMatchObject({
+      durationSeconds: 4,
+      subtitle: "Current edited subtitle",
+      voiceover: "Current edited voiceover",
+      visualPrompt: "Current edited visual prompt",
+      assetId: "asset-1",
+    });
+    expect(body.apiConfig).toMatchObject(createDefaultApiConfig());
   });
 
   it("places the step 03 scene list before the centered preview workspace", () => {
@@ -481,6 +538,62 @@ describe("App", () => {
 
     expect(markup).toContain("已上传 1/4");
     expect(markup).toContain("Uploaded packshot.png");
+  });
+
+  it("creates a prep snapshot from the latest edited keywords and uploads", () => {
+    const snapshot = createAssetPrepSnapshotFromUploads(
+      {
+        hero: [
+          {
+            id: "asset-packshot",
+            asset: makeAsset({
+              id: "asset-packshot",
+              name: "GlowGrip packshot.png",
+              type: "image",
+              mimeType: "image/png",
+              tags: ["hero"],
+            }),
+            mimeType: "image/png",
+            name: "GlowGrip packshot.png",
+            size: 242000,
+            source: "library",
+          },
+        ],
+        brand: [
+          {
+            id: "script-draft",
+            mimeType: "text/plain",
+            name: "Campaign draft.txt",
+            size: 1024,
+            source: "file",
+          },
+        ],
+      },
+      [" portable ", "", "creator table"],
+    );
+
+    expect(snapshot).toEqual({
+      assetIds: ["asset-packshot"],
+      keywords: ["portable", "creator table"],
+      materials: [
+        expect.objectContaining({
+          assetId: "asset-packshot",
+          bucketId: "hero",
+          name: "GlowGrip packshot.png",
+          source: "library",
+          tags: ["hero"],
+          type: "image",
+        }),
+        expect.objectContaining({
+          assetId: undefined,
+          bucketId: "brand",
+          name: "Campaign draft.txt",
+          source: "file",
+          tags: [],
+          type: undefined,
+        }),
+      ],
+    });
   });
 
   it("maps loaded project assets into asset prep buckets for historical projects", () => {

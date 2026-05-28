@@ -25,7 +25,7 @@ interface StudioWorkspaceProps {
   onDeleteScene: (sceneId: string) => void;
   onDismissSuggestion: (suggestionId: string) => void;
   onLoadSuggestions: (sceneId: string) => void;
-  onRegenerateScene: (sceneId: string) => void;
+  onRegenerateScene: (scene: StoryboardScene) => void;
   onSceneChange: (scene: StoryboardScene) => void;
   onSceneSave: (sceneId: string) => void;
   onSceneMove: (sceneId: string, direction: "earlier" | "later") => void;
@@ -214,7 +214,7 @@ export const StudioWorkspace = ({
                 <Button
                   disabled={isBusy}
                   icon={<WandSparkles size={18} />}
-                  onClick={() => onRegenerateScene(selectedScene.id)}
+                  onClick={() => onRegenerateScene(selectedScene)}
                 >
                   {copy.regenerateScene}
                 </Button>

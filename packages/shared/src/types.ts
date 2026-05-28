@@ -33,6 +33,7 @@ import type {
   RenderRequestSchema,
   RenderTaskSchema,
   RenderTaskStatusSchema,
+  SceneRegenerationRequestSchema,
   SceneStatusSchema,
   SceneUpdateSchema,
   ScriptGenerationMaterialSchema,
@@ -78,6 +79,7 @@ export type ScriptResult = z.infer<typeof ScriptResultSchema>;
 export type ScriptGenerationMaterial = z.infer<typeof ScriptGenerationMaterialSchema>;
 export type ScriptGenerationRequest = z.infer<typeof ScriptGenerationRequestSchema>;
 export type SceneUpdate = z.infer<typeof SceneUpdateSchema>;
+export type SceneRegenerationRequest = z.infer<typeof SceneRegenerationRequestSchema>;
 export type EditingSuggestion = z.infer<typeof EditingSuggestionSchema>;
 export type MediaSettings = z.infer<typeof MediaSettingsSchema>;
 export type RenderRequest = z.infer<typeof RenderRequestSchema>;

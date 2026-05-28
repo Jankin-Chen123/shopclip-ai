@@ -1160,18 +1160,36 @@ describe("P0 backend lifecycle", () => {
     });
 
     const regenerated = await request<{
-      scene: { id: string; imageUrl?: string; status: string; subtitle: string };
+      scene: {
+        id: string;
+        imageUrl?: string;
+        status: string;
+        subtitle: string;
+        voiceover: string;
+        visualPrompt: string;
+      };
       traceEvent: { step: string; status: string };
     }>(baseUrl, `/api/scenes/${secondScene!.id}/regenerate`, {
       method: "POST",
+      body: JSON.stringify({
+        scene: {
+          durationSeconds: secondScene!.durationSeconds,
+          subtitle: "Current edited CTA subtitle",
+          voiceover: "Current edited CTA voiceover",
+          visualPrompt: "Current edited CTA visual prompt with exact product framing",
+          assetId: preparedAsset.body.asset.id,
+        },
+      }),
     });
 
     expect(regenerated.status).toBe(200);
     expect(regenerated.body.scene).toMatchObject({
       id: secondScene!.id,
       status: "generated",
+      subtitle: "Current edited CTA subtitle",
+      voiceover: "Current edited CTA voiceover",
+      visualPrompt: "Current edited CTA visual prompt with exact product framing",
     });
-    expect(regenerated.body.scene.subtitle).toContain("重生成：");
     expect(regenerated.body.scene.imageUrl).toEqual(expect.stringMatching(/^data:image\/svg\+xml,/));
     expect(regenerated.body.traceEvent).toMatchObject({
       step: "scene-regenerated",
@@ -1201,7 +1219,10 @@ describe("P0 backend lifecycle", () => {
       subtitle: "Edited hook subtitle",
       voiceover: "Edited hook voiceover",
     });
-    expect(loadedSecondScene?.subtitle).toContain("重生成：");
+    expect(loadedSecondScene).toMatchObject({
+      subtitle: "Current edited CTA subtitle",
+      voiceover: "Current edited CTA voiceover",
+    });
     expect(untouchedScenes.map((scene) => scene.subtitle)).toEqual([
       "证明核心卖点",
       "行动号召",
