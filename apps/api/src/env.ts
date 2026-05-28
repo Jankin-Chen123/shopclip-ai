@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const parseEnvValue = (value: string) => {
   const trimmed = value.trim();
@@ -16,15 +16,33 @@ type LoadLocalEnvFileOptions = {
   override?: boolean;
 };
 
+const findLocalEnvFile = (startDir = process.cwd()) => {
+  let currentDir = resolve(startDir);
+
+  while (true) {
+    const candidate = join(currentDir, ".env");
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      return undefined;
+    }
+    currentDir = parentDir;
+  }
+};
+
 export const loadLocalEnvFile = (
-  path = resolve(process.cwd(), ".env"),
+  path?: string,
   options: LoadLocalEnvFileOptions = {},
 ) => {
-  if (!existsSync(path)) {
+  const envPath = path ? resolve(path) : findLocalEnvFile();
+  if (!envPath) {
     return;
   }
 
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+  const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
   for (const line of lines) {
     const trimmedLine = line.trim();
     if (!trimmedLine || trimmedLine.startsWith("#")) {

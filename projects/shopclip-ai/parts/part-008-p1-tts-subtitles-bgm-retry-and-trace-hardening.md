@@ -61,6 +61,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - Added Delivery UI controls for Seedance video settings: aspect ratio, resolution, generate audio, watermark, and optional seed. These values are sent in the render request and are not required as `.env` values.
 - 2026-05-28 follow-up: Reverted backend Seedance model alias normalization. Render submission now uses the exact `.env` model configuration from `AI_VIDEO_MODEL_ID` / `AI_VIDEO_ENDPOINT_ID`; production should configure the Ark `ep-...` endpoint ID for the video role.
 - 2026-05-28 follow-up: API startup now loads the local `.env` with override enabled so stale process-level values cannot keep an old video model active when the server `.env` has been updated.
+- 2026-05-28 follow-up: API `.env` loading now searches upward from the process cwd, so deployments that start the package from `apps/api` still load the workspace root `.env`.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`

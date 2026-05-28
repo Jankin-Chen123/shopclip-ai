@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -46,6 +46,26 @@ describe("loadLocalEnvFile", () => {
     loadLocalEnvFile(envPath, { override: true });
 
     expect(process.env.AI_VIDEO_MODEL_ID).toBe("ep-video-from-env-file");
+
+    await rm(tempDir, { force: true, recursive: true });
+  });
+
+  it("finds the workspace .env when the API process starts from a nested directory", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "shopclip-env-"));
+    const apiDir = join(tempDir, "apps", "api");
+    await mkdir(apiDir, { recursive: true });
+    await writeFile(join(tempDir, ".env"), "AI_VIDEO_MODEL_ID=ep-video-from-workspace-env", "utf8");
+
+    const originalCwd = process.cwd();
+    process.env.AI_VIDEO_MODEL_ID = "doubao-seedance-1-5-pro";
+    try {
+      process.chdir(apiDir);
+      loadLocalEnvFile(undefined, { override: true });
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(process.env.AI_VIDEO_MODEL_ID).toBe("ep-video-from-workspace-env");
 
     await rm(tempDir, { force: true, recursive: true });
   });
