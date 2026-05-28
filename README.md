@@ -93,7 +93,7 @@ corepack pnpm dev
 | `AI_IMAGE_MODEL_ID`    | API    | 图片生成才需要       | 图片生成模型的方舟 endpoint ID 或可调用 model ID。           |
 | `ARK_IMAGE_SIZE`       | API    | 可选                 | 图片生成尺寸，默认 `1024x1024`。                           |
 | `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID 或可调用 model ID；生产建议填写方舟控制台中的 `ep-...` endpoint ID，后端会原样提交该值。 |
-| `AI_VIDEO_REFERENCE_IMAGES` | API | 可选            | 默认 `false`，Seedance 渲染只提交文本内容以走 text-to-video；只有 endpoint 支持参考图 / r2v 时才设为 `true`。 |
+| `AI_VIDEO_IMAGE_INPUT_MODE` | API | 可选            | Seedance 图片输入模式，默认 `first_frame`，会把第一张公网商品图作为首帧图一并提交；只能文生视频时设为 `none`，支持参考图的模型可设为 `reference_image`。 |
 | `AI_VIDEO_DURATION`    | API    | 可选                 | Seedance 目标视频时长覆盖值；为空时按分镜总时长自动计算。 |
 | `AI_VIDEO_ALLOWED_DURATIONS` | API | 可选           | Seedance 可接受的离散时长列表，默认 `5,10,12`；分镜总时长会向上规整到最近可用值。 |
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
@@ -159,7 +159,7 @@ flowchart TD
 - Editing Agent 建议是可解释的确定性建议。
 - TTS、字幕、BGM 和看板指标均为 metadata-backed mock 输出。
 - 渲染产物默认使用 mock 输出；只有显式设置 `VIDEO_RENDER_PROVIDER_MODE=seedance` 且配置服务端视频密钥/模型后，才调用 Seedance。TTS 声线不会控制 Seedance 画面效果。
-- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认不向 Seedance 请求体发送参考图，避免不支持 r2v 的视频 endpoint 失败；如确认 endpoint 支持参考图，再设置 `AI_VIDEO_REFERENCE_IMAGES=true`。Seedance 的 `duration` 是目标视频秒数；默认按分镜时长总和计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
+- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会从项目/分镜素材中选第一张公网商品图，以 `role=first_frame` 一并提交给 Seedance；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。Seedance 的 `duration` 是目标视频秒数；默认按分镜时长总和计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
 - UI 支持失败渲染模拟和重试，不会丢失项目数据。
 - 真实 provider 密钥只能放在服务端环境变量中，浏览器不会直接调用模型或 TTS provider。
 

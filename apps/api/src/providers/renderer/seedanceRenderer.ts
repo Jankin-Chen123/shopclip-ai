@@ -24,6 +24,7 @@ type SeedanceConfig = {
 };
 
 type SeedanceVideoSettings = VideoGenerationSettings;
+type SeedanceImageInputMode = "none" | "first_frame" | "reference_image";
 
 type SeedanceTaskUpdate = {
   renderTask: Partial<RenderTask>;
@@ -55,6 +56,26 @@ const parseNumberEnv = (key: string) => {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseImageInputMode = (): SeedanceImageInputMode => {
+  const configuredMode = firstEnv("AI_VIDEO_IMAGE_INPUT_MODE", "AI_VIDEO_REFERENCE_IMAGE_MODE")
+    ?.toLowerCase()
+    .replace(/-/g, "_");
+  if (
+    configuredMode === "none" ||
+    configuredMode === "first_frame" ||
+    configuredMode === "reference_image"
+  ) {
+    return configuredMode;
+  }
+
+  const legacyReferenceImagesFlag = process.env.AI_VIDEO_REFERENCE_IMAGES?.trim();
+  if (legacyReferenceImagesFlag) {
+    return parseBooleanEnv("AI_VIDEO_REFERENCE_IMAGES", true) ? "first_frame" : "none";
+  }
+
+  return "first_frame";
 };
 
 const parseDurationListEnv = () => {
@@ -236,21 +257,30 @@ const buildSeedanceRequestBody = (
   config: SeedanceConfig,
   videoSettings: SeedanceVideoSettings,
 ) => {
-  const includeReferenceImages = parseBooleanEnv("AI_VIDEO_REFERENCE_IMAGES", false);
-  const content: Array<Record<string, unknown>> = [
-    {
-      type: "text",
-      text: promptForProject(project),
-    },
-    ...(includeReferenceImages
-      ? uniquePublicImageAssets(project).map((asset) => ({
+  const imageInputMode = parseImageInputMode();
+  const imageAssets = imageInputMode === "none" ? [] : uniquePublicImageAssets(project);
+  const imageContent =
+    imageInputMode === "reference_image"
+      ? imageAssets.slice(0, 4).map((asset) => ({
           type: "image_url",
           role: "reference_image",
           image_url: {
             url: asset.url,
           },
         }))
-      : []),
+      : imageAssets.slice(0, 1).map((asset) => ({
+          type: "image_url",
+          role: "first_frame",
+          image_url: {
+            url: asset.url,
+          },
+        }));
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: promptForProject(project),
+    },
+    ...imageContent,
   ];
 
   return {

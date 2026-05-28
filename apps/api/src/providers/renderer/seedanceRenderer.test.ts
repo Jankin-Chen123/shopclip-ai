@@ -16,8 +16,10 @@ const touchedKeys = [
   "AI_VIDEO_GENERATE_AUDIO",
   "AI_VIDEO_ALLOWED_DURATIONS",
   "AI_VIDEO_DURATION",
+  "AI_VIDEO_IMAGE_INPUT_MODE",
   "AI_VIDEO_MODEL_ID",
   "AI_VIDEO_REFERENCE_IMAGES",
+  "AI_VIDEO_REFERENCE_IMAGE_MODE",
   "AI_VIDEO_RATIO",
   "AI_VIDEO_RESOLUTION",
   "AI_VIDEO_SEED",
@@ -85,7 +87,7 @@ describe("Seedance renderer provider", () => {
     }
   });
 
-  it("submits a Seedance task with storyboard prompt and video options", async () => {
+  it("submits a Seedance task with storyboard prompt, first-frame image, and video options", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
@@ -143,15 +145,22 @@ describe("Seedance renderer provider", () => {
     expect(requestBody.content[0].type).toBe("text");
     expect(requestBody.content[0].text).toContain("GlowGrip Phone Stand");
     expect(requestBody.content[0].text).toContain("Macro product shot");
-    expect(requestBody.content).toHaveLength(1);
+    expect(requestBody.content[1]).toEqual({
+      type: "image_url",
+      role: "first_frame",
+      image_url: {
+        url: "https://cdn.example.test/product.png",
+      },
+    });
+    expect(requestBody.content).toHaveLength(2);
   });
 
-  it("includes reference images only when explicitly enabled", async () => {
+  it("can submit reference-image role content when explicitly configured", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
     process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
-    process.env.AI_VIDEO_REFERENCE_IMAGES = "true";
+    process.env.AI_VIDEO_IMAGE_INPUT_MODE = "reference_image";
 
     const fetchMock = vi.fn(async () =>
       Response.json({
@@ -178,6 +187,35 @@ describe("Seedance renderer provider", () => {
         url: "https://cdn.example.test/product.png",
       },
     });
+  });
+
+  it("can disable Seedance image input for text-only endpoints", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    process.env.AI_VIDEO_IMAGE_INPUT_MODE = "none";
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "seedance-task-text-only",
+        status: "queued",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderWithConfiguredVideoProvider(project, {
+      mediaSettings: {
+        ttsVoice: "clear-host",
+        subtitleStyle: "clean-lower-third",
+        subtitlesEnabled: true,
+        bgmTrack: "creator-pop",
+      },
+    });
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody.content).toHaveLength(1);
+    expect(requestBody.content[0].type).toBe("text");
   });
 
   it("uses the configured Seedance duration when provided by the environment", async () => {
