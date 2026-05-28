@@ -329,4 +329,61 @@ describe("Seedance render API flow", () => {
       },
     });
   });
+
+  it("renders only the latest generated storyboard scenes", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+      return Response.json({
+        id: "seedance-scene-task-current",
+        status: "queued",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Current storyboard only",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+    const firstScript = await request<{
+      script: { scenes: Array<{ id: string }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const latestScript = await request<{
+      script: { scenes: Array<{ id: string }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        draftScript: "第二版脚本，只渲染这一版。",
+      }),
+    });
+
+    const render = await request<{
+      renderTask: {
+        sceneClips: Array<{ sceneId: string }>;
+      };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/render`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    expect(firstScript.body.script.scenes).toHaveLength(4);
+    expect(latestScript.body.script.scenes).toHaveLength(4);
+    expect(render.body.renderTask.sceneClips.map((clip) => clip.sceneId)).toEqual(
+      latestScript.body.script.scenes.map((scene) => scene.id),
+    );
+  });
 });

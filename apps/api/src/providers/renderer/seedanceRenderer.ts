@@ -394,9 +394,21 @@ const errorMessageFromBody = (body: unknown) => {
   );
 };
 
+const currentStoryboardScenes = (project: ProjectSnapshot) => {
+  const latestScriptScenes = project.scripts.at(-1)?.scenes;
+  const scenes = latestScriptScenes && latestScriptScenes.length > 0
+    ? latestScriptScenes
+    : project.scenes;
+  return [...scenes].sort((left, right) => left.order - right.order);
+};
+
+const projectWithCurrentStoryboard = (project: ProjectSnapshot): ProjectSnapshot => ({
+  ...project,
+  scenes: currentStoryboardScenes(project),
+});
+
 const queuedSceneClips = (project: ProjectSnapshot): SceneRenderClip[] =>
-  [...project.scenes]
-    .sort((left, right) => left.order - right.order)
+  currentStoryboardScenes(project)
     .map((scene) => ({
       sceneId: scene.id,
       order: scene.order,
@@ -428,15 +440,16 @@ export const createSeedanceRenderProvider = () => {
       project: ProjectSnapshot,
       requestSettings?: VideoGenerationSettings,
     ): Promise<RenderProviderResult> {
+      const renderProject = projectWithCurrentStoryboard(project);
       const videoSettings = resolveVideoSettings(requestSettings);
-      const scenes = [...project.scenes].sort((left, right) => left.order - right.order);
+      const scenes = [...renderProject.scenes].sort((left, right) => left.order - right.order);
       const sceneClips: SceneRenderClip[] = [];
       for (const scene of scenes) {
         const body = await requestArkJson(
           "POST",
           config,
           config.path,
-          buildSeedanceRequestBody(project, config, videoSettings, scene),
+          buildSeedanceRequestBody(renderProject, config, videoSettings, scene),
         );
         const providerTaskId = taskIdFromBody(body);
         const videoUrl = collectVideoUrls(body)[0];
@@ -644,6 +657,7 @@ export const createSeedanceRenderProvider = () => {
       project: ProjectSnapshot,
       renderTask: RenderTask,
     ): Promise<SeedanceTaskUpdate> {
+      const renderProject = projectWithCurrentStoryboard(project);
       if (!renderTask.sceneClips || renderTask.sceneClips.length === 0) {
         if (!renderTask.providerTaskId) {
           return {
@@ -671,7 +685,7 @@ export const createSeedanceRenderProvider = () => {
       const traceEvents: SeedanceTaskUpdate["traceEvents"] = [];
 
       if (queuedClip) {
-        const scene = project.scenes.find((candidate) => candidate.id === queuedClip.sceneId);
+        const scene = renderProject.scenes.find((candidate) => candidate.id === queuedClip.sceneId);
         if (!scene) {
           const failedClip = {
             ...queuedClip,
@@ -687,7 +701,7 @@ export const createSeedanceRenderProvider = () => {
               config,
               config.path,
               buildSeedanceRequestBody(
-                project,
+                renderProject,
                 config,
                 resolveVideoSettings(renderTask.videoSettings),
                 scene,
