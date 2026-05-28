@@ -4103,6 +4103,39 @@ textarea {
   font-size: 0.82rem;
 }
 
+.scene-clip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.scene-clip-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scene-clip-card video {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #050505;
+  object-fit: cover;
+}
+
+.scene-clip-card div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.scene-clip-card strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
 .media-summary {
   display: inline-flex;
   align-items: center;

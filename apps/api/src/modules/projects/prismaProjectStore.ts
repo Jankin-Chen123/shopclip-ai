@@ -14,7 +14,7 @@ import type {
   StoryboardScene,
   TraceEvent,
 } from "@shopclip/shared";
-import { MediaSettingsSchema, VideoGenerationSettingsSchema } from "@shopclip/shared";
+import { MediaSettingsSchema, RenderTaskSchema, VideoGenerationSettingsSchema } from "@shopclip/shared";
 
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
@@ -132,6 +132,15 @@ const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): Render
   errorMessage: task.errorMessage ?? undefined,
   provider: task.provider ?? undefined,
   providerTaskId: task.providerTaskId ?? undefined,
+  sceneClips: Array.isArray(task.sceneClips) ? RenderTaskSchema.parse({
+    id: task.id,
+    projectId: task.projectId,
+    status: task.status,
+    progress: task.progress,
+    sceneClips: task.sceneClips,
+    createdAt: toIso(task.createdAt),
+    updatedAt: toIso(task.updatedAt),
+  }).sceneClips : undefined,
   mediaSettings: MediaSettingsSchema.safeParse(task.mediaSettings).success
     ? MediaSettingsSchema.parse(task.mediaSettings)
     : undefined,
@@ -518,6 +527,7 @@ export class PrismaProjectStore implements ProjectStore {
         errorMessage: renderTask.errorMessage,
         provider: renderTask.provider,
         providerTaskId: renderTask.providerTaskId,
+        sceneClips: renderTask.sceneClips,
         mediaSettings: renderTask.mediaSettings,
         videoSettings: renderTask.videoSettings,
         retryOfRenderTaskId: renderTask.retryOfRenderTaskId,
@@ -689,6 +699,7 @@ export class PrismaProjectStore implements ProjectStore {
         errorMessage: update.errorMessage,
         provider: update.provider,
         providerTaskId: update.providerTaskId,
+        sceneClips: update.sceneClips,
         mediaSettings: update.mediaSettings,
         videoSettings: update.videoSettings,
         retryOfRenderTaskId: update.retryOfRenderTaskId,

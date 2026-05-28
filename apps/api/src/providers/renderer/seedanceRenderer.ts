@@ -1,6 +1,7 @@
 import type {
   AssetMetadata,
   RenderTask,
+  SceneRenderClip,
   TraceEvent,
   VideoGenerationSettings,
 } from "@shopclip/shared";
@@ -14,7 +15,7 @@ const DEFAULT_VIDEO_MODEL = "doubao-seedance-2-0-260128";
 const DEFAULT_VIDEO_PATH = "/contents/generations/tasks";
 const DEFAULT_VIDEO_RATIO = "9:16";
 const DEFAULT_VIDEO_RESOLUTION = "720p";
-const DEFAULT_VIDEO_DURATIONS = [5, 10, 12];
+const DEFAULT_VIDEO_DURATIONS = [5, 10];
 
 type SeedanceConfig = {
   apiKey: string;
@@ -189,8 +190,8 @@ const requestArkJson = async (
   return responseBody;
 };
 
-const promptForProject = (project: ProjectSnapshot) => {
-  const scenes = project.scenes
+const promptForProject = (project: ProjectSnapshot, scenes = project.scenes) => {
+  const sceneLines = scenes
     .sort((left, right) => left.order - right.order)
     .map(
       (scene) =>
@@ -206,7 +207,7 @@ const promptForProject = (project: ProjectSnapshot) => {
     `语气: ${project.tone}`,
     `风格: ${project.style}`,
     "分镜:",
-    scenes,
+    sceneLines,
   ].join("\n");
 };
 
@@ -231,19 +232,13 @@ const uniquePublicImageAssets = (project: ProjectSnapshot): AssetMetadata[] => {
   return [...selected.values()].slice(0, 4);
 };
 
-const totalDurationSeconds = (project: ProjectSnapshot) =>
-  Math.min(
-    Math.max(...DEFAULT_VIDEO_DURATIONS),
-    Math.max(1, Math.round(project.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0))),
-  );
-
-const resolveSeedanceDuration = (project: ProjectSnapshot) => {
+const resolveSeedanceDuration = (scene: ProjectSnapshot["scenes"][number]) => {
   const configuredDuration = parseNumberEnv("AI_VIDEO_DURATION");
   if (configuredDuration && configuredDuration > 0) {
     return configuredDuration;
   }
 
-  const storyboardDuration = totalDurationSeconds(project);
+  const storyboardDuration = Math.max(1, Math.round(scene.durationSeconds));
   const allowedDurations = parseDurationListEnv();
   return (
     allowedDurations.find((duration) => duration >= storyboardDuration) ??
@@ -256,9 +251,20 @@ const buildSeedanceRequestBody = (
   project: ProjectSnapshot,
   config: SeedanceConfig,
   videoSettings: SeedanceVideoSettings,
+  scene: ProjectSnapshot["scenes"][number],
 ) => {
   const imageInputMode = parseImageInputMode();
-  const imageAssets = imageInputMode === "none" ? [] : uniquePublicImageAssets(project);
+  const sceneAsset = scene?.assetId
+    ? project.assets.find((candidate) => candidate.id === scene.assetId)
+    : undefined;
+  const projectImageAssets = uniquePublicImageAssets(project);
+  const imageAssets =
+    imageInputMode === "none"
+      ? []
+      : [
+          ...(sceneAsset?.type === "image" && isPublicHttpUrl(sceneAsset.url) ? [sceneAsset] : []),
+          ...projectImageAssets.filter((asset) => asset.id !== sceneAsset?.id),
+        ];
   const imageContent =
     imageInputMode === "reference_image"
       ? imageAssets.slice(0, 4).map((asset) => ({
@@ -278,7 +284,7 @@ const buildSeedanceRequestBody = (
   const content: Array<Record<string, unknown>> = [
     {
       type: "text",
-      text: promptForProject(project),
+      text: promptForProject(project, scene ? [scene] : project.scenes),
     },
     ...imageContent,
   ];
@@ -288,7 +294,7 @@ const buildSeedanceRequestBody = (
     content,
     ratio: videoSettings.ratio,
     resolution: videoSettings.resolution,
-    duration: resolveSeedanceDuration(project),
+    duration: resolveSeedanceDuration(scene),
     generate_audio: videoSettings.generateAudio,
     watermark: videoSettings.watermark,
     ...(videoSettings.seed === undefined ? {} : { seed: videoSettings.seed }),
@@ -303,6 +309,12 @@ const taskIdFromBody = (body: unknown) => {
     getString(data?.task_id)
   );
 };
+
+const clipTaskIdsFromProviderTaskId = (providerTaskId: string | undefined) =>
+  providerTaskId
+    ?.split(",")
+    .map((taskId) => taskId.trim())
+    .filter(Boolean) ?? [];
 
 const rawTaskStatus = (body: unknown) => {
   const data = isRecord(body) && isRecord(body.data) ? body.data : undefined;
@@ -394,69 +406,157 @@ export const createSeedanceRenderProvider = () => {
       requestSettings?: VideoGenerationSettings,
     ): Promise<RenderProviderResult> {
       const videoSettings = resolveVideoSettings(requestSettings);
-      const body = await requestArkJson(
-        "POST",
-        config,
-        config.path,
-        buildSeedanceRequestBody(project, config, videoSettings),
-      );
-      const providerTaskId = taskIdFromBody(body);
-      const videoUrl = collectVideoUrls(body)[0];
-
-      if (videoUrl) {
-        return {
-          renderTask: {
-            status: "completed",
-            progress: 100,
-            previewUrl: videoUrl,
-            exportUrl: videoUrl,
-            provider: "volcengine-seedance",
-            providerTaskId,
-            videoSettings,
-          },
-          traceEvents: [
-            {
-              status: "queued",
-              step: "render-queued",
-              message: "Seedance video generation request queued.",
-            },
-            {
-              status: "completed",
-              step: "seedance-video-ready",
-              message: "Seedance returned a renderable video URL immediately.",
-            },
-          ],
-        };
+      const scenes = [...project.scenes].sort((left, right) => left.order - right.order);
+      const sceneClips: SceneRenderClip[] = [];
+      for (const scene of scenes) {
+        const body = await requestArkJson(
+          "POST",
+          config,
+          config.path,
+          buildSeedanceRequestBody(project, config, videoSettings, scene),
+        );
+        const providerTaskId = taskIdFromBody(body);
+        const videoUrl = collectVideoUrls(body)[0];
+        if (!providerTaskId && !videoUrl) {
+          throw new Error(`Seedance did not return a task id or video URL for scene ${scene.order}.`);
+        }
+        sceneClips.push({
+          sceneId: scene.id,
+          order: scene.order,
+          subtitle: scene.subtitle,
+          status: videoUrl ? "completed" : "running",
+          progress: videoUrl ? 100 : 15,
+          providerTaskId,
+          videoUrl,
+          coverUrl: videoUrl,
+        });
       }
-
-      if (!providerTaskId) {
-        throw new Error("Seedance did not return a task id or video URL.");
-      }
+      const providerTaskId = sceneClips
+        .map((clip) => clip.providerTaskId)
+        .filter((taskId): taskId is string => Boolean(taskId))
+        .join(",");
+      const completedClips = sceneClips.filter((clip) => clip.status === "completed");
+      const firstVideoUrl = completedClips[0]?.videoUrl;
+      const allCompleted = completedClips.length === sceneClips.length;
 
       return {
         renderTask: {
-          status: "running",
-          progress: 15,
+          status: allCompleted ? "completed" : "running",
+          progress: allCompleted ? 100 : 15,
+          previewUrl: firstVideoUrl,
+          exportUrl: firstVideoUrl,
           provider: "volcengine-seedance",
-          providerTaskId,
+          providerTaskId: providerTaskId || undefined,
+          sceneClips,
           videoSettings,
         },
         traceEvents: [
           {
             status: "queued",
             step: "render-queued",
-            message: "Seedance video generation request queued.",
+            message: "Seedance scene video generation requests queued.",
           },
           {
-            status: "running",
-            step: "seedance-task-submitted",
-            message: `Seedance task submitted: ${providerTaskId}.`,
+            status: allCompleted ? "completed" : "running",
+            step: "seedance-scene-tasks-submitted",
+            message: `Seedance scene tasks submitted: ${providerTaskId || "immediate-video-urls"}.`,
           },
         ],
       };
     },
 
-    async loadTask(providerTaskId: string): Promise<SeedanceTaskUpdate> {
+    async loadTask(
+      providerTaskId: string,
+      sceneClips: SceneRenderClip[] = [],
+    ): Promise<SeedanceTaskUpdate> {
+      if (sceneClips.length > 0) {
+        const updatedClips = await Promise.all(
+          sceneClips.map(async (clip) => {
+            if (clip.status === "completed" || !clip.providerTaskId) {
+              return clip;
+            }
+            const body = await requestArkJson(
+              "GET",
+              config,
+              `${config.path}/${encodeURIComponent(clip.providerTaskId)}`,
+            );
+            const status = statusFromBody(body);
+            const videoUrl = collectVideoUrls(body)[0];
+            const materializedStatus = videoUrl ? "completed" : status;
+            return {
+              ...clip,
+              status: materializedStatus,
+              progress: progressFromBody(body, materializedStatus, Boolean(videoUrl)),
+              videoUrl: videoUrl ?? clip.videoUrl,
+              coverUrl: videoUrl ?? clip.coverUrl,
+              errorMessage:
+                materializedStatus === "failed"
+                  ? (errorMessageFromBody(body) ?? "Seedance scene video generation failed.")
+                  : clip.errorMessage,
+            };
+          }),
+        );
+        const completedClips = updatedClips.filter((clip) => clip.status === "completed");
+        const failedClip = updatedClips.find((clip) => clip.status === "failed");
+        const firstVideoUrl = completedClips[0]?.videoUrl;
+        const allCompleted = completedClips.length === updatedClips.length;
+        const averageProgress = Math.round(
+          updatedClips.reduce((sum, clip) => sum + clip.progress, 0) / updatedClips.length,
+        );
+
+        if (failedClip) {
+          return {
+            renderTask: {
+              status: "failed",
+              progress: averageProgress,
+              errorMessage: failedClip.errorMessage ?? "Seedance scene video generation failed.",
+              sceneClips: updatedClips,
+            },
+            traceEvents: [
+              {
+                status: "failed",
+                step: "seedance-scene-video-failed",
+                message: failedClip.errorMessage ?? "Seedance scene video generation failed.",
+              },
+            ],
+          };
+        }
+
+        return {
+          renderTask: {
+            status: allCompleted ? "completed" : "running",
+            progress: allCompleted ? 100 : Math.max(15, Math.min(95, averageProgress)),
+            previewUrl: firstVideoUrl,
+            exportUrl: firstVideoUrl,
+            sceneClips: updatedClips,
+          },
+          traceEvents: [
+            {
+              status: allCompleted ? "completed" : "running",
+              step: allCompleted ? "seedance-scene-clips-ready" : "seedance-scene-tasks-polled",
+              message: allCompleted
+                ? "All Seedance scene clips are ready."
+                : "Seedance scene clips are still processing.",
+            },
+          ],
+        };
+      }
+
+      const taskIds = clipTaskIdsFromProviderTaskId(providerTaskId);
+      if (taskIds.length > 1) {
+        return this.loadTask(
+          providerTaskId,
+          taskIds.map((taskId, index) => ({
+            sceneId: `scene-${index + 1}`,
+            order: index + 1,
+            subtitle: `Scene ${index + 1}`,
+            status: "running",
+            progress: 15,
+            providerTaskId: taskId,
+          })),
+        );
+      }
+
       const body = await requestArkJson(
         "GET",
         config,

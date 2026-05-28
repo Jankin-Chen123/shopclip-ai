@@ -56,6 +56,7 @@ import {
   createSeedanceRenderProvider,
   renderWithConfiguredVideoProvider,
 } from "../../providers/renderer/seedanceRenderer.js";
+import { composeSceneClipsWithFfmpeg } from "../../providers/renderer/ffmpegComposer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { MemoryProjectStore } from "./memoryStore.js";
@@ -1731,7 +1732,32 @@ export const createP0Router = ({
       try {
         const providerResult = await createSeedanceRenderProvider().loadTask(
           renderTask.renderTask.providerTaskId,
+          renderTask.renderTask.sceneClips,
         );
+        if (
+          providerResult.renderTask.status === "completed" &&
+          providerResult.renderTask.sceneClips &&
+          providerResult.renderTask.sceneClips.length > 1
+        ) {
+          try {
+            const exportUrl = await composeSceneClipsWithFfmpeg(
+              renderTask.project.id,
+              providerResult.renderTask.sceneClips,
+            );
+            if (exportUrl) {
+              providerResult.renderTask.exportUrl = exportUrl;
+            }
+          } catch (error) {
+            providerResult.traceEvents.push({
+              status: "failed",
+              step: "ffmpeg-scene-compose-failed",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "ffmpeg scene clip composition failed.",
+            });
+          }
+        }
         const updated = await store.updateRenderTask(
           renderTask.renderTask.id,
           providerResult.renderTask,

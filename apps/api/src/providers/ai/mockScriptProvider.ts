@@ -75,6 +75,25 @@ const ensureMaterialConsistency = (visualPrompt: string): string =>
     ? visualPrompt
     : `${visualPrompt}；产品外观必须与绑定素材一致。`;
 
+const normalizeAssetMention = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[「」『』“”"'[\]【】（）()]/gu, "")
+    .replace(/\s+/gu, "");
+
+const resolveDraftSceneAssetId = (
+  visualPrompt: string,
+  assets: AssetMetadata[],
+  fallbackAssetId: string | undefined,
+): string | undefined => {
+  const normalizedPrompt = normalizeAssetMention(visualPrompt);
+  const explicitMatch = [...assets]
+    .sort((left, right) => right.name.length - left.name.length)
+    .find((asset) => normalizedPrompt.includes(normalizeAssetMention(asset.name)));
+
+  return explicitMatch?.id ?? fallbackAssetId;
+};
+
 const chooseChineseText = (primary: string, fallback: string): string => {
   if (hasChineseText(primary)) {
     return primary;
@@ -88,7 +107,8 @@ const chooseChineseText = (primary: string, fallback: string): string => {
 const parseDraftScriptScenes = (
   project: ProjectSnapshot,
   draftScript: string | undefined,
-  assetId: string | undefined,
+  assets: AssetMetadata[],
+  fallbackAssetId: string | undefined,
 ): StoryboardScene[] => {
   if (!draftScript?.trim()) {
     return [];
@@ -124,6 +144,7 @@ const parseDraftScriptScenes = (
     const visualPrompt = ensureMaterialConsistency(
       rawVisual || `根据脚本内容展示${project.productName}的核心卖点`,
     );
+    const sceneAssetId = resolveDraftSceneAssetId(rawVisual, assets, fallbackAssetId);
 
     scenes.push({
       id: `scene-draft-${scenes.length + 1}`,
@@ -133,7 +154,7 @@ const parseDraftScriptScenes = (
       subtitle,
       voiceover,
       visualPrompt,
-      assetId,
+      assetId: sceneAssetId,
       status: "generated",
     });
     totalDurationSeconds += durationSeconds;
@@ -183,12 +204,13 @@ export const generateFallbackScript = (
 ): ScriptProviderResult => {
   const primaryAsset = context.assets?.[0] ?? project.assets[0];
   const assetId = primaryAsset?.id;
+  const assets = context.assets ?? project.assets;
   const draftScript = context.request?.draftScript?.trim();
   const keywordSummary = compactList(
     [...(context.request?.keywords ?? []), ...project.sellingPoints].slice(0, 4),
     project.sellingPoints[0] ?? "清晰产品卖点",
   );
-  const parsedScenes = parseDraftScriptScenes(project, draftScript, assetId);
+  const parsedScenes = parseDraftScriptScenes(project, draftScript, assets, assetId);
   const hasParsedScenes = parsedScenes.length > 0;
 
   return {

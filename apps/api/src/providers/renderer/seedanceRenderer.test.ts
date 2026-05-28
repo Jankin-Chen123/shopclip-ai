@@ -116,13 +116,15 @@ describe("Seedance renderer provider", () => {
       status: "running",
       progress: 15,
       provider: "volcengine-seedance",
-      providerTaskId: "seedance-task-123",
+      providerTaskId: "seedance-task-123,seedance-task-123",
     });
+    expect(result.renderTask.sceneClips).toHaveLength(2);
     expect(result.traceEvents.map((event) => event.step)).toEqual([
       "render-queued",
-      "seedance-task-submitted",
+      "seedance-scene-tasks-submitted",
     ]);
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
       "https://ark.example.test/api/v3/contents/generations/tasks",
       expect.objectContaining({
         method: "POST",
@@ -132,13 +134,14 @@ describe("Seedance renderer provider", () => {
         }),
       }),
     );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
     expect(requestBody).toMatchObject({
       model: "ep-seedance-render",
       ratio: "9:16",
       resolution: "720p",
-      duration: 10,
+      duration: 5,
       generate_audio: false,
       watermark: false,
     });
@@ -246,7 +249,7 @@ describe("Seedance renderer provider", () => {
     expect(requestBody.duration).toBe(10);
   });
 
-  it("derives Seedance duration from storyboard scene durations", async () => {
+  it("derives each Seedance duration from its storyboard scene duration", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
@@ -278,8 +281,11 @@ describe("Seedance renderer provider", () => {
       },
     );
 
-    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-    expect(requestBody.duration).toBe(12);
+    const requestDurations = fetchMock.mock.calls.map((call) => {
+      const body = JSON.parse(String((call[1] as RequestInit).body));
+      return body.duration;
+    });
+    expect(requestDurations).toEqual([10, 10]);
   });
 
   it("prefers render request video settings over environment defaults", async () => {
@@ -390,6 +396,58 @@ describe("Seedance renderer provider", () => {
         }),
       }),
     );
+  });
+
+  it("polls Seedance scene clips and exposes each returned video URL", async () => {
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const taskId = String(url instanceof Request ? url.url : url).split("/").at(-1);
+      return Response.json({
+        status: "succeeded",
+        content: {
+          video_url: `https://cdn.example.test/${taskId}.mp4`,
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createSeedanceRenderProvider();
+    const result = await provider.loadTask("seedance-task-1,seedance-task-2", [
+      {
+        sceneId: "scene-1",
+        order: 1,
+        subtitle: "Hook",
+        status: "running",
+        progress: 15,
+        providerTaskId: "seedance-task-1",
+      },
+      {
+        sceneId: "scene-2",
+        order: 2,
+        subtitle: "Detail",
+        status: "running",
+        progress: 15,
+        providerTaskId: "seedance-task-2",
+      },
+    ]);
+
+    expect(result.renderTask).toMatchObject({
+      status: "completed",
+      progress: 100,
+      previewUrl: "https://cdn.example.test/seedance-task-1.mp4",
+      exportUrl: "https://cdn.example.test/seedance-task-1.mp4",
+    });
+    expect(result.renderTask.sceneClips?.map((clip) => clip.videoUrl)).toEqual([
+      "https://cdn.example.test/seedance-task-1.mp4",
+      "https://cdn.example.test/seedance-task-2.mp4",
+    ]);
+    expect(result.traceEvents.at(-1)).toMatchObject({
+      status: "completed",
+      step: "seedance-scene-clips-ready",
+    });
   });
 
   it("uses the mock renderer when Seedance render mode is not explicitly enabled", async () => {

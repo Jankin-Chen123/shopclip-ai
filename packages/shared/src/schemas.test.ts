@@ -88,6 +88,34 @@ describe("shared contract schemas", () => {
     ).toBe(false);
   });
 
+  it("accepts render tasks with per-scene video clips", () => {
+    const result = RenderTaskSchema.safeParse({
+      id: "render_demo",
+      projectId: "project_demo",
+      status: "completed",
+      progress: 100,
+      previewUrl: "https://cdn.example.test/scene-1.mp4",
+      exportUrl: "https://cdn.example.test/scene-1.mp4",
+      provider: "volcengine-seedance",
+      sceneClips: [
+        {
+          sceneId: "scene_1",
+          order: 1,
+          subtitle: "Hook",
+          status: "completed",
+          progress: 100,
+          providerTaskId: "cgt-scene-1",
+          videoUrl: "https://cdn.example.test/scene-1.mp4",
+        },
+      ],
+      createdAt: "2026-05-21T00:00:00.000Z",
+      updatedAt: "2026-05-21T00:00:01.000Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.sceneClips).toHaveLength(1);
+  });
+
   it("rejects invalid scene duration and scripts longer than 15 seconds", () => {
     expect(
       StoryboardSceneSchema.safeParse({

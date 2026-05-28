@@ -8,6 +8,7 @@ const touchedKeys = [
   "ARK_API_BASE_URL",
   "AI_VIDEO_API_KEY",
   "AI_VIDEO_MODEL_ID",
+  "FFMPEG_PATH",
   "VIDEO_RENDER_PROVIDER_MODE",
 ];
 
@@ -37,6 +38,7 @@ describe("Seedance render API flow", () => {
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
     process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    process.env.FFMPEG_PATH = "ffmpeg-disabled-for-test";
 
     const app = createApp();
     server = app.listen(0);
@@ -63,23 +65,26 @@ describe("Seedance render API flow", () => {
     });
   });
 
-  it("creates a Seedance render task and completes it when polling returns a video URL", async () => {
+  it("creates Seedance scene clip tasks and completes them when polling returns video URLs", async () => {
     const originalFetch = globalThis.fetch;
+    let createTaskCount = 0;
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const requestUrl = url instanceof Request ? url.url : String(url);
       if (requestUrl.startsWith(baseUrl)) {
         return originalFetch(url, init);
       }
       if (requestUrl.endsWith("/contents/generations/tasks")) {
+        createTaskCount += 1;
         return Response.json({
-          id: "seedance-task-456",
+          id: `seedance-scene-task-${createTaskCount}`,
           status: "queued",
         });
       }
+      const taskId = requestUrl.split("/").at(-1);
       return Response.json({
         status: "succeeded",
         content: {
-          video_url: "https://cdn.example.test/final-video.mp4",
+          video_url: `https://cdn.example.test/${taskId}.mp4`,
         },
       });
     });
@@ -126,6 +131,11 @@ describe("Seedance render API flow", () => {
         status: string;
         provider: string;
         providerTaskId: string;
+        sceneClips: Array<{
+          order: number;
+          status: string;
+          providerTaskId: string;
+        }>;
       };
       traceEvents: Array<{ step: string; status: string }>;
     }>(baseUrl, `/api/projects/${created.body.project.id}/render`, {
@@ -145,12 +155,20 @@ describe("Seedance render API flow", () => {
     expect(render.body.renderTask).toMatchObject({
       status: "running",
       provider: "volcengine-seedance",
-      providerTaskId: "seedance-task-456",
+      providerTaskId: "seedance-scene-task-1,seedance-scene-task-2,seedance-scene-task-3,seedance-scene-task-4",
     });
-    const seedanceCreateCall = fetchMock.mock.calls.find(([url]) =>
+    expect(render.body.renderTask.sceneClips).toHaveLength(4);
+    expect(render.body.renderTask.sceneClips.map((clip) => clip.providerTaskId)).toEqual([
+      "seedance-scene-task-1",
+      "seedance-scene-task-2",
+      "seedance-scene-task-3",
+      "seedance-scene-task-4",
+    ]);
+    const seedanceCreateCalls = fetchMock.mock.calls.filter(([url]) =>
       String(url instanceof Request ? url.url : url).endsWith("/contents/generations/tasks"),
     );
-    const seedanceCreateBody = JSON.parse(String((seedanceCreateCall?.[1] as RequestInit).body));
+    expect(seedanceCreateCalls).toHaveLength(4);
+    const seedanceCreateBody = JSON.parse(String((seedanceCreateCalls[0]?.[1] as RequestInit).body));
     expect(seedanceCreateBody).toMatchObject({
       ratio: "1:1",
       resolution: "1080p",
@@ -165,6 +183,10 @@ describe("Seedance render API flow", () => {
         progress: number;
         previewUrl: string;
         exportUrl: string;
+        sceneClips: Array<{
+          status: string;
+          videoUrl: string;
+        }>;
       };
       traceEvents: Array<{ step: string; status: string }>;
     }>(baseUrl, `/api/render-tasks/${render.body.renderTask.id}`);
@@ -173,9 +195,18 @@ describe("Seedance render API flow", () => {
     expect(polled.body.renderTask).toMatchObject({
       status: "completed",
       progress: 100,
-      previewUrl: "https://cdn.example.test/final-video.mp4",
-      exportUrl: "https://cdn.example.test/final-video.mp4",
+      previewUrl: "https://cdn.example.test/seedance-scene-task-1.mp4",
+      exportUrl: "https://cdn.example.test/seedance-scene-task-1.mp4",
     });
-    expect(polled.body.traceEvents.map((event) => event.step)).toContain("seedance-video-ready");
+    expect(polled.body.renderTask.sceneClips.map((clip) => clip.videoUrl)).toEqual([
+      "https://cdn.example.test/seedance-scene-task-1.mp4",
+      "https://cdn.example.test/seedance-scene-task-2.mp4",
+      "https://cdn.example.test/seedance-scene-task-3.mp4",
+      "https://cdn.example.test/seedance-scene-task-4.mp4",
+    ]);
+    expect(polled.body.traceEvents.map((event) => event.step)).toContain("seedance-scene-clips-ready");
+    expect(polled.body.traceEvents.map((event) => event.step)).toContain(
+      "ffmpeg-scene-compose-failed",
+    );
   });
 });

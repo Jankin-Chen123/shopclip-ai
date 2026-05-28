@@ -60,6 +60,9 @@ const seedFromInput = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+const playableSceneClips = (renderTask: RenderTask | undefined) =>
+  renderTask?.sceneClips?.filter((clip) => clip.videoUrl) ?? [];
+
 export const RenderPanel = ({
   copy,
   disabled,
@@ -305,7 +308,32 @@ export const RenderPanel = ({
         <h2 id="export-title">{copy.exportTitle}</h2>
       </div>
       <div className="preview-box">
-        {renderTask?.previewUrl ? (
+        {playableSceneClips(renderTask).length > 0 ? (
+          <>
+            <strong>{copy.clipPreviewTitle}</strong>
+            <div className="scene-clip-grid">
+              {playableSceneClips(renderTask).map((clip) => (
+                <article className="scene-clip-card" key={clip.sceneId}>
+                  <video
+                    controls
+                    playsInline
+                    preload="metadata"
+                    poster={clip.coverUrl && clip.coverUrl !== clip.videoUrl ? clip.coverUrl : undefined}
+                    src={clip.videoUrl}
+                  >
+                    <a href={clip.videoUrl}>{clip.videoUrl}</a>
+                  </video>
+                  <div>
+                    <strong>
+                      {clip.order}. {clip.subtitle}
+                    </strong>
+                    <span>{clip.videoUrl}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : renderTask?.previewUrl ? (
           <>
             <strong>{copy.previewArtifact}</strong>
             <span>{renderTask.previewUrl}</span>
@@ -325,7 +353,11 @@ export const RenderPanel = ({
         ) : (
           <>
             <strong>{copy.previewUnavailable}</strong>
-            <span>{copy.previewUnavailableBody}</span>
+            <span>
+              {renderTask?.sceneClips?.some((clip) => clip.status === "running")
+                ? copy.clipPreviewFallback
+                : copy.previewUnavailableBody}
+            </span>
           </>
         )}
       </div>

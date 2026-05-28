@@ -1013,17 +1013,45 @@ describe("P0 backend lifecycle", () => {
         targetDurationSeconds: 15,
       }),
     });
-    const asset = await request<{ asset: { id: string } }>(
+    const heroAsset = await request<{ asset: { id: string; name: string } }>(
       baseUrl,
       `/api/projects/${created.body.project.id}/assets`,
       {
         method: "POST",
         body: JSON.stringify({
           type: "image",
-          name: "小猫水杯主图",
+          name: "生成水杯多角度细节图.png",
           mimeType: "image/png",
           sizeBytes: 200_000,
           tags: ["product"],
+        }),
+      },
+    );
+    const strawAsset = await request<{ asset: { id: string; name: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "Snipaste_2026-05-21_19-32-08.png",
+          mimeType: "image/png",
+          sizeBytes: 180_000,
+          tags: ["straw"],
+        }),
+      },
+    );
+    const travelAsset = await request<{ asset: { id: string; name: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "生成水杯多角度细节图 (2).png",
+          mimeType: "image/png",
+          sizeBytes: 210_000,
+          tags: ["travel"],
         }),
       },
     );
@@ -1032,6 +1060,7 @@ describe("P0 backend lifecycle", () => {
       script: {
         narrative: string;
         scenes: Array<{
+          assetId?: string;
           durationSeconds: number;
           subtitle: string;
           voiceover: string;
@@ -1041,13 +1070,17 @@ describe("P0 backend lifecycle", () => {
     }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
       method: "POST",
       body: JSON.stringify({
-        assetIds: [asset.body.asset.id],
+        assetIds: [
+          heroAsset.body.asset.id,
+          strawAsset.body.asset.id,
+          travelAsset.body.asset.id,
+        ],
         draftScript: [
           "| 时间 | 旁白 | 字幕 | 画面 |",
           "|---|---|---|---|",
-          "| 0-3s | 小包塞不下水杯？ | 小包塞不下？ | 手拿小包和小猫水杯做尺寸对比 |",
-          "| 3-7s | 这只小猫水杯轻松放进口袋 | 轻松塞进口袋 | 展示水杯放入随身小包 |",
-          "| 7-11s | 防漏防滑，通勤更安心 | 防漏防滑 | 近景展示杯盖和防漏结构 |",
+          "| 0-3s | 小包塞不下水杯？ | 小包塞不下？ | 手拿小包和小猫水杯做尺寸对比，调用 [生成水杯多角度细节图.png] 素材展示 |",
+          "| 3-7s | 这只小猫水杯轻松放进口袋 | 轻松塞进口袋 | 展示水杯吸管和防漏结构，调用 [Snipaste_2026-05-21_19-32-08.png] 素材展示 |",
+          "| 7-11s | 防漏防滑，通勤更安心 | 防漏防滑 | 近景展示随身携带效果，调用 [生成水杯多角度细节图 (2).png] 素材展示 |",
         ].join("\n"),
       }),
     });
@@ -1068,6 +1101,11 @@ describe("P0 backend lifecycle", () => {
       subtitle: "轻松塞进口袋",
       voiceover: "这只小猫水杯轻松放进口袋",
     });
+    expect(generated.body.script.scenes.map((scene) => scene.assetId)).toEqual([
+      heroAsset.body.asset.id,
+      strawAsset.body.asset.id,
+      travelAsset.body.asset.id,
+    ]);
   });
 
   it("uses prepared assets for storyboard generation and regenerates only the selected scene", async () => {

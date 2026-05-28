@@ -94,10 +94,12 @@ corepack pnpm dev
 | `ARK_IMAGE_SIZE`       | API    | 可选                 | 图片生成尺寸，默认 `1024x1024`。                           |
 | `AI_VIDEO_MODEL_ID`    | API    | 视频生成才需要       | 视频生成模型的方舟 endpoint ID 或可调用 model ID；生产建议填写方舟控制台中的 `ep-...` endpoint ID，后端会原样提交该值。 |
 | `AI_VIDEO_IMAGE_INPUT_MODE` | API | 可选            | Seedance 图片输入模式，默认 `first_frame`，会把第一张公网商品图作为首帧图一并提交；只能文生视频时设为 `none`，支持参考图的模型可设为 `reference_image`。 |
-| `AI_VIDEO_DURATION`    | API    | 可选                 | Seedance 目标视频时长覆盖值；为空时按分镜总时长自动计算。 |
-| `AI_VIDEO_ALLOWED_DURATIONS` | API | 可选           | Seedance 可接受的离散时长列表，默认 `5,10,12`；分镜总时长会向上规整到最近可用值。 |
+| `AI_VIDEO_DURATION`    | API    | 可选                 | Seedance 目标视频时长覆盖值；为空时按每个分镜时长自动计算。 |
+| `AI_VIDEO_ALLOWED_DURATIONS` | API | 可选           | Seedance 可接受的离散时长列表，默认 `5,10`；每个分镜时长会向上规整到最近可用值。 |
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
+| `FFMPEG_PATH`          | API    | 可选                 | 服务器 ffmpeg 可执行文件路径；配置后用于把分镜视频片段拼接为最终导出 MP4。 |
+| `RENDER_EXPORT_DIR`    | API    | 可选                 | ffmpeg 拼接产物目录，默认使用系统临时目录并通过 `/api/render-exports` 暴露。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
 | `TTS_API_KEY`          | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
 | `EXTERNAL_ASSET_PROVIDERS` | API | 可选              | 服务端外部素材源列表；可用 `pexels,pixabay,freesound`。 |
@@ -159,7 +161,7 @@ flowchart TD
 - Editing Agent 建议是可解释的确定性建议。
 - TTS、字幕、BGM 和看板指标均为 metadata-backed mock 输出。
 - 渲染产物默认使用 mock 输出；只有显式设置 `VIDEO_RENDER_PROVIDER_MODE=seedance` 且配置服务端视频密钥/模型后，才调用 Seedance。TTS 声线不会控制 Seedance 画面效果。
-- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会从项目/分镜素材中选第一张公网商品图，以 `role=first_frame` 一并提交给 Seedance；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。Seedance 的 `duration` 是目标视频秒数；默认按分镜时长总和计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
+- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会按分镜逐段提交 Seedance 任务，并从每个分镜的绑定素材中选公网图片，以 `role=first_frame` 一并提交；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。每段视频完成后会在步骤 04 展示可点击预览；配置 `FFMPEG_PATH` 后，后端会尝试用 ffmpeg 拼接所有分镜片段为最终导出 MP4。Seedance 的 `duration` 是目标视频秒数；默认按每个分镜时长分别计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
 - UI 支持失败渲染模拟和重试，不会丢失项目数据。
 - 真实 provider 密钥只能放在服务端环境变量中，浏览器不会直接调用模型或 TTS provider。
 

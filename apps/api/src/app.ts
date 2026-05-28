@@ -6,6 +6,7 @@ import { createInspirationRouter } from "./modules/inspiration/router.js";
 import type { P0RouterOptions } from "./modules/projects/router.js";
 import { createP0Router } from "./modules/projects/router.js";
 import { createProjectStoreFromEnv } from "./modules/projects/storeFactory.js";
+import { renderExportDir } from "./providers/renderer/ffmpegComposer.js";
 
 const parseCorsOrigins = (): string | string[] => {
   const configuredOrigin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
@@ -47,6 +48,7 @@ export const createApp = (options: AppOptions = {}): Express => {
     }),
   );
   app.use(express.json({ limit: process.env.JSON_BODY_LIMIT ?? "1mb" }));
+  app.use("/api/render-exports", express.static(renderExportDir()));
 
   app.get("/health", (_request, response) => {
     response.json(createHealthPayload("api"));

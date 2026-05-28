@@ -31,6 +31,7 @@ import type {
   ProjectStatusSchema,
   ProjectSummarySchema,
   RenderRequestSchema,
+  SceneRenderClipSchema,
   RenderTaskSchema,
   RenderTaskStatusSchema,
   SceneRegenerationRequestSchema,
@@ -85,6 +86,7 @@ export type EditingSuggestion = z.infer<typeof EditingSuggestionSchema>;
 export type MediaSettings = z.infer<typeof MediaSettingsSchema>;
 export type VideoGenerationSettings = z.infer<typeof VideoGenerationSettingsSchema>;
 export type RenderRequest = z.infer<typeof RenderRequestSchema>;
+export type SceneRenderClip = z.infer<typeof SceneRenderClipSchema>;
 export type RenderTask = z.infer<typeof RenderTaskSchema>;
 export type TraceEvent = z.infer<typeof TraceEventSchema>;
 export type DashboardResponse = z.infer<typeof DashboardResponseSchema>;

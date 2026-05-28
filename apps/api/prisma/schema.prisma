@@ -186,6 +186,7 @@ model RenderTask {
   errorMessage String?
   provider     String?
   providerTaskId String?
+  sceneClips   Json?
   mediaSettings Json?
   videoSettings Json?
   retryOfRenderTaskId String?

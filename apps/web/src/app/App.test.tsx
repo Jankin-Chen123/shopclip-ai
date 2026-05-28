@@ -224,6 +224,59 @@ describe("App", () => {
     expect(markup).toContain("Seed");
   });
 
+  it("renders per-scene video previews in the render panel", () => {
+    const markup = renderToStaticMarkup(
+      <RenderPanel
+        copy={copy.en.render}
+        disabled={false}
+        forceRenderFailure={false}
+        isExporting={false}
+        isRendering={false}
+        mediaSettings={{
+          bgmTrack: "creator-pop",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        onExport={() => undefined}
+        onForceFailureChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onRefreshRender={() => undefined}
+        onRetryRender={() => undefined}
+        onStartRender={() => undefined}
+        onVideoSettingsChange={() => undefined}
+        renderTask={{
+          id: "render-1",
+          projectId: "project-1",
+          status: "completed",
+          progress: 100,
+          provider: "volcengine-seedance",
+          previewUrl: "https://cdn.example.test/scene-1.mp4",
+          exportUrl: "https://cdn.example.test/scene-1.mp4",
+          sceneClips: [
+            {
+              sceneId: "scene-1",
+              order: 1,
+              subtitle: "Hook",
+              status: "completed",
+              progress: 100,
+              videoUrl: "https://cdn.example.test/scene-1.mp4",
+              coverUrl: "https://cdn.example.test/scene-1.mp4",
+            },
+          ],
+          createdAt: "2026-05-28T00:00:00.000Z",
+          updatedAt: "2026-05-28T00:00:00.000Z",
+        }}
+        traceEvents={[]}
+        videoSettings={defaultVideoSettings}
+      />,
+    );
+
+    expect(markup).toContain("Scene clip previews");
+    expect(markup).toContain("<video");
+    expect(markup).toContain("https://cdn.example.test/scene-1.mp4");
+  });
+
   it("includes model API settings in one-click script generation requests", () => {
     const apiConfig = {
       general: {

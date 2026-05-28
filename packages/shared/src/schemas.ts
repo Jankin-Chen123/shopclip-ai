@@ -360,6 +360,18 @@ export const RenderRequestSchema = z.object({
   simulateFailure: z.boolean().default(false),
 });
 
+export const SceneRenderClipSchema = z.object({
+  sceneId: z.string().trim().min(1),
+  order: z.number().int().min(1),
+  subtitle: z.string().trim().min(1),
+  status: RenderTaskStatusSchema,
+  progress: z.number().min(0).max(100).default(0),
+  providerTaskId: z.string().trim().min(1).optional(),
+  videoUrl: z.string().trim().min(1).optional(),
+  coverUrl: z.string().trim().min(1).optional(),
+  errorMessage: z.string().trim().min(1).optional(),
+});
+
 export const RenderTaskSchema = z.object({
   id: z.string().trim().min(1),
   projectId: z.string().trim().min(1),
@@ -370,6 +382,7 @@ export const RenderTaskSchema = z.object({
   errorMessage: z.string().trim().min(1).optional(),
   provider: z.string().trim().min(1).optional(),
   providerTaskId: z.string().trim().min(1).optional(),
+  sceneClips: z.array(SceneRenderClipSchema).optional(),
   mediaSettings: MediaSettingsSchema.optional(),
   videoSettings: VideoGenerationSettingsSchema.optional(),
   retryOfRenderTaskId: z.string().trim().min(1).optional(),
