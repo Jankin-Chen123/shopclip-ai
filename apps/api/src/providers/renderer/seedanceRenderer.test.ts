@@ -14,6 +14,8 @@ const touchedKeys = [
   "AI_VIDEO_API_KEY",
   "AI_VIDEO_ENDPOINT_ID",
   "AI_VIDEO_GENERATE_AUDIO",
+  "AI_VIDEO_ALLOWED_DURATIONS",
+  "AI_VIDEO_DURATION",
   "AI_VIDEO_MODEL_ID",
   "AI_VIDEO_REFERENCE_IMAGES",
   "AI_VIDEO_RATIO",
@@ -134,7 +136,7 @@ describe("Seedance renderer provider", () => {
       model: "ep-seedance-render",
       ratio: "9:16",
       resolution: "720p",
-      duration: 8,
+      duration: 10,
       generate_audio: false,
       watermark: false,
     });
@@ -176,6 +178,70 @@ describe("Seedance renderer provider", () => {
         url: "https://cdn.example.test/product.png",
       },
     });
+  });
+
+  it("uses the configured Seedance duration when provided by the environment", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    process.env.AI_VIDEO_DURATION = "10";
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "seedance-task-duration",
+        status: "queued",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderWithConfiguredVideoProvider(project, {
+      mediaSettings: {
+        ttsVoice: "clear-host",
+        subtitleStyle: "clean-lower-third",
+        subtitlesEnabled: true,
+        bgmTrack: "creator-pop",
+      },
+    });
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody.duration).toBe(10);
+  });
+
+  it("derives Seedance duration from storyboard scene durations", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "seedance-task-storyboard-duration",
+        status: "queued",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderWithConfiguredVideoProvider(
+      {
+        ...project,
+        scenes: project.scenes.map((scene, index) => ({
+          ...scene,
+          durationSeconds: index === 0 ? 7 : 8,
+        })),
+      },
+      {
+        mediaSettings: {
+          ttsVoice: "clear-host",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          bgmTrack: "creator-pop",
+        },
+      },
+    );
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody.duration).toBe(15);
   });
 
   it("prefers render request video settings over environment defaults", async () => {

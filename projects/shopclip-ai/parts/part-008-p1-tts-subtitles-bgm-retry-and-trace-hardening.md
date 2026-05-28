@@ -63,6 +63,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - 2026-05-28 follow-up: API startup now loads the local `.env` with override enabled so stale process-level values cannot keep an old video model active when the server `.env` has been updated.
 - 2026-05-28 follow-up: API `.env` loading now searches upward from the process cwd, so deployments that start the package from `apps/api` still load the workspace root `.env`.
 - 2026-05-28 follow-up: Seedance render requests now omit reference images by default to avoid triggering unsupported `r2v` tasks on text-to-video endpoints. Reference images can be re-enabled with `AI_VIDEO_REFERENCE_IMAGES=true` when using an endpoint that supports them.
+- 2026-05-28 follow-up: Seedance `duration` is derived from storyboard scene durations, then rounded up to the nearest value from `AI_VIDEO_ALLOWED_DURATIONS` to avoid unsupported values such as 8 seconds. `AI_VIDEO_DURATION` remains available as an explicit server override.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
@@ -70,6 +71,7 @@ Add P1 media controls and make generation failures recoverable and observable.
   - `projects/shopclip-ai/evidence/2026-05-28-seedance-env-model-config.md`
   - `projects/shopclip-ai/evidence/2026-05-28-env-override-for-video-model.md`
   - `projects/shopclip-ai/evidence/2026-05-28-seedance-reference-image-toggle.md`
+  - `projects/shopclip-ai/evidence/2026-05-28-seedance-duration-config.md`
 
 ## Verification Evidence
 

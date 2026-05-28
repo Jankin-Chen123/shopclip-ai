@@ -14,6 +14,7 @@ const DEFAULT_VIDEO_MODEL = "doubao-seedance-2-0-260128";
 const DEFAULT_VIDEO_PATH = "/contents/generations/tasks";
 const DEFAULT_VIDEO_RATIO = "9:16";
 const DEFAULT_VIDEO_RESOLUTION = "720p";
+const DEFAULT_VIDEO_DURATIONS = [5, 10, 15];
 
 type SeedanceConfig = {
   apiKey: string;
@@ -54,6 +55,20 @@ const parseNumberEnv = (key: string) => {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseDurationListEnv = () => {
+  const value = firstEnv("AI_VIDEO_ALLOWED_DURATIONS");
+  if (!value) {
+    return DEFAULT_VIDEO_DURATIONS;
+  }
+
+  const durations = value
+    .split(",")
+    .map((item) => Number.parseInt(item.trim(), 10))
+    .filter((item) => Number.isFinite(item) && item > 0)
+    .sort((left, right) => left - right);
+  return durations.length > 0 ? durations : DEFAULT_VIDEO_DURATIONS;
 };
 
 const VIDEO_RATIOS = ["1:1", "4:3", "3:4", "16:9", "9:16", "21:9"] as const;
@@ -153,12 +168,6 @@ const requestArkJson = async (
   return responseBody;
 };
 
-const totalDurationSeconds = (project: ProjectSnapshot) =>
-  Math.min(
-    15,
-    Math.max(1, Math.round(project.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0))),
-  );
-
 const promptForProject = (project: ProjectSnapshot) => {
   const scenes = project.scenes
     .sort((left, right) => left.order - right.order)
@@ -201,6 +210,27 @@ const uniquePublicImageAssets = (project: ProjectSnapshot): AssetMetadata[] => {
   return [...selected.values()].slice(0, 4);
 };
 
+const totalDurationSeconds = (project: ProjectSnapshot) =>
+  Math.min(
+    15,
+    Math.max(1, Math.round(project.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0))),
+  );
+
+const resolveSeedanceDuration = (project: ProjectSnapshot) => {
+  const configuredDuration = parseNumberEnv("AI_VIDEO_DURATION");
+  if (configuredDuration && configuredDuration > 0) {
+    return configuredDuration;
+  }
+
+  const storyboardDuration = totalDurationSeconds(project);
+  const allowedDurations = parseDurationListEnv();
+  return (
+    allowedDurations.find((duration) => duration >= storyboardDuration) ??
+    allowedDurations[allowedDurations.length - 1] ??
+    storyboardDuration
+  );
+};
+
 const buildSeedanceRequestBody = (
   project: ProjectSnapshot,
   config: SeedanceConfig,
@@ -228,7 +258,7 @@ const buildSeedanceRequestBody = (
     content,
     ratio: videoSettings.ratio,
     resolution: videoSettings.resolution,
-    duration: totalDurationSeconds(project),
+    duration: resolveSeedanceDuration(project),
     generate_audio: videoSettings.generateAudio,
     watermark: videoSettings.watermark,
     ...(videoSettings.seed === undefined ? {} : { seed: videoSettings.seed }),
