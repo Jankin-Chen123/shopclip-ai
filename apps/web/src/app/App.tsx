@@ -668,7 +668,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       return;
     }
 
-    const creationAssetLibraryRefreshCategory = getCreationAssetLibraryRefreshCategory(activePage);
+    const creationAssetLibraryRefreshCategory =
+      activePage === "inspiration" ? "all" : getCreationAssetLibraryRefreshCategory(activePage);
     if (creationAssetLibraryRefreshCategory) {
       refreshAssetLibrary(creationAssetLibraryRefreshCategory);
     }
@@ -1165,17 +1166,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         sourceAssetId: draft.sourceAssetId?.trim() || undefined,
         sourceUrl: draft.sourceUrl?.trim() || undefined,
       });
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              referenceVideos: [
-                ...current.referenceVideos.filter((candidate) => candidate.id !== reference.id),
-                reference,
-              ],
-            }
-          : current,
-      );
+      const refreshedProject = await loadProject(project.id);
+      setProject(refreshedProject);
       setSelectedReferenceIdForScript(reference.id);
       setScriptProductionMode("viral-remix");
     });
@@ -1539,7 +1531,24 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         ) : null}
 
         {activePage === "inspiration" ? (
-          <InspirationPanel apiConfig={apiConfig} language={language} />
+          <section className="inspiration-reference-workspace" aria-label="Inspiration workspace">
+            <InspirationPanel apiConfig={apiConfig} language={language} />
+            <ReferenceLibraryPanel
+              disabled={!project || busyState !== "idle"}
+              error={errors.script}
+              isLoading={busyState === "reference"}
+              language={language}
+              onAnalyzeReference={handleAnalyzeReference}
+              onCreateTemplate={handleCreateReferenceTemplate}
+              references={project?.referenceVideos ?? []}
+              sourceAssets={studioAssets.filter(
+                (asset) =>
+                  (asset.type === "video" || asset.mimeType?.startsWith("video/")) &&
+                  asset.source !== "public_reference",
+              )}
+              templates={project?.viralTemplates ?? []}
+            />
+          </section>
         ) : null}
 
         {activePage === "settings" ? (
@@ -1592,20 +1601,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     onImportFiles={handleImportFiles}
                     onPreparationChange={handleAssetPrepChange}
                     preparedLibraryAssetsByBucket={preparedProjectAssetsByBucket}
-                  />
-                  <ReferenceLibraryPanel
-                    disabled={!project || busyState !== "idle"}
-                    isLoading={busyState === "reference"}
-                    language={language}
-                    onAnalyzeReference={handleAnalyzeReference}
-                    onCreateTemplate={handleCreateReferenceTemplate}
-                    references={project?.referenceVideos ?? []}
-                    sourceAssets={studioAssets.filter(
-                      (asset) =>
-                        (asset.type === "video" || asset.mimeType?.startsWith("video/")) &&
-                        asset.source !== "public_reference",
-                    )}
-                    templates={project?.viralTemplates ?? []}
                   />
                   <ScriptPanel
                     copy={text.script}

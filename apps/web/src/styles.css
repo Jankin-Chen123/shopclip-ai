@@ -659,6 +659,7 @@ a {
 
 .asset-workspace,
 .inspiration-page,
+.inspiration-reference-workspace,
 .script-workspace {
   display: grid;
   grid-column: 1 / -1;
@@ -666,6 +667,7 @@ a {
 }
 
 .asset-workspace > .panel,
+.inspiration-reference-workspace > .panel,
 .script-workspace > .panel {
   grid-column: 1 / -1;
 }

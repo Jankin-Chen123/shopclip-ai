@@ -29,7 +29,7 @@ MVP 完成说明：
 
 - 已完成素材结构化 schema、Prisma/store 扩展、素材处理 job、mock/Ark provider 边界、混合检索、参考视频拆解、模板提炼、剧本生成接入和 Studio 分镜素材召回。
 - 真实火山/Ark 多模态视觉理解已接入环境配置驱动的 provider wrapper；默认 `VISION_PROVIDER_MODE=mock` 走 deterministic fallback，填写 `VISION_PROVIDER_MODE=ark`、`ARK_API_KEY` 或 `AI_VISION_API_KEY`、`AI_VISION_MODEL_ID` 后，素材结构化会调用真实多模态模型。COS 智能检索和公开视频站外搜索仍按 provider/config 形式接入。
-- 自有参考视频已通过 `sourceAssetId` 接入：商家先上传视频素材，再在参考视频拆解面板选择该视频，后端复用素材处理链路生成结构化 slice 后再跑爆款拆解。
+- 自有参考视频已通过 `sourceAssetId` 接入：商家先上传视频素材，再在灵感分区的参考视频拆解面板选择该视频，后端复用素材处理链路生成结构化 slice 后再跑爆款拆解；前端拆解完成后刷新项目快照，保证创作分区和 Studio 能消费最新结构化素材。
 
 ## 2. 指定 GitHub 仓库代码调研结论
 
@@ -313,6 +313,7 @@ flowchart TD
 - Create: `apps/web/src/features/references/ReferenceLibraryPanel.tsx`
 - Create: `apps/web/src/features/references/ReferenceBreakdownView.tsx`
 - Modify: `apps/web/src/lib/api.ts`
+- Modify: `apps/web/src/app/App.tsx`
 
 ## 7. API 计划
 
@@ -473,7 +474,7 @@ flowchart TD
 
 - [x] 增加公开参考 URL 登记，必须填写 `sourceDeclaration`。
 - [x] MVP 支持上传自有参考视频和手动录入公开视频来源。自有参考视频通过已上传视频素材 `sourceAssetId` 接入。
-- [x] 上传视频复用素材处理 frames/transcript，再跑爆款拆解。`POST /api/references/analyze` 会先处理 `sourceAssetId` 对应视频，再保存参考拆解。
+- [x] 上传视频复用素材处理 frames/transcript，再跑爆款拆解。灵感分区点击“拆解参考视频”后，`POST /api/references/analyze` 会先处理 `sourceAssetId` 对应视频，再保存参考拆解。
 - [x] 拆解输出包含 hook、节奏、情绪曲线、转化因子、目标人群、内容公式、9 段叙事结构、复刻蓝图。
 - [x] ViralX 9 段结构转为 JSON：`Hook`、`Pain`、`Fear`、`Solution`、`Demo`、`Trust`、`Price`、`CTA`、`Closure`。
 - [x] URL 参考只保存来源、公开统计和结构化分析，不保存公开视频混剪素材。
@@ -555,7 +556,7 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 - [x] COS 关闭时纯文本检索仍可用。
 - [x] COS 开启时能通过 objectKey 映射回数据库资产。
 - [x] 公开参考视频只保存结构化分析和来源声明。
-- [x] 自有参考视频可通过已上传视频素材 `sourceAssetId` 触发素材结构化，再保存结构化拆解。
+- [x] 自有参考视频可在灵感分区通过已上传视频素材 `sourceAssetId` 触发素材结构化，再保存结构化拆解。
 - [x] 爆款拆解报告包含 Hook、节奏、情绪曲线、转化因子、目标人群、内容公式和复刻蓝图。
 - [x] 剧本生成可选择参考视频或模板，并生成包含 `assetRecallQuery` 的分镜。
 - [x] Studio 可以召回 slice 候选并替换单个分镜素材。

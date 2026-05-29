@@ -25,7 +25,7 @@ test.describe("Part 015 structured references", () => {
       buffer: Buffer.from("demo-video-reference"),
     });
 
-    await page.goto("/#create");
+    await page.goto("/#inspiration");
     await expect(page.getByRole("heading", { name: "Viral video breakdown" })).toBeVisible();
     await page.getByLabel("Uploaded reference video").selectOption({
       label: "Self shot reference demo.mp4",
@@ -39,6 +39,7 @@ test.describe("Part 015 structured references", () => {
     await page.getByRole("button", { name: "Create template" }).click();
     await expect(page.getByText("1 template")).toBeVisible();
 
+    await page.goto("/#create");
     const scriptGeneration = page.getByRole("region", { name: "Script generation" });
     await expect(scriptGeneration.getByLabel("Reference video")).toContainText(
       "Self-shot proof demo",

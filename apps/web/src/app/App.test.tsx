@@ -193,6 +193,7 @@ describe("App", () => {
     expect(markup).toContain("Write or paste your draft script");
     expect(markup).toContain("One-click generate");
     expect(markup).toContain("Generate storyboard");
+    expect(markup).not.toContain("Viral video breakdown");
   });
 
   it("renders video generation settings in the render panel", () => {
@@ -1520,6 +1521,8 @@ describe("App", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="inspiration" />);
 
     expect(markup).toContain("What do you want to create today?");
+    expect(markup).toContain("Viral video breakdown");
+    expect(markup).toContain("Analyze reference");
     expect(markup).toContain("Image");
     expect(markup).toContain("Custom");
     expect(markup).not.toContain("Use skills");

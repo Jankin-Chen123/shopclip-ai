@@ -17,6 +17,7 @@ interface ReferenceDraft {
 
 interface ReferenceLibraryPanelProps {
   disabled: boolean;
+  error?: string;
   isLoading: boolean;
   language: Language;
   onAnalyzeReference: (draft: ReferenceDraft) => void;
@@ -65,6 +66,7 @@ const text = {
 
 export const ReferenceLibraryPanel = ({
   disabled,
+  error,
   isLoading,
   language,
   onAnalyzeReference,
@@ -188,6 +190,11 @@ export const ReferenceLibraryPanel = ({
       >
         {copy.createTemplate}
       </Button>
+      {error ? (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <div className="reference-breakdown-list">
         {references.length === 0 ? (
