@@ -63,6 +63,7 @@ import {
   searchAssets,
   searchExternalStockAssets,
   startRender,
+  updateProjectPrep,
   updateScene,
   uploadAssetFileToStorage,
   type AssetLibraryCategory,
@@ -302,6 +303,7 @@ export const getPreparedAssetsByBucket = (
 
 export const createAssetPrepSnapshotFromProjectAssets = (
   assets: AssetMetadata[],
+  keywords: string[] = [],
 ): AssetPrepSnapshot => {
   const preparedAssetsByBucket = getPreparedAssetsByBucket(assets);
   const materials = Object.entries(preparedAssetsByBucket).flatMap(([bucketId, bucketAssets]) =>
@@ -319,7 +321,7 @@ export const createAssetPrepSnapshotFromProjectAssets = (
 
   return {
     assetIds: materials.map((material) => material.assetId),
-    keywords: [],
+    keywords,
     materials,
   };
 };
@@ -502,6 +504,34 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setAssetPrepSnapshot(snapshot);
   }, []);
 
+  useEffect(() => {
+    if (!project) {
+      return;
+    }
+
+    const currentKeywords = project.prepKeywords.join("\u001f");
+    const nextKeywords = assetPrepSnapshot.keywords.join("\u001f");
+    if (currentKeywords === nextKeywords) {
+      return;
+    }
+
+    const projectId = project.id;
+    const keywords = [...assetPrepSnapshot.keywords];
+    const timeoutId = window.setTimeout(() => {
+      void updateProjectPrep(projectId, { keywords })
+        .then((updatedProject) => {
+          setProject((current) =>
+            current?.id === updatedProject.id
+              ? { ...current, prepKeywords: updatedProject.prepKeywords }
+              : current,
+          );
+        })
+        .catch(() => undefined);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [assetPrepSnapshot.keywords, project]);
+
   const handleContinueToScript = () => {
     if (typeof document !== "undefined") {
       document.getElementById("script")?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -671,7 +701,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setAssetSearchResults([]);
     setExternalAssetSearchResults([]);
     setEditingSuggestions([]);
-    setAssetPrepSnapshot(createAssetPrepSnapshotFromProjectAssets(loadedProject.assets));
+    setAssetPrepSnapshot(
+      createAssetPrepSnapshotFromProjectAssets(loadedProject.assets, loadedProject.prepKeywords),
+    );
     setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
     setDirtySceneIds(new Set());
   };

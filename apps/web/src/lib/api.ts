@@ -19,6 +19,7 @@ import type {
   MediaSettings,
   Project,
   ProjectBrief,
+  ProjectPrepUpdate,
   ProjectSummary,
   RenderRequest,
   RenderTask,
@@ -145,6 +146,17 @@ export const createProject = async (brief: ProjectBrief): Promise<ProjectSnapsho
 
 export const loadProject = async (projectId: string): Promise<ProjectSnapshot> => {
   const response = await requestJson<{ project: ProjectSnapshot }>(`/projects/${projectId}`);
+  return response.project;
+};
+
+export const updateProjectPrep = async (
+  projectId: string,
+  update: ProjectPrepUpdate,
+): Promise<ProjectSnapshot> => {
+  const response = await requestJson<{ project: ProjectSnapshot }>(`/projects/${projectId}/prep`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
   return response.project;
 };
 

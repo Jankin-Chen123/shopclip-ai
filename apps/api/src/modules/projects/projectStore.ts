@@ -98,6 +98,10 @@ export interface ProjectStore {
     jobId: string,
     update: Partial<Pick<AssetProcessingJob, "message" | "status" | "steps">>,
   ): MaybePromise<AssetProcessingJob | undefined>;
+  updateProjectPrepKeywords(
+    projectId: string,
+    keywords: string[],
+  ): MaybePromise<ProjectSnapshot | undefined>;
   updateRenderTask(
     renderTaskId: string,
     update: Partial<Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">>,

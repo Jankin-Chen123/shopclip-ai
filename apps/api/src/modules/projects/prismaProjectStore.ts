@@ -174,6 +174,7 @@ const toProjectSnapshot = (project: ProjectWithRelations): ProjectSnapshot => {
     tone: project.tone,
     style: project.style,
     targetDurationSeconds: project.targetDurationSeconds,
+    prepKeywords: project.prepKeywords,
     status: project.status,
     createdAt: toIso(project.createdAt),
     updatedAt: toIso(project.updatedAt),
@@ -201,6 +202,7 @@ export class PrismaProjectStore implements ProjectStore {
     const project = await this.prisma.project.create({
       data: {
         ...brief,
+        prepKeywords: [],
       },
       include: projectInclude,
     });
@@ -464,6 +466,21 @@ export class PrismaProjectStore implements ProjectStore {
       data: update,
     });
     return toAssetProcessingJob(updated);
+  }
+
+  async updateProjectPrepKeywords(
+    projectId: string,
+    keywords: string[],
+  ): Promise<ProjectSnapshot | undefined> {
+    const project = await this.prisma.project
+      .update({
+        where: { id: projectId },
+        data: { prepKeywords: keywords },
+        include: projectInclude,
+      })
+      .catch(() => undefined);
+
+    return project ? toProjectSnapshot(project) : undefined;
   }
 
   async addScript(

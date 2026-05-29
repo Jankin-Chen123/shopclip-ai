@@ -1,0 +1,1 @@
+ALTER TABLE "Project" ADD COLUMN "prepKeywords" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

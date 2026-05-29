@@ -14,6 +14,7 @@ import type {
 import {
   ExternalAssetSearchRequestSchema,
   ProjectBriefSchema,
+  ProjectPrepUpdateSchema,
   ExternalAssetResultSchema,
   RenderRequestSchema,
   SceneRegenerationRequestSchema,
@@ -22,6 +23,7 @@ import {
   ScriptResultSchema,
 } from "@shopclip/shared";
 
+import { extractBrandDocumentText } from "../assets/documentText.js";
 import { createAssetSlices, inferAssetTags } from "../assets/tagging.js";
 import {
   CreateAssetRequestSchema,
@@ -201,28 +203,68 @@ const collectStorageObjectKeys = (assets: AssetMetadata[]): Set<string> => {
   return objectKeys;
 };
 
+const compactPromptText = (value: string, maxLength: number): string => {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  return compacted.length > maxLength ? `${compacted.slice(0, maxLength - 1)}...` : compacted;
+};
+
+const getExtractedDocumentText = (asset: AssetMetadata): string | undefined => {
+  const metadata = getMetadataRecord(asset);
+  if (metadata.documentTextStatus !== "extracted") {
+    return undefined;
+  }
+  return asset.embeddingText?.trim() || undefined;
+};
+
+const buildBrandDocumentPromptLines = (assets: AssetMetadata[]): string[] => {
+  let remainingCharacters = 3_600;
+  const lines: string[] = [];
+
+  for (const asset of assets) {
+    const text = getExtractedDocumentText(asset);
+    if (!text || remainingCharacters <= 0) {
+      continue;
+    }
+
+    const excerpt = compactPromptText(text, Math.min(1_200, remainingCharacters));
+    if (!excerpt) {
+      continue;
+    }
+    remainingCharacters -= excerpt.length;
+    lines.push(`${asset.name}:${excerpt}`);
+  }
+
+  return lines;
+};
+
 const scriptGenerationPrompt = (
   project: ProjectSnapshot,
   request: ScriptGenerationRequest,
   assets: AssetMetadata[],
 ) => {
+  const targetDurationSeconds = project.targetDurationSeconds;
+  const keywords = request.keywords.length > 0 ? request.keywords : project.prepKeywords;
   const materialLines = [
     ...assets.map((asset) => `${asset.name} (${asset.mimeType ?? asset.type})`),
     ...request.materials.map(
       (material) => `${material.name} (${material.mimeType ?? material.type ?? "素材"})`,
     ),
   ];
+  const brandDocumentLines = buildBrandDocumentPromptLines(assets);
 
   return [
     "请改写电商短视频脚本。必须使用中文输出，内容要简洁、转化导向，并可直接用于分镜生成。",
     "输出格式必须是 Markdown 表格，表头固定为：| 时间 | 旁白 | 字幕 | 画面 |。",
-    "每一行代表一个分镜，总时长不得超过 15 秒；画面列必须包含素材外观一致性要求。",
+    `每一行代表一个分镜，分镜时长总和必须等于目标总时长 ${targetDurationSeconds} 秒；画面列必须包含素材外观一致性要求。`,
     `产品：${project.productName}`,
     `目标人群：${project.audience}`,
     `语气：${project.tone}`,
+    `视频风格：${project.style}`,
+    `目标总时长：${targetDurationSeconds} 秒`,
     `核心卖点：${project.sellingPoints.join("、")}`,
     `已准备素材：${materialLines.slice(0, 10).join("；") || "无"}`,
-    `关键词：${request.keywords.join("、") || "无"}`,
+    `品牌资料内容：${brandDocumentLines.join("; ") || "无可读取品牌资料正文"}`,
+    `关键词：${keywords.join("、") || "无"}`,
     `用户草稿：${request.draftScript || "未提供草稿，请直接生成一个强脚本。"}`,
   ].join("\n");
 };
@@ -919,6 +961,29 @@ export const createP0Router = ({
     response.json({ project });
   });
 
+  router.patch("/projects/:projectId/prep", async (request, response) => {
+    const parsedUpdate = ProjectPrepUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedUpdate.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_PROJECT_PREP",
+        "Project preparation settings are invalid.",
+      );
+      return;
+    }
+
+    const project = await store.updateProjectPrepKeywords(
+      request.params.projectId,
+      parsedUpdate.data.keywords,
+    );
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.json({ project });
+  });
+
   router.delete("/projects/:projectId", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
@@ -1335,14 +1400,15 @@ export const createP0Router = ({
         return;
       }
 
+      const contentType =
+        typeof request.headers["content-type"] === "string"
+          ? request.headers["content-type"]
+          : (asset.mimeType ?? "application/octet-stream");
       let uploaded;
       try {
         uploaded = await storageProvider.uploadObject({
           body: request.body,
-          contentType:
-            typeof request.headers["content-type"] === "string"
-              ? request.headers["content-type"]
-              : (asset.mimeType ?? "application/octet-stream"),
+          contentType,
           objectKey: asset.objectKey,
         });
       } catch (error) {
@@ -1357,15 +1423,36 @@ export const createP0Router = ({
 
       const job = await store.getLatestAssetProcessingJob(asset.id);
       const uploadedAt = new Date().toISOString();
+      const documentText = await extractBrandDocumentText({
+        body: request.body,
+        mimeType: contentType,
+        name: asset.name,
+      });
+      const documentTextMetadata =
+        documentText.status === "unsupported"
+          ? {}
+          : {
+              documentTextCharacterCount: documentText.characterCount,
+              documentTextExtractedAt: uploadedAt,
+              documentTextKind: documentText.kind,
+              documentTextStatus: documentText.status,
+              ...(documentText.errorMessage
+                ? { documentTextError: documentText.errorMessage }
+                : {}),
+            };
       const updatedAsset = await store.updateAsset(asset.id, {
         status: "ready",
         url: uploaded.publicUrl,
+        ...(documentText.status === "extracted" && documentText.text
+          ? { embeddingText: documentText.text }
+          : {}),
         metadata: {
           proxiedUpload: true,
           uploadedBytes: request.body.length,
           uploadConfirmedAt: uploadedAt,
           structuredAssetVersion: "asset-multigranularity-v1",
           structureProvider: "mock-asset-processor",
+          ...documentTextMetadata,
         },
       });
       if (!updatedAsset) {
@@ -1376,9 +1463,16 @@ export const createP0Router = ({
       const processingJob = job
         ? await store.updateAssetProcessingJob(job.id, {
             status: "ready",
-            steps: [...job.steps, "server-proxy-upload", "metadata-ready"],
+            steps: [
+              ...job.steps,
+              "server-proxy-upload",
+              ...(documentText.status === "extracted" ? ["document-text-extracted"] : []),
+              "metadata-ready",
+            ],
             message:
-              "Asset uploaded through the API server. Metadata is ready for script generation and storyboard recall.",
+              documentText.status === "extracted"
+                ? "Asset uploaded through the API server. Document text is ready for script generation and storyboard recall."
+                : "Asset uploaded through the API server. Metadata is ready for script generation and storyboard recall.",
           })
         : undefined;
 
@@ -1558,6 +1652,7 @@ export const createP0Router = ({
       tone: "neutral",
       style: "library",
       targetDurationSeconds: 15,
+      prepKeywords: [],
       status: "ready" as const,
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
@@ -1633,7 +1728,15 @@ export const createP0Router = ({
       return;
     }
 
-    const preparedAssetResult = await resolvePreparedAssets(project, parsedRequest.data);
+    const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
+      request.body ?? {},
+      "keywords",
+    );
+    const workingProject = shouldPersistKeywords
+      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ?? project)
+      : project;
+
+    const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
     if (preparedAssetResult.invalidAssetIds.length > 0) {
       sendInvalidRequest(
         response,
@@ -1644,7 +1747,7 @@ export const createP0Router = ({
     }
     const preparedAssets = preparedAssetResult.assets;
     const providerResult = await rewriteScriptWithConfiguredProvider(
-      project,
+      workingProject,
       parsedRequest.data,
       preparedAssets,
     );
@@ -1665,7 +1768,15 @@ export const createP0Router = ({
       return;
     }
 
-    const preparedAssetResult = await resolvePreparedAssets(project, parsedRequest.data);
+    const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
+      request.body ?? {},
+      "keywords",
+    );
+    const workingProject = shouldPersistKeywords
+      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ?? project)
+      : project;
+
+    const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
     if (preparedAssetResult.invalidAssetIds.length > 0) {
       sendInvalidRequest(
         response,
@@ -1676,11 +1787,11 @@ export const createP0Router = ({
     }
     const preparedAssets = preparedAssetResult.assets;
     const textProviderResult = await rewriteScriptWithConfiguredProvider(
-      project,
+      workingProject,
       parsedRequest.data,
       preparedAssets,
     );
-    const providerResult = generateFallbackScript(project, {
+    const providerResult = generateFallbackScript(workingProject, {
       assets: preparedAssets,
       request: {
         ...parsedRequest.data,
@@ -1690,7 +1801,7 @@ export const createP0Router = ({
       },
     });
     const scriptWithSceneImages = await renderStoryboardSceneImages(
-      project,
+      workingProject,
       providerResult.script,
       parsedRequest.data,
       preparedAssets,

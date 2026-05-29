@@ -27,6 +27,7 @@ import type {
   InspirationVideoTaskResponseSchema,
   MediaSettingsSchema,
   ProjectBriefSchema,
+  ProjectPrepUpdateSchema,
   ProjectSchema,
   ProjectStatusSchema,
   ProjectSummarySchema,
@@ -58,6 +59,7 @@ export type RenderTaskStatus = z.infer<typeof RenderTaskStatusSchema>;
 export type TraceEventStatus = z.infer<typeof TraceEventStatusSchema>;
 
 export type ProjectBrief = z.infer<typeof ProjectBriefSchema>;
+export type ProjectPrepUpdate = z.infer<typeof ProjectPrepUpdateSchema>;
 export type Project = z.infer<typeof ProjectSchema>;
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;

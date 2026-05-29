@@ -17,6 +17,7 @@ import {
   AssetPrepPanel,
   createAssetPrepSnapshotFromUploads,
   filterPrepLibraryAssets,
+  hydratePrepUploadsWithLibraryAssets,
 } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import {
@@ -487,6 +488,62 @@ describe("App", () => {
     expect(markup).toContain('aria-label="删除关键词：便携"');
     expect(markup).toContain("添加关键词");
     expect(markup).toContain("关键词内容");
+  });
+
+  it("does not replace an explicitly empty prep keyword snapshot with defaults", () => {
+    const markup = renderToStaticMarkup(
+      <AssetPrepPanel
+        disabled={false}
+        initialSnapshot={{ assetIds: [], keywords: [], materials: [] }}
+        isGenerating={false}
+        isImporting={false}
+        language="zh"
+        onBack={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onImportFiles={() => undefined}
+      />,
+    );
+
+    expect(markup).not.toContain('value="便携"');
+    expect(markup).not.toContain('value="可折叠"');
+  });
+
+  it("keeps loaded project prep keywords in the script generation snapshot", () => {
+    const snapshot = createAssetPrepSnapshotFromProjectAssets(
+      [makeAsset({ id: "asset-packshot", name: "Packshot.png", type: "image" })],
+      ["portable", "stable"],
+    );
+
+    expect(snapshot.assetIds).toEqual(["asset-packshot"]);
+    expect(snapshot.keywords).toEqual(["portable", "stable"]);
+  });
+
+  it("hydrates pending prep uploads with imported library assets for immediate previews", () => {
+    const hydrated = hydratePrepUploadsWithLibraryAssets(
+      {
+        hero: [
+          {
+            id: "Packshot.png-200000-1",
+            mimeType: "image/png",
+            name: "Packshot.png",
+            size: 200_000,
+            source: "file",
+          },
+        ],
+      },
+      [
+        makeAsset({
+          id: "asset-packshot",
+          name: "Packshot.png",
+          type: "image",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+        }),
+      ],
+    );
+
+    expect(hydrated.hero?.[0]?.asset?.id).toBe("asset-packshot");
+    expect(hydrated.hero?.[0]?.source).toBe("library");
   });
 
   it("renders searchable library import with preview and selected import controls", () => {

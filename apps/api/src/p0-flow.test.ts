@@ -58,6 +58,117 @@ describe("P0 backend lifecycle", () => {
     delete process.env.ARK_API_BASE_URL;
   });
 
+  it("extracts uploaded brand document text and sends it to the text model prompt", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: [
+                "| Time | Voiceover | Subtitle | Visual |",
+                "|---|---|---|---|",
+                "| 0-4s | Brand-led hook | Brand-led hook | Show product with brand guide constraints |",
+                "| 4-8s | Proof line | Proof line | Show clean premium product proof |",
+                "| 8-12s | CTA line | CTA line | Show direct purchase CTA |",
+              ].join("\n"),
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Brand document guided script",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+    const uploadIntent = await request<{
+      asset: { id: string };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/assets/upload-intent`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "reference",
+        name: "brand-guide.md",
+        mimeType: "text/markdown",
+        sizeBytes: 88,
+        tags: ["brand"],
+      }),
+    });
+
+    const uploaded = await request<{
+      asset: { embeddingText?: string; metadata?: Record<string, unknown> };
+    }>(baseUrl, `/api/assets/${uploadIntent.body.asset.id}/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "text/markdown",
+      },
+      body: "# Brand Voice\nUse warm premium wording and avoid exaggerated claims.",
+    });
+
+    expect(uploaded.status).toBe(200);
+    expect(uploaded.body.asset.embeddingText).toContain("Use warm premium wording");
+    expect(uploaded.body.asset.metadata).toMatchObject({
+      documentTextStatus: "extracted",
+      documentTextKind: "text",
+    });
+
+    const generated = await request<{
+      fallback: { used: boolean; provider: string };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [uploadIntent.body.asset.id],
+        materials: [
+          {
+            assetId: uploadIntent.body.asset.id,
+            bucketId: "brand",
+            name: "brand-guide.md",
+            mimeType: "text/markdown",
+            source: "file",
+            type: "reference",
+          },
+        ],
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+        },
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.fallback).toEqual({
+      used: false,
+      provider: "openai-compatible",
+    });
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    expect(externalCalls).toHaveLength(1);
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.messages[1].content).toContain("品牌资料内容");
+    expect(body.messages[1].content).toContain(
+      "Use warm premium wording and avoid exaggerated claims.",
+    );
+  });
+
   it("lists historical projects as compact summaries ordered by latest update", async () => {
     const first = await request<{
       project: { id: string; title: string };
@@ -1289,6 +1400,111 @@ describe("P0 backend lifecycle", () => {
     expect(body.model).toBe("custom-text-model");
     expect(body.messages[1].content).toContain("产品：Fold Stand");
     expect(body.messages[1].content).toContain("用户草稿：Focus on desk portability.");
+  });
+
+  it("passes visual style and exact target duration to the configured text model", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: [
+                "| Time | Voiceover | Subtitle | Visual |",
+                "|---|---|---|---|",
+                "| 0-4s | Hook | Hook | Show the product hero image |",
+                "| 4-8s | Proof | Proof | Show usage close-up |",
+                "| 8-12s | CTA | CTA | Show purchase prompt |",
+              ].join("\n"),
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Duration controlled script",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "clear and direct",
+        style: "clean ingredient closeups",
+        targetDurationSeconds: 12,
+      }),
+    });
+
+    const generated = await request<{
+      fallback: { used: boolean; provider: string };
+      script: { scenes: Array<{ durationSeconds: number }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        keywords: ["portable", "stable"],
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+        },
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(
+      generated.body.script.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
+    ).toBe(12);
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    expect(externalCalls).toHaveLength(1);
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.messages[1].content).toContain("视频风格：clean ingredient closeups");
+    expect(body.messages[1].content).toContain("目标总时长：12 秒");
+    expect(body.messages[1].content).toContain("分镜时长总和必须等于目标总时长");
+  });
+
+  it("generates fallback storyboard durations that sum to the project target duration", async () => {
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Fallback duration script",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+
+    const generated = await request<{
+      script: {
+        constraints: string[];
+        scenes: Array<{ durationSeconds: number }>;
+      };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.scenes).toHaveLength(4);
+    expect(generated.body.script.scenes.map((scene) => scene.durationSeconds)).toEqual([
+      3, 3, 3, 3,
+    ]);
+    expect(
+      generated.body.script.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
+    ).toBe(12);
+    expect(generated.body.script.constraints).toContain("完整分镜总时长必须等于 12 秒");
   });
 
   it("structures storyboard scene fields from the current script draft table", async () => {

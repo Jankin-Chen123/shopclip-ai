@@ -224,6 +224,34 @@ const createLibraryPrepUpload = (asset: AssetMetadata): ManualPrepUpload => ({
   source: "library",
 });
 
+const uploadsAreEqual = (
+  left: Record<string, ManualPrepUpload[]>,
+  right: Record<string, ManualPrepUpload[]>,
+): boolean => JSON.stringify(left) === JSON.stringify(right);
+
+const matchesPendingUpload = (asset: AssetMetadata, upload: ManualPrepUpload): boolean =>
+  !upload.asset &&
+  asset.name === upload.name &&
+  (upload.size === 0 || asset.sizeBytes === upload.size) &&
+  (!upload.mimeType || asset.mimeType === upload.mimeType);
+
+export const hydratePrepUploadsWithLibraryAssets = (
+  manualUploads: Record<string, ManualPrepUpload[]>,
+  libraryAssets: AssetMetadata[],
+): Record<string, ManualPrepUpload[]> => {
+  const hydrated = Object.fromEntries(
+    Object.entries(manualUploads).map(([bucketId, uploads]) => [
+      bucketId,
+      uploads.map((upload) => {
+        const matchedAsset = libraryAssets.find((asset) => matchesPendingUpload(asset, upload));
+        return matchedAsset ? createLibraryPrepUpload(matchedAsset) : upload;
+      }),
+    ]),
+  );
+
+  return uploadsAreEqual(hydrated, manualUploads) ? manualUploads : hydrated;
+};
+
 const createInitialManualUploads = (
   preparedLibraryAssetsByBucket: Record<string, AssetMetadata[]>,
   initialSnapshot: AssetPrepSnapshot | undefined,
@@ -329,7 +357,7 @@ export const AssetPrepPanel = ({
   );
   const [previewAsset, setPreviewAsset] = useState<AssetMetadata>();
   const [keywords, setKeywords] = useState<string[]>(() =>
-    initialSnapshot?.keywords.length ? [...initialSnapshot.keywords] : [...text[language].keywordList],
+    initialSnapshot ? [...initialSnapshot.keywords] : [...text[language].keywordList],
   );
   const [newKeyword, setNewKeyword] = useState("");
   const copy = text[language];
@@ -433,6 +461,10 @@ export const AssetPrepPanel = ({
 
   const useAssetPrepSnapshotEffect =
     typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+  useEffect(() => {
+    setManualUploads((current) => hydratePrepUploadsWithLibraryAssets(current, libraryAssets));
+  }, [libraryAssets]);
 
   useAssetPrepSnapshotEffect(() => {
     onPreparationChange?.(createAssetPrepSnapshotFromUploads(manualUploads, keywords));

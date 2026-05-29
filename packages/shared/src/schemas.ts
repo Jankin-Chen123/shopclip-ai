@@ -43,9 +43,14 @@ export const ProjectBriefSchema = z.object({
 
 export const ProjectSchema = ProjectBriefSchema.extend({
   id: z.string().trim().min(1),
+  prepKeywords: z.array(z.string().trim().min(1)).max(40).default([]),
   status: ProjectStatusSchema,
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,
+});
+
+export const ProjectPrepUpdateSchema = z.object({
+  keywords: z.array(z.string().trim().min(1)).max(40).default([]),
 });
 
 export const ProjectSummarySchema = ProjectSchema.pick({

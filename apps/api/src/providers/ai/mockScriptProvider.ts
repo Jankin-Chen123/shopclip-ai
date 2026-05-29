@@ -24,6 +24,34 @@ const compactList = (values: Array<string | undefined>, fallback: string) => {
   return compacted.length > 0 ? compacted.join(", ") : fallback;
 };
 
+const targetDurationForProject = (project: ProjectSnapshot): number =>
+  Math.min(Math.max(project.targetDurationSeconds || 15, 1), 15);
+
+const effectiveKeywords = (
+  project: ProjectSnapshot,
+  request: ScriptGenerationRequest | undefined,
+): string[] => (request?.keywords.length ? request.keywords : project.prepKeywords);
+
+const distributeSceneDurations = (totalDurationSeconds: number, sceneCount: number): number[] => {
+  const baseDuration = Math.floor(totalDurationSeconds / sceneCount);
+  let remainingSeconds = totalDurationSeconds - baseDuration * sceneCount;
+  return Array.from({ length: sceneCount }, (_, index) => {
+    const remainingSlots = sceneCount - index;
+    const extraSecond = remainingSeconds >= remainingSlots ? 1 : 0;
+    remainingSeconds -= extraSecond;
+    return baseDuration + extraSecond;
+  });
+};
+
+const createTimeRanges = (durations: number[]): string[] => {
+  let cursor = 0;
+  return durations.map((duration) => {
+    const start = cursor;
+    cursor += duration;
+    return `${start}-${cursor}s`;
+  });
+};
+
 const hasChineseText = (value: string): boolean => /[\u3400-\u9fff]/u.test(value);
 
 const cleanScriptCell = (value: string | undefined): string =>
@@ -49,7 +77,7 @@ const splitMarkdownRow = (line: string): string[] => {
     .map(cleanScriptCell);
 };
 
-const durationFromTimeCell = (value: string): number | undefined => {
+const durationFromTimeCell = (value: string, maxDurationSeconds: number): number | undefined => {
   const normalized = value.replace(/秒/gu, "s").replace(/\s+/g, "");
   const range = /(\d+(?:\.\d+)?)(?:s)?(?:-|–|—|~|至|到)(\d+(?:\.\d+)?)(?:s)?/u.exec(
     normalized,
@@ -58,7 +86,7 @@ const durationFromTimeCell = (value: string): number | undefined => {
     const start = Number.parseFloat(range[1]!);
     const end = Number.parseFloat(range[2]!);
     const duration = end - start;
-    return duration > 0 ? Math.min(duration, 15) : undefined;
+    return duration > 0 ? Math.min(duration, maxDurationSeconds) : undefined;
   }
 
   const single = /(\d+(?:\.\d+)?)(?:s)?/u.exec(normalized);
@@ -67,7 +95,7 @@ const durationFromTimeCell = (value: string): number | undefined => {
   }
 
   const duration = Number.parseFloat(single[1]!);
-  return duration > 0 ? Math.min(duration, 15) : undefined;
+  return duration > 0 ? Math.min(duration, maxDurationSeconds) : undefined;
 };
 
 const ensureMaterialConsistency = (visualPrompt: string): string =>
@@ -116,6 +144,7 @@ const parseDraftScriptScenes = (
 
   const scenes: StoryboardScene[] = [];
   let totalDurationSeconds = 0;
+  const targetDurationSeconds = targetDurationForProject(project);
   for (const line of draftScript.split(/\r?\n/u)) {
     const cells = splitMarkdownRow(line);
     if (cells.length < 3) {
@@ -130,12 +159,12 @@ const parseDraftScriptScenes = (
       continue;
     }
 
-    const parsedDuration = durationFromTimeCell(firstCell);
-    if (!parsedDuration || totalDurationSeconds >= 15) {
+    const parsedDuration = durationFromTimeCell(firstCell, targetDurationSeconds);
+    if (!parsedDuration || totalDurationSeconds >= targetDurationSeconds) {
       continue;
     }
 
-    const durationSeconds = Math.min(parsedDuration, 15 - totalDurationSeconds);
+    const durationSeconds = Math.min(parsedDuration, targetDurationSeconds - totalDurationSeconds);
     const rawVoiceover = cleanScriptCell(cells[1]);
     const rawSubtitle = cleanScriptCell(cells[2]);
     const rawVisual = cleanScriptCell(cells[3]) || rawVoiceover || rawSubtitle;
@@ -169,6 +198,10 @@ export const rewriteFallbackScript = (
 ): { fallback: { used: boolean; provider: string }; scriptText: string } => {
   const request = context.request;
   const draftScript = request?.draftScript?.trim();
+  const targetDurationSeconds = targetDurationForProject(project);
+  const [firstRange, secondRange, thirdRange, fourthRange] = createTimeRanges(
+    distributeSceneDurations(targetDurationSeconds, 4),
+  );
   const materialNames = compactList(
     [
       ...(context.assets ?? []).map((asset) => asset.name),
@@ -177,7 +210,7 @@ export const rewriteFallbackScript = (
     "已准备产品素材",
   );
   const keywordLine = compactList(
-    [...(request?.keywords ?? []), ...project.sellingPoints].slice(0, 8),
+    [...effectiveKeywords(project, request), ...project.sellingPoints].slice(0, 8),
     "清晰产品卖点",
   );
 
@@ -189,10 +222,10 @@ export const rewriteFallbackScript = (
     scriptText: [
       "| 时间 | 旁白 | 字幕 | 画面 |",
       "|---|---|---|---|",
-      `| 0-3s | 还在为${project.sellingPoints[0] ?? "产品使用不方便"}发愁吗？ | 痛点开场 | 展示${project.audience}的真实使用痛点，产品外观必须与用户素材一致 |`,
-      `| 3-7s | ${project.productName}一步解决这个问题。 | 展示解决方案 | 使用${materialNames}展示${keywordLine}，产品外观必须与用户素材一致 |`,
-      `| 7-11s | ${project.sellingPoints.slice(0, 2).join("，")}。 | 证明核心卖点 | 近景展示产品细节和使用效果，产品外观必须与用户素材一致 |`,
-      `| 11-15s | 现在就了解${project.productName}，让每次使用更省心。 | 行动号召 | 最终产品定格和购买引导，产品外观必须与用户素材一致 |`,
+      `| ${firstRange} | 还在为${project.sellingPoints[0] ?? "产品使用不方便"}发愁吗？ | 痛点开场 | 展示${project.audience}的真实使用痛点，产品外观必须与用户素材一致 |`,
+      `| ${secondRange} | ${project.productName}一步解决这个问题。 | 展示解决方案 | 使用${materialNames}展示${keywordLine}，产品外观必须与用户素材一致 |`,
+      `| ${thirdRange} | ${project.sellingPoints.slice(0, 2).join("，")}。 | 证明核心卖点 | 近景展示产品细节和使用效果，产品外观必须与用户素材一致 |`,
+      `| ${fourthRange} | 现在就了解${project.productName}，让每次使用更省心。 | 行动号召 | 最终产品定格和购买引导，产品外观必须与用户素材一致 |`,
       draftScript ? `\n用户原始草稿参考：${draftScript}` : "",
     ].join("\n"),
   };
@@ -206,8 +239,10 @@ export const generateFallbackScript = (
   const assetId = primaryAsset?.id;
   const assets = context.assets ?? project.assets;
   const draftScript = context.request?.draftScript?.trim();
+  const targetDurationSeconds = targetDurationForProject(project);
+  const fallbackDurations = distributeSceneDurations(targetDurationSeconds, 4);
   const keywordSummary = compactList(
-    [...(context.request?.keywords ?? []), ...project.sellingPoints].slice(0, 4),
+    [...effectiveKeywords(project, context.request), ...project.sellingPoints].slice(0, 4),
     project.sellingPoints[0] ?? "清晰产品卖点",
   );
   const parsedScenes = parseDraftScriptScenes(project, draftScript, assets, assetId);
@@ -225,7 +260,7 @@ export const generateFallbackScript = (
         `先呈现目标用户的痛点，再展示${project.productName}如何解决问题，最后给出明确购买引导。`,
       constraints: [
         "使用中文生成视频脚本和分镜描述",
-        "完整分镜总时长不超过 15 秒",
+        `完整分镜总时长必须等于 ${targetDurationSeconds} 秒`,
         hasParsedScenes ? "分镜字段已根据步骤二脚本文本结构化生成" : "未识别到结构化脚本文本，使用确定性 fallback 分镜",
         "没有服务端配置时使用确定性 fallback，不调用外部 AI",
         `参考准备关键词：${keywordSummary}`,
@@ -237,7 +272,7 @@ export const generateFallbackScript = (
           id: "scene-draft-1",
           projectId: project.id,
           order: 1,
-          durationSeconds: 3,
+          durationSeconds: fallbackDurations[0]!,
           subtitle: "痛点开场",
           voiceover: `还在为${project.sellingPoints[0] ?? "产品展示不清晰"}发愁吗？`,
           visualPrompt: `快速开场镜头，展示目标用户的痛点；产品外观必须与绑定素材一致。`,
@@ -248,7 +283,7 @@ export const generateFallbackScript = (
           id: "scene-draft-2",
           projectId: project.id,
           order: 2,
-          durationSeconds: 4,
+          durationSeconds: fallbackDurations[1]!,
           subtitle: "展示解决方案",
           voiceover: `${project.productName}一步就能让使用过程更简单。`,
           visualPrompt: `产品近景演示镜头，必须使用绑定素材中的同款产品，产品外观必须与绑定素材一致。`,
@@ -259,7 +294,7 @@ export const generateFallbackScript = (
           id: "scene-draft-3",
           projectId: project.id,
           order: 3,
-          durationSeconds: 4,
+          durationSeconds: fallbackDurations[2]!,
           subtitle: "证明核心卖点",
           voiceover: project.sellingPoints.slice(0, 2).join("。"),
           visualPrompt: `使用前后对比镜头，背景可以变化，但产品外观必须与绑定素材一致。`,
@@ -270,7 +305,7 @@ export const generateFallbackScript = (
           id: "scene-draft-4",
           projectId: project.id,
           order: 4,
-          durationSeconds: 4,
+          durationSeconds: fallbackDurations[3]!,
           subtitle: "行动号召",
           voiceover: `现在就了解${project.productName}，让每次展示更省心。`,
           visualPrompt: `最终产品定格镜头和明确购买引导；产品外观必须与绑定素材一致。`,

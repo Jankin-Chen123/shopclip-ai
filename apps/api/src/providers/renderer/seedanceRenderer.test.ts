@@ -36,6 +36,7 @@ const project: ProjectSnapshot = {
   tone: "confident",
   style: "fast desk demo",
   targetDurationSeconds: 12,
+  prepKeywords: [],
   status: "ready",
   createdAt: "2026-05-28T00:00:00.000Z",
   updatedAt: "2026-05-28T00:00:00.000Z",

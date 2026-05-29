@@ -74,6 +74,7 @@ model Project {
   tone                  String
   style                 String
   targetDurationSeconds Int               @default(15)
+  prepKeywords          String[]          @default([])
   status                ProjectStatus     @default(draft)
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt

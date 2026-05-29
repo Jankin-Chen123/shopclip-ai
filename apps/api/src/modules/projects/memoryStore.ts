@@ -27,6 +27,7 @@ export class MemoryProjectStore implements ProjectStore {
     const timestamp = now();
     const project: ProjectSnapshot = {
       ...brief,
+      prepKeywords: [],
       id: randomUUID(),
       status: "draft",
       createdAt: timestamp,
@@ -356,6 +357,17 @@ export class MemoryProjectStore implements ProjectStore {
     }
 
     return undefined;
+  }
+
+  updateProjectPrepKeywords(projectId: string, keywords: string[]): ProjectSnapshot | undefined {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      return undefined;
+    }
+
+    project.prepKeywords = [...keywords];
+    project.updatedAt = now();
+    return project;
   }
 
   addScript(
