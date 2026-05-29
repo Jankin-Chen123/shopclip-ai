@@ -1192,7 +1192,9 @@ describe("P0 backend lifecycle", () => {
     const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
     expect(body.messages[1].content).toContain("产品：小猫水杯");
     expect(body.messages[1].content).toContain("目标人群：通勤女生");
-    expect(body.messages[1].content).toContain("已准备素材：小猫水杯主图");
+    expect(body.messages[1].content).toContain("已准备素材清单：assetId=");
+    expect(body.messages[1].content).toContain("文件名=小猫水杯主图");
+    expect(body.messages[1].content).toContain("参考素材列必须只填写一个已准备素材的文件名或 assetId");
     expect(body.messages[1].content).toContain("关键词：便携、防漏");
     expect(body.messages[1].content).toContain("用户草稿：强调小包装得下和通勤防漏。");
   });
@@ -1613,6 +1615,132 @@ describe("P0 backend lifecycle", () => {
       strawAsset.body.asset.id,
       travelAsset.body.asset.id,
     ]);
+  });
+
+  it("uses the model-provided reference asset column for scene asset slots", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: [
+                "| 时间 | 旁白 | 字幕 | 画面 | 参考素材 |",
+                "|---|---|---|---|---|",
+                "| 0-3s | 软萌水杯上新 | 软萌小猫水杯 | 产品外观与提供的素材完全一致，近景快拉镜头 | 主图-正面水杯.png |",
+                "| 3-6s | 吸管一按即开 | 一按即喝 | 产品外观与提供的素材完全一致，特写吸管结构 | 细节-吸管按钮.png |",
+                "| 6-9s | 通勤放包不漏 | 小包也能放 | 产品外观与提供的素材完全一致，手拿通勤场景 | 场景-通勤携带.png |",
+              ].join("\n"),
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Cup launch clip",
+        productName: "小猫水杯",
+        audience: "通勤女生",
+        sellingPoints: ["吸管方便", "防漏便携"],
+        tone: "轻快",
+        style: "ins 风短视频",
+        targetDurationSeconds: 9,
+      }),
+    });
+    const mainAsset = await request<{ asset: { id: string; name: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "主图-正面水杯.png",
+          mimeType: "image/png",
+          sizeBytes: 200_000,
+          tags: ["hero"],
+        }),
+      },
+    );
+    const detailAsset = await request<{ asset: { id: string; name: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "细节-吸管按钮.png",
+          mimeType: "image/png",
+          sizeBytes: 180_000,
+          tags: ["detail"],
+        }),
+      },
+    );
+    const sceneAsset = await request<{ asset: { id: string; name: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "场景-通勤携带.png",
+          mimeType: "image/png",
+          sizeBytes: 210_000,
+          tags: ["scene"],
+        }),
+      },
+    );
+
+    const generated = await request<{
+      script: {
+        scenes: Array<{
+          assetId?: string;
+          visualPrompt: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [
+          mainAsset.body.asset.id,
+          detailAsset.body.asset.id,
+          sceneAsset.body.asset.id,
+        ],
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+        },
+      }),
+    });
+
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.scenes.map((scene) => scene.assetId)).toEqual([
+      mainAsset.body.asset.id,
+      detailAsset.body.asset.id,
+      sceneAsset.body.asset.id,
+    ]);
+    expect(generated.body.script.scenes.map((scene) => scene.visualPrompt)).toEqual([
+      expect.stringContaining("主图-正面水杯.png"),
+      expect.stringContaining("细节-吸管按钮.png"),
+      expect.stringContaining("场景-通勤携带.png"),
+    ]);
+
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
+    expect(body.messages[1].content).toContain("参考素材");
   });
 
   it("uses prepared assets for storyboard generation and regenerates only the selected scene", async () => {

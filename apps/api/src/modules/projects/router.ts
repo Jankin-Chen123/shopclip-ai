@@ -237,6 +237,31 @@ const buildBrandDocumentPromptLines = (assets: AssetMetadata[]): string[] => {
   return lines;
 };
 
+const buildScriptAssetPromptLines = (
+  request: ScriptGenerationRequest,
+  assets: AssetMetadata[],
+): string[] => {
+  const materialsByAssetId = new Map(
+    request.materials
+      .filter((material) => material.assetId)
+      .map((material) => [material.assetId!, material]),
+  );
+  const assetLines = assets.map((asset) => {
+    const material = materialsByAssetId.get(asset.id);
+    const bucket = material?.bucketId ? `；素材槽位=${material.bucketId}` : "";
+    const tags = asset.tags.length > 0 ? `；标签=${asset.tags.join("、")}` : "";
+    return `assetId=${asset.id}；文件名=${asset.name}${bucket}；类型=${asset.mimeType ?? asset.type}${tags}`;
+  });
+  const pendingMaterialLines = request.materials
+    .filter((material) => !material.assetId)
+    .map(
+      (material) =>
+        `未入库素材；文件名=${material.name}；素材槽位=${material.bucketId ?? "未知"}；类型=${material.mimeType ?? material.type ?? "素材"}`,
+    );
+
+  return [...assetLines, ...pendingMaterialLines];
+};
+
 const scriptGenerationPrompt = (
   project: ProjectSnapshot,
   request: ScriptGenerationRequest,
@@ -244,25 +269,23 @@ const scriptGenerationPrompt = (
 ) => {
   const targetDurationSeconds = project.targetDurationSeconds;
   const keywords = request.keywords.length > 0 ? request.keywords : project.prepKeywords;
-  const materialLines = [
-    ...assets.map((asset) => `${asset.name} (${asset.mimeType ?? asset.type})`),
-    ...request.materials.map(
-      (material) => `${material.name} (${material.mimeType ?? material.type ?? "素材"})`,
-    ),
-  ];
+  const materialLines = buildScriptAssetPromptLines(request, assets);
   const brandDocumentLines = buildBrandDocumentPromptLines(assets);
 
   return [
     "请改写电商短视频脚本。必须使用中文输出，内容要简洁、转化导向，并可直接用于分镜生成。",
-    "输出格式必须是 Markdown 表格，表头固定为：| 时间 | 旁白 | 字幕 | 画面 |。",
-    `每一行代表一个分镜，分镜时长总和必须等于目标总时长 ${targetDurationSeconds} 秒；画面列必须包含素材外观一致性要求。`,
+    "输出格式必须是 Markdown 表格，表头固定为：| 时间 | 旁白 | 字幕 | 画面 | 参考素材 |。",
+    `每一行代表一个分镜，分镜时长总和必须等于目标总时长 ${targetDurationSeconds} 秒。`,
+    "参考素材列必须只填写一个已准备素材的文件名或 assetId，用来绑定该分镜素材槽位；不要写“提供的素材”“用户素材”“同款产品”这类泛称。",
+    "不同分镜必须根据镜头目标选择最合适的素材：产品外观/开场优先主图，功能结构优先细节图，使用场景/通勤/CTA 优先场景图；如果素材充足，不要所有分镜都使用同一张图。",
+    "画面列必须描述镜头动作和构图，并写明“主要参考素材：<文件名>，产品外观必须与绑定素材一致”。",
     `产品：${project.productName}`,
     `目标人群：${project.audience}`,
     `语气：${project.tone}`,
     `视频风格：${project.style}`,
     `目标总时长：${targetDurationSeconds} 秒`,
     `核心卖点：${project.sellingPoints.join("、")}`,
-    `已准备素材：${materialLines.slice(0, 10).join("；") || "无"}`,
+    `已准备素材清单：${materialLines.slice(0, 20).join("\n") || "无"}`,
     `品牌资料内容：${brandDocumentLines.join("; ") || "无可读取品牌资料正文"}`,
     `关键词：${keywords.join("、") || "无"}`,
     `用户草稿：${request.draftScript || "未提供草稿，请直接生成一个强脚本。"}`,

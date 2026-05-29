@@ -46,6 +46,7 @@ import {
 } from "./App";
 import { copy } from "./i18n";
 import { regenerateScene, resolveApiDownloadUrl } from "../lib/api";
+import { createExportDownloadFilename, triggerBrowserDownload } from "../lib/download";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -398,6 +399,39 @@ describe("App", () => {
     expect(resolveApiDownloadUrl("https://cdn.example.test/export.mp4")).toBe(
       "https://cdn.example.test/export.mp4",
     );
+  });
+
+  it("triggers a browser download for exported demo videos", () => {
+    const anchor = {
+      click: vi.fn(),
+      download: "",
+      href: "",
+      rel: "",
+      remove: vi.fn(),
+      style: {},
+      target: "",
+    };
+    const fakeDocument = {
+      body: {
+        appendChild: vi.fn(),
+      },
+      createElement: vi.fn(() => anchor),
+    } as unknown as Document;
+
+    expect(
+      triggerBrowserDownload(
+        "https://cdn.example.test/final.mp4",
+        createExportDownloadFilename("project-1"),
+        fakeDocument,
+      ),
+    ).toBe(true);
+
+    expect(anchor.href).toBe("https://cdn.example.test/final.mp4");
+    expect(anchor.download).toBe("shopclip-project-1-export.mp4");
+    expect(anchor.target).toBe("_blank");
+    expect(fakeDocument.body.appendChild).toHaveBeenCalledWith(anchor);
+    expect(anchor.click).toHaveBeenCalledTimes(1);
+    expect(anchor.remove).toHaveBeenCalledTimes(1);
   });
 
   it("places the step 03 scene list before the centered preview workspace", () => {

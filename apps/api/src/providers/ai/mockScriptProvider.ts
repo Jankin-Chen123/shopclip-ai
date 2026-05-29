@@ -43,6 +43,29 @@ const distributeSceneDurations = (totalDurationSeconds: number, sceneCount: numb
   });
 };
 
+const isStoryboardAsset = (asset: AssetMetadata): boolean =>
+  asset.type === "image" ||
+  asset.type === "video" ||
+  asset.mimeType?.startsWith("image/") === true ||
+  asset.mimeType?.startsWith("video/") === true;
+
+const getStoryboardAssetCandidates = (assets: AssetMetadata[]): AssetMetadata[] => {
+  const visualAssets = assets.filter(isStoryboardAsset);
+  return visualAssets.length > 0 ? visualAssets : assets;
+};
+
+const selectSceneFallbackAsset = (
+  assets: AssetMetadata[],
+  sceneIndex: number,
+  fallbackAssetId: string | undefined,
+): AssetMetadata | undefined => {
+  const candidates = getStoryboardAssetCandidates(assets);
+  if (candidates.length > 0) {
+    return candidates[sceneIndex % candidates.length];
+  }
+  return fallbackAssetId ? assets.find((asset) => asset.id === fallbackAssetId) : undefined;
+};
+
 const createTimeRanges = (durations: number[]): string[] => {
   let cursor = 0;
   return durations.map((duration) => {
@@ -98,10 +121,15 @@ const durationFromTimeCell = (value: string, maxDurationSeconds: number): number
   return duration > 0 ? Math.min(duration, maxDurationSeconds) : undefined;
 };
 
-const ensureMaterialConsistency = (visualPrompt: string): string =>
-  visualPrompt.includes("产品外观必须与绑定素材一致")
-    ? visualPrompt
-    : `${visualPrompt}；产品外观必须与绑定素材一致。`;
+const ensureMaterialConsistency = (visualPrompt: string, assetName?: string): string => {
+  const promptWithAsset =
+    assetName && !normalizeAssetMention(visualPrompt).includes(normalizeAssetMention(assetName))
+      ? `${visualPrompt}；主要参考素材：${assetName}`
+      : visualPrompt;
+  return promptWithAsset.includes("产品外观必须与绑定素材一致")
+    ? promptWithAsset
+    : `${promptWithAsset}；产品外观必须与绑定素材一致。`;
+};
 
 const normalizeAssetMention = (value: string): string =>
   value
@@ -109,17 +137,22 @@ const normalizeAssetMention = (value: string): string =>
     .replace(/[「」『』“”"'[\]【】（）()]/gu, "")
     .replace(/\s+/gu, "");
 
-const resolveDraftSceneAssetId = (
+const resolveDraftSceneAsset = (
+  assetReference: string,
   visualPrompt: string,
   assets: AssetMetadata[],
-  fallbackAssetId: string | undefined,
-): string | undefined => {
-  const normalizedPrompt = normalizeAssetMention(visualPrompt);
-  const explicitMatch = [...assets]
+  fallbackAsset: AssetMetadata | undefined,
+): AssetMetadata | undefined => {
+  const normalizedPrompt = normalizeAssetMention(`${assetReference} ${visualPrompt}`);
+  const explicitMatch = [...getStoryboardAssetCandidates(assets)]
     .sort((left, right) => right.name.length - left.name.length)
-    .find((asset) => normalizedPrompt.includes(normalizeAssetMention(asset.name)));
+    .find(
+      (asset) =>
+        normalizedPrompt.includes(normalizeAssetMention(asset.name)) ||
+        normalizedPrompt.includes(normalizeAssetMention(asset.id)),
+    );
 
-  return explicitMatch?.id ?? fallbackAssetId;
+  return explicitMatch ?? fallbackAsset;
 };
 
 const chooseChineseText = (primary: string, fallback: string): string => {
@@ -168,12 +201,15 @@ const parseDraftScriptScenes = (
     const rawVoiceover = cleanScriptCell(cells[1]);
     const rawSubtitle = cleanScriptCell(cells[2]);
     const rawVisual = cleanScriptCell(cells[3]) || rawVoiceover || rawSubtitle;
+    const rawAssetReference = cleanScriptCell(cells[4]);
     const subtitle = chooseChineseText(rawSubtitle, rawVoiceover) || `${project.productName} 分镜`;
     const voiceover = chooseChineseText(rawVoiceover, rawSubtitle) || subtitle;
+    const fallbackAsset = selectSceneFallbackAsset(assets, scenes.length, fallbackAssetId);
+    const sceneAsset = resolveDraftSceneAsset(rawAssetReference, rawVisual, assets, fallbackAsset);
     const visualPrompt = ensureMaterialConsistency(
       rawVisual || `根据脚本内容展示${project.productName}的核心卖点`,
+      sceneAsset?.name ?? rawAssetReference,
     );
-    const sceneAssetId = resolveDraftSceneAssetId(rawVisual, assets, fallbackAssetId);
 
     scenes.push({
       id: `scene-draft-${scenes.length + 1}`,
@@ -183,7 +219,7 @@ const parseDraftScriptScenes = (
       subtitle,
       voiceover,
       visualPrompt,
-      assetId: sceneAssetId,
+      assetId: sceneAsset?.id,
       status: "generated",
     });
     totalDurationSeconds += durationSeconds;
@@ -209,6 +245,9 @@ export const rewriteFallbackScript = (
     ].slice(0, 6),
     "已准备产品素材",
   );
+  const storyboardAssets = getStoryboardAssetCandidates(context.assets ?? []);
+  const sceneAssetName = (index: number): string =>
+    storyboardAssets[index % storyboardAssets.length]?.name ?? materialNames;
   const keywordLine = compactList(
     [...effectiveKeywords(project, request), ...project.sellingPoints].slice(0, 8),
     "清晰产品卖点",
@@ -220,12 +259,12 @@ export const rewriteFallbackScript = (
       provider: "mock-script-provider",
     },
     scriptText: [
-      "| 时间 | 旁白 | 字幕 | 画面 |",
-      "|---|---|---|---|",
-      `| ${firstRange} | 还在为${project.sellingPoints[0] ?? "产品使用不方便"}发愁吗？ | 痛点开场 | 展示${project.audience}的真实使用痛点，产品外观必须与用户素材一致 |`,
-      `| ${secondRange} | ${project.productName}一步解决这个问题。 | 展示解决方案 | 使用${materialNames}展示${keywordLine}，产品外观必须与用户素材一致 |`,
-      `| ${thirdRange} | ${project.sellingPoints.slice(0, 2).join("，")}。 | 证明核心卖点 | 近景展示产品细节和使用效果，产品外观必须与用户素材一致 |`,
-      `| ${fourthRange} | 现在就了解${project.productName}，让每次使用更省心。 | 行动号召 | 最终产品定格和购买引导，产品外观必须与用户素材一致 |`,
+      "| 时间 | 旁白 | 字幕 | 画面 | 参考素材 |",
+      "|---|---|---|---|---|",
+      `| ${firstRange} | 还在为${project.sellingPoints[0] ?? "产品使用不方便"}发愁吗？ | 痛点开场 | 展示${project.audience}的真实使用痛点，主要参考素材：${sceneAssetName(0)}，产品外观必须与用户素材一致 | ${sceneAssetName(0)} |`,
+      `| ${secondRange} | ${project.productName}一步解决这个问题。 | 展示解决方案 | 展示${keywordLine}，主要参考素材：${sceneAssetName(1)}，产品外观必须与用户素材一致 | ${sceneAssetName(1)} |`,
+      `| ${thirdRange} | ${project.sellingPoints.slice(0, 2).join("，")}。 | 证明核心卖点 | 近景展示产品细节和使用效果，主要参考素材：${sceneAssetName(2)}，产品外观必须与用户素材一致 | ${sceneAssetName(2)} |`,
+      `| ${fourthRange} | 现在就了解${project.productName}，让每次使用更省心。 | 行动号召 | 最终产品定格和购买引导，主要参考素材：${sceneAssetName(3)}，产品外观必须与用户素材一致 | ${sceneAssetName(3)} |`,
       draftScript ? `\n用户原始草稿参考：${draftScript}` : "",
     ].join("\n"),
   };
@@ -238,6 +277,8 @@ export const generateFallbackScript = (
   const primaryAsset = context.assets?.[0] ?? project.assets[0];
   const assetId = primaryAsset?.id;
   const assets = context.assets ?? project.assets;
+  const sceneAsset = (index: number): AssetMetadata | undefined =>
+    selectSceneFallbackAsset(assets, index, assetId);
   const draftScript = context.request?.draftScript?.trim();
   const targetDurationSeconds = targetDurationForProject(project);
   const fallbackDurations = distributeSceneDurations(targetDurationSeconds, 4);
@@ -275,8 +316,11 @@ export const generateFallbackScript = (
           durationSeconds: fallbackDurations[0]!,
           subtitle: "痛点开场",
           voiceover: `还在为${project.sellingPoints[0] ?? "产品展示不清晰"}发愁吗？`,
-          visualPrompt: `快速开场镜头，展示目标用户的痛点；产品外观必须与绑定素材一致。`,
-          assetId,
+          visualPrompt: ensureMaterialConsistency(
+            "快速开场镜头，展示目标用户的痛点",
+            sceneAsset(0)?.name,
+          ),
+          assetId: sceneAsset(0)?.id,
           status: "generated",
         },
         {
@@ -286,8 +330,11 @@ export const generateFallbackScript = (
           durationSeconds: fallbackDurations[1]!,
           subtitle: "展示解决方案",
           voiceover: `${project.productName}一步就能让使用过程更简单。`,
-          visualPrompt: `产品近景演示镜头，必须使用绑定素材中的同款产品，产品外观必须与绑定素材一致。`,
-          assetId,
+          visualPrompt: ensureMaterialConsistency(
+            "产品近景演示镜头，必须使用绑定素材中的同款产品",
+            sceneAsset(1)?.name,
+          ),
+          assetId: sceneAsset(1)?.id,
           status: "generated",
         },
         {
@@ -297,8 +344,11 @@ export const generateFallbackScript = (
           durationSeconds: fallbackDurations[2]!,
           subtitle: "证明核心卖点",
           voiceover: project.sellingPoints.slice(0, 2).join("。"),
-          visualPrompt: `使用前后对比镜头，背景可以变化，但产品外观必须与绑定素材一致。`,
-          assetId,
+          visualPrompt: ensureMaterialConsistency(
+            "使用前后对比镜头，背景可以变化",
+            sceneAsset(2)?.name,
+          ),
+          assetId: sceneAsset(2)?.id,
           status: "generated",
         },
         {
@@ -308,8 +358,11 @@ export const generateFallbackScript = (
           durationSeconds: fallbackDurations[3]!,
           subtitle: "行动号召",
           voiceover: `现在就了解${project.productName}，让每次展示更省心。`,
-          visualPrompt: `最终产品定格镜头和明确购买引导；产品外观必须与绑定素材一致。`,
-          assetId,
+          visualPrompt: ensureMaterialConsistency(
+            "最终产品定格镜头和明确购买引导",
+            sceneAsset(3)?.name,
+          ),
+          assetId: sceneAsset(3)?.id,
           status: "generated",
         },
       ],
