@@ -64,6 +64,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - 2026-05-28 follow-up: API `.env` loading now searches upward from the process cwd, so deployments that start the package from `apps/api` still load the workspace root `.env`.
 - 2026-05-28 follow-up: Seedance render requests now omit reference images by default to avoid triggering unsupported `r2v` tasks on text-to-video endpoints. Reference images can be re-enabled with `AI_VIDEO_REFERENCE_IMAGES=true` when using an endpoint that supports them.
 - 2026-05-28 follow-up: Seedance `duration` is derived from storyboard scene durations, then rounded up to the nearest value from `AI_VIDEO_ALLOWED_DURATIONS` to avoid unsupported values such as 8 seconds. `AI_VIDEO_DURATION` remains available as an explicit server override.
+- 2026-05-29 follow-up: Multi-scene Seedance exports now compose scene clips with ffmpeg, upload the final `export.mp4` to COS at `projects/<projectId>/exports/<exportId>/export.mp4`, and return the COS URL to the frontend. `COS_EXPORT_READ_MODE=signed` can be used for private COS buckets.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
@@ -83,6 +84,9 @@ Add P1 media controls and make generation failures recoverable and observable.
 - `corepack pnpm --filter @shopclip/web test -- App.test.tsx`
 - `corepack pnpm --filter @shopclip/api test -- seedanceRenderer.test.ts`
 - `corepack pnpm --filter @shopclip/api test -- env.test.ts`
+- 2026-05-29 follow-up: `corepack pnpm --filter @shopclip/api test -- src/providers/renderer/renderExportPublisher.test.ts src/providers/renderer/ffmpegComposer.test.ts src/seedance-render-flow.test.ts`
+- 2026-05-29 follow-up: `corepack pnpm typecheck`
+- 2026-05-29 follow-up: `corepack pnpm lint`
 
 ## Verification Plan
 

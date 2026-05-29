@@ -59,7 +59,10 @@ import {
   createSeedanceRenderProvider,
   createQueuedRenderWithConfiguredVideoProvider,
 } from "../../providers/renderer/seedanceRenderer.js";
-import { composeSceneClipsWithFfmpeg } from "../../providers/renderer/ffmpegComposer.js";
+import {
+  createCosRenderExportPublisher,
+  type RenderExportPublisher,
+} from "../../providers/renderer/renderExportPublisher.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { MemoryProjectStore } from "./memoryStore.js";
@@ -741,6 +744,7 @@ export interface P0RouterOptions {
   externalAssetDownloader?: ExternalAssetDownloader;
   store?: ProjectStore;
   storageProvider?: StorageProvider;
+  renderExportPublisher?: RenderExportPublisher;
   sceneClipComposer?: SceneClipComposer;
   videoFrameExtractor?: VideoFrameExtractor;
 }
@@ -748,15 +752,22 @@ export interface P0RouterOptions {
 export const createP0Router = ({
   cosAssetSearch = searchCosIntelligentAssets,
   externalAssetDownloader = downloadExternalAsset,
-  sceneClipComposer = composeSceneClipsWithFfmpeg,
+  renderExportPublisher,
+  sceneClipComposer,
   store = new MemoryProjectStore(),
   storageProvider = new CosStorageProvider(),
   videoFrameExtractor = extractVideoReferenceFrames,
 }: P0RouterOptions = {}): Router => {
   const router = Router();
+  const publishRenderExport =
+    renderExportPublisher ??
+    sceneClipComposer ??
+    createCosRenderExportPublisher({ storageProvider });
 
   const canUseAssetInProject = (asset: AssetMetadata, projectId: string): boolean =>
     !asset.projectId || asset.projectId === projectId;
+  const isLocalRenderExportUrl = (url: string | undefined): boolean =>
+    url?.startsWith("/api/render-exports/") ?? false;
 
   const resolvePreparedAssets = async (
     project: ProjectSnapshot,
@@ -1914,7 +1925,7 @@ export const createP0Router = ({
           providerResult.renderTask.sceneClips.length > 1
         ) {
           try {
-            const exportUrl = await sceneClipComposer(
+            const exportUrl = await publishRenderExport(
               renderTask.project.id,
               providerResult.renderTask.sceneClips,
             );
@@ -1922,18 +1933,18 @@ export const createP0Router = ({
               providerResult.renderTask.exportUrl = exportUrl;
               providerResult.traceEvents.push({
                 status: "completed",
-                step: "ffmpeg-scene-compose-completed",
-                message: "Seedance scene clips composed into a final export video.",
+                step: "render-export-published",
+                message: "Seedance scene clips composed and published as a final export video.",
               });
             }
           } catch (error) {
             providerResult.traceEvents.push({
               status: "failed",
-              step: "ffmpeg-scene-compose-failed",
+              step: "render-export-publish-failed",
               message:
                 error instanceof Error
                   ? error.message
-                  : "ffmpeg scene clip composition failed.",
+                  : "Final render export publishing failed.",
             });
           }
         }
@@ -2034,12 +2045,12 @@ export const createP0Router = ({
 
     if (
       completedRender &&
-      !exportUrl &&
+      (!exportUrl || isLocalRenderExportUrl(exportUrl)) &&
       completedRender.sceneClips &&
       completedRender.sceneClips.length > 1
     ) {
       try {
-        exportUrl = await sceneClipComposer(project.id, completedRender.sceneClips);
+        exportUrl = await publishRenderExport(project.id, completedRender.sceneClips);
         if (exportUrl) {
           await store.updateRenderTask(
             completedRender.id,
@@ -2047,8 +2058,8 @@ export const createP0Router = ({
             [
               {
                 status: "completed",
-                step: "ffmpeg-scene-compose-completed",
-                message: "Seedance scene clips composed into a final export video.",
+                step: "render-export-published",
+                message: "Seedance scene clips composed and published as a final export video.",
               },
             ],
           );
@@ -2080,8 +2091,8 @@ export const createP0Router = ({
       downloadUrl: exportUrl,
       contentType: "video/mp4",
       fallback: {
-        used: true,
-        provider: "mock-renderer",
+        used: completedRender?.provider === "mock-renderer",
+        provider: completedRender?.provider ?? "unknown",
       },
     });
   });

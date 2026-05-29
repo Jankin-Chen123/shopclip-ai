@@ -99,7 +99,8 @@ corepack pnpm dev
 | `ARK_API_BASE_URL`     | API    | 可选                 | 火山方舟 OpenAI-compatible API base URL。                   |
 | `ARK_VIDEO_GENERATION_PATH` | API | 可选              | 火山方舟视频生成任务路径，默认 `/contents/generations/tasks`。 |
 | `FFMPEG_PATH`          | API    | 可选                 | 服务器 ffmpeg 可执行文件路径；配置后用于把分镜视频片段拼接为最终导出 MP4。 |
-| `RENDER_EXPORT_DIR`    | API    | 可选                 | ffmpeg 拼接产物目录，默认使用系统临时目录并通过 `/api/render-exports` 暴露。 |
+| `RENDER_EXPORT_DIR`    | API    | 可选                 | ffmpeg 拼接产物临时目录，默认使用系统临时目录。最终导出会上传到 COS 后返回 COS URL。 |
+| `COS_EXPORT_READ_MODE` | API    | 可选                 | 导出成片的 COS 读取方式；默认 `public` 返回 `COS_PUBLIC_BASE_URL` 下的对象地址，私有桶可设为 `signed` 返回临时签名 URL。 |
 | `TTS_PROVIDER_MODE`    | API    | 可选                 | Demo 使用 `mock` 保持确定性。                              |
 | `TTS_API_KEY`          | API    | 真实 provider 才需要 | 服务端密钥，不能暴露到前端。                               |
 | `EXTERNAL_ASSET_PROVIDERS` | API | 可选              | 服务端外部素材源列表；可用 `pexels,pixabay,freesound`。 |
@@ -161,7 +162,7 @@ flowchart TD
 - Editing Agent 建议是可解释的确定性建议。
 - TTS、字幕、BGM 和看板指标均为 metadata-backed mock 输出。
 - 渲染产物默认使用 mock 输出；只有显式设置 `VIDEO_RENDER_PROVIDER_MODE=seedance` 且配置服务端视频密钥/模型后，才调用 Seedance。TTS 声线不会控制 Seedance 画面效果。
-- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会按分镜逐段提交 Seedance 任务，并从每个分镜的绑定素材中选公网图片，以 `role=first_frame` 一并提交；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。每段视频完成后会在步骤 04 展示可点击预览；配置 `FFMPEG_PATH` 后，后端会尝试用 ffmpeg 拼接所有分镜片段为最终导出 MP4。Seedance 的 `duration` 是目标视频秒数；默认按每个分镜时长分别计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
+- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会按分镜逐段提交 Seedance 任务，并从每个分镜的绑定素材中选公网图片，以 `role=first_frame` 一并提交；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。每段视频完成后会在步骤 04 展示可点击预览；配置 `FFMPEG_PATH` 后，后端会尝试用 ffmpeg 拼接所有分镜片段为最终导出 MP4，并上传到 COS 的 `projects/<projectId>/exports/<exportId>/export.mp4` 后返回 COS 访问地址。Seedance 的 `duration` 是目标视频秒数；默认按每个分镜时长分别计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
 - UI 支持失败渲染模拟和重试，不会丢失项目数据。
 - 真实 provider 密钥只能放在服务端环境变量中，浏览器不会直接调用模型或 TTS provider。
 

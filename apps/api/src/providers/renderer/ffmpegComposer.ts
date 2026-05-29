@@ -104,16 +104,28 @@ const runFfmpegConcat = async (
   }
 };
 
-export const composeSceneClipsWithFfmpeg = async (
+export interface LocalSceneClipExport {
+  exportId: string;
+  localUrl: string;
+  outputPath: string;
+}
+
+export const composeSceneClipsToLocalFile = async (
   projectId: string,
   clips: SceneRenderClip[],
-): Promise<string | undefined> => {
-  const videoUrls = clips
+): Promise<LocalSceneClipExport | undefined> => {
+  const videoUrls = [...clips]
     .sort((left, right) => left.order - right.order)
     .map((clip) => clip.videoUrl)
     .filter((url): url is string => Boolean(url));
   if (videoUrls.length <= 1) {
-    return videoUrls[0];
+    return videoUrls[0]
+      ? {
+          exportId: "single-scene",
+          localUrl: videoUrls[0],
+          outputPath: videoUrls[0],
+        }
+      : undefined;
   }
 
   const exportId = randomUUID();
@@ -129,5 +141,17 @@ export const composeSceneClipsWithFfmpeg = async (
   );
 
   await runFfmpegConcat(commandFromEnv(), concatListPath, outputPath);
-  return `/api/render-exports/${encodeURIComponent(projectId)}/${encodeURIComponent(exportId)}/export.mp4`;
+  return {
+    exportId,
+    localUrl: `/api/render-exports/${encodeURIComponent(projectId)}/${encodeURIComponent(exportId)}/export.mp4`,
+    outputPath,
+  };
+};
+
+export const composeSceneClipsWithFfmpeg = async (
+  projectId: string,
+  clips: SceneRenderClip[],
+): Promise<string | undefined> => {
+  const localExport = await composeSceneClipsToLocalFile(projectId, clips);
+  return localExport?.localUrl;
 };

@@ -239,7 +239,7 @@ describe("Seedance render API flow", () => {
     ]);
     expect(polled?.body.traceEvents.map((event) => event.step)).toContain("seedance-scene-clips-ready");
     expect(polled?.body.traceEvents.map((event) => event.step)).toContain(
-      "ffmpeg-scene-compose-failed",
+      "render-export-publish-failed",
     );
 
     const exported = await request<{ error: { code: string } }>(
@@ -250,7 +250,7 @@ describe("Seedance render API flow", () => {
     expect(exported.body.error.code).toBe("EXPORT_COMPOSE_FAILED");
   });
 
-  it("returns the composed final video URL for multi-scene Seedance exports", async () => {
+  it("returns the published COS final video URL for multi-scene Seedance exports", async () => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -260,9 +260,9 @@ describe("Seedance render API flow", () => {
         resolve();
       });
     });
-    const composedUrl = "/api/render-exports/composed-project/final/export.mp4";
+    const composedUrl = "https://cdn.example.test/projects/composed-project/exports/final/export.mp4";
     const app = createApp({
-      sceneClipComposer: async () => composedUrl,
+      renderExportPublisher: async () => composedUrl,
     });
     server = app.listen(0);
     await new Promise<void>((resolve) => {
