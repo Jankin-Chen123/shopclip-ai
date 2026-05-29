@@ -548,6 +548,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 状态：已通过 `apps/web/e2e/part-015-structure-and-reference.spec.ts` 浏览器实跑。`corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts` 输出 `1 passed`，覆盖上传自有参考视频、参考拆解、模板提炼和剧本引用选择。
 
+2026-05-29 UI 跟进：用户要求灵感分区删除 AI 对话/会话记录区域，只保留视频拆解板块。已从 `apps/web/src/app/App.tsx` 的灵感页移除 `InspirationPanel` 渲染，并将侧栏灵感说明改为参考与视频拆解；新增页面级测试覆盖“只渲染参考视频拆解面板”。验证命令：`corepack pnpm --filter @shopclip/web test` 结果 `71 passed`，`corepack pnpm --filter @shopclip/web typecheck` 通过，`corepack pnpm --filter @shopclip/web build` 通过，Playwright 浏览器检查输出 `PLAYWRIGHT_OK inspiration page shows video breakdown only`。
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。

@@ -26,7 +26,6 @@ import {
 import { AssetPrepPanel, type AssetPrepSnapshot } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
-import { InspirationPanel } from "../features/inspiration/InspirationPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
@@ -1532,7 +1531,6 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
         {activePage === "inspiration" ? (
           <section className="inspiration-reference-workspace" aria-label="Inspiration workspace">
-            <InspirationPanel apiConfig={apiConfig} language={language} />
             <ReferenceLibraryPanel
               disabled={!project || busyState !== "idle"}
               error={errors.script}

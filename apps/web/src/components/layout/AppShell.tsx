@@ -123,8 +123,8 @@ export const AppShell = ({
 
     if (section === "inspiration") {
       return language === "zh"
-        ? { label: "灵感", title: "想法、参考与 AI 生图" }
-        : { label: "Inspiration", title: "Ideas, references, and AI images" };
+        ? { label: "灵感", title: "参考与视频拆解" }
+        : { label: "Inspiration", title: "References and video breakdown" };
     }
 
     if (section === "settings") {

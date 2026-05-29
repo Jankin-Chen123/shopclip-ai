@@ -1517,18 +1517,17 @@ describe("App", () => {
     expect(markup).not.toContain("No external stock results");
   });
 
-  it("renders inspiration generation controls as a dedicated page", () => {
+  it("renders only the reference video breakdown panel on the inspiration page", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="inspiration" />);
 
-    expect(markup).toContain("What do you want to create today?");
     expect(markup).toContain("Viral video breakdown");
     expect(markup).toContain("Analyze reference");
-    expect(markup).toContain("Image");
-    expect(markup).toContain("Custom");
+    expect(markup).not.toContain("What do you want to create today?");
+    expect(markup).not.toContain("Generate material");
+    expect(markup).not.toContain("Session history");
     expect(markup).not.toContain("Use skills");
     expect(markup).not.toContain("Agent mode");
     expect(markup).not.toContain("Auto</button>");
-    expect(markup).toContain("Generate material");
     expect(markup).not.toContain("Current routing");
   });
 
