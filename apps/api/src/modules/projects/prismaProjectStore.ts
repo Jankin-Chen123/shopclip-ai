@@ -3,18 +3,28 @@ import type { AssetStorageProvider as PrismaAssetStorageProvider, Prisma } from 
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
+  AssetProcessingEvent,
   AssetProcessingJob,
   AssetSlice,
   EditingSuggestion,
   ProjectBrief,
   ProjectSummary,
+  ReferenceVideo,
+  ReferenceVideoAnalysis,
   RenderTask,
   SceneUpdate,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
+  ViralTemplate,
 } from "@shopclip/shared";
-import { MediaSettingsSchema, RenderTaskSchema, VideoGenerationSettingsSchema } from "@shopclip/shared";
+import {
+  MediaSettingsSchema,
+  ReferenceVideoAnalysisSchema,
+  RenderTaskSchema,
+  StructuredSliceMetadataSchema,
+  VideoGenerationSettingsSchema,
+} from "@shopclip/shared";
 
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
@@ -23,7 +33,10 @@ type AssetWithSlices = Prisma.AssetGetPayload<{ include: { slices: true } }>;
 type ProjectWithRelations = Prisma.ProjectGetPayload<{
   include: {
     assets: { include: { slices: true } };
+    assetProcessingEvents: true;
     assetProcessingJobs: true;
+    referenceVideos: true;
+    viralTemplates: true;
     scripts: { include: { scenes: true } };
     scenes: true;
     renderTasks: true;
@@ -36,7 +49,10 @@ type RenderTaskWithRelations = Prisma.RenderTaskGetPayload<{
     project: {
       include: {
         assets: { include: { slices: true } };
+        assetProcessingEvents: true;
         assetProcessingJobs: true;
+        referenceVideos: true;
+        viralTemplates: true;
         scripts: { include: { scenes: true } };
         scenes: true;
         renderTasks: true;
@@ -87,6 +103,26 @@ const toAssetSlice = (slice: AssetWithSlices["slices"][number]): AssetSlice => (
   startSecond: slice.startSecond ?? undefined,
   endSecond: slice.endSecond ?? undefined,
   tags: slice.tags,
+  thumbnailKey: slice.thumbnailKey ?? undefined,
+  embeddingText: slice.embeddingText ?? undefined,
+  searchText: slice.searchText ?? undefined,
+  metadata: StructuredSliceMetadataSchema.safeParse(slice.metadata).success
+    ? StructuredSliceMetadataSchema.parse(slice.metadata)
+    : undefined,
+});
+
+const toAssetProcessingEvent = (
+  event: ProjectWithRelations["assetProcessingEvents"][number],
+): AssetProcessingEvent => ({
+  id: event.id,
+  jobId: event.jobId,
+  assetId: event.assetId,
+  step: event.step,
+  status: event.status,
+  message: event.message,
+  progress: event.progress,
+  retryable: event.retryable,
+  createdAt: toIso(event.createdAt),
 });
 
 const toAssetProcessingJob = (
@@ -108,6 +144,7 @@ const toScene = (scene: ProjectWithRelations["scenes"][number]): StoryboardScene
   subtitle: scene.subtitle,
   voiceover: scene.voiceover,
   visualPrompt: scene.visualPrompt,
+  assetRecallQuery: scene.assetRecallQuery ?? undefined,
   imageUrl: scene.imageUrl ?? undefined,
   assetId: scene.assetId ?? undefined,
   status: scene.status,
@@ -162,6 +199,48 @@ const toTraceEvent = (event: RenderTaskWithRelations["traceEvents"][number]): Tr
   createdAt: toIso(event.createdAt),
 });
 
+const toReferenceVideo = (
+  reference: ProjectWithRelations["referenceVideos"][number],
+): ReferenceVideo => ({
+  id: reference.id,
+  projectId: reference.projectId ?? undefined,
+  sourceAssetId: reference.sourceAssetId ?? undefined,
+  sourceUrl: reference.sourceUrl,
+  sourcePlatform: reference.sourcePlatform,
+  sourceDeclaration: reference.sourceDeclaration,
+  title: reference.title,
+  author: reference.author ?? undefined,
+  category: reference.category,
+  publicStats:
+    reference.publicStats &&
+    typeof reference.publicStats === "object" &&
+    !Array.isArray(reference.publicStats)
+      ? (reference.publicStats as ReferenceVideo["publicStats"])
+      : { likes: 0, comments: 0, shares: 0, views: 0 },
+  status: reference.status,
+  analysis: ReferenceVideoAnalysisSchema.safeParse(reference.analysis).success
+    ? ReferenceVideoAnalysisSchema.parse(reference.analysis)
+    : undefined,
+  errorMessage: reference.errorMessage ?? undefined,
+  createdAt: toIso(reference.createdAt),
+  updatedAt: toIso(reference.updatedAt),
+});
+
+const toViralTemplate = (
+  template: ProjectWithRelations["viralTemplates"][number],
+): ViralTemplate => ({
+  templateId: template.id,
+  name: template.name,
+  category: template.category,
+  strategy: template.strategy,
+  factorSet: template.factorSet,
+  narrativeStructure: template.narrativeStructure as ViralTemplate["narrativeStructure"],
+  shotRequirements: template.shotRequirements,
+  copywritingRules: template.copywritingRules,
+  riskRules: template.riskRules,
+  sourceReferenceIds: template.sourceReferenceIds,
+});
+
 const toProjectSnapshot = (project: ProjectWithRelations): ProjectSnapshot => {
   const assets = project.assets.map(toAsset);
   const assetSlices = project.assets.flatMap((asset) => asset.slices.map(toAssetSlice));
@@ -180,7 +259,10 @@ const toProjectSnapshot = (project: ProjectWithRelations): ProjectSnapshot => {
     updatedAt: toIso(project.updatedAt),
     assets,
     assetSlices,
+    assetProcessingEvents: project.assetProcessingEvents.map(toAssetProcessingEvent),
     assetProcessingJobs: project.assetProcessingJobs.map(toAssetProcessingJob),
+    referenceVideos: project.referenceVideos.map(toReferenceVideo),
+    viralTemplates: project.viralTemplates.map(toViralTemplate),
     scripts: project.scripts.map(toScript),
     scenes: project.scenes.sort((left, right) => left.order - right.order).map(toScene),
     renderTasks: project.renderTasks.map(toRenderTask),
@@ -189,7 +271,10 @@ const toProjectSnapshot = (project: ProjectWithRelations): ProjectSnapshot => {
 
 const projectInclude = {
   assets: { include: { slices: true } },
+  assetProcessingEvents: true,
   assetProcessingJobs: true,
+  referenceVideos: true,
+  viralTemplates: true,
   scripts: { include: { scenes: true } },
   scenes: true,
   renderTasks: true,
@@ -301,12 +386,71 @@ export class PrismaProjectStore implements ProjectStore {
             startSecond: slice.startSecond,
             endSecond: slice.endSecond,
             tags: slice.tags,
+            thumbnailKey: slice.thumbnailKey,
+            embeddingText: slice.embeddingText,
+            searchText: slice.searchText,
+            metadata: slice.metadata as Prisma.InputJsonValue | undefined,
           })),
         },
       },
       include: { slices: true },
     });
     return toAsset(created);
+  }
+
+  async addAssetSlices(
+    assetId: string,
+    slices: Array<Omit<AssetSlice, "id" | "assetId">>,
+  ): Promise<AssetSlice[]> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset) {
+      return [];
+    }
+
+    const created = await Promise.all(
+      slices.map((slice) =>
+        this.prisma.assetSlice.create({
+          data: {
+            id: randomUUID(),
+            assetId,
+            label: slice.label,
+            startSecond: slice.startSecond,
+            endSecond: slice.endSecond,
+            tags: slice.tags,
+            thumbnailKey: slice.thumbnailKey,
+            embeddingText: slice.embeddingText,
+            searchText: slice.searchText,
+            metadata: slice.metadata as Prisma.InputJsonValue | undefined,
+          },
+        }),
+      ),
+    );
+    return created.map(toAssetSlice);
+  }
+
+  async updateAssetSlice(
+    sliceId: string,
+    update: Partial<Omit<AssetSlice, "id" | "assetId">>,
+  ): Promise<AssetSlice | undefined> {
+    const current = await this.prisma.assetSlice.findUnique({ where: { id: sliceId } });
+    if (!current) {
+      return undefined;
+    }
+
+    const updated = await this.prisma.assetSlice.update({
+      where: { id: sliceId },
+      data: {
+        label: update.label,
+        startSecond: update.startSecond,
+        endSecond: update.endSecond,
+        tags: update.tags,
+        thumbnailKey: update.thumbnailKey,
+        embeddingText: update.embeddingText,
+        searchText: update.searchText,
+        metadata: update.metadata as Prisma.InputJsonValue | undefined,
+      },
+    });
+    return toAssetSlice(updated);
   }
 
   async updateAsset(
@@ -432,6 +576,39 @@ export class PrismaProjectStore implements ProjectStore {
     return toAssetProcessingJob(created);
   }
 
+  async addAssetProcessingEvent(
+    jobId: string,
+    event: Omit<AssetProcessingEvent, "id" | "jobId" | "createdAt">,
+  ): Promise<AssetProcessingEvent | undefined> {
+    const job = await this.prisma.assetProcessingJob.findUnique({ where: { id: jobId } });
+    if (!job) {
+      return undefined;
+    }
+
+    const created = await this.prisma.assetProcessingEvent.create({
+      data: {
+        id: randomUUID(),
+        projectId: job.projectId,
+        jobId,
+        assetId: event.assetId,
+        step: event.step,
+        status: event.status,
+        message: event.message,
+        progress: event.progress,
+        retryable: event.retryable,
+      },
+    });
+    return toAssetProcessingEvent(created);
+  }
+
+  async listAssetProcessingEvents(jobId: string): Promise<AssetProcessingEvent[]> {
+    const events = await this.prisma.assetProcessingEvent.findMany({
+      where: { jobId },
+      orderBy: { createdAt: "asc" },
+    });
+    return events.map(toAssetProcessingEvent);
+  }
+
   async getAssetProcessingJob(jobId: string): Promise<AssetProcessingJob | undefined> {
     const job = await this.prisma.assetProcessingJob.findUnique({ where: { id: jobId } });
     return job ? toAssetProcessingJob(job) : undefined;
@@ -483,6 +660,122 @@ export class PrismaProjectStore implements ProjectStore {
     return project ? toProjectSnapshot(project) : undefined;
   }
 
+  async addReferenceVideo(
+    projectId: string | undefined,
+    reference: Omit<ReferenceVideo, "id" | "projectId" | "analysis" | "createdAt" | "updatedAt">,
+  ): Promise<ReferenceVideo | undefined> {
+    const project = projectId
+      ? await this.prisma.project.findUnique({ where: { id: projectId } })
+      : undefined;
+    if (projectId && !project) {
+      return undefined;
+    }
+
+    const created = await this.prisma.referenceVideo.create({
+      data: {
+        id: randomUUID(),
+        projectId,
+        sourceAssetId: reference.sourceAssetId,
+        sourceUrl: reference.sourceUrl,
+        sourcePlatform: reference.sourcePlatform,
+        sourceDeclaration: reference.sourceDeclaration,
+        title: reference.title,
+        author: reference.author,
+        category: reference.category,
+        publicStats: reference.publicStats as Prisma.InputJsonValue,
+        status: reference.status,
+        errorMessage: reference.errorMessage,
+      },
+    });
+    return toReferenceVideo(created);
+  }
+
+  async updateReferenceVideoAnalysis(
+    referenceId: string,
+    analysis: ReferenceVideoAnalysis,
+  ): Promise<ReferenceVideo | undefined> {
+    const current = await this.prisma.referenceVideo.findUnique({ where: { id: referenceId } });
+    if (!current) {
+      return undefined;
+    }
+
+    const updated = await this.prisma.referenceVideo.update({
+      where: { id: referenceId },
+      data: {
+        status: "ready",
+        analysis: analysis as Prisma.InputJsonValue,
+        publicStats: analysis.publicStats as Prisma.InputJsonValue,
+        segments: {
+          deleteMany: {},
+          create: analysis.commerceNarrativeSegments.map((segment) => ({
+            id: randomUUID(),
+            role: segment.role,
+            startSecond: segment.startSecond,
+            endSecond: segment.endSecond,
+            summary: segment.summary,
+            copywriting: segment.copywriting,
+            visualPrompt: segment.visualPrompt,
+          })),
+        },
+      },
+    });
+    return toReferenceVideo(updated);
+  }
+
+  async listReferenceVideos(projectId?: string): Promise<ReferenceVideo[]> {
+    const references = await this.prisma.referenceVideo.findMany({
+      where: projectId ? { projectId } : undefined,
+      orderBy: { createdAt: "desc" },
+    });
+    return references.map(toReferenceVideo);
+  }
+
+  async addViralTemplate(template: ViralTemplate): Promise<ViralTemplate> {
+    const reference = template.sourceReferenceIds[0]
+      ? await this.prisma.referenceVideo.findUnique({
+          where: { id: template.sourceReferenceIds[0] },
+          select: { projectId: true },
+        })
+      : undefined;
+    const upserted = await this.prisma.viralTemplate.upsert({
+      where: { id: template.templateId },
+      create: {
+        id: template.templateId,
+        projectId: reference?.projectId,
+        name: template.name,
+        category: template.category,
+        strategy: template.strategy,
+        factorSet: template.factorSet,
+        narrativeStructure: template.narrativeStructure,
+        shotRequirements: template.shotRequirements,
+        copywritingRules: template.copywritingRules,
+        riskRules: template.riskRules,
+        sourceReferenceIds: template.sourceReferenceIds,
+      },
+      update: {
+        projectId: reference?.projectId,
+        name: template.name,
+        category: template.category,
+        strategy: template.strategy,
+        factorSet: template.factorSet,
+        narrativeStructure: template.narrativeStructure,
+        shotRequirements: template.shotRequirements,
+        copywritingRules: template.copywritingRules,
+        riskRules: template.riskRules,
+        sourceReferenceIds: template.sourceReferenceIds,
+      },
+    });
+    return toViralTemplate(upserted);
+  }
+
+  async listViralTemplates(category?: string): Promise<ViralTemplate[]> {
+    const templates = await this.prisma.viralTemplate.findMany({
+      where: category ? { category } : undefined,
+      orderBy: { updatedAt: "desc" },
+    });
+    return templates.map(toViralTemplate);
+  }
+
   async addScript(
     projectId: string,
     script: Omit<ScriptResult, "id" | "projectId">,
@@ -512,6 +805,7 @@ export class PrismaProjectStore implements ProjectStore {
               subtitle: scene.subtitle,
               voiceover: scene.voiceover,
               visualPrompt: scene.visualPrompt,
+              assetRecallQuery: scene.assetRecallQuery,
               imageUrl: scene.imageUrl,
               assetId: scene.assetId,
               status: scene.status,
@@ -596,6 +890,7 @@ export class PrismaProjectStore implements ProjectStore {
         subtitle: update.subtitle,
         voiceover: update.voiceover,
         visualPrompt: update.visualPrompt,
+        assetRecallQuery: update.assetRecallQuery === null ? null : update.assetRecallQuery,
         imageUrl: update.imageUrl,
         assetId: update.assetId === null ? null : update.assetId,
         status: update.status ?? "edited",

@@ -5,7 +5,9 @@ import {
   ArrowRight,
   Clock3,
   Lightbulb,
+  Replace,
   Save,
+  Search,
   Trash2,
   Video,
   WandSparkles,
@@ -15,6 +17,7 @@ import {
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { AppCopy } from "../../app/i18n";
+import type { AssetRecallCandidate } from "../../lib/api";
 
 interface StudioWorkspaceProps {
   assets: AssetMetadata[];
@@ -24,6 +27,8 @@ interface StudioWorkspaceProps {
   onApplySuggestion: (suggestionId: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onDismissSuggestion: (suggestionId: string) => void;
+  onApplyAssetCandidate: (assetId: string) => void;
+  onLoadAssetCandidates: (sceneId: string) => void;
   onLoadSuggestions: (sceneId: string) => void;
   onRegenerateScene: (scene: StoryboardScene) => void;
   onSceneChange: (scene: StoryboardScene) => void;
@@ -32,6 +37,7 @@ interface StudioWorkspaceProps {
   onSelectedSceneChange: (sceneId: string) => void;
   scenes: StoryboardScene[];
   selectedSceneId?: string;
+  assetCandidates: AssetRecallCandidate[];
   suggestions: EditingSuggestion[];
 }
 
@@ -43,6 +49,8 @@ export const StudioWorkspace = ({
   onApplySuggestion,
   onDeleteScene,
   onDismissSuggestion,
+  onApplyAssetCandidate,
+  onLoadAssetCandidates,
   onLoadSuggestions,
   onRegenerateScene,
   onSceneChange,
@@ -51,6 +59,7 @@ export const StudioWorkspace = ({
   onSelectedSceneChange,
   scenes,
   selectedSceneId,
+  assetCandidates = [],
   suggestions,
 }: StudioWorkspaceProps) => {
   const selectedScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
@@ -187,6 +196,47 @@ export const StudioWorkspace = ({
                   ))}
                 </select>
               </label>
+              <div className="asset-recall-panel">
+                <div className="inspector-heading">
+                  <h3>{copy.assetCandidates}</h3>
+                  <Button
+                    disabled={isBusy}
+                    icon={<Search size={18} />}
+                    onClick={() => onLoadAssetCandidates(selectedScene.id)}
+                  >
+                    {copy.loadAssetCandidates}
+                  </Button>
+                </div>
+                {assetCandidates.length === 0 ? (
+                  <div className="empty-state compact-empty">
+                    <strong>{copy.noAssetCandidates}</strong>
+                    <span>{copy.noAssetCandidatesBody}</span>
+                  </div>
+                ) : (
+                  assetCandidates.map((candidate) => (
+                    <article className="asset-recall-row" key={`${candidate.asset.id}-${candidate.slice?.id ?? "asset"}`}>
+                      <div>
+                        <h4>{candidate.asset.name}</h4>
+                        <p>
+                          {candidate.slice?.startSecond !== undefined &&
+                          candidate.slice.endSecond !== undefined
+                            ? copy.sliceTime(candidate.slice.startSecond, candidate.slice.endSecond)
+                            : candidate.asset.type}
+                          {" · "}
+                          {candidate.reasons.slice(0, 3).join(" / ")}
+                        </p>
+                      </div>
+                      <Button
+                        disabled={isBusy}
+                        icon={<Replace size={18} />}
+                        onClick={() => onApplyAssetCandidate(candidate.asset.id)}
+                      >
+                        {copy.useCandidate}
+                      </Button>
+                    </article>
+                  ))
+                )}
+              </div>
               <Button
                 disabled={!dirtySceneIds.has(selectedScene.id) || isBusy}
                 icon={<Save size={18} />}

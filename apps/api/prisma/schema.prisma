@@ -65,6 +65,13 @@ enum TraceEventStatus {
   retrying
 }
 
+enum ReferenceVideoStatus {
+  registered
+  analyzing
+  ready
+  failed
+}
+
 model Project {
   id                    String            @id @default(cuid())
   title                 String
@@ -80,6 +87,9 @@ model Project {
   updatedAt             DateTime          @updatedAt
   assets                Asset[]
   assetProcessingJobs   AssetProcessingJob[]
+  assetProcessingEvents AssetProcessingEvent[]
+  referenceVideos       ReferenceVideo[]
+  viralTemplates        ViralTemplate[]
   scripts               Script[]
   scenes                StoryboardScene[]
   renderTasks           RenderTask[]
@@ -107,7 +117,9 @@ model Asset {
   project         Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   slices          AssetSlice[]
   processingJobs  AssetProcessingJob[]
+  processingEvents AssetProcessingEvent[]
   scenes          StoryboardScene[]
+  referenceVideos ReferenceVideo[]
 
   @@index([projectId])
   @@index([objectKey])
@@ -123,6 +135,7 @@ model AssetProcessingJob {
   createdAt DateTime    @default(now())
   project   Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   asset     Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  events    AssetProcessingEvent[]
 
   @@index([projectId])
   @@index([assetId])
@@ -135,9 +148,95 @@ model AssetSlice {
   startSecond Float?
   endSecond   Float?
   tags        String[]
+  thumbnailKey String?
+  embeddingText String?
+  searchText  String?
+  metadata    Json?
   asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([assetId])
+}
+
+model AssetProcessingEvent {
+  id        String           @id @default(cuid())
+  projectId String?
+  jobId     String
+  assetId   String
+  step      String
+  status    TraceEventStatus
+  message   String
+  progress  Int              @default(0)
+  retryable Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  project   Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  job       AssetProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  asset     Asset            @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([jobId])
+  @@index([assetId])
+}
+
+model ReferenceVideo {
+  id                String               @id @default(cuid())
+  projectId         String?
+  sourceAssetId     String?
+  sourceUrl         String
+  sourcePlatform    String
+  sourceDeclaration String
+  title             String
+  author            String?
+  category          String
+  publicStats       Json?
+  status            ReferenceVideoStatus @default(registered)
+  analysis          Json?
+  errorMessage      String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  project           Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  sourceAsset       Asset?               @relation(fields: [sourceAssetId], references: [id], onDelete: SetNull)
+  segments          ReferenceVideoSegment[]
+
+  @@index([projectId])
+  @@index([sourceAssetId])
+  @@index([sourcePlatform])
+  @@index([category])
+}
+
+model ReferenceVideoSegment {
+  id          String         @id @default(cuid())
+  referenceId String
+  role        String
+  startSecond Float
+  endSecond   Float
+  summary     String
+  copywriting String
+  visualPrompt String
+  metadata    Json?
+  reference   ReferenceVideo @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@index([referenceId])
+  @@index([role])
+}
+
+model ViralTemplate {
+  id                 String   @id
+  projectId          String?
+  name               String
+  category           String
+  strategy           String
+  factorSet          String[]
+  narrativeStructure String[]
+  shotRequirements   String[]
+  copywritingRules   String[]
+  riskRules          String[]
+  sourceReferenceIds String[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  project            Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([category])
 }
 
 model Script {
@@ -164,6 +263,7 @@ model StoryboardScene {
   subtitle        String
   voiceover       String
   visualPrompt    String
+  assetRecallQuery String?
   imageUrl        String?
   status          SceneStatus @default(draft)
   createdAt       DateTime    @default(now())

@@ -1,16 +1,20 @@
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
+  AssetProcessingEvent,
   AssetProcessingJob,
   AssetSlice,
   EditingSuggestion,
   ProjectBrief,
   ProjectSummary,
+  ReferenceVideo,
+  ReferenceVideoAnalysis,
   RenderTask,
   SceneUpdate,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
+  ViralTemplate,
 } from "@shopclip/shared";
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
@@ -20,7 +24,10 @@ export class MemoryProjectStore implements ProjectStore {
   private readonly projects = new Map<string, ProjectSnapshot>();
   private readonly globalAssets: AssetMetadata[] = [];
   private readonly globalAssetSlices: AssetSlice[] = [];
+  private readonly globalAssetProcessingEvents: AssetProcessingEvent[] = [];
   private readonly globalAssetProcessingJobs: AssetProcessingJob[] = [];
+  private readonly globalReferenceVideos: ReferenceVideo[] = [];
+  private readonly viralTemplates: ViralTemplate[] = [];
   private readonly traceEvents = new Map<string, TraceEvent[]>();
 
   createProject(brief: ProjectBrief): ProjectSnapshot {
@@ -34,10 +41,13 @@ export class MemoryProjectStore implements ProjectStore {
       updatedAt: timestamp,
       assets: [],
       assetSlices: [],
+      assetProcessingEvents: [],
       scripts: [],
       scenes: [],
       renderTasks: [],
       assetProcessingJobs: [],
+      referenceVideos: [],
+      viralTemplates: [],
     };
 
     this.projects.set(project.id, project);
@@ -105,6 +115,58 @@ export class MemoryProjectStore implements ProjectStore {
       this.globalAssetSlices.push(...storedSlices);
     }
     return storedAsset;
+  }
+
+  addAssetSlices(assetId: string, slices: Array<Omit<AssetSlice, "id" | "assetId">>): AssetSlice[] {
+    const match = this.findAssetProject(assetId);
+    if (!match) {
+      return [];
+    }
+
+    const storedSlices = slices.map((slice) => ({
+      ...slice,
+      id: randomUUID(),
+      assetId,
+    }));
+    if (match.project) {
+      match.project.assetSlices.push(...storedSlices);
+      match.project.updatedAt = now();
+    } else {
+      this.globalAssetSlices.push(...storedSlices);
+    }
+    return storedSlices;
+  }
+
+  updateAssetSlice(
+    sliceId: string,
+    update: Partial<Omit<AssetSlice, "id" | "assetId">>,
+  ): AssetSlice | undefined {
+    const globalIndex = this.globalAssetSlices.findIndex((slice) => slice.id === sliceId);
+    if (globalIndex !== -1) {
+      const updatedSlice = {
+        ...this.globalAssetSlices[globalIndex]!,
+        ...update,
+      };
+      this.globalAssetSlices[globalIndex] = updatedSlice;
+      return updatedSlice;
+    }
+
+    for (const project of this.projects.values()) {
+      const sliceIndex = project.assetSlices.findIndex((slice) => slice.id === sliceId);
+      if (sliceIndex === -1) {
+        continue;
+      }
+
+      const updatedSlice = {
+        ...project.assetSlices[sliceIndex]!,
+        ...update,
+      };
+      project.assetSlices[sliceIndex] = updatedSlice;
+      project.updatedAt = now();
+      return updatedSlice;
+    }
+
+    return undefined;
   }
 
   updateAsset(
@@ -177,6 +239,11 @@ export class MemoryProjectStore implements ProjectStore {
         this.globalAssetProcessingJobs.splice(index, 1);
       }
     }
+    for (let index = this.globalAssetProcessingEvents.length - 1; index >= 0; index -= 1) {
+      if (requestedAssetIds.has(this.globalAssetProcessingEvents[index]?.assetId ?? "")) {
+        this.globalAssetProcessingEvents.splice(index, 1);
+      }
+    }
 
     for (const project of this.projects.values()) {
       const projectDeletedAssets = project.assets.filter((asset) => requestedAssetIds.has(asset.id));
@@ -187,6 +254,9 @@ export class MemoryProjectStore implements ProjectStore {
       );
       const nextAssetProcessingJobs = project.assetProcessingJobs.filter(
         (job) => !requestedAssetIds.has(job.assetId),
+      );
+      const nextAssetProcessingEvents = project.assetProcessingEvents.filter(
+        (event) => !requestedAssetIds.has(event.assetId),
       );
       const nextScenes = project.scenes.map((scene) =>
         scene.assetId && requestedAssetIds.has(scene.assetId)
@@ -218,6 +288,7 @@ export class MemoryProjectStore implements ProjectStore {
       project.assets = nextAssets;
       project.assetSlices = nextAssetSlices;
       project.assetProcessingJobs = nextAssetProcessingJobs;
+      project.assetProcessingEvents = nextAssetProcessingEvents;
       project.scenes = nextScenes;
       project.scripts = nextScripts;
       project.updatedAt = timestamp;
@@ -279,6 +350,40 @@ export class MemoryProjectStore implements ProjectStore {
       this.globalAssetProcessingJobs.push(storedJob);
     }
     return storedJob;
+  }
+
+  addAssetProcessingEvent(
+    jobId: string,
+    event: Omit<AssetProcessingEvent, "id" | "jobId" | "createdAt">,
+  ): AssetProcessingEvent | undefined {
+    const job = this.getAssetProcessingJob(jobId);
+    if (!job) {
+      return undefined;
+    }
+
+    const storedEvent: AssetProcessingEvent = {
+      ...event,
+      id: randomUUID(),
+      jobId,
+      createdAt: now(),
+    };
+    const project = this.findAssetProject(event.assetId)?.project;
+    if (project) {
+      project.assetProcessingEvents.push(storedEvent);
+      project.updatedAt = now();
+    } else {
+      this.globalAssetProcessingEvents.push(storedEvent);
+    }
+    return storedEvent;
+  }
+
+  listAssetProcessingEvents(jobId: string): AssetProcessingEvent[] {
+    const projectEvents = [...this.projects.values()].flatMap(
+      (project) => project.assetProcessingEvents,
+    );
+    return [...this.globalAssetProcessingEvents, ...projectEvents].filter(
+      (event) => event.jobId === jobId,
+    );
   }
 
   getAssetProcessingJob(jobId: string): AssetProcessingJob | undefined {
@@ -370,6 +475,114 @@ export class MemoryProjectStore implements ProjectStore {
     return project;
   }
 
+  addReferenceVideo(
+    projectId: string | undefined,
+    reference: Omit<ReferenceVideo, "id" | "projectId" | "analysis" | "createdAt" | "updatedAt">,
+  ): ReferenceVideo | undefined {
+    const project = projectId ? this.projects.get(projectId) : undefined;
+    if (projectId && !project) {
+      return undefined;
+    }
+
+    const timestamp = now();
+    const storedReference: ReferenceVideo = {
+      ...reference,
+      id: randomUUID(),
+      projectId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    if (project) {
+      project.referenceVideos.push(storedReference);
+      project.updatedAt = timestamp;
+    } else {
+      this.globalReferenceVideos.push(storedReference);
+    }
+    return storedReference;
+  }
+
+  updateReferenceVideoAnalysis(
+    referenceId: string,
+    analysis: ReferenceVideoAnalysis,
+  ): ReferenceVideo | undefined {
+    const timestamp = now();
+    const globalIndex = this.globalReferenceVideos.findIndex((reference) => reference.id === referenceId);
+    if (globalIndex !== -1) {
+      const updatedReference: ReferenceVideo = {
+        ...this.globalReferenceVideos[globalIndex]!,
+        analysis,
+        status: "ready",
+        updatedAt: timestamp,
+      };
+      this.globalReferenceVideos[globalIndex] = updatedReference;
+      return updatedReference;
+    }
+
+    for (const project of this.projects.values()) {
+      const referenceIndex = project.referenceVideos.findIndex(
+        (reference) => reference.id === referenceId,
+      );
+      if (referenceIndex === -1) {
+        continue;
+      }
+
+      const updatedReference: ReferenceVideo = {
+        ...project.referenceVideos[referenceIndex]!,
+        analysis,
+        status: "ready",
+        updatedAt: timestamp,
+      };
+      project.referenceVideos[referenceIndex] = updatedReference;
+      project.updatedAt = timestamp;
+      return updatedReference;
+    }
+
+    return undefined;
+  }
+
+  listReferenceVideos(projectId?: string): ReferenceVideo[] {
+    if (projectId) {
+      return this.projects.get(projectId)?.referenceVideos ?? [];
+    }
+
+    return [
+      ...this.globalReferenceVideos,
+      ...[...this.projects.values()].flatMap((project) => project.referenceVideos),
+    ];
+  }
+
+  addViralTemplate(template: ViralTemplate): ViralTemplate {
+    const existingIndex = this.viralTemplates.findIndex(
+      (candidate) => candidate.templateId === template.templateId,
+    );
+    if (existingIndex === -1) {
+      this.viralTemplates.push(template);
+    } else {
+      this.viralTemplates[existingIndex] = template;
+    }
+
+    for (const project of this.projects.values()) {
+      const usesProjectReference = project.referenceVideos.some((reference) =>
+        template.sourceReferenceIds.includes(reference.id),
+      );
+      if (usesProjectReference) {
+        const projectTemplateIndex = project.viralTemplates.findIndex(
+          (candidate) => candidate.templateId === template.templateId,
+        );
+        if (projectTemplateIndex === -1) {
+          project.viralTemplates.push(template);
+        } else {
+          project.viralTemplates[projectTemplateIndex] = template;
+        }
+      }
+    }
+    return template;
+  }
+
+  listViralTemplates(category?: string): ViralTemplate[] {
+    return this.viralTemplates.filter((template) => !category || template.category === category);
+  }
+
   addScript(
     projectId: string,
     script: Omit<ScriptResult, "id" | "projectId">,
@@ -447,6 +660,10 @@ export class MemoryProjectStore implements ProjectStore {
     const updatedScene: StoryboardScene = {
       ...match.scene,
       ...update,
+      assetRecallQuery:
+        update.assetRecallQuery === null
+          ? undefined
+          : (update.assetRecallQuery ?? match.scene.assetRecallQuery),
       assetId: update.assetId === null ? undefined : (update.assetId ?? match.scene.assetId),
       status: update.status ?? "edited",
     };

@@ -32,6 +32,24 @@ const effectiveKeywords = (
   request: ScriptGenerationRequest | undefined,
 ): string[] => (request?.keywords.length ? request.keywords : project.prepKeywords);
 
+const productionConstraints = (request: ScriptGenerationRequest | undefined): string[] => {
+  if (!request) {
+    return [];
+  }
+
+  return [
+    request.productionMode && request.productionMode !== "automatic"
+      ? `生产模式：${request.productionMode}`
+      : undefined,
+    request.referenceId
+      ? "参考视频只用于 Hook、节奏和叙事结构提炼，不保存、不复刻、不混剪公开视频素材"
+      : undefined,
+    request.templateId
+      ? "已应用灵感模板：按 Hook + Demo + Trust + CTA 压缩为 15 秒以内结构"
+      : undefined,
+  ].filter((constraint): constraint is string => Boolean(constraint));
+};
+
 const distributeSceneDurations = (totalDurationSeconds: number, sceneCount: number): number[] => {
   const baseDuration = Math.floor(totalDurationSeconds / sceneCount);
   let remainingSeconds = totalDurationSeconds - baseDuration * sceneCount;
@@ -219,6 +237,7 @@ const parseDraftScriptScenes = (
       subtitle,
       voiceover,
       visualPrompt,
+      assetRecallQuery: `${subtitle} ${rawVisual} ${rawAssetReference}`.trim(),
       assetId: sceneAsset?.id,
       status: "generated",
     });
@@ -305,6 +324,7 @@ export const generateFallbackScript = (
         hasParsedScenes ? "分镜字段已根据步骤二脚本文本结构化生成" : "未识别到结构化脚本文本，使用确定性 fallback 分镜",
         "没有服务端配置时使用确定性 fallback，不调用外部 AI",
         `参考准备关键词：${keywordSummary}`,
+        ...productionConstraints(context.request),
       ],
       scenes: hasParsedScenes
         ? parsedScenes
@@ -320,6 +340,7 @@ export const generateFallbackScript = (
             "快速开场镜头，展示目标用户的痛点",
             sceneAsset(0)?.name,
           ),
+          assetRecallQuery: `hook pain ${keywordSummary}`,
           assetId: sceneAsset(0)?.id,
           status: "generated",
         },
@@ -334,6 +355,7 @@ export const generateFallbackScript = (
             "产品近景演示镜头，必须使用绑定素材中的同款产品",
             sceneAsset(1)?.name,
           ),
+          assetRecallQuery: `demo solution ${keywordSummary}`,
           assetId: sceneAsset(1)?.id,
           status: "generated",
         },
@@ -348,6 +370,7 @@ export const generateFallbackScript = (
             "使用前后对比镜头，背景可以变化",
             sceneAsset(2)?.name,
           ),
+          assetRecallQuery: `trust proof close-up ${keywordSummary}`,
           assetId: sceneAsset(2)?.id,
           status: "generated",
         },
@@ -362,6 +385,7 @@ export const generateFallbackScript = (
             "最终产品定格镜头和明确购买引导",
             sceneAsset(3)?.name,
           ),
+          assetRecallQuery: `cta packshot ${keywordSummary}`,
           assetId: sceneAsset(3)?.id,
           status: "generated",
         },

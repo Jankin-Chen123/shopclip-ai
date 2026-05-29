@@ -28,6 +28,7 @@ import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/a
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { InspirationPanel } from "../features/inspiration/InspirationPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
+import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import {
   createDefaultStockProviderConfigs,
@@ -42,6 +43,8 @@ import { copy, isLanguage, type Language } from "./i18n";
 import {
   addAsset,
   applySceneSuggestion,
+  analyzeReferenceVideo,
+  createReferenceTemplate,
   createProject,
   createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
@@ -56,6 +59,8 @@ import {
   loadProject,
   loadProjectAssets,
   loadRenderTask,
+  processAssetStructure,
+  recallSceneAssets,
   regenerateScene,
   reorderScenes,
   retryRenderTask,
@@ -66,6 +71,7 @@ import {
   updateProjectPrep,
   updateScene,
   uploadAssetFileToStorage,
+  type AssetRecallCandidate,
   type AssetLibraryCategory,
   type AssetSearchResult,
   type CreateAssetInput,
@@ -132,6 +138,7 @@ export const createScriptGenerationRequestPayload = (
   draftScript: scriptDraft.trim() || undefined,
   keywords: assetPrepSnapshot.keywords,
   materials: assetPrepSnapshot.materials,
+  productionMode: "automatic",
   apiConfig: createScriptGenerationApiConfig(apiConfig),
 });
 
@@ -193,7 +200,10 @@ type BusyState =
   | "scene"
   | "render"
   | "export"
-  | "dashboard";
+  | "dashboard"
+  | "reference";
+
+type ScriptProductionMode = NonNullable<ScriptGenerationRequest["productionMode"]>;
 
 const getStoredLanguage = (): Language => {
   if (typeof window === "undefined") {
@@ -391,6 +401,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [fallbackProvider, setFallbackProvider] = useState<string>();
   const [forceRenderFailure, setForceRenderFailure] = useState(false);
   const [editingSuggestions, setEditingSuggestions] = useState<EditingSuggestion[]>([]);
+  const [assetRecallCandidates, setAssetRecallCandidates] = useState<AssetRecallCandidate[]>([]);
   const [assetPrepSnapshot, setAssetPrepSnapshot] = useState<AssetPrepSnapshot>({
     assetIds: [],
     keywords: [],
@@ -410,6 +421,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [renderTask, setRenderTask] = useState<RenderTask>();
   const [script, setScript] = useState<ScriptResult>();
   const [scriptDraft, setScriptDraft] = useState("");
+  const [scriptProductionMode, setScriptProductionMode] =
+    useState<ScriptProductionMode>("automatic");
+  const [selectedReferenceIdForScript, setSelectedReferenceIdForScript] = useState<string>();
+  const [selectedTemplateIdForScript, setSelectedTemplateIdForScript] = useState<string>();
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
   const isRenderPollInFlight = useRef(false);
@@ -726,6 +741,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setProject(createdProject);
       setScript(undefined);
       setScriptDraft("");
+      setScriptProductionMode("automatic");
+      setSelectedReferenceIdForScript(undefined);
+      setSelectedTemplateIdForScript(undefined);
       setRenderTask(undefined);
       setTraceEvents([]);
       setDashboard(undefined);
@@ -734,6 +752,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setAssetSearchResults([]);
       setExternalAssetSearchResults([]);
       setEditingSuggestions([]);
+      setAssetRecallCandidates([]);
       setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
       setSelectedSceneId(undefined);
       setDirtySceneIds(new Set());
@@ -745,6 +764,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setBrief(defaultBrief);
     setScript(undefined);
     setScriptDraft("");
+    setScriptProductionMode("automatic");
+    setSelectedReferenceIdForScript(undefined);
+    setSelectedTemplateIdForScript(undefined);
     setRenderTask(undefined);
     setTraceEvents([]);
     setDashboard(undefined);
@@ -754,6 +776,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setAssetSearchResults([]);
     setExternalAssetSearchResults([]);
     setEditingSuggestions([]);
+    setAssetRecallCandidates([]);
     setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
     setSelectedSceneId(undefined);
     setDirtySceneIds(new Set());
@@ -774,6 +797,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
     setScript(latestScript);
     setScriptDraft(latestScript?.narrative ?? "");
+    setScriptProductionMode("automatic");
+    setSelectedReferenceIdForScript(undefined);
+    setSelectedTemplateIdForScript(undefined);
     setRenderTask(latestRender);
     setTraceEvents([]);
     setDashboard(undefined);
@@ -782,6 +808,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setAssetSearchResults([]);
     setExternalAssetSearchResults([]);
     setEditingSuggestions([]);
+    setAssetRecallCandidates([]);
     setAssetPrepSnapshot(
       createAssetPrepSnapshotFromProjectAssets(loadedProject.assets, loadedProject.prepKeywords),
     );
@@ -948,10 +975,46 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const handleSearchAssets = () => {
     void runAction("asset", "search", async () => {
-      const response = await searchAssets(undefined, assetSearchQuery);
+      const response = await searchAssets(project?.id, assetSearchQuery, [], {
+        level: activeAssetCategory === "video" ? "slice" : undefined,
+        sceneRole: activeAssetCategory === "video" ? "demo" : undefined,
+      });
       setHasAssetSearchRun(true);
       setAssetSearchResults(response.results);
       setExternalAssetSearchResults(response.externalResults);
+    });
+  };
+
+  const handleProcessAsset = (assetId: string) => {
+    void runAction("asset", "asset", async () => {
+      const processed = await processAssetStructure(assetId);
+      setAssetLibrary((current) => ({
+        assets: current.assets.map((asset) =>
+          asset.id === processed.asset.id ? processed.asset : asset,
+        ),
+        assetSlices: [
+          ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
+          ...processed.slices,
+        ],
+      }));
+      setProject((current) =>
+        current && processed.asset.projectId === current.id
+          ? {
+              ...current,
+              assets: current.assets.map((asset) =>
+                asset.id === processed.asset.id ? processed.asset : asset,
+              ),
+              assetSlices: [
+                ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
+                ...processed.slices,
+              ],
+              assetProcessingEvents: [...current.assetProcessingEvents, ...processed.events],
+              assetProcessingJobs: [...current.assetProcessingJobs, processed.job],
+            }
+          : current,
+      );
+      setAssetSearchResults([]);
+      setHasAssetSearchRun(false);
     });
   };
 
@@ -1075,7 +1138,82 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const createScriptGenerationRequest = () =>
-    createScriptGenerationRequestPayload(assetPrepSnapshot, scriptDraft, apiConfig);
+    ({
+      ...createScriptGenerationRequestPayload(assetPrepSnapshot, scriptDraft, apiConfig),
+      productionMode: scriptProductionMode,
+      referenceId: selectedReferenceIdForScript,
+      templateId: selectedTemplateIdForScript,
+    }) satisfies ScriptGenerationRequest;
+
+  const handleAnalyzeReference = (draft: {
+    category: string;
+    sourceDeclaration: string;
+    sourceAssetId?: string;
+    sourcePlatform: string;
+    sourceUrl?: string;
+    title: string;
+  }) => {
+    if (!project) {
+      setErrors((current) => ({ ...current, script: "Create or load a project first." }));
+      return;
+    }
+
+    void runAction("script", "reference", async () => {
+      const reference = await analyzeReferenceVideo({
+        ...draft,
+        projectId: project.id,
+        sourceAssetId: draft.sourceAssetId?.trim() || undefined,
+        sourceUrl: draft.sourceUrl?.trim() || undefined,
+      });
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              referenceVideos: [
+                ...current.referenceVideos.filter((candidate) => candidate.id !== reference.id),
+                reference,
+              ],
+            }
+          : current,
+      );
+      setSelectedReferenceIdForScript(reference.id);
+      setScriptProductionMode("viral-remix");
+    });
+  };
+
+  const handleCreateReferenceTemplate = () => {
+    if (!project || project.referenceVideos.length === 0) {
+      return;
+    }
+
+    const readyReferences = project.referenceVideos.filter((reference) => reference.status === "ready");
+    if (readyReferences.length === 0) {
+      return;
+    }
+
+    void runAction("script", "reference", async () => {
+      const template = await createReferenceTemplate({
+        category: readyReferences[0]?.category ?? project.productName,
+        referenceIds: readyReferences.map((reference) => reference.id),
+        templateName: `${project.productName} viral template`,
+      });
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              viralTemplates: [
+                ...current.viralTemplates.filter(
+                  (candidate) => candidate.templateId !== template.templateId,
+                ),
+                template,
+              ],
+            }
+          : current,
+      );
+      setSelectedTemplateIdForScript(template.templateId);
+      setScriptProductionMode("template");
+    });
+  };
 
   const handleRewriteScript = () => {
     if (!project) {
@@ -1104,6 +1242,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setScriptDraft(generated.script.narrative);
       setSelectedSceneId(generated.script.scenes[0]?.id);
       setDirtySceneIds(new Set());
+      setAssetRecallCandidates([]);
       setProject((current) =>
         current
           ? {
@@ -1123,6 +1262,12 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const handleSceneChange = (updatedScene: StoryboardScene) => {
     replaceSceneInState(updatedScene);
     setDirtySceneIds((current) => new Set(current).add(updatedScene.id));
+  };
+
+  const handleSelectedSceneChange = (sceneId: string) => {
+    setSelectedSceneId(sceneId);
+    setEditingSuggestions([]);
+    setAssetRecallCandidates([]);
   };
 
   const handleSceneSave = (sceneId: string) => {
@@ -1197,6 +1342,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setSelectedSceneId(updatedScenes[0]?.id);
       setDirtySceneIds(new Set());
       setEditingSuggestions([]);
+      setAssetRecallCandidates([]);
     });
   };
 
@@ -1220,7 +1366,19 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         return next;
       });
       setEditingSuggestions([]);
+      setAssetRecallCandidates([]);
     });
+  };
+
+  const handleLoadAssetCandidates = (sceneId: string) => {
+    void runAction("studio", "scene", async () => {
+      const recall = await recallSceneAssets(sceneId);
+      setAssetRecallCandidates(recall.candidates);
+    });
+  };
+
+  const handleApplyAssetCandidate = (assetId: string) => {
+    handleRecallAsset(assetId);
   };
 
   const handleLoadSuggestions = (sceneId: string) => {
@@ -1366,6 +1524,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               onImportExternalAsset={handleImportExternalAsset}
               onImportFiles={handleImportFiles}
               onDeleteAssets={handleDeleteAssets}
+              onProcessAsset={handleProcessAsset}
               onRecallAsset={selectedSceneId ? handleRecallAsset : undefined}
               onSearchExternalAssets={handleSearchExternalAssets}
               onSearchAssets={handleSearchAssets}
@@ -1434,6 +1593,20 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     onPreparationChange={handleAssetPrepChange}
                     preparedLibraryAssetsByBucket={preparedProjectAssetsByBucket}
                   />
+                  <ReferenceLibraryPanel
+                    disabled={!project || busyState !== "idle"}
+                    isLoading={busyState === "reference"}
+                    language={language}
+                    onAnalyzeReference={handleAnalyzeReference}
+                    onCreateTemplate={handleCreateReferenceTemplate}
+                    references={project?.referenceVideos ?? []}
+                    sourceAssets={studioAssets.filter(
+                      (asset) =>
+                        (asset.type === "video" || asset.mimeType?.startsWith("video/")) &&
+                        asset.source !== "public_reference",
+                    )}
+                    templates={project?.viralTemplates ?? []}
+                  />
                   <ScriptPanel
                     copy={text.script}
                     disabled={busyState !== "idle"}
@@ -1443,9 +1616,17 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     isStoryboardGenerating={busyState === "script"}
                     onGenerateScript={handleRewriteScript}
                     onGenerateStoryboard={() => handleGenerateScript("studio")}
+                    onProductionModeChange={setScriptProductionMode}
+                    onReferenceChange={setSelectedReferenceIdForScript}
                     onScriptDraftChange={setScriptDraft}
+                    onTemplateChange={setSelectedTemplateIdForScript}
+                    productionMode={scriptProductionMode}
+                    references={project?.referenceVideos ?? []}
                     script={script}
                     scriptDraft={scriptDraft}
+                    selectedReferenceId={selectedReferenceIdForScript}
+                    selectedTemplateId={selectedTemplateIdForScript}
+                    templates={project?.viralTemplates ?? []}
                   />
                 </>
               ) : null}
@@ -1453,19 +1634,22 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               {activePage === "studio" ? (
                 <section className="script-storyboard-workspace">
                   <StudioWorkspace
+                    assetCandidates={assetRecallCandidates}
                     assets={studioAssets}
                     copy={text.studio}
                     dirtySceneIds={dirtySceneIds}
                     isBusy={busyState === "scene"}
+                    onApplyAssetCandidate={handleApplyAssetCandidate}
                     onApplySuggestion={handleApplySuggestion}
                     onDeleteScene={handleDeleteScene}
                     onDismissSuggestion={handleDismissSuggestion}
+                    onLoadAssetCandidates={handleLoadAssetCandidates}
                     onLoadSuggestions={handleLoadSuggestions}
                     onRegenerateScene={handleRegenerateScene}
                     onSceneChange={handleSceneChange}
                     onSceneMove={handleSceneMove}
                     onSceneSave={handleSceneSave}
-                    onSelectedSceneChange={setSelectedSceneId}
+                    onSelectedSceneChange={handleSelectedSceneChange}
                     scenes={scenes}
                     selectedSceneId={selectedSceneId}
                     suggestions={editingSuggestions}

@@ -1,5 +1,6 @@
 import type {
   AssetMetadata,
+  AssetProcessingEvent,
   AssetProcessingJob,
   AssetSearchResponse,
   AssetSearchResult,
@@ -21,6 +22,7 @@ import type {
   ProjectBrief,
   ProjectPrepUpdate,
   ProjectSummary,
+  ReferenceVideo,
   RenderRequest,
   RenderTask,
   SceneRegenerationRequest,
@@ -29,12 +31,17 @@ import type {
   ScriptResult,
   StoryboardScene,
   TraceEvent,
+  ViralTemplate,
   VideoGenerationSettings,
 } from "@shopclip/shared";
 
 export interface ProjectSnapshot extends Project {
   assets: AssetMetadata[];
   assetSlices: AssetSlice[];
+  assetProcessingEvents: AssetProcessingEvent[];
+  assetProcessingJobs: AssetProcessingJob[];
+  referenceVideos: ReferenceVideo[];
+  viralTemplates: ViralTemplate[];
   scripts: ScriptResult[];
   scenes: StoryboardScene[];
   renderTasks: RenderTask[];
@@ -85,6 +92,13 @@ export interface AssetLibraryResponse {
   category: AssetLibraryCategory | "all";
   assets: AssetMetadata[];
   assetSlices: AssetSlice[];
+}
+
+export interface AssetRecallCandidate {
+  asset: AssetMetadata;
+  reasons: string[];
+  score: number;
+  slice?: AssetSlice;
 }
 
 export type UserApiConfig = NonNullable<InspirationGenerateRequest["apiConfig"]>;
@@ -233,6 +247,19 @@ export const loadAssetProcessingJob = async (
   return response.processingJob;
 };
 
+export const processAssetStructure = async (
+  assetId: string,
+): Promise<{
+  asset: AssetMetadata;
+  events: AssetProcessingEvent[];
+  job: AssetProcessingJob;
+  slices: AssetSlice[];
+}> =>
+  requestJson(`/assets/${assetId}/process`, {
+    method: "POST",
+    body: JSON.stringify({ mode: "full", forceRegenerate: true }),
+  });
+
 export const uploadAssetFileToStorage = async (
   assetId: string,
   file: File,
@@ -285,6 +312,7 @@ export const searchAssets = async (
   projectId: string | undefined,
   query: string,
   tags: string[] = [],
+  options: { level?: "asset" | "slice"; sceneRole?: string } = {},
 ): Promise<AssetSearchResponse> => {
   const params = new URLSearchParams({ q: query });
   if (projectId) {
@@ -293,8 +321,44 @@ export const searchAssets = async (
   if (tags.length > 0) {
     params.set("tags", tags.join(","));
   }
+  if (options.level) {
+    params.set("level", options.level);
+  }
+  if (options.sceneRole) {
+    params.set("sceneRole", options.sceneRole);
+  }
 
   return requestJson(`/assets/search?${params.toString()}`);
+};
+
+export const analyzeReferenceVideo = async (input: {
+  author?: string;
+  category: string;
+  projectId?: string;
+  publicStats?: ReferenceVideo["publicStats"];
+  sourceDeclaration: string;
+  sourceAssetId?: string;
+  sourcePlatform: string;
+  sourceUrl?: string;
+  title: string;
+}): Promise<ReferenceVideo> => {
+  const response = await requestJson<{ reference: ReferenceVideo }>("/references/analyze", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return response.reference;
+};
+
+export const createReferenceTemplate = async (input: {
+  category: string;
+  referenceIds: string[];
+  templateName: string;
+}): Promise<ViralTemplate> => {
+  const response = await requestJson<{ template: ViralTemplate }>("/references/templates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return response.template;
 };
 
 export const searchExternalStockAssets = async (
@@ -311,6 +375,7 @@ export const generateScript = async (
     assetIds: [],
     keywords: [],
     materials: [],
+    productionMode: "automatic",
   },
 ): Promise<{ fallback: { used: boolean; provider: string }; script: ScriptResult }> =>
   requestJson(`/projects/${projectId}/generate-script`, {
@@ -447,6 +512,13 @@ export const regenerateScene = async (
     body: JSON.stringify(request ?? {}),
   });
 
+export const recallSceneAssets = async (
+  sceneId: string,
+): Promise<{ scene: StoryboardScene; candidates: AssetRecallCandidate[] }> =>
+  requestJson(`/scenes/${sceneId}/asset-recall`, {
+    method: "POST",
+  });
+
 export const loadSceneSuggestions = async (sceneId: string): Promise<EditingSuggestion[]> => {
   const response = await requestJson<{ suggestions: EditingSuggestion[] }>(
     `/scenes/${sceneId}/suggestions`,
@@ -463,6 +535,7 @@ export const applySceneSuggestion = async (
   });
 
 export type {
+  AssetProcessingEvent,
   AssetSearchResult,
   DashboardResponse,
   EditingSuggestion,
@@ -474,6 +547,8 @@ export type {
   InspirationGenerateResponse,
   InspirationMaterial,
   MediaSettings,
+  ReferenceVideo,
   RenderRequest,
+  ViralTemplate,
   VideoGenerationSettings,
 };

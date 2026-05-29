@@ -2,7 +2,10 @@ import type { z } from "zod";
 
 import type {
   AssetMetadataSchema,
+  AssetProcessingEventSchema,
   AssetProcessingJobSchema,
+  AssetQualitySignalsSchema,
+  AssetRoleSchema,
   AssetSearchResponseSchema,
   AssetSearchResultSchema,
   AssetSliceSchema,
@@ -11,6 +14,8 @@ import type {
   AssetStorageProviderSchema,
   AssetTypeSchema,
   AssetUploadIntentSchema,
+  CameraMovementSchema,
+  CommerceNarrativeSegmentSchema,
   DashboardResponseSchema,
   EditingSuggestionSchema,
   ExternalAssetProviderConfigSchema,
@@ -26,24 +31,35 @@ import type {
   InspirationVideoTaskRequestSchema,
   InspirationVideoTaskResponseSchema,
   MediaSettingsSchema,
+  ProductProfileSchema,
+  ProductVisibilitySchema,
   ProjectBriefSchema,
   ProjectPrepUpdateSchema,
   ProjectSchema,
   ProjectStatusSchema,
   ProjectSummarySchema,
+  ReferenceVideoSchema,
+  ReferenceVideoStatusSchema,
   RenderRequestSchema,
   SceneRenderClipSchema,
   RenderTaskSchema,
   RenderTaskStatusSchema,
   SceneRegenerationRequestSchema,
+  SceneRoleSchema,
   SceneStatusSchema,
   SceneUpdateSchema,
   ScriptGenerationMaterialSchema,
   ScriptGenerationRequestSchema,
   ScriptResultSchema,
+  ShotTypeSchema,
   StoryboardSceneSchema,
+  ReferenceVideoAnalysisSchema,
+  StructuredAssetMetadataSchema,
+  StructuredSliceMetadataSchema,
   TraceEventSchema,
   TraceEventStatusSchema,
+  ViralTemplateSchema,
+  VisualIdentitySchema,
   VideoGenerationSettingsSchema,
 } from "./schemas.js";
 
@@ -52,18 +68,34 @@ export type AssetType = z.infer<typeof AssetTypeSchema>;
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
 export type AssetSource = z.infer<typeof AssetSourceSchema>;
 export type AssetStorageProvider = z.infer<typeof AssetStorageProviderSchema>;
+export type AssetRole = z.infer<typeof AssetRoleSchema>;
+export type SceneRole = z.infer<typeof SceneRoleSchema>;
+export type ProductVisibility = z.infer<typeof ProductVisibilitySchema>;
+export type ShotType = z.infer<typeof ShotTypeSchema>;
+export type CameraMovement = z.infer<typeof CameraMovementSchema>;
 export type InspirationAssetType = z.infer<typeof InspirationAssetTypeSchema>;
 export type InspirationMaterialStatus = z.infer<typeof InspirationMaterialStatusSchema>;
 export type SceneStatus = z.infer<typeof SceneStatusSchema>;
 export type RenderTaskStatus = z.infer<typeof RenderTaskStatusSchema>;
 export type TraceEventStatus = z.infer<typeof TraceEventStatusSchema>;
+export type ReferenceVideoStatus = z.infer<typeof ReferenceVideoStatusSchema>;
 
 export type ProjectBrief = z.infer<typeof ProjectBriefSchema>;
 export type ProjectPrepUpdate = z.infer<typeof ProjectPrepUpdateSchema>;
 export type Project = z.infer<typeof ProjectSchema>;
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
+export type VisualIdentity = z.infer<typeof VisualIdentitySchema>;
+export type ProductProfile = z.infer<typeof ProductProfileSchema>;
+export type AssetQualitySignals = z.infer<typeof AssetQualitySignalsSchema>;
+export type StructuredAssetMetadata = z.infer<typeof StructuredAssetMetadataSchema>;
+export type StructuredSliceMetadata = z.infer<typeof StructuredSliceMetadataSchema>;
+export type CommerceNarrativeSegment = z.infer<typeof CommerceNarrativeSegmentSchema>;
+export type ReferenceVideoAnalysis = z.infer<typeof ReferenceVideoAnalysisSchema>;
+export type ReferenceVideo = z.infer<typeof ReferenceVideoSchema>;
+export type ViralTemplate = z.infer<typeof ViralTemplateSchema>;
 export type AssetMetadata = z.infer<typeof AssetMetadataSchema>;
 export type AssetUploadIntent = z.infer<typeof AssetUploadIntentSchema>;
+export type AssetProcessingEvent = z.infer<typeof AssetProcessingEventSchema>;
 export type AssetProcessingJob = z.infer<typeof AssetProcessingJobSchema>;
 export type AssetSlice = z.infer<typeof AssetSliceSchema>;
 export type AssetSearchResult = z.infer<typeof AssetSearchResultSchema>;

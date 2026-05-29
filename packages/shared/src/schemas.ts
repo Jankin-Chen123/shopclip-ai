@@ -28,6 +28,7 @@ export const TraceEventStatusSchema = z.enum([
   "failed",
   "retrying",
 ]);
+export const ReferenceVideoStatusSchema = z.enum(["registered", "analyzing", "ready", "failed"]);
 
 export const IsoDateTimeSchema = z.string().datetime({ offset: true });
 
@@ -65,6 +66,245 @@ export const ProjectSummarySchema = ProjectSchema.pick({
   sceneCount: z.number().int().nonnegative(),
 });
 
+export const AssetRoleSchema = z.enum([
+  "hero_image",
+  "detail_image",
+  "packaging",
+  "usage_demo",
+  "lifestyle",
+  "reference_video",
+  "transition",
+  "brand_doc",
+]);
+
+export const SceneRoleSchema = z.enum([
+  "hook",
+  "pain",
+  "fear",
+  "solution",
+  "demo",
+  "trust",
+  "price",
+  "cta",
+  "closure",
+  "transition",
+]);
+
+export const ProductVisibilitySchema = z.enum(["clear", "partial", "none", "uncertain"]);
+
+export const ShotTypeSchema = z.enum([
+  "close_up",
+  "medium",
+  "wide",
+  "overhead",
+  "first_person",
+  "screen_recording",
+  "packshot",
+  "unknown",
+]);
+
+export const CameraMovementSchema = z.enum([
+  "static",
+  "pan",
+  "tilt",
+  "push_in",
+  "pull_out",
+  "handheld",
+  "handheld_push_in",
+  "zoom",
+  "unknown",
+]);
+
+export const VisualIdentitySchema = z.object({
+  colors: z.array(z.string().trim().min(1)).default([]),
+  materials: z.array(z.string().trim().min(1)).default([]),
+  shape: z.string().trim().min(1).optional(),
+  logoText: z.string().trim().min(1).optional(),
+  packaging: z.string().trim().min(1).optional(),
+});
+
+export const ProductProfileSchema = z.object({
+  productName: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  targetAudience: z.array(z.string().trim().min(1)).default([]),
+  sellingPoints: z.array(z.string().trim().min(1)).default([]),
+  usageScenarios: z.array(z.string().trim().min(1)).default([]),
+  visualIdentity: VisualIdentitySchema.default({ colors: [], materials: [] }),
+  doNotMisrepresent: z.array(z.string().trim().min(1)).default([]),
+  sourceAssetIds: z.array(z.string().trim().min(1)).default([]),
+  confidence: z.number().min(0).max(1).default(0),
+});
+
+export const AssetQualitySignalsSchema = z.object({
+  sharpness: z.number().min(0).max(1).optional(),
+  stability: z.number().min(0).max(1).optional(),
+  productVisibility: ProductVisibilitySchema.optional(),
+  usableForAd: z.boolean().optional(),
+});
+
+export const StructuredAssetMetadataSchema = z.object({
+  assetId: z.string().trim().min(1),
+  projectId: z.string().trim().min(1).optional(),
+  type: AssetTypeSchema,
+  source: AssetSourceSchema.default("merchant_upload"),
+  sourceDeclaration: z.string().trim().min(1),
+  objectKey: z.string().trim().min(1).optional(),
+  thumbnailKey: z.string().trim().min(1).optional(),
+  durationSeconds: z.number().positive().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  format: z.string().trim().min(1).optional(),
+  overallSummary: z.string().trim().min(1),
+  role: AssetRoleSchema,
+  globalTags: z.array(z.string().trim().min(1)).default([]),
+  ocrText: z.string().trim().default(""),
+  asrSummary: z.string().trim().default(""),
+  visualStyle: z
+    .object({
+      colors: z.array(z.string().trim().min(1)).default([]),
+      materials: z.array(z.string().trim().min(1)).default([]),
+      lighting: z.string().trim().min(1).optional(),
+      background: z.string().trim().min(1).optional(),
+      mood: z.string().trim().min(1).optional(),
+    })
+    .default({ colors: [], materials: [] }),
+  qualitySignals: AssetQualitySignalsSchema.default({}),
+  complianceFlags: z.array(z.string().trim().min(1)).default([]),
+  searchText: z.string().trim().min(1),
+  embeddingText: z.string().trim().min(1),
+  modelTrace: z
+    .object({
+      provider: z.string().trim().min(1),
+      model: z.string().trim().min(1).optional(),
+      confidence: z.number().min(0).max(1).optional(),
+      fallbackUsed: z.boolean().optional(),
+      error: z.string().trim().min(1).optional(),
+    })
+    .optional(),
+});
+
+export const StructuredSliceMetadataSchema = z
+  .object({
+    sliceId: z.string().trim().min(1),
+    assetId: z.string().trim().min(1),
+    startSecond: z.number().min(0),
+    endSecond: z.number().positive(),
+    thumbnailKey: z.string().trim().min(1).optional(),
+    frameKeys: z.array(z.string().trim().min(1)).default([]),
+    summary: z.string().trim().min(1),
+    transcript: z.string().trim().default(""),
+    ocrText: z.string().trim().default(""),
+    shotType: ShotTypeSchema.default("unknown"),
+    cameraMovement: CameraMovementSchema.default("unknown"),
+    composition: z.string().trim().default(""),
+    transition: z.string().trim().default(""),
+    mood: z.string().trim().default(""),
+    action: z.string().trim().default(""),
+    keyElements: z.array(z.string().trim().min(1)).default([]),
+    productVisibility: ProductVisibilitySchema.default("uncertain"),
+    visibleProductParts: z.array(z.string().trim().min(1)).default([]),
+    suitableSceneRoles: z.array(SceneRoleSchema).default([]),
+    qualitySignals: AssetQualitySignalsSchema.default({}),
+    searchText: z.string().trim().min(1),
+    embeddingText: z.string().trim().min(1),
+    cosFrameObjectKeys: z.array(z.string().trim().min(1)).default([]),
+  })
+  .refine((slice) => slice.endSecond > slice.startSecond, {
+    message: "Slice endSecond must be greater than startSecond.",
+    path: ["endSecond"],
+  });
+
+export const CommerceNarrativeSegmentSchema = z
+  .object({
+    role: SceneRoleSchema,
+    startSecond: z.number().min(0),
+    endSecond: z.number().positive(),
+    summary: z.string().trim().min(1),
+    copywriting: z.string().trim().min(1),
+    visualPrompt: z.string().trim().min(1),
+  })
+  .refine((segment) => segment.endSecond > segment.startSecond, {
+    message: "Narrative segment endSecond must be greater than startSecond.",
+    path: ["endSecond"],
+  });
+
+export const ReferenceVideoAnalysisSchema = z.object({
+  referenceId: z.string().trim().min(1),
+  sourceUrl: z.string().trim().min(1),
+  sourcePlatform: z.string().trim().min(1),
+  sourceDeclaration: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  author: z.string().trim().min(1).optional(),
+  publicStats: z
+    .object({
+      likes: z.number().int().nonnegative().default(0),
+      comments: z.number().int().nonnegative().default(0),
+      shares: z.number().int().nonnegative().default(0),
+      views: z.number().int().nonnegative().default(0),
+    })
+    .default({ likes: 0, comments: 0, shares: 0, views: 0 }),
+  durationSeconds: z.number().positive().optional(),
+  category: z.string().trim().min(1),
+  hookScore: z.number().min(0).max(1),
+  hookAnalysis: z.string().trim().min(1),
+  pacingAnalysis: z.string().trim().min(1),
+  emotionalArc: z.array(z.string().trim().min(1)).default([]),
+  targetAudience: z.array(z.string().trim().min(1)).default([]),
+  contentFormula: z.string().trim().min(1),
+  keyViralFactors: z.array(z.string().trim().min(1)).default([]),
+  commerceNarrativeSegments: z.array(CommerceNarrativeSegmentSchema).default([]),
+  recreationBlueprint: z.object({
+    visual: z.string().trim().min(1),
+    copywriting: z.string().trim().min(1),
+    shootingGuide: z.string().trim().min(1),
+  }),
+  commentInsights: z.array(z.string().trim().min(1)).default([]),
+  derivedTemplates: z.array(z.string().trim().min(1)).default([]),
+});
+
+export const ReferenceVideoSchema = z.object({
+  id: z.string().trim().min(1),
+  projectId: z.string().trim().min(1).optional(),
+  sourceAssetId: z.string().trim().min(1).optional(),
+  sourceUrl: z.string().trim().min(1),
+  sourcePlatform: z.string().trim().min(1),
+  sourceDeclaration: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  author: z.string().trim().min(1).optional(),
+  category: z.string().trim().min(1),
+  publicStats: ReferenceVideoAnalysisSchema.shape.publicStats,
+  status: ReferenceVideoStatusSchema,
+  analysis: ReferenceVideoAnalysisSchema.optional(),
+  errorMessage: z.string().trim().min(1).optional(),
+  createdAt: IsoDateTimeSchema,
+  updatedAt: IsoDateTimeSchema,
+});
+
+export const AssetProcessingEventSchema = z.object({
+  id: z.string().trim().min(1),
+  jobId: z.string().trim().min(1),
+  assetId: z.string().trim().min(1),
+  step: z.string().trim().min(1),
+  status: TraceEventStatusSchema,
+  message: z.string().trim().min(1),
+  progress: z.number().min(0).max(100).default(0),
+  retryable: z.boolean().default(false),
+  createdAt: IsoDateTimeSchema,
+});
+
+export const ViralTemplateSchema = z.object({
+  templateId: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  strategy: z.string().trim().min(1),
+  factorSet: z.array(z.string().trim().min(1)).default([]),
+  narrativeStructure: z.array(SceneRoleSchema).min(1),
+  shotRequirements: z.array(z.string().trim().min(1)).default([]),
+  copywritingRules: z.array(z.string().trim().min(1)).default([]),
+  riskRules: z.array(z.string().trim().min(1)).default([]),
+  sourceReferenceIds: z.array(z.string().trim().min(1)).default([]),
+});
+
 export const AssetMetadataSchema = z.object({
   id: z.string().trim().min(1),
   projectId: z.string().trim().min(1).optional(),
@@ -80,6 +320,7 @@ export const AssetMetadataSchema = z.object({
   sizeBytes: z.number().int().positive().optional(),
   tags: z.array(z.string().trim().min(1)).default([]),
   embeddingText: z.string().trim().min(1).optional(),
+  structuredMetadata: StructuredAssetMetadataSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   createdAt: IsoDateTimeSchema.optional(),
   updatedAt: IsoDateTimeSchema.optional(),
@@ -113,6 +354,10 @@ export const AssetSliceSchema = z.object({
   startSecond: z.number().min(0).optional(),
   endSecond: z.number().positive().optional(),
   tags: z.array(z.string().trim().min(1)).default([]),
+  thumbnailKey: z.string().trim().min(1).optional(),
+  embeddingText: z.string().trim().min(1).optional(),
+  searchText: z.string().trim().min(1).optional(),
+  metadata: StructuredSliceMetadataSchema.optional(),
 });
 
 export const AssetSearchResultSchema = z.object({
@@ -258,6 +503,7 @@ export const StoryboardSceneSchema = z.object({
   subtitle: z.string().trim().min(1),
   voiceover: z.string().trim().min(1),
   visualPrompt: z.string().trim().min(1),
+  assetRecallQuery: z.string().trim().min(1).optional(),
   imageUrl: z.string().trim().min(1).optional(),
   assetId: z.string().trim().min(1).optional(),
   status: SceneStatusSchema,
@@ -303,6 +549,9 @@ export const ScriptGenerationRequestSchema = z.object({
   draftScript: z.string().trim().max(5000).optional(),
   keywords: z.array(z.string().trim().min(1)).max(40).default([]),
   materials: z.array(ScriptGenerationMaterialSchema).max(80).default([]),
+  productionMode: z.enum(["automatic", "viral-remix", "template", "agentic"]).default("automatic"),
+  referenceId: z.string().trim().min(1).optional(),
+  templateId: z.string().trim().min(1).optional(),
   apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
 });
 
@@ -312,6 +561,7 @@ export const SceneUpdateSchema = z
     subtitle: z.string().trim().min(1).optional(),
     voiceover: z.string().trim().min(1).optional(),
     visualPrompt: z.string().trim().min(1).optional(),
+    assetRecallQuery: z.string().trim().min(1).nullable().optional(),
     imageUrl: z.string().trim().min(1).optional(),
     assetId: z.string().trim().min(1).nullable().optional(),
     status: SceneStatusSchema.optional(),

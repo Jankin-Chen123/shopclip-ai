@@ -1,5 +1,5 @@
 import type { ChangeEvent } from "react";
-import type { ScriptResult } from "@shopclip/shared";
+import type { ReferenceVideo, ScriptGenerationRequest, ScriptResult, ViralTemplate } from "@shopclip/shared";
 import { ArrowRight, Loader2, WandSparkles } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -15,9 +15,17 @@ interface ScriptPanelProps {
   isStoryboardGenerating: boolean;
   onGenerateScript: () => void;
   onGenerateStoryboard: () => void;
+  onProductionModeChange: (mode: NonNullable<ScriptGenerationRequest["productionMode"]>) => void;
+  onReferenceChange: (referenceId: string | undefined) => void;
   onScriptDraftChange: (scriptDraft: string) => void;
+  onTemplateChange: (templateId: string | undefined) => void;
+  productionMode: NonNullable<ScriptGenerationRequest["productionMode"]>;
+  references: ReferenceVideo[];
   script?: ScriptResult;
   scriptDraft: string;
+  selectedReferenceId?: string;
+  selectedTemplateId?: string;
+  templates: ViralTemplate[];
 }
 
 export const ScriptPanel = ({
@@ -29,9 +37,17 @@ export const ScriptPanel = ({
   isStoryboardGenerating,
   onGenerateScript,
   onGenerateStoryboard,
+  onProductionModeChange,
+  onReferenceChange,
   onScriptDraftChange,
+  onTemplateChange,
+  productionMode,
+  references,
   script,
   scriptDraft,
+  selectedReferenceId,
+  selectedTemplateId,
+  templates,
 }: ScriptPanelProps) => {
   const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     onScriptDraftChange(event.target.value);
@@ -59,6 +75,53 @@ export const ScriptPanel = ({
           value={scriptDraft}
         />
       </label>
+
+      <div className="script-context-grid">
+        <label>
+          {copy.productionMode}
+          <select
+            onChange={(event) =>
+              onProductionModeChange(
+                event.target.value as NonNullable<ScriptGenerationRequest["productionMode"]>,
+              )
+            }
+            value={productionMode}
+          >
+            <option value="automatic">{copy.modes.automatic}</option>
+            <option value="viral-remix">{copy.modes.viralRemix}</option>
+            <option value="template">{copy.modes.template}</option>
+            <option value="agentic">{copy.modes.agentic}</option>
+          </select>
+        </label>
+        <label>
+          {copy.referenceVideo}
+          <select
+            onChange={(event) => onReferenceChange(event.target.value || undefined)}
+            value={selectedReferenceId ?? ""}
+          >
+            <option value="">{copy.noReferenceVideo}</option>
+            {references.map((reference) => (
+              <option key={reference.id} value={reference.id}>
+                {reference.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {copy.viralTemplate}
+          <select
+            onChange={(event) => onTemplateChange(event.target.value || undefined)}
+            value={selectedTemplateId ?? ""}
+          >
+            <option value="">{copy.noViralTemplate}</option>
+            {templates.map((template) => (
+              <option key={template.templateId} value={template.templateId}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <div className="script-generation-actions">
         <Button

@@ -15,6 +15,7 @@ import {
   Trash2,
   UploadCloud,
   Video,
+  WandSparkles,
   X,
 } from "lucide-react";
 
@@ -49,6 +50,7 @@ interface AssetsPanelProps {
   onDeleteAssets?: (assetIds: string[]) => void;
   onImportExternalAsset?: (asset: ExternalAssetResult) => Promise<void> | void;
   onImportFiles: (files: File[]) => void;
+  onProcessAsset?: (assetId: string) => void;
   onRecallAsset?: (assetId: string) => void;
   onSearchExternalAssets?: (
     query: string,
@@ -158,6 +160,23 @@ const formatAssetDate = (value: string | undefined) => {
     return value;
   }
   return date.toLocaleString();
+};
+
+const structuredAssetSummary = (asset: AssetMetadata) => {
+  const structuredAsset = asset.metadata?.structuredAsset;
+  if (typeof structuredAsset !== "object" || structuredAsset === null) {
+    return undefined;
+  }
+
+  return structuredAsset as {
+    overallSummary?: string;
+    role?: string;
+    searchText?: string;
+    qualitySignals?: {
+      productVisibility?: string;
+      usableForAd?: boolean;
+    };
+  };
 };
 
 const genericImportUi = {
@@ -334,6 +353,7 @@ export const AssetsPanel = ({
   hasProject,
   onImportExternalAsset,
   onImportFiles,
+  onProcessAsset,
   onRecallAsset,
   onCategoryChange,
   onDeleteAssets,
@@ -387,6 +407,7 @@ export const AssetsPanel = ({
   const searchScoreByAssetId = new Map(
     searchResults.map((result) => [result.asset.id, result.score] as const),
   );
+  const searchResultByAssetId = new Map(searchResults.map((result) => [result.asset.id, result] as const));
   const selectedExternalAssets = externalModalResults.filter((result) =>
     selectedExternalAssetIds.has(result.id),
   );
@@ -793,6 +814,9 @@ export const AssetsPanel = ({
             const isReady = asset.status === "ready";
             const isSelected = selectedAssetIds.has(asset.id);
             const searchScore = searchScoreByAssetId.get(asset.id);
+            const searchResult = searchResultByAssetId.get(asset.id);
+            const structuredSummary = structuredAssetSummary(asset);
+            const firstStructuredSlice = searchResult?.slices.find((slice) => slice.metadata);
 
             return (
               <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
@@ -810,6 +834,21 @@ export const AssetsPanel = ({
                   >
                     {isSelected ? <Check size={13} aria-hidden="true" /> : null}
                   </button>
+                  {onProcessAsset ? (
+                    <button
+                      aria-label={
+                        language === "zh"
+                          ? `结构化分析 ${asset.name}`
+                          : `Run structured analysis for ${asset.name}`
+                      }
+                      className="asset-card-delete"
+                      disabled={disabled}
+                      onClick={() => onProcessAsset(asset.id)}
+                      type="button"
+                    >
+                      <WandSparkles size={13} aria-hidden="true" />
+                    </button>
+                  ) : null}
                   <button
                     aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
                     className="asset-card-delete"
@@ -885,6 +924,15 @@ export const AssetsPanel = ({
                       : formatBytes(asset.sizeBytes)}
                   </span>
                 </div>
+                {structuredSummary || firstStructuredSlice ? (
+                  <div className="asset-card-structure">
+                    <span>{structuredSummary?.role ?? firstStructuredSlice?.metadata?.shotType}</span>
+                    <small>
+                      {firstStructuredSlice?.metadata?.suitableSceneRoles.join(", ") ??
+                        structuredSummary?.qualitySignals?.productVisibility}
+                    </small>
+                  </div>
+                ) : null}
               </article>
             );
           })
@@ -998,6 +1046,18 @@ export const AssetsPanel = ({
                       <dd>{previewAsset.embeddingText}</dd>
                     </div>
                   ) : null}
+                  {structuredAssetSummary(previewAsset)?.overallSummary ? (
+                    <div>
+                      <dt>{language === "zh" ? "结构化摘要" : "Structured summary"}</dt>
+                      <dd>{structuredAssetSummary(previewAsset)?.overallSummary}</dd>
+                    </div>
+                  ) : null}
+                  {structuredAssetSummary(previewAsset)?.role ? (
+                    <div>
+                      <dt>{language === "zh" ? "素材角色" : "Asset role"}</dt>
+                      <dd>{structuredAssetSummary(previewAsset)?.role}</dd>
+                    </div>
+                  ) : null}
                   {formatAssetDate(previewAsset.createdAt) ? (
                     <div>
                       <dt>{language === "zh" ? "创建时间" : "Created"}</dt>
@@ -1017,6 +1077,15 @@ export const AssetsPanel = ({
                       variant="primary"
                     >
                       {language === "zh" ? "用于当前分镜" : "Use in selected scene"}
+                    </Button>
+                  ) : null}
+                  {onProcessAsset ? (
+                    <Button
+                      disabled={disabled}
+                      icon={<WandSparkles size={18} />}
+                      onClick={() => onProcessAsset(previewAsset.id)}
+                    >
+                      {language === "zh" ? "多颗粒度结构化" : "Analyze structure"}
                     </Button>
                   ) : null}
                   {previewAssetReady ? (

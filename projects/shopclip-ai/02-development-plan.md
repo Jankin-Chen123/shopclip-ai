@@ -99,6 +99,7 @@ projects/shopclip-ai/
 | 010  | 部署、文档、安全复核与最终证据         | `delivery-ops-engineer`     | 006、007、008、009 | 否     | Done    |
 | 011  | 灵感分区多模态素材生成                 | `implementation-engineer`   | 010                | 否     | Done    |
 | 012  | 用户 API 设置与模型配置                | `implementation-engineer`   | 011                | 否     | Done    |
+| 015  | 多颗粒度素材结构化、爆款视频拆解与智能剪辑计划 | `solution-architect` / `implementation-engineer` | 006、007、008 | 否 | Done |
 
 ## 依赖图
 
@@ -117,6 +118,9 @@ flowchart TD
   P007 --> P010
   P008 --> P010
   P009 --> P010
+  P006 --> P015["015 多颗粒度结构化 + 爆款拆解"]
+  P007 --> P015
+  P008 --> P015
 ```
 
 ## 集成计划
@@ -298,6 +302,19 @@ flowchart TD
 - [x] 运行 production build 和 smoke tests。
 - [x] 针对部署 URL 运行浏览器验证。
 - [x] 检查没有 secret 被提交或暴露在前端构建中。
+
+### Task 015：多颗粒度素材结构化、爆款视频拆解与智能剪辑计划
+
+**文件：**
+
+- 创建：`projects/shopclip-ai/parts/part-015-multigranularity-asset-and-viral-analysis.md`
+- 后续修改：`packages/shared/src/schemas.ts`、`apps/api/prisma/schema.prisma`、`apps/api/src/modules/assets`、`apps/api/src/modules/retrieval`、`apps/api/src/modules/references`、`apps/web/src/features/assets`、`apps/web/src/features/script`、`apps/web/src/features/studio`
+
+- [x] 深入阅读用户指定的 `pelpeljakob-creator/viral-video-analyzer` 与 `chongchonghaoman/ViralX` 代码逻辑。
+- [x] 将参考仓库中的视频拆解、爆款分析、9 段叙事结构、变体生成和长任务体验转译为 ShopClip 的 TypeScript/Node 实施方案。
+- [x] 明确图片、视频、参考视频、模板四类对象的多颗粒度结构化字段。
+- [x] 明确纯文本检索 + 腾讯云 COS 智能检索的混合检索路线。
+- [x] 形成后续可执行的 Part 015 计划文档。
 
 ## 审批
 

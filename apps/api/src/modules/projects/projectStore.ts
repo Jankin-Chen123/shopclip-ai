@@ -1,22 +1,29 @@
 import type {
   AssetMetadata,
+  AssetProcessingEvent,
   AssetProcessingJob,
   AssetSlice,
   EditingSuggestion,
   Project,
   ProjectBrief,
   ProjectSummary,
+  ReferenceVideo,
+  ReferenceVideoAnalysis,
   RenderTask,
   SceneUpdate,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
+  ViralTemplate,
 } from "@shopclip/shared";
 
 export interface ProjectSnapshot extends Project {
   assets: AssetMetadata[];
   assetSlices: AssetSlice[];
+  assetProcessingEvents: AssetProcessingEvent[];
   assetProcessingJobs: AssetProcessingJob[];
+  referenceVideos: ReferenceVideo[];
+  viralTemplates: ViralTemplate[];
   scripts: ScriptResult[];
   scenes: StoryboardScene[];
   renderTasks: RenderTask[];
@@ -44,6 +51,18 @@ export interface ProjectStore {
     projectId: string | undefined,
     job: Omit<AssetProcessingJob, "createdAt">,
   ): MaybePromise<AssetProcessingJob | undefined>;
+  addAssetProcessingEvent(
+    jobId: string,
+    event: Omit<AssetProcessingEvent, "id" | "jobId" | "createdAt">,
+  ): MaybePromise<AssetProcessingEvent | undefined>;
+  addAssetSlices(
+    assetId: string,
+    slices: Array<Omit<AssetSlice, "id" | "assetId">>,
+  ): MaybePromise<AssetSlice[]>;
+  addReferenceVideo(
+    projectId: string | undefined,
+    reference: Omit<ReferenceVideo, "id" | "projectId" | "analysis" | "createdAt" | "updatedAt">,
+  ): MaybePromise<ReferenceVideo | undefined>;
   addRenderTask(
     projectId: string,
     renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,
@@ -53,6 +72,7 @@ export interface ProjectStore {
     projectId: string,
     script: Omit<ScriptResult, "id" | "projectId">,
   ): MaybePromise<ScriptResult | undefined>;
+  addViralTemplate(template: ViralTemplate): MaybePromise<ViralTemplate>;
   createProject(brief: ProjectBrief): MaybePromise<ProjectSnapshot>;
   deleteAssets(assetIds: string[]): MaybePromise<AssetMetadata[]>;
   deleteProject(projectId: string): MaybePromise<boolean>;
@@ -61,8 +81,11 @@ export interface ProjectStore {
   getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;
   getLatestAssetProcessingJob(assetId: string): MaybePromise<AssetProcessingJob | undefined>;
   getProject(id: string): MaybePromise<ProjectSnapshot | undefined>;
+  listAssetProcessingEvents(jobId: string): MaybePromise<AssetProcessingEvent[]>;
   listProjects(): MaybePromise<ProjectSummary[]>;
   listAssets(): MaybePromise<{ assets: AssetMetadata[]; assetSlices: AssetSlice[] }>;
+  listReferenceVideos(projectId?: string): MaybePromise<ReferenceVideo[]>;
+  listViralTemplates(category?: string): MaybePromise<ViralTemplate[]>;
   getRenderTask(
     renderTaskId: string,
   ): MaybePromise<{ project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined>;
@@ -98,6 +121,14 @@ export interface ProjectStore {
     jobId: string,
     update: Partial<Pick<AssetProcessingJob, "message" | "status" | "steps">>,
   ): MaybePromise<AssetProcessingJob | undefined>;
+  updateAssetSlice(
+    sliceId: string,
+    update: Partial<Omit<AssetSlice, "id" | "assetId">>,
+  ): MaybePromise<AssetSlice | undefined>;
+  updateReferenceVideoAnalysis(
+    referenceId: string,
+    analysis: ReferenceVideoAnalysis,
+  ): MaybePromise<ReferenceVideo | undefined>;
   updateProjectPrepKeywords(
     projectId: string,
     keywords: string[],
