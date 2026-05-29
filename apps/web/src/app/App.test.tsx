@@ -39,6 +39,7 @@ import {
   createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
   getCreationAssetLibraryRefreshCategory,
+  getCreationUsableAssets,
   getPreparedAssetsByBucket,
   hasUsableStockProviderCredential,
   pruneAssetPrepSnapshotDeletedAssets,
@@ -516,6 +517,19 @@ describe("App", () => {
 
     expect(snapshot.assetIds).toEqual(["asset-packshot"]);
     expect(snapshot.keywords).toEqual(["portable", "stable"]);
+  });
+
+  it("keeps other projects' private assets out of the creation prep library", () => {
+    const assets = getCreationUsableAssets("project-1", [
+      makeAsset({ id: "current-project-asset", projectId: "project-1" }),
+      makeAsset({ id: "global-library-asset", projectId: undefined }),
+      makeAsset({ id: "other-project-asset", projectId: "project-2" }),
+    ]);
+
+    expect(assets.map((asset) => asset.id)).toEqual([
+      "current-project-asset",
+      "global-library-asset",
+    ]);
   });
 
   it("hydrates pending prep uploads with imported library assets for immediate previews", () => {

@@ -269,6 +269,20 @@ export const getCreationAssetLibraryRefreshCategory = (
   page: WorkspacePageId,
 ): AssetLibraryCategory | undefined => (page === "create" ? "all" : undefined);
 
+export const getCreationUsableAssets = (
+  projectId: string | undefined,
+  assets: AssetMetadata[],
+): AssetMetadata[] => {
+  const assetsById = new Map<string, AssetMetadata>();
+  assets.forEach((asset) => {
+    if (asset.projectId && asset.projectId !== projectId) {
+      return;
+    }
+    assetsById.set(asset.id, asset);
+  });
+  return [...assetsById.values()];
+};
+
 type PreparedAssetBucketId = "hero" | "scene" | "demo" | "brand";
 
 export const getPreparedAssetsByBucket = (
@@ -397,6 +411,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const activeAssets = useMemo(
     () => assetLibrary.assets.filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
     [activeAssetCategory, assetLibrary.assets],
+  );
+  const creationUsableAssets = useMemo(
+    () => getCreationUsableAssets(project?.id, [...(project?.assets ?? []), ...assetLibrary.assets]),
+    [assetLibrary.assets, project?.assets, project?.id],
   );
   const studioAssets = useMemo(() => {
     const assetsById = new Map<string, AssetMetadata>();
@@ -1344,7 +1362,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     initialSnapshot={assetPrepSnapshot}
                     key={project?.id ?? "projectless-asset-prep"}
                     language={language}
-                    libraryAssets={[...(project?.assets ?? []), ...assetLibrary.assets]}
+                    libraryAssets={creationUsableAssets}
                     onBack={() => handlePageChange("project")}
                     onGenerateStoryboard={handleContinueToScript}
                     onImportFiles={handleImportFiles}
