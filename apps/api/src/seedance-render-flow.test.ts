@@ -229,8 +229,8 @@ describe("Seedance render API flow", () => {
       status: "completed",
       progress: 100,
       previewUrl: "https://cdn.example.test/seedance-scene-task-1.mp4",
-      exportUrl: "https://cdn.example.test/seedance-scene-task-1.mp4",
     });
+    expect(polled?.body.renderTask.exportUrl).toBeUndefined();
     expect(polled?.body.renderTask.sceneClips.map((clip) => clip.videoUrl)).toEqual([
       "https://cdn.example.test/seedance-scene-task-1.mp4",
       "https://cdn.example.test/seedance-scene-task-2.mp4",
@@ -241,6 +241,107 @@ describe("Seedance render API flow", () => {
     expect(polled?.body.traceEvents.map((event) => event.step)).toContain(
       "ffmpeg-scene-compose-failed",
     );
+
+    const exported = await request<{ error: { code: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/export`,
+    );
+    expect(exported.status).toBe(502);
+    expect(exported.body.error.code).toBe("EXPORT_COMPOSE_FAILED");
+  });
+
+  it("returns the composed final video URL for multi-scene Seedance exports", async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+    const composedUrl = "/api/render-exports/composed-project/final/export.mp4";
+    const app = createApp({
+      sceneClipComposer: async () => composedUrl,
+    });
+    server = app.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const originalFetch = globalThis.fetch;
+    let createTaskCount = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+      if (requestUrl.endsWith("/contents/generations/tasks")) {
+        createTaskCount += 1;
+        return Response.json({
+          id: `seedance-scene-task-${createTaskCount}`,
+          status: "queued",
+        });
+      }
+      const taskId = requestUrl.split("/").at(-1);
+      return Response.json({
+        status: "succeeded",
+        content: {
+          video_url: `https://cdn.example.test/${taskId}.mp4`,
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Composed Seedance launch clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+    await request(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const render = await request<{ renderTask: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/render`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+
+    let polled: {
+      body: { renderTask: { status: string; exportUrl?: string } };
+    } | undefined;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      polled = await request<{ renderTask: { status: string; exportUrl?: string } }>(
+        baseUrl,
+        `/api/render-tasks/${render.body.renderTask.id}`,
+      );
+      if (polled.body.renderTask.status === "completed") {
+        break;
+      }
+      await wait(10);
+    }
+
+    expect(polled?.body.renderTask.exportUrl).toBe(composedUrl);
+    const exported = await request<{ exportUrl: string; downloadUrl: string }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/export`,
+    );
+    expect(exported.status).toBe(200);
+    expect(exported.body.exportUrl).toBe(composedUrl);
+    expect(exported.body.downloadUrl).toBe(composedUrl);
   });
 
   it("returns a queued render task before slow Seedance scene submission completes", async () => {

@@ -219,6 +219,82 @@ describe("P0 backend lifecycle", () => {
     expect(library.body.assets.map((asset) => asset.id)).not.toContain(projectAsset.body.asset.id);
   });
 
+  it("clears storyboard asset references when deleting a referenced global asset", async () => {
+    const globalAsset = await request<{
+      asset: { id: string; name: string };
+    }>(baseUrl, "/api/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Reusable hero packshot",
+        mimeType: "image/png",
+        sizeBytes: 120_000,
+        tags: ["library", "hero"],
+      }),
+    });
+    const created = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Global asset reference cleanup",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const projectId = created.body.project.id;
+
+    const generated = await request<{
+      script: { scenes: Array<{ assetId?: string }> };
+    }>(baseUrl, `/api/projects/${projectId}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [globalAsset.body.asset.id],
+        materials: [
+          {
+            assetId: globalAsset.body.asset.id,
+            name: globalAsset.body.asset.name,
+            source: "library",
+            tags: ["library", "hero"],
+            type: "image",
+          },
+        ],
+      }),
+    });
+    expect(generated.status).toBe(201);
+    expect(generated.body.script.scenes.every((scene) => scene.assetId === globalAsset.body.asset.id))
+      .toBe(true);
+
+    const deleted = await request<{
+      deletedAssets: Array<{ id: string }>;
+    }>(baseUrl, "/api/assets", {
+      method: "DELETE",
+      body: JSON.stringify({ assetIds: [globalAsset.body.asset.id] }),
+    });
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.deletedAssets.map((asset) => asset.id)).toEqual([globalAsset.body.asset.id]);
+
+    const loadedProject = await request<{
+      project: {
+        scripts: Array<{ scenes: Array<{ assetId?: string }> }>;
+        scenes: Array<{ assetId?: string }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+
+    expect(loadedProject.body.project.scenes.every((scene) => scene.assetId === undefined)).toBe(
+      true,
+    );
+    expect(
+      loadedProject.body.project.scripts.every((script) =>
+        script.scenes.every((scene) => scene.assetId === undefined),
+      ),
+    ).toBe(true);
+  });
+
   it("creates a project, accepts an image asset, generates storyboard, renders, and exposes export", async () => {
     const created = await request<{
       project: { id: string; productName: string };
@@ -427,6 +503,164 @@ describe("P0 backend lifecycle", () => {
     );
     expect(loadedProject.body.project.scenes).toHaveLength(4);
     expect(history.body.projects.find((project) => project.id === projectId)?.sceneCount).toBe(4);
+  });
+
+  it("rejects stale asset ids when generating a storyboard", async () => {
+    const created = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Stale asset guard",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+
+    const generated = await request<{
+      error: { code: string };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: ["deleted-or-missing-asset"],
+      }),
+    });
+
+    expect(generated.status).toBe(400);
+    expect(generated.body.error.code).toBe("INVALID_SCRIPT_ASSETS");
+  });
+
+  it("rejects another project's private asset when generating a storyboard", async () => {
+    const owner = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Asset owner",
+        productName: "Owner Product",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["owner only"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const other = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Other project",
+        productName: "Other Product",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["separate"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const ownerAsset = await request<{
+      asset: { id: string };
+    }>(baseUrl, `/api/projects/${owner.body.project.id}/assets`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "image",
+        name: "Owner private packshot",
+        mimeType: "image/png",
+        sizeBytes: 120_000,
+        tags: ["private"],
+      }),
+    });
+
+    const generated = await request<{
+      error: { code: string };
+    }>(baseUrl, `/api/projects/${other.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        assetIds: [ownerAsset.body.asset.id],
+      }),
+    });
+
+    expect(generated.status).toBe(400);
+    expect(generated.body.error.code).toBe("INVALID_SCRIPT_ASSETS");
+  });
+
+  it("rejects stale asset ids when editing a storyboard scene", async () => {
+    const created = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Scene stale asset guard",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const generated = await request<{
+      script: { scenes: Array<{ id: string }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+    });
+    const sceneId = generated.body.script.scenes[0]?.id;
+    expect(sceneId).toBeDefined();
+
+    const edited = await request<{
+      error: { code: string };
+    }>(baseUrl, `/api/scenes/${sceneId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        assetId: "deleted-or-missing-asset",
+      }),
+    });
+
+    expect(edited.status).toBe(400);
+    expect(edited.body.error.code).toBe("INVALID_SCENE_ASSET");
+  });
+
+  it("rejects stale asset ids when regenerating a storyboard scene", async () => {
+    const created = await request<{
+      project: { id: string };
+    }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Scene regenerate stale asset guard",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    const generated = await request<{
+      script: { scenes: Array<{ id: string }> };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+    });
+    const sceneId = generated.body.script.scenes[0]?.id;
+    expect(sceneId).toBeDefined();
+
+    const regenerated = await request<{
+      error: { code: string };
+    }>(baseUrl, `/api/scenes/${sceneId}/regenerate`, {
+      method: "POST",
+      body: JSON.stringify({
+        scene: {
+          assetId: "deleted-or-missing-asset",
+        },
+      }),
+    });
+
+    expect(regenerated.status).toBe(400);
+    expect(regenerated.body.error.code).toBe("INVALID_SCENE_ASSET");
   });
 
   it("rejects invalid assets before storing metadata", async () => {

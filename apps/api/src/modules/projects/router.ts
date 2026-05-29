@@ -8,6 +8,7 @@ import type {
   ExternalAssetResult,
   ScriptGenerationRequest,
   ScriptResult,
+  SceneRenderClip,
   StoryboardScene,
 } from "@shopclip/shared";
 import {
@@ -602,6 +603,10 @@ export interface ExternalAssetDownloadResult {
 export type ExternalAssetDownloader = (
   asset: ExternalAssetResult,
 ) => Promise<ExternalAssetDownloadResult>;
+export type SceneClipComposer = (
+  projectId: string,
+  clips: SceneRenderClip[],
+) => Promise<string | undefined>;
 
 const downloadExternalAsset: ExternalAssetDownloader = async (asset) => {
   const sourceUrl = asset.downloadUrl ?? asset.previewUrl;
@@ -671,32 +676,46 @@ export interface P0RouterOptions {
   externalAssetDownloader?: ExternalAssetDownloader;
   store?: ProjectStore;
   storageProvider?: StorageProvider;
+  sceneClipComposer?: SceneClipComposer;
   videoFrameExtractor?: VideoFrameExtractor;
 }
 
 export const createP0Router = ({
   cosAssetSearch = searchCosIntelligentAssets,
   externalAssetDownloader = downloadExternalAsset,
+  sceneClipComposer = composeSceneClipsWithFfmpeg,
   store = new MemoryProjectStore(),
   storageProvider = new CosStorageProvider(),
   videoFrameExtractor = extractVideoReferenceFrames,
 }: P0RouterOptions = {}): Router => {
   const router = Router();
 
+  const canUseAssetInProject = (asset: AssetMetadata, projectId: string): boolean =>
+    !asset.projectId || asset.projectId === projectId;
+
   const resolvePreparedAssets = async (
     project: ProjectSnapshot,
     request: ScriptGenerationRequest,
-  ): Promise<AssetMetadata[]> => {
+  ): Promise<{ assets: AssetMetadata[]; invalidAssetIds: string[] }> => {
     const requestedAssetIds = [...new Set(request.assetIds)];
     const requestedAssets = (
       await Promise.all(requestedAssetIds.map((assetId) => store.getAsset(assetId)))
     ).filter((asset): asset is AssetMetadata => Boolean(asset));
+    const assetById = new Map(requestedAssets.map((asset) => [asset.id, asset]));
+    const invalidAssetIds = requestedAssetIds.filter((assetId) => {
+      const asset = assetById.get(assetId);
+      return !asset || !canUseAssetInProject(asset, project.id);
+    });
 
-    if (requestedAssets.length > 0) {
-      return requestedAssets;
+    if (invalidAssetIds.length > 0) {
+      return { assets: [], invalidAssetIds };
     }
 
-    return project.assets;
+    if (requestedAssets.length > 0) {
+      return { assets: requestedAssets, invalidAssetIds: [] };
+    }
+
+    return { assets: project.assets, invalidAssetIds: [] };
   };
 
   const buildExternalImportTags = (
@@ -1614,7 +1633,16 @@ export const createP0Router = ({
       return;
     }
 
-    const preparedAssets = await resolvePreparedAssets(project, parsedRequest.data);
+    const preparedAssetResult = await resolvePreparedAssets(project, parsedRequest.data);
+    if (preparedAssetResult.invalidAssetIds.length > 0) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_ASSETS",
+        "One or more requested assets do not exist or cannot be used in this project.",
+      );
+      return;
+    }
+    const preparedAssets = preparedAssetResult.assets;
     const providerResult = await rewriteScriptWithConfiguredProvider(
       project,
       parsedRequest.data,
@@ -1637,7 +1665,16 @@ export const createP0Router = ({
       return;
     }
 
-    const preparedAssets = await resolvePreparedAssets(project, parsedRequest.data);
+    const preparedAssetResult = await resolvePreparedAssets(project, parsedRequest.data);
+    if (preparedAssetResult.invalidAssetIds.length > 0) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_ASSETS",
+        "One or more requested assets do not exist or cannot be used in this project.",
+      );
+      return;
+    }
+    const preparedAssets = preparedAssetResult.assets;
     const textProviderResult = await rewriteScriptWithConfiguredProvider(
       project,
       parsedRequest.data,
@@ -1743,12 +1780,17 @@ export const createP0Router = ({
           providerResult.renderTask.sceneClips.length > 1
         ) {
           try {
-            const exportUrl = await composeSceneClipsWithFfmpeg(
+            const exportUrl = await sceneClipComposer(
               renderTask.project.id,
               providerResult.renderTask.sceneClips,
             );
             if (exportUrl) {
               providerResult.renderTask.exportUrl = exportUrl;
+              providerResult.traceEvents.push({
+                status: "completed",
+                step: "ffmpeg-scene-compose-completed",
+                message: "Seedance scene clips composed into a final export video.",
+              });
             }
           } catch (error) {
             providerResult.traceEvents.push({
@@ -1854,8 +1896,42 @@ export const createP0Router = ({
     const completedRender = [...project.renderTasks]
       .reverse()
       .find((renderTask) => renderTask.status === "completed");
+    let exportUrl = completedRender?.exportUrl;
 
-    if (!completedRender?.exportUrl) {
+    if (
+      completedRender &&
+      !exportUrl &&
+      completedRender.sceneClips &&
+      completedRender.sceneClips.length > 1
+    ) {
+      try {
+        exportUrl = await sceneClipComposer(project.id, completedRender.sceneClips);
+        if (exportUrl) {
+          await store.updateRenderTask(
+            completedRender.id,
+            { exportUrl },
+            [
+              {
+                status: "completed",
+                step: "ffmpeg-scene-compose-completed",
+                message: "Seedance scene clips composed into a final export video.",
+              },
+            ],
+          );
+        }
+      } catch (error) {
+        response.status(502).json({
+          error: {
+            code: "EXPORT_COMPOSE_FAILED",
+            message:
+              error instanceof Error ? error.message : "Final video composition failed.",
+          },
+        });
+        return;
+      }
+    }
+
+    if (!exportUrl) {
       sendInvalidRequest(
         response,
         "EXPORT_NOT_READY",
@@ -1866,8 +1942,8 @@ export const createP0Router = ({
 
     response.json({
       projectId: project.id,
-      exportUrl: completedRender.exportUrl,
-      downloadUrl: completedRender.exportUrl,
+      exportUrl,
+      downloadUrl: exportUrl,
       contentType: "video/mp4",
       fallback: {
         used: true,
@@ -1881,6 +1957,24 @@ export const createP0Router = ({
     if (!parsedUpdate.success) {
       sendInvalidRequest(response, "INVALID_SCENE_UPDATE", "Scene update fields are invalid.");
       return;
+    }
+
+    if (typeof parsedUpdate.data.assetId === "string") {
+      const context = await store.getSceneContext(request.params.sceneId);
+      if (!context) {
+        sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+        return;
+      }
+
+      const asset = await store.getAsset(parsedUpdate.data.assetId);
+      if (!asset || !canUseAssetInProject(asset, context.project.id)) {
+        sendInvalidRequest(
+          response,
+          "INVALID_SCENE_ASSET",
+          "Scene asset does not exist or cannot be used in this project.",
+        );
+        return;
+      }
     }
 
     const updatedScene = await store.updateScene(request.params.sceneId, parsedUpdate.data);
@@ -1944,6 +2038,17 @@ export const createP0Router = ({
     }
 
     const sceneUpdate = parsedRegeneration.data.scene;
+    if (typeof sceneUpdate?.assetId === "string") {
+      const asset = await store.getAsset(sceneUpdate.assetId);
+      if (!asset || !canUseAssetInProject(asset, context.project.id)) {
+        sendInvalidRequest(
+          response,
+          "INVALID_SCENE_ASSET",
+          "Scene asset does not exist or cannot be used in this project.",
+        );
+        return;
+      }
+    }
     const nextAssetId =
       sceneUpdate?.assetId === null ? undefined : (sceneUpdate?.assetId ?? context.scene.assetId);
     const sceneForImage = {

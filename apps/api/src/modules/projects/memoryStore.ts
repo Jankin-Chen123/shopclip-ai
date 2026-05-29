@@ -179,24 +179,20 @@ export class MemoryProjectStore implements ProjectStore {
 
     for (const project of this.projects.values()) {
       const projectDeletedAssets = project.assets.filter((asset) => requestedAssetIds.has(asset.id));
-      if (projectDeletedAssets.length === 0) {
-        continue;
-      }
-
       deletedAssets.push(...projectDeletedAssets);
-      project.assets = project.assets.filter((asset) => !requestedAssetIds.has(asset.id));
-      project.assetSlices = project.assetSlices.filter(
+      const nextAssets = project.assets.filter((asset) => !requestedAssetIds.has(asset.id));
+      const nextAssetSlices = project.assetSlices.filter(
         (slice) => !requestedAssetIds.has(slice.assetId),
       );
-      project.assetProcessingJobs = project.assetProcessingJobs.filter(
+      const nextAssetProcessingJobs = project.assetProcessingJobs.filter(
         (job) => !requestedAssetIds.has(job.assetId),
       );
-      project.scenes = project.scenes.map((scene) =>
+      const nextScenes = project.scenes.map((scene) =>
         scene.assetId && requestedAssetIds.has(scene.assetId)
           ? { ...scene, assetId: undefined }
           : scene,
       );
-      project.scripts = project.scripts.map((script) => ({
+      const nextScripts = project.scripts.map((script) => ({
         ...script,
         scenes: script.scenes.map((scene) =>
           scene.assetId && requestedAssetIds.has(scene.assetId)
@@ -204,6 +200,25 @@ export class MemoryProjectStore implements ProjectStore {
             : scene,
         ),
       }));
+
+      const changed =
+        projectDeletedAssets.length > 0 ||
+        nextScenes.some((scene, index) => scene.assetId !== project.scenes[index]?.assetId) ||
+        nextScripts.some((script, scriptIndex) =>
+          script.scenes.some(
+            (scene, sceneIndex) =>
+              scene.assetId !== project.scripts[scriptIndex]?.scenes[sceneIndex]?.assetId,
+          ),
+        );
+      if (!changed) {
+        continue;
+      }
+
+      project.assets = nextAssets;
+      project.assetSlices = nextAssetSlices;
+      project.assetProcessingJobs = nextAssetProcessingJobs;
+      project.scenes = nextScenes;
+      project.scripts = nextScripts;
       project.updatedAt = timestamp;
     }
 

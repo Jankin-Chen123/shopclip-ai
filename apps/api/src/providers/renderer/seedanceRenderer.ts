@@ -429,6 +429,11 @@ const aggregateSceneClipProgress = (sceneClips: SceneRenderClip[]) =>
     ? Math.round(sceneClips.reduce((sum, clip) => sum + clip.progress, 0) / sceneClips.length)
     : 0;
 
+const exportUrlForSceneClips = (sceneClips: SceneRenderClip[]) =>
+  sceneClips.length === 1 && sceneClips[0]?.status === "completed"
+    ? sceneClips[0].videoUrl
+    : undefined;
+
 export const createSeedanceRenderProvider = () => {
   const config = getSeedanceConfig();
   if (!config) {
@@ -480,7 +485,7 @@ export const createSeedanceRenderProvider = () => {
           status: allCompleted ? "completed" : "running",
           progress: allCompleted ? 100 : 15,
           previewUrl: firstVideoUrl,
-          exportUrl: firstVideoUrl,
+          exportUrl: exportUrlForSceneClips(sceneClips),
           provider: "volcengine-seedance",
           providerTaskId: providerTaskId || undefined,
           sceneClips,
@@ -563,7 +568,7 @@ export const createSeedanceRenderProvider = () => {
             status: allCompleted ? "completed" : "running",
             progress: allCompleted ? 100 : Math.max(15, Math.min(95, averageProgress)),
             previewUrl: firstVideoUrl,
-            exportUrl: firstVideoUrl,
+            exportUrl: exportUrlForSceneClips(updatedClips),
             sceneClips: updatedClips,
           },
           traceEvents: [
@@ -808,7 +813,7 @@ export const createSeedanceRenderProvider = () => {
           status: allCompleted ? "completed" : "running",
           progress: allCompleted ? 100 : Math.max(5, Math.min(95, progress)),
           previewUrl: firstVideoUrl,
-          exportUrl: firstVideoUrl,
+          exportUrl: exportUrlForSceneClips(polledClips),
           providerTaskId: providerTaskIdFromClips(polledClips),
           sceneClips: polledClips,
         },

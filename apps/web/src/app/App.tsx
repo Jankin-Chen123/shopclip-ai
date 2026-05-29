@@ -324,6 +324,17 @@ export const createAssetPrepSnapshotFromProjectAssets = (
   };
 };
 
+export const pruneAssetPrepSnapshotDeletedAssets = (
+  snapshot: AssetPrepSnapshot,
+  deletedAssetIds: Set<string>,
+): AssetPrepSnapshot => ({
+  ...snapshot,
+  assetIds: snapshot.assetIds.filter((assetId) => !deletedAssetIds.has(assetId)),
+  materials: snapshot.materials.filter(
+    (material) => !material.assetId || !deletedAssetIds.has(material.assetId),
+  ),
+});
+
 interface AppProps {
   initialLanguage?: Language;
   initialPage?: WorkspacePageId;
@@ -940,6 +951,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               ),
             }
           : current,
+      );
+      setAssetPrepSnapshot((current) =>
+        pruneAssetPrepSnapshotDeletedAssets(current, deletedAssetIds),
       );
       setAssetSearchResults((current) =>
         current.filter((result) => !deletedAssetIds.has(result.asset.id)),

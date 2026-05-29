@@ -40,9 +40,10 @@ import {
   getCreationAssetLibraryRefreshCategory,
   getPreparedAssetsByBucket,
   hasUsableStockProviderCredential,
+  pruneAssetPrepSnapshotDeletedAssets,
 } from "./App";
 import { copy } from "./i18n";
-import { regenerateScene } from "../lib/api";
+import { regenerateScene, resolveApiDownloadUrl } from "../lib/api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -386,6 +387,15 @@ describe("App", () => {
       assetId: "asset-1",
     });
     expect(body.apiConfig).toMatchObject(createDefaultApiConfig());
+  });
+
+  it("resolves relative API export URLs against the configured API origin", () => {
+    expect(resolveApiDownloadUrl("/api/render-exports/project/final/export.mp4")).toBe(
+      "http://localhost:4000/api/render-exports/project/final/export.mp4",
+    );
+    expect(resolveApiDownloadUrl("https://cdn.example.test/export.mp4")).toBe(
+      "https://cdn.example.test/export.mp4",
+    );
   });
 
   it("places the step 03 scene list before the centered preview workspace", () => {
@@ -767,6 +777,48 @@ describe("App", () => {
         name: "GlowGrip demo.mp4",
         source: "library",
       }),
+    ]);
+  });
+
+  it("removes deleted assets from the current asset prep snapshot", () => {
+    const snapshot = pruneAssetPrepSnapshotDeletedAssets(
+      {
+        assetIds: ["asset-packshot", "asset-demo", "asset-detail"],
+        keywords: ["便携"],
+        materials: [
+          {
+            assetId: "asset-packshot",
+            bucketId: "hero",
+            name: "GlowGrip packshot.png",
+            source: "library",
+            tags: ["hero"],
+            type: "image",
+          },
+          {
+            assetId: "asset-demo",
+            bucketId: "demo",
+            name: "GlowGrip demo.mp4",
+            source: "library",
+            tags: ["demo"],
+            type: "video",
+          },
+          {
+            bucketId: "brand",
+            name: "品牌语气",
+            source: "library",
+            tags: ["brand"],
+            type: "text",
+          },
+        ],
+      },
+      new Set(["asset-demo"]),
+    );
+
+    expect(snapshot.assetIds).toEqual(["asset-packshot", "asset-detail"]);
+    expect(snapshot.keywords).toEqual(["便携"]);
+    expect(snapshot.materials).toEqual([
+      expect.objectContaining({ assetId: "asset-packshot" }),
+      expect.objectContaining({ name: "品牌语气" }),
     ]);
   });
 

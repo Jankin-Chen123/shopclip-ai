@@ -438,8 +438,8 @@ describe("Seedance renderer provider", () => {
       status: "completed",
       progress: 100,
       previewUrl: "https://cdn.example.test/seedance-task-1.mp4",
-      exportUrl: "https://cdn.example.test/seedance-task-1.mp4",
     });
+    expect(result.renderTask.exportUrl).toBeUndefined();
     expect(result.renderTask.sceneClips?.map((clip) => clip.videoUrl)).toEqual([
       "https://cdn.example.test/seedance-task-1.mp4",
       "https://cdn.example.test/seedance-task-2.mp4",

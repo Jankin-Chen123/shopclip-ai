@@ -94,6 +94,13 @@ const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 export const getAssetContentUrl = (assetId: string): string =>
   `${apiBaseUrl}/assets/${encodeURIComponent(assetId)}/content`;
 
+export const resolveApiDownloadUrl = (url: string): string => {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+    return url;
+  }
+  return new URL(url, apiBaseUrl).toString();
+};
+
 const getErrorMessage = (body: unknown): string => {
   if (
     typeof body === "object" &&
@@ -375,8 +382,14 @@ export const retryRenderTask = async (
     body: JSON.stringify(request),
   });
 
-export const exportProject = async (projectId: string): Promise<ExportResult> =>
-  requestJson(`/projects/${projectId}/export`);
+export const exportProject = async (projectId: string): Promise<ExportResult> => {
+  const response = await requestJson<ExportResult>(`/projects/${projectId}/export`);
+  return {
+    ...response,
+    downloadUrl: resolveApiDownloadUrl(response.downloadUrl),
+    exportUrl: resolveApiDownloadUrl(response.exportUrl),
+  };
+};
 
 export const loadDashboard = async (projectId: string): Promise<DashboardResponse> =>
   requestJson(`/projects/${projectId}/dashboard`);
