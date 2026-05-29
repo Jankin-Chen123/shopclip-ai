@@ -42,6 +42,7 @@ import {
   getCreationUsableAssets,
   getPreparedAssetsByBucket,
   hasUsableStockProviderCredential,
+  isRenderTaskPollingActive,
   pruneAssetPrepSnapshotDeletedAssets,
 } from "./App";
 import { copy } from "./i18n";
@@ -279,6 +280,85 @@ describe("App", () => {
     expect(markup).toContain("Scene clip previews");
     expect(markup).toContain("<video");
     expect(markup).toContain("https://cdn.example.test/scene-1.mp4");
+  });
+
+  it("keeps step 04 user-facing output free of raw provider URLs and trace noise", () => {
+    const markup = renderToStaticMarkup(
+      <RenderPanel
+        copy={copy.en.render}
+        disabled={false}
+        forceRenderFailure={false}
+        isExporting={false}
+        isRendering={false}
+        mediaSettings={{
+          bgmTrack: "creator-pop",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        onExport={() => undefined}
+        onForceFailureChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onRefreshRender={() => undefined}
+        onRetryRender={() => undefined}
+        onStartRender={() => undefined}
+        onVideoSettingsChange={() => undefined}
+        renderTask={{
+          id: "render-1",
+          projectId: "project-1",
+          status: "completed",
+          progress: 100,
+          provider: "volcengine-seedance",
+          previewUrl: "https://cdn.example.test/scene-1.mp4",
+          exportUrl: "https://cos.example.test/export.mp4",
+          sceneClips: [
+            {
+              sceneId: "scene-1",
+              order: 1,
+              subtitle: "Hook",
+              status: "completed",
+              progress: 100,
+              videoUrl: "https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com/long-provider-url.mp4?Signature=secret",
+            },
+          ],
+          createdAt: "2026-05-28T00:00:00.000Z",
+          updatedAt: "2026-05-28T00:00:00.000Z",
+        }}
+        traceEvents={[
+          {
+            id: "trace-1",
+            renderTaskId: "render-1",
+            status: "completed",
+            step: "seedance-scene-task-submitted",
+            message: "Seedance scene 1 task submitted: cgt-1.",
+            createdAt: "2026-05-28T00:00:00.000Z",
+          },
+        ]}
+        videoSettings={defaultVideoSettings}
+      />,
+    );
+
+    expect(markup).toContain("Ready to download");
+    expect(markup).toContain("Technical details");
+    expect(markup).not.toContain(
+      "<span>https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com",
+    );
+    expect(markup).not.toContain("seedance-scene-task-submitted");
+  });
+
+  it("auto-polls active render tasks but stops after completion or failure", () => {
+    expect(isRenderTaskPollingActive({ id: "render-1", status: "queued" } as RenderTask)).toBe(
+      true,
+    );
+    expect(isRenderTaskPollingActive({ id: "render-1", status: "running" } as RenderTask)).toBe(
+      true,
+    );
+    expect(isRenderTaskPollingActive({ id: "render-1", status: "completed" } as RenderTask)).toBe(
+      false,
+    );
+    expect(isRenderTaskPollingActive({ id: "render-1", status: "failed" } as RenderTask)).toBe(
+      false,
+    );
   });
 
   it("includes model API settings in one-click script generation requests", () => {

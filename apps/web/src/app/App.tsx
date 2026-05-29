@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -283,6 +283,13 @@ export const getCreationUsableAssets = (
   return [...assetsById.values()];
 };
 
+export const isRenderTaskPollingActive = (
+  renderTask: Pick<RenderTask, "status"> | undefined,
+): boolean =>
+  renderTask?.status === "queued" ||
+  renderTask?.status === "running" ||
+  renderTask?.status === "retrying";
+
 type PreparedAssetBucketId = "hero" | "scene" | "demo" | "brand";
 
 export const getPreparedAssetsByBucket = (
@@ -405,6 +412,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [scriptDraft, setScriptDraft] = useState("");
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
+  const isRenderPollInFlight = useRef(false);
   const text = copy[language];
 
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
@@ -656,6 +664,61 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       refreshProjectHistory();
     }
   }, [activePage]);
+
+  useEffect(() => {
+    if (!renderTask || !isRenderTaskPollingActive(renderTask)) {
+      return;
+    }
+
+    let cancelled = false;
+    const syncRenderTask = async () => {
+      if (isRenderPollInFlight.current) {
+        return;
+      }
+      isRenderPollInFlight.current = true;
+      try {
+        const render = await loadRenderTask(renderTask.id);
+        if (cancelled) {
+          return;
+        }
+        setRenderTask(render.renderTask);
+        setTraceEvents(render.traceEvents);
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                renderTasks: current.renderTasks.map((task) =>
+                  task.id === render.renderTask.id ? render.renderTask : task,
+                ),
+                status: render.renderTask.status === "completed" ? "completed" : current.status,
+              }
+            : current,
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setErrors((current) => ({
+            ...current,
+            render: error instanceof Error ? error.message : "Render progress sync failed.",
+          }));
+        }
+      } finally {
+        isRenderPollInFlight.current = false;
+      }
+    };
+
+    const firstSync = window.setTimeout(() => {
+      void syncRenderTask();
+    }, 1200);
+    const interval = window.setInterval(() => {
+      void syncRenderTask();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(firstSync);
+      window.clearInterval(interval);
+    };
+  }, [renderTask?.id, renderTask?.status]);
 
   const handleCreateProject = () =>
     runAction("project", "project", async () => {
@@ -1200,6 +1263,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         simulateFailure: forceRenderFailure,
       });
       setDashboard(undefined);
+      setExportResult(undefined);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
       setProject((current) =>
@@ -1226,6 +1290,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         simulateFailure: false,
       });
       setDashboard(undefined);
+      setExportResult(undefined);
       setForceRenderFailure(false);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);

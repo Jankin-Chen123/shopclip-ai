@@ -4010,11 +4010,57 @@ textarea {
   justify-content: flex-start;
 }
 
-.media-controls {
+.render-hero {
+  align-items: flex-start;
+}
+
+.render-hero p:not(.eyebrow) {
+  max-width: 640px;
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.render-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.render-summary-grid article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 116px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(13, 18, 27, 0.72);
+}
+
+.render-summary-grid span,
+.render-summary-grid small,
+.render-details small,
+.render-technical-body p {
+  color: var(--muted);
+}
+
+.render-summary-grid span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.render-summary-grid strong {
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
+.media-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -4089,7 +4135,8 @@ textarea {
 .preview-box {
   display: grid;
   gap: 4px;
-  min-width: min(100%, 360px);
+  flex: 1 1 420px;
+  min-width: min(100%, 420px);
   min-height: 70px;
   padding: 12px;
   border: 1px solid var(--border);
@@ -4101,6 +4148,10 @@ textarea {
   color: var(--muted);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 0.82rem;
+}
+
+.scene-clip-card span {
+  font-family: inherit;
 }
 
 .scene-clip-grid {
@@ -4142,6 +4193,48 @@ textarea {
   gap: 6px;
   color: #bfdbfe;
   font-size: 0.82rem;
+}
+
+.render-details {
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(8, 10, 16, 0.56);
+}
+
+.render-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 56px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.render-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.render-details summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.render-details[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.render-details summary svg {
+  flex: 0 0 auto;
+  transition: transform 180ms ease;
+}
+
+.render-technical-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
 }
 
 .dashboard-empty {
@@ -4475,6 +4568,7 @@ textarea {
   .asset-search-controls,
   .asset-prep-footer,
   .media-controls,
+  .render-summary-grid,
   .dashboard-summary,
   .funnel-list li,
   .search-result-row,
