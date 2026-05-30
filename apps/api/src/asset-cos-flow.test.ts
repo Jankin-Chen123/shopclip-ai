@@ -86,6 +86,7 @@ describe("COS-backed asset import contract", () => {
   let baseUrl: string;
 
   beforeEach(async () => {
+    process.env.VISION_PROVIDER_MODE = "mock";
     const app = createApp();
     server = app.listen(0);
     await new Promise<void>((resolve) => {
@@ -96,6 +97,7 @@ describe("COS-backed asset import contract", () => {
   });
 
   afterEach(async () => {
+    delete process.env.VISION_PROVIDER_MODE;
     vi.restoreAllMocks();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
@@ -471,7 +473,9 @@ describe("COS-backed asset import contract", () => {
     expect(proxiedUploadBody.asset.metadata).toMatchObject({
       proxiedUpload: true,
       uploadedBytes: 4,
-      structureProvider: "mock-asset-processor",
+      structuredAssetVersion: "asset-multigranularity-v1",
+      structureStatus: "pending_structure",
+      localFilePath: expect.any(String),
     });
     expect(proxiedUploadBody.processingJob).toMatchObject({
       status: "ready",
@@ -523,7 +527,8 @@ describe("COS-backed asset import contract", () => {
     expect(confirmed.body.asset.metadata).toMatchObject({
       checksum: "sha256-demo",
       uploadedFileName: "Hero packshot on white.png",
-      structureProvider: "mock-asset-processor",
+      structuredAssetVersion: "asset-multigranularity-v1",
+      structureStatus: "pending_structure",
     });
     expect(confirmed.body.processingJob).toMatchObject({
       id: created.body.processingJob.id,
@@ -710,11 +715,22 @@ describe("COS-backed asset import contract", () => {
     );
 
     expect(completedJob.body.processingJob.steps).toEqual(
-      expect.arrayContaining(["external-download", "cos-upload", "metadata-ready"]),
+      expect.arrayContaining([
+        "external-download",
+        "cos-upload",
+        "multigranularity-structure",
+        "metadata-ready",
+      ]),
     );
 
     const project = await request<{
       project: {
+        assetSlices: Array<{
+          assetId: string;
+          metadata?: Record<string, unknown>;
+          searchText?: string;
+          thumbnailKey?: string;
+        }>;
         assets: Array<{
           id: string;
           metadata: Record<string, unknown>;
@@ -754,8 +770,30 @@ describe("COS-backed asset import contract", () => {
       externalSource: "pexels",
       downloadedBytes: Buffer.byteLength("downloaded:image:asset-image"),
       downloadedFromUrl: "https://images.pexels.com/image/download",
+      localFilePath: expect.any(String),
+      structuredAsset: expect.objectContaining({
+        assetId: queued.body.asset.id,
+        type: "image",
+      }),
+      structuredAssetObjectKey: expect.stringMatching(
+        new RegExp(`^projects/${projectId}/derived/${queued.body.asset.id}/metadata/structured-asset\\.json$`),
+      ),
+      structuredAssetVersion: "asset-multigranularity-v1",
     });
-    expect(uploadedObjects).toHaveLength(1);
+    expect(project.body.project.assetSlices).toContainEqual(
+      expect.objectContaining({
+        assetId: queued.body.asset.id,
+        searchText: expect.stringContaining("water"),
+      }),
+    );
+    expect(uploadedObjects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          contentType: "application/json",
+          objectKey: importedAsset?.metadata.structuredAssetObjectKey,
+        }),
+      ]),
+    );
     expect(uploadedObjects[0]).toMatchObject({
       body: Buffer.from("downloaded:image:asset-image"),
       contentType: "image/webp",

@@ -152,6 +152,9 @@ const isSeedanceRenderEnabled = () => {
   return mode === "seedance" || mode === "ark" || mode === "doubao" || mode === "real";
 };
 
+const isExplicitMockRenderMode = () =>
+  firstEnv("VIDEO_RENDER_PROVIDER_MODE")?.toLowerCase() === "mock";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -875,62 +878,30 @@ export const createQueuedRenderWithConfiguredVideoProvider = (
   project: ProjectSnapshot,
   options: RenderFallbackOptions,
 ): RenderProviderResult => {
-  if (!isSeedanceRenderEnabled()) {
+  if (isExplicitMockRenderMode()) {
     return renderFallbackPreview(project, options);
   }
-
-  try {
-    return createQueuedSeedanceRenderTask(project, options);
-  } catch (error) {
-    const fallbackResult = renderFallbackPreview(project, options);
-    return {
-      renderTask: {
-        ...fallbackResult.renderTask,
-        provider: "mock-renderer",
-      },
-      traceEvents: [
-        {
-          status: "failed",
-          step: "seedance-task-queue-failed",
-          message:
-            error instanceof Error
-              ? `${error.message} Deterministic mock render fallback used.`
-              : "Seedance task queueing failed. Deterministic mock render fallback used.",
-        },
-        ...fallbackResult.traceEvents,
-      ],
-    };
+  if (!isSeedanceRenderEnabled()) {
+    throw new Error(
+      "Real video rendering is not configured. Set VIDEO_RENDER_PROVIDER_MODE=seedance/ark/real plus AI_VIDEO_API_KEY or ARK_API_KEY, or explicitly set VIDEO_RENDER_PROVIDER_MODE=mock for demo fixtures.",
+    );
   }
+
+  return createQueuedSeedanceRenderTask(project, options);
 };
 
 export const renderWithConfiguredVideoProvider = async (
   project: ProjectSnapshot,
   options: RenderFallbackOptions,
 ): Promise<RenderProviderResult> => {
-  if (!isSeedanceRenderEnabled()) {
+  if (isExplicitMockRenderMode()) {
     return renderFallbackPreview(project, options);
   }
-
-  try {
-    return await createSeedanceRenderProvider().createTask(project, options.videoSettings);
-  } catch (error) {
-    const fallbackResult = renderFallbackPreview(project, options);
-    return {
-      renderTask: {
-        ...fallbackResult.renderTask,
-        provider: "mock-renderer",
-      },
-      traceEvents: [
-        {
-          status: "failed",
-          step: "seedance-task-submit-failed",
-          message:
-            error instanceof Error
-              ? `${error.message} Deterministic mock render fallback used.`
-              : "Seedance task submission failed. Deterministic mock render fallback used.",
-        },
-        ...fallbackResult.traceEvents,
-      ],
-    };
+  if (!isSeedanceRenderEnabled()) {
+    throw new Error(
+      "Real video rendering is not configured. Set VIDEO_RENDER_PROVIDER_MODE=seedance/ark/real plus AI_VIDEO_API_KEY or ARK_API_KEY, or explicitly set VIDEO_RENDER_PROVIDER_MODE=mock for demo fixtures.",
+    );
   }
+
+  return createSeedanceRenderProvider().createTask(project, options.videoSettings);
 };

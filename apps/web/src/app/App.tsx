@@ -176,6 +176,51 @@ export const createAssetInputFromFile = (file: File, language: Language): Create
   };
 };
 
+const shouldAutoProcessImportedAsset = (asset: AssetMetadata): boolean =>
+  asset.type === "image" ||
+  asset.type === "video" ||
+  Boolean(asset.mimeType?.startsWith("image/") || asset.mimeType?.startsWith("video/"));
+
+interface ImportAndStructureFilesInput {
+  createAssetUploadIntentFn?: typeof createAssetUploadIntent;
+  files: File[];
+  language: Language;
+  processAssetStructureFn?: typeof processAssetStructure;
+  projectId?: string;
+  uploadAssetFileToStorageFn?: typeof uploadAssetFileToStorage;
+}
+
+export const importAndStructureFiles = async ({
+  createAssetUploadIntentFn = createAssetUploadIntent,
+  files,
+  language,
+  processAssetStructureFn = processAssetStructure,
+  projectId,
+  uploadAssetFileToStorageFn = uploadAssetFileToStorage,
+}: ImportAndStructureFilesInput): Promise<{ assets: AssetMetadata[]; assetSlices: AssetSlice[] }> => {
+  const importedAssets: AssetMetadata[] = [];
+  const assetSlices: AssetSlice[] = [];
+
+  for (const file of files) {
+    const uploadIntent = await createAssetUploadIntentFn(
+      projectId,
+      createAssetInputFromFile(file, language),
+    );
+    const uploaded = await uploadAssetFileToStorageFn(uploadIntent.asset.id, file);
+    let importedAsset = uploaded.asset;
+
+    if (shouldAutoProcessImportedAsset(importedAsset)) {
+      const processed = await processAssetStructureFn(importedAsset.id);
+      importedAsset = processed.asset;
+      assetSlices.push(...processed.slices);
+    }
+
+    importedAssets.push(importedAsset);
+  }
+
+  return { assets: importedAssets, assetSlices };
+};
+
 export const hasUsableStockProviderCredential = hasSearchableStockProviderCredential;
 
 const defaultMediaSettings: MediaSettings = {
@@ -941,20 +986,22 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
 
     void runAction("asset", "asset", async () => {
-      const importedAssets = await Promise.all(
-        files.map(async (file) => {
-          const uploadIntent = await createAssetUploadIntent(
-            project?.id,
-            createAssetInputFromFile(file, language),
-          );
-          const uploaded = await uploadAssetFileToStorage(uploadIntent.asset.id, file);
-          return uploaded.asset;
-        }),
-      );
+      const imported = await importAndStructureFiles({
+        files,
+        language,
+        projectId: project?.id,
+      });
+      const importedAssets = imported.assets;
 
       setAssetLibrary((current) => ({
         ...current,
         assets: [...current.assets, ...importedAssets],
+        assetSlices: [
+          ...current.assetSlices.filter(
+            (slice) => !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
+          ),
+          ...imported.assetSlices,
+        ],
       }));
       setProject((current) =>
         current && importedAssets.some((asset) => asset.projectId === current.id)
@@ -963,6 +1010,19 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               assets: [
                 ...current.assets,
                 ...importedAssets.filter((asset) => asset.projectId === current.id),
+              ],
+              assetSlices: [
+                ...current.assetSlices.filter(
+                  (slice) =>
+                    !imported.assetSlices.some(
+                      (candidate) => candidate.assetId === slice.assetId,
+                    ),
+                ),
+                ...imported.assetSlices.filter((slice) =>
+                  importedAssets.some(
+                    (asset) => asset.projectId === current.id && asset.id === slice.assetId,
+                  ),
+                ),
               ],
             }
           : current,

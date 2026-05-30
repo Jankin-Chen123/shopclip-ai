@@ -106,8 +106,13 @@ process.on("SIGTERM", handleSignal);
 
 (async () => {
   spawnCommand("corepack pnpm --filter @shopclip/api dev", {
+    AI_PROVIDER_MODE: "mock",
+    COS_PROVIDER_MODE: "mock",
     PORT: apiPort,
     PROJECT_STORE_MODE: "memory",
+    REFERENCE_PROVIDER_MODE: "mock",
+    VIDEO_RENDER_PROVIDER_MODE: "mock",
+    VISION_PROVIDER_MODE: "mock",
   });
   spawnCommand(`corepack pnpm --filter @shopclip/web dev -- --port ${webPort}`, {
     VITE_API_URL: `http://localhost:${apiPort}/api`,

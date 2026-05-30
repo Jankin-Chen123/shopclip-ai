@@ -65,6 +65,8 @@ describe("P1 media controls and render retry", () => {
   let baseUrl: string;
 
   beforeEach(async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "mock";
     const app = createApp();
     server = app.listen(0);
     await new Promise<void>((resolve) => {
@@ -75,6 +77,8 @@ describe("P1 media controls and render retry", () => {
   });
 
   afterEach(async () => {
+    delete process.env.AI_PROVIDER_MODE;
+    delete process.env.VIDEO_RENDER_PROVIDER_MODE;
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {

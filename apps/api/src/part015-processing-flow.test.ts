@@ -1,16 +1,123 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
 import { MemoryProjectStore } from "./modules/projects/memoryStore.js";
+import type { StorageProvider } from "./providers/storage/storageProvider.js";
+
+const require = createRequire(import.meta.url);
+const ffmpegPath = (require("@ffmpeg-installer/ffmpeg") as { path: string }).path;
+
+const runFfmpeg = (args: string[]) =>
+  new Promise<void>((resolve, reject) => {
+    const child = spawn(ffmpegPath, args, { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`ffmpeg fixture generation failed with ${code}: ${stderr.slice(0, 800)}`));
+    });
+  });
+
+const createFixtureVideo = async (directory: string, name: string) => {
+  const videoPath = join(directory, name);
+  await runFfmpeg([
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=320x180:rate=10",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=1000:duration=9",
+    "-t",
+    "9",
+    "-c:v",
+    "mpeg4",
+    "-q:v",
+    "5",
+    "-c:a",
+    "aac",
+    videoPath,
+  ]);
+  return videoPath;
+};
 
 describe("Part 015 structured asset and reference flow", () => {
   let server: Server;
   let baseUrl: string;
+  let workdir: string;
+  let productVideoPath: string;
+  let ownedReferenceVideoPath: string;
+  let publicReferenceVideoPath: string;
+  let uploadedObjects: Array<{ contentType: string; objectKey: string }>;
 
   beforeEach(async () => {
-    const app = createApp({ store: new MemoryProjectStore() });
+    process.env.VISION_PROVIDER_MODE = "mock";
+    process.env.REFERENCE_PROVIDER_MODE = "mock";
+    process.env.REFERENCE_DOWNLOAD_PROVIDER_MODE = "mock";
+    process.env.AI_PROVIDER_MODE = "mock";
+    workdir = await mkdtemp(join(tmpdir(), "shopclip-part015-real-"));
+    productVideoPath = await createFixtureVideo(workdir, "portable-blender-close-up-demo.mp4");
+    ownedReferenceVideoPath = await createFixtureVideo(workdir, "self-shot-reference-demo.mp4");
+    publicReferenceVideoPath = await createFixtureVideo(workdir, "public-reference-demo.mp4");
+    const publicReferenceStats = await stat(publicReferenceVideoPath);
+    uploadedObjects = [];
+    const storageProvider: StorageProvider = {
+      createUploadIntent: ({ asset, assetId, projectId }) => ({
+        provider: "mock-cos",
+        bucket: "test-bucket",
+        region: "ap-guangzhou",
+        objectKey: `projects/${projectId ?? "global"}/raw/${assetId}/source.${
+          asset.mimeType.split("/").at(1) ?? "bin"
+        }`,
+        uploadUrl: `https://cos.test/raw/${assetId}`,
+        publicUrl: `https://cos.test/raw/${assetId}`,
+        method: "PUT",
+        headers: { "content-type": asset.mimeType },
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+      createReadUrl: ({ objectKey }) => ({ url: `https://cos.test/${objectKey}` }),
+      deleteObject: async () => undefined,
+      uploadObject: async ({ contentType, objectKey }) => {
+        uploadedObjects.push({ contentType, objectKey });
+        return {
+          objectKey,
+          provider: "mock-cos",
+          publicUrl: `https://cos.test/${objectKey}`,
+        };
+      },
+    };
+    const app = createApp({
+      store: new MemoryProjectStore(),
+      storageProvider,
+      referenceDownloader: {
+        downloadReference: async ({ reference }) => ({
+          durationSeconds: 9,
+          height: 180,
+          localFilePath: publicReferenceVideoPath,
+          mimeType: "video/mp4",
+          name: "public-reference-demo.mp4",
+          publicAnalysisUrl: publicReferenceVideoPath,
+          sizeBytes: publicReferenceStats.size,
+          sourceUrl: reference.sourceUrl,
+          width: 320,
+        }),
+      },
+    });
     server = app.listen(0);
     await new Promise<void>((resolve) => {
       server.once("listening", resolve);
@@ -20,6 +127,10 @@ describe("Part 015 structured asset and reference flow", () => {
   });
 
   afterEach(async () => {
+    delete process.env.VISION_PROVIDER_MODE;
+    delete process.env.REFERENCE_PROVIDER_MODE;
+    delete process.env.REFERENCE_DOWNLOAD_PROVIDER_MODE;
+    delete process.env.AI_PROVIDER_MODE;
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -29,6 +140,7 @@ describe("Part 015 structured asset and reference flow", () => {
         resolve();
       });
     });
+    await rm(workdir, { recursive: true, force: true });
   });
 
   it("processes video assets into searchable slices and stores reference breakdowns", async () => {
@@ -56,10 +168,10 @@ describe("Part 015 structured asset and reference flow", () => {
         name: "portable-blender-close-up-demo.mp4",
         mimeType: "video/mp4",
         sizeBytes: 4_000_000,
-        url: "/uploads/portable-blender-close-up-demo.mp4",
+        url: productVideoPath,
         tags: ["portable blender", "close-up", "demo"],
         metadata: {
-          durationSeconds: 9,
+          localFilePath: productVideoPath,
         },
       }),
     });
@@ -77,7 +189,11 @@ describe("Part 015 structured asset and reference flow", () => {
       events: Array<{ step: string; status: string }>;
       job: { status: string };
       slices: Array<{
-        metadata?: { suitableSceneRoles?: string[]; productVisibility?: string };
+        metadata?: {
+          cosFrameObjectKeys?: string[];
+          suitableSceneRoles?: string[];
+          productVisibility?: string;
+        };
         searchText?: string;
       }>;
     };
@@ -85,13 +201,25 @@ describe("Part 015 structured asset and reference flow", () => {
     expect(processed.events.map((event) => event.step)).toEqual([
       "probe",
       "sample_frames",
-      "extract_audio",
+      "publish_artifacts",
+      "prepare_ocr",
       "understand",
       "persist_metadata",
       "index",
     ]);
     expect(processed.slices.length).toBeGreaterThanOrEqual(3);
     expect(processed.slices[0]?.metadata?.suitableSceneRoles).toContain("demo");
+    expect(processed.slices[0]?.metadata?.cosFrameObjectKeys?.[0]).toMatch(
+      new RegExp(`^projects/${project.id}/derived/${asset.id}/frames/.+\\.jpg$`),
+    );
+    expect(processed.asset.metadata?.structuredAssetObjectKey).toBe(
+      `projects/${project.id}/derived/${asset.id}/metadata/structured-asset.json`,
+    );
+    expect(
+      uploadedObjects.some((object) =>
+        object.objectKey.endsWith("/metadata/structured-asset.json"),
+      ),
+    ).toBe(true);
 
     const searchResponse = await fetch(
       `${baseUrl}/api/assets/search?projectId=${project.id}&q=close-up%20demo&level=slice&sceneRole=demo`,
@@ -113,10 +241,10 @@ describe("Part 015 structured asset and reference flow", () => {
         name: "self-shot-reference-demo.mp4",
         mimeType: "video/mp4",
         sizeBytes: 3_200_000,
-        url: "/uploads/self-shot-reference-demo.mp4",
+        url: ownedReferenceVideoPath,
         tags: ["self-shot", "reference", "demo"],
         metadata: {
-          durationSeconds: 6,
+          localFilePath: ownedReferenceVideoPath,
         },
       }),
     });
@@ -142,7 +270,7 @@ describe("Part 015 structured asset and reference flow", () => {
       reference: { sourceAssetId?: string; sourceUrl: string; status: string };
     };
     expect(ownedReference.reference.sourceAssetId).toBe(ownedReferenceAsset.id);
-    expect(ownedReference.reference.sourceUrl).toBe("/uploads/self-shot-reference-demo.mp4");
+    expect(ownedReference.reference.sourceUrl).toBe(ownedReferenceVideoPath);
     expect(ownedReference.reference.status).toBe("ready");
 
     const ownedReferenceSearchResponse = await fetch(
@@ -174,13 +302,32 @@ describe("Part 015 structured asset and reference flow", () => {
       reference: {
         analysis?: { commerceNarrativeSegments?: Array<{ role: string }> };
         id: string;
+        sourceAssetId?: string;
         status: string;
       };
     };
     expect(reference.reference.status).toBe("ready");
+    expect(reference.reference.sourceAssetId).toBeTruthy();
     expect(reference.reference.analysis?.commerceNarrativeSegments?.map((segment) => segment.role)).toContain(
       "hook",
     );
+
+    const publicReferenceSearchResponse = await fetch(
+      `${baseUrl}/api/assets/search?projectId=${project.id}&q=viral%20blender&level=slice`,
+    );
+    expect(publicReferenceSearchResponse.status).toBe(200);
+    const publicReferenceSearch = (await publicReferenceSearchResponse.json()) as {
+      results: Array<{
+        asset: { id: string; source?: string };
+        slices: Array<{ metadata?: { suitableSceneRoles?: string[] }; searchText?: string }>;
+      }>;
+    };
+    const publicReferenceResult = publicReferenceSearch.results.find(
+      (result) => result.asset.id === reference.reference.sourceAssetId,
+    );
+    expect(publicReferenceResult?.asset.source).toBe("public_reference");
+    expect(publicReferenceResult?.slices.length).toBeGreaterThanOrEqual(3);
+    expect(publicReferenceResult?.slices[0]?.metadata?.suitableSceneRoles).toContain("demo");
 
     const templateResponse = await fetch(`${baseUrl}/api/references/templates`, {
       method: "POST",
@@ -232,6 +379,9 @@ describe("Part 015 structured asset and reference flow", () => {
       }>;
     };
     expect(recall.candidates[0]?.asset.id).toBe(asset.id);
+    expect(
+      recall.candidates.some((candidate) => candidate.asset.id === reference.reference.sourceAssetId),
+    ).toBe(false);
     expect(recall.candidates[0]?.slice?.metadata?.productVisibility).toBe("clear");
     expect(recall.candidates[0]?.reasons.join(" ")).toContain("product-visibility:clear");
   });

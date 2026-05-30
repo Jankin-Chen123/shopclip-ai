@@ -171,25 +171,17 @@ describe("ark inspiration provider", () => {
     );
   });
 
-  it("keeps image results in fallback when the image provider does not return media", async () => {
+  it("fails fast when the image provider does not return media in real mode", async () => {
     configureArkEnv();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => Response.json({ data: [{}] })),
     );
 
-    const generated = await generateInspiration({
+    await expect(generateInspiration({
       prompt: "Create an image for a fold-flat phone stand.",
       assetType: "image",
-    });
-
-    expect(generated.fallback.used).toBe(true);
-    expect(generated.materials[0]).toMatchObject({
-      type: "image",
-      status: "failed",
-      mimeType: "image/png",
-    });
-    expect(generated.materials[0].url).toBeUndefined();
+    })).rejects.toThrow(/did not return an image URL/);
   });
 
   it("uses the user supplied API settings instead of environment configuration", async () => {

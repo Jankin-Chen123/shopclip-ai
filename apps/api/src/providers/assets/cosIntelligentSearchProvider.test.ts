@@ -107,6 +107,99 @@ describe("COS intelligent search provider", () => {
     });
   });
 
+  it("maps COS derived frame matches back to the matching slice", () => {
+    const assets = [
+      makeAsset({
+        id: "asset-video",
+        name: "Matched video",
+        objectKey: "projects/demo/raw/asset-video/source.mp4",
+        type: "video",
+      }),
+    ];
+    const slices: AssetSlice[] = [
+      {
+        id: "slice-opening",
+        assetId: "asset-video",
+        label: "Opening",
+        startSecond: 0,
+        endSecond: 3,
+        tags: ["hook"],
+        metadata: {
+          sliceId: "slice-opening",
+          assetId: "asset-video",
+          startSecond: 0,
+          endSecond: 3,
+          frameKeys: ["projects/demo/derived/asset-video/frames/frame-0.jpg"],
+          summary: "Opening product reveal",
+          transcript: "",
+          ocrText: "",
+          shotType: "close_up",
+          cameraMovement: "static",
+          composition: "Product centered.",
+          transition: "cut",
+          mood: "bright",
+          action: "opening product reveal",
+          keyElements: ["product"],
+          productVisibility: "clear",
+          visibleProductParts: ["body"],
+          suitableSceneRoles: ["hook"],
+          qualitySignals: { productVisibility: "clear", usableForAd: true },
+          searchText: "opening product reveal",
+          embeddingText: "opening product reveal",
+          cosFrameObjectKeys: ["projects/demo/derived/asset-video/frames/frame-0.jpg"],
+        },
+      },
+      {
+        id: "slice-demo",
+        assetId: "asset-video",
+        label: "Demo",
+        startSecond: 3,
+        endSecond: 6,
+        tags: ["demo"],
+        metadata: {
+          sliceId: "slice-demo",
+          assetId: "asset-video",
+          startSecond: 3,
+          endSecond: 6,
+          frameKeys: ["projects/demo/derived/asset-video/frames/frame-3.jpg"],
+          summary: "Usage demo",
+          transcript: "",
+          ocrText: "",
+          shotType: "close_up",
+          cameraMovement: "static",
+          composition: "Hand demo.",
+          transition: "cut",
+          mood: "practical",
+          action: "usage demo",
+          keyElements: ["product"],
+          productVisibility: "clear",
+          visibleProductParts: ["body"],
+          suitableSceneRoles: ["demo"],
+          qualitySignals: { productVisibility: "clear", usableForAd: true },
+          searchText: "usage demo",
+          embeddingText: "usage demo",
+          cosFrameObjectKeys: ["projects/demo/derived/asset-video/frames/frame-3.jpg"],
+        },
+      },
+    ];
+
+    const results = mapCosImageMatchesToAssetResults(
+      [
+        {
+          uri: "cos://shopclip-1250000000/projects/demo/derived/asset-video/frames/frame-3.jpg",
+          objectKey: "projects/demo/derived/asset-video/frames/frame-3.jpg",
+          score: 96,
+        },
+      ],
+      { assets, assetSlices: slices },
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.asset.id).toBe("asset-video");
+    expect(results[0]?.slices.map((slice) => slice.id)).toEqual(["slice-demo"]);
+    expect(results[0]?.reasons).toContain("cos-slice:slice-demo");
+  });
+
   it("posts a text-to-image hybrid search request to the configured Tencent CI endpoint", async () => {
     const requests: Array<{ body: unknown; headers: Record<string, string>; url: string }> = [];
     const provider = createCosIntelligentSearchProvider(

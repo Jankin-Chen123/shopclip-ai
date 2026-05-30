@@ -28,8 +28,11 @@
 MVP 完成说明：
 
 - 已完成素材结构化 schema、Prisma/store 扩展、素材处理 job、mock/Ark provider 边界、混合检索、参考视频拆解、模板提炼、剧本生成接入和 Studio 分镜素材召回。
-- 真实火山/Ark 多模态视觉理解已接入环境配置驱动的 provider wrapper；默认 `VISION_PROVIDER_MODE=mock` 走 deterministic fallback，填写 `VISION_PROVIDER_MODE=ark`、`ARK_API_KEY` 或 `AI_VISION_API_KEY`、`AI_VISION_MODEL_ID` 后，素材结构化会调用真实多模态模型。COS 智能检索和公开视频站外搜索仍按 provider/config 形式接入。
-- 自有参考视频已通过 `sourceAssetId` 接入：商家先上传视频素材，再在灵感分区的参考视频拆解面板选择该视频，后端复用素材处理链路生成结构化 slice 后再跑爆款拆解；前端拆解完成后刷新项目快照，保证创作分区和 Studio 能消费最新结构化素材。
+- 真实媒体处理已落地：视频素材通过 ffprobe 读取时长/分辨率，通过 ffmpeg 抽取真实关键帧；视频字幕、贴纸和商品标签默认通过视觉模型 OCR 写入 `ocrText`。ASR 仅作为显式 `ASR_PROVIDER_MODE=http/real` 的可选增强，默认不抽音频、不伪造 transcript。
+- 真实火山/Ark 多模态视觉理解已接入环境配置驱动的 provider wrapper；业务默认 `VISION_PROVIDER_MODE=ark`/real 需要真实 key 与模型，缺配置或模型失败会直接报错。只有显式 `VISION_PROVIDER_MODE=mock` 才走 deterministic fixture。COS 智能检索和公开视频站外搜索仍按 provider/config 形式接入。
+- 真实火山/Ark 参考视频拆解已接入环境配置驱动的 provider wrapper；业务默认 `REFERENCE_PROVIDER_MODE=ark`/real 需要真实 key 与模型，缺配置会直接报错。只有显式 `REFERENCE_PROVIDER_MODE=mock` 才走 deterministic fixture。
+- 公开视频主动拆解已按“分析型下载”接入：用户只提供 `sourceUrl` 时，后端通过 `ReferenceDownloadProvider` 创建 `source=public_reference` 的视频资产，复用素材处理链路生成结构化 slice，再把结构化上下文提供给爆款拆解 provider。默认 downloader 为真实 HTTP 直链下载；只有显式 `REFERENCE_DOWNLOAD_PROVIDER_MODE=mock` 才返回 fixture。平台短链后续可接 `yt-dlp` 或托管下载服务。
+- 自有参考视频已通过 `sourceAssetId` 接入：商家先上传视频素材，再在灵感分区的参考视频拆解面板选择该视频，后端复用素材处理链路生成结构化 slice 后再跑爆款拆解；前端拆解完成后刷新项目快照，保证创作分区和 Studio 能消费最新结构化素材。公开视频资产仍禁止进入最终成片混剪候选，只用于分析、模板和剧本参考。
 
 ## 2. 指定 GitHub 仓库代码调研结论
 
@@ -245,8 +248,8 @@ flowchart TD
   StoreRaw --> Job["AssetProcessingJob / ReferenceAnalysisJob"]
   Job --> Probe["ffprobe 获取媒体信息"]
   Probe --> Frame["抽帧: 固定采样 + 场景变化帧"]
-  Frame --> ASR["音频抽取 + ASR"]
-  ASR --> VLM["逐帧/片段 VLM 理解"]
+  Frame --> OCR["帧 OCR / 字幕贴纸识别"]
+  OCR --> VLM["逐帧/片段 VLM 理解"]
   VLM --> Segment["3 秒片段聚合 + 文案对齐"]
   Segment --> Viral["爆款因子/叙事结构分析"]
   Viral --> Persist["Zod 校验后写入 DB metadata"]
@@ -428,7 +431,7 @@ flowchart TD
 - Create: `apps/api/src/modules/media/audioExtractor.ts`
 - Modify: `apps/api/src/modules/projects/router.ts`
 
-- [x] 实现步骤：`probe`、`sample_frames`、`extract_audio`、`understand`、`persist_metadata`、`index`。
+- [x] 实现步骤：`probe`、`sample_frames`、`prepare_ocr`、`understand`、`persist_metadata`、`index`；只有显式 ASR 模式才使用 `extract_audio`。
 - [x] 图片资产创建一个 synthetic slice。
 - [x] 视频资产按 3 秒切片，并补充场景变化帧。
 - [x] 处理进度写入 `AssetProcessingEvent`。
@@ -444,7 +447,7 @@ flowchart TD
 
 - [x] provider 输出必须匹配 shared schema。
 - [x] mock provider 根据文件名、tags、slice 时间生成确定性 metadata。
-- [x] Ark provider 只读服务端环境变量，不暴露 secret；素材处理默认接入 Ark wrapper，未配置时自动保持 mock。
+- [x] Ark provider 只读服务端环境变量，不暴露 secret；素材处理默认接入 Ark wrapper，未配置或模型失败时显式报错，只有显式 mock 模式才使用 deterministic fixture。
 - [x] Prompt 字段包含 shot type、camera movement、composition、transition、text overlay、visual description、mood、key elements。
 - [x] 模型输出不合法时写入 `needs_review`，不阻塞整条任务。
 
@@ -473,11 +476,13 @@ flowchart TD
 - Modify: `apps/api/src/modules/projects/router.ts`
 
 - [x] 增加公开参考 URL 登记，必须填写 `sourceDeclaration`。
-- [x] MVP 支持上传自有参考视频和手动录入公开视频来源。自有参考视频通过已上传视频素材 `sourceAssetId` 接入。
-- [x] 上传视频复用素材处理 frames/transcript，再跑爆款拆解。灵感分区点击“拆解参考视频”后，`POST /api/references/analyze` 会先处理 `sourceAssetId` 对应视频，再保存参考拆解。
+- [x] MVP 支持上传自有参考视频和手动录入公开视频来源。自有参考视频通过已上传视频素材 `sourceAssetId` 接入；公开视频 URL 会主动生成分析型 `public_reference` 视频资产。
+- [x] 上传视频复用素材处理 frames/OCR 文案，再跑爆款拆解。灵感分区点击“拆解参考视频”后，`POST /api/references/analyze` 会先处理 `sourceAssetId` 对应视频，再保存参考拆解。
+- [x] 公开视频 URL 拆解复用同一链路：`ReferenceDownloadProvider` -> `public_reference` asset -> `processAssetStructure()` -> structured slices -> viral breakdown -> template/script consumption。
 - [x] 拆解输出包含 hook、节奏、情绪曲线、转化因子、目标人群、内容公式、9 段叙事结构、复刻蓝图。
+- [x] Ark provider 不再是 mock wrapper；配置 `REFERENCE_PROVIDER_MODE=ark` 和参考拆解模型后会调用 `/responses`，只有显式 mock 模式才回落 deterministic fixture；真实模式缺少 key 或模型 ID 会直接报配置错误。
 - [x] ViralX 9 段结构转为 JSON：`Hook`、`Pain`、`Fear`、`Solution`、`Demo`、`Trust`、`Price`、`CTA`、`Closure`。
-- [x] URL 参考只保存来源、公开统计和结构化分析，不保存公开视频混剪素材。
+- [x] URL 参考可保存分析型下载资产、结构化 slice 和拆解结果，但 `public_reference` 仍被 Studio 召回过滤，不能作为原始混剪素材。
 
 ### Task 015.7：模板提炼与剧本生成接入
 
@@ -550,6 +555,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 2026-05-29 UI 跟进：用户要求灵感分区删除 AI 对话/会话记录区域，只保留视频拆解板块。已从 `apps/web/src/app/App.tsx` 的灵感页移除 `InspirationPanel` 渲染，并将侧栏灵感说明改为参考与视频拆解；新增页面级测试覆盖“只渲染参考视频拆解面板”。验证命令：`corepack pnpm --filter @shopclip/web test` 结果 `71 passed`，`corepack pnpm --filter @shopclip/web typecheck` 通过，`corepack pnpm --filter @shopclip/web build` 通过，Playwright 浏览器检查输出 `PLAYWRIGHT_OK inspiration page shows video breakdown only`。
 
+2026-05-30 前端真实结构化闭环跟进：本地文件导入已改为上传后自动调用 `processAssetStructure()`；服务端上传会同时写 COS raw object 与本地 media cache，外部图片/视频导入会生成结构化 metadata、slice 和 COS 派生 JSON。剧本 prompt 与 Studio 召回已读取 `structuredAsset`/slice 语义信息。新增/更新测试覆盖外部图片结构化、外部真实 MP4 导入结构化、结构化 prompt 上下文、分镜 role 召回和前端自动结构化导入。最新验证：`@shopclip/api test` 27 files / 115 tests passed，`@shopclip/shared test` 21 passed，`@shopclip/web test` 72 passed，API/Web typecheck 与 build 通过，`corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts` 1 passed。
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。
@@ -565,10 +572,10 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 ## 10. 风险与边界
 
-- 自动站外搜索和下载公开视频有合规与稳定性风险；MVP 只支持用户提供 URL/元数据或上传自有参考视频。
+- 自动站外搜索和平台短链下载公开视频有合规与稳定性风险；MVP 支持用户提供 URL 后做分析型 ingest，默认真实 HTTP downloader 可处理直链视频，抖音/TikTok 短链后续接平台 downloader provider。测试/演示 fixture 必须显式设置 mock。
 - COS 智能检索只做召回加速，不替代数据库。
-- 视频 slice 理解会增加模型成本；默认 mock provider，真实 provider 通过配置开启。
-- 参考视频只用于方法论提炼和剧本结构参考，不进入成片混剪。
+- 视频 slice 理解会增加模型成本；真实 provider 通过配置开启，测试/演示 fixture 需显式设置 mock。
+- 参考视频只用于方法论提炼、结构化拆解和剧本结构参考，不进入成片混剪。
 - 当前已有 `Asset.metadata` JSON 扩展位，第一阶段优先复用，避免大迁移影响现有 Demo。
 
 ## 11. Definition Of Done

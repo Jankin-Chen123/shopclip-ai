@@ -26,6 +26,8 @@ describe("P0 backend lifecycle", () => {
   let baseUrl: string;
 
   beforeEach(async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "mock";
     const app = createApp();
     server = app.listen(0);
     await new Promise<void>((resolve) => {
@@ -55,6 +57,7 @@ describe("P0 backend lifecycle", () => {
     delete process.env.AI_IMAGE_MODEL_ID;
     delete process.env.AI_VIDEO_API_KEY;
     delete process.env.AI_VIDEO_MODEL_ID;
+    delete process.env.VIDEO_RENDER_PROVIDER_MODE;
     delete process.env.ARK_API_BASE_URL;
   });
 
@@ -809,6 +812,7 @@ describe("P0 backend lifecycle", () => {
   it("passes bound image assets and video keyframes to Seedream storyboard generation", async () => {
     process.env.AI_PROVIDER_MODE = "ark";
     process.env.ARK_API_KEY = "ark-test-key";
+    process.env.AI_GENERAL_MODEL_ID = "doubao-text-test";
     process.env.AI_IMAGE_MODEL_ID = "doubao-seedream-test";
     process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
     const originalFetch = globalThis.fetch;
@@ -816,6 +820,12 @@ describe("P0 backend lifecycle", () => {
       const requestUrl = url instanceof Request ? url.url : String(url);
       if (requestUrl.startsWith(baseUrl)) {
         return originalFetch(url, init);
+      }
+      if (requestUrl.endsWith("/responses")) {
+        return Response.json({
+          output_text:
+            "| 时间 | 旁白 | 字幕 | 画面 | 参考素材 |\n| 0-3s | 还在担心支架不稳？ | 痛点开场 | 主要参考素材：GlowGrip silver packshot.png，产品外观必须与绑定素材一致 | GlowGrip silver packshot.png |",
+        });
       }
 
       return Response.json({
@@ -829,11 +839,14 @@ describe("P0 backend lifecycle", () => {
     vi.stubGlobal("fetch", fetchMock);
     const getArkRequestBodies = () =>
       fetchMock.mock.calls
-        .filter(([url]) => {
+        .map(([url, init]) => {
           const requestUrl = url instanceof Request ? url.url : String(url);
-          return requestUrl.startsWith("https://ark.example.test");
+          if (!requestUrl.startsWith("https://ark.example.test")) {
+            return undefined;
+          }
+          return JSON.parse(String((init as RequestInit).body));
         })
-        .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+        .filter((body): body is Record<string, unknown> => Boolean(body && "prompt" in body));
 
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",
@@ -1028,6 +1041,7 @@ describe("P0 backend lifecycle", () => {
   it("retries storyboard scene image generation without reference images when Ark rejects them", async () => {
     process.env.AI_PROVIDER_MODE = "ark";
     process.env.ARK_API_KEY = "ark-test-key";
+    process.env.AI_GENERAL_MODEL_ID = "doubao-text-test";
     process.env.AI_IMAGE_MODEL_ID = "doubao-seedream-test";
     process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
     const originalFetch = globalThis.fetch;
@@ -1038,6 +1052,12 @@ describe("P0 backend lifecycle", () => {
       }
 
       const body = JSON.parse(String(init?.body));
+      if (requestUrl.endsWith("/responses")) {
+        return Response.json({
+          output_text:
+            "| 时间 | 旁白 | 字幕 | 画面 | 参考素材 |\n| 0-3s | 还在找稳固支架？ | 痛点开场 | 主要参考素材：Fold Stand packshot，产品外观必须与绑定素材一致 | Fold Stand packshot |",
+        });
+      }
       if (Array.isArray(body.image)) {
         return Response.json(
           {
@@ -1104,8 +1124,9 @@ describe("P0 backend lifecycle", () => {
         String(url instanceof Request ? url.url : url).startsWith("https://ark.example.test"),
       )
       .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
-    expect(bodies[0]?.image).toEqual([asset.body.asset.url]);
-    expect(bodies.some((body) => body.image === undefined)).toBe(true);
+    const imageBodies = bodies.filter((body) => "prompt" in body);
+    expect(imageBodies[0]?.image).toEqual([asset.body.asset.url]);
+    expect(imageBodies.some((body) => body.image === undefined)).toBe(true);
   });
 
   it("uses configured text model settings when one-click rewriting a script", async () => {

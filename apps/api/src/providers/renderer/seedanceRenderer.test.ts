@@ -451,7 +451,8 @@ describe("Seedance renderer provider", () => {
     });
   });
 
-  it("uses the mock renderer when Seedance render mode is not explicitly enabled", async () => {
+  it("uses the mock renderer only when mock render mode is explicit", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "mock";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
 

@@ -1,5 +1,18 @@
-import type { ReferenceVideoAnalysis, ReferenceVideo } from "@shopclip/shared";
+import type {
+  AssetMetadata,
+  AssetSlice,
+  ReferenceVideoAnalysis,
+  ReferenceVideo,
+} from "@shopclip/shared";
+
+export interface ViralBreakdownContext {
+  sourceAsset?: AssetMetadata;
+  sourceSlices?: AssetSlice[];
+}
 
 export interface ViralBreakdownProvider {
-  analyzeReference: (reference: ReferenceVideo) => Promise<ReferenceVideoAnalysis>;
+  analyzeReference: (
+    reference: ReferenceVideo,
+    context?: ViralBreakdownContext,
+  ) => Promise<ReferenceVideoAnalysis>;
 }

@@ -691,7 +691,7 @@ const progressFromTaskBody = (
 export const loadInspirationVideoTask = async (
   request: InspirationVideoTaskRequest,
 ): Promise<InspirationMaterial> => {
-  const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
+  const providerMode = (process.env.AI_PROVIDER_MODE ?? "ark").toLowerCase();
   const generationLikeRequest: InspirationGenerateRequest = {
     prompt: request.prompt,
     assetType: "video",
@@ -699,11 +699,7 @@ export const loadInspirationVideoTask = async (
   };
   const config = getRequiredConfig(generationLikeRequest);
 
-  if (
-    !config ||
-    (!hasUserConfigInput(generationLikeRequest) &&
-      !["ark", "doubao", "real"].includes(providerMode))
-  ) {
+  if (providerMode === "mock" && !hasUserConfigInput(generationLikeRequest)) {
     return {
       id: createId("material", request.taskId),
       type: "video",
@@ -714,6 +710,15 @@ export const loadInspirationVideoTask = async (
       progress: 10,
       mimeType: "video/mp4",
     };
+  }
+  if (
+    !config ||
+    (!hasUserConfigInput(generationLikeRequest) &&
+      !["ark", "doubao", "real"].includes(providerMode))
+  ) {
+    throw new Error(
+      "Real video inspiration polling is not configured. Set AI_PROVIDER_MODE=ark plus provider credentials, or explicitly set AI_PROVIDER_MODE=mock for demo fixtures.",
+    );
   }
 
   try {
@@ -760,19 +765,22 @@ export const loadInspirationVideoTask = async (
 export const generateInspiration = async (
   request: InspirationGenerateRequest,
 ): Promise<InspirationGenerateResponse> => {
-  const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
-  if (!hasUserConfigInput(request) && !["ark", "doubao", "real"].includes(providerMode)) {
+  const providerMode = (process.env.AI_PROVIDER_MODE ?? "ark").toLowerCase();
+  if (!hasUserConfigInput(request) && providerMode === "mock") {
     return createFallbackResponse(request, "AI_PROVIDER_MODE is mock.");
+  }
+  if (!hasUserConfigInput(request) && !["ark", "doubao", "real"].includes(providerMode)) {
+    throw new Error(
+      `Unsupported AI_PROVIDER_MODE=${providerMode}. Use ark/doubao/real for business runs, or explicitly set mock for demo fixtures.`,
+    );
   }
 
   const config = getRequiredConfig(request);
   if (!config) {
-    return createFallbackResponse(
-      request,
+    throw new Error(
       hasUserConfigInput(request)
         ? "User API settings are incomplete."
         : "Ark provider environment variables are incomplete.",
-      providerMode !== "mock",
     );
   }
 
@@ -797,6 +805,6 @@ export const generateInspiration = async (
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Ark provider error.";
-    return createFallbackResponse(request, `${message} Deterministic fallback used.`, true);
+    throw new Error(message);
   }
 };

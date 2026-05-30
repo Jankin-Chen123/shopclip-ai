@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import {
   StructuredAssetMetadataSchema,
   StructuredSliceMetadataSchema,
@@ -25,6 +26,7 @@ const ASSET_SYSTEM_PROMPT = [
   "You are a multimodal analyst for ecommerce short-video production.",
   "Return only valid JSON. Do not wrap JSON in markdown.",
   "Analyze the provided image/video references and asset context.",
+  "Read visible subtitles, stickers, product labels, and text overlays from frames into ocrText.",
   "Do not invent product colors, shape, logo text, packaging, features, or claims that are not visible or provided.",
   "Use concise English tags because downstream retrieval is keyword-based.",
 ].join("\n");
@@ -33,6 +35,7 @@ const SLICE_SYSTEM_PROMPT = [
   "You are analyzing one short ecommerce video slice or image shot.",
   "Return only valid JSON. Do not wrap JSON in markdown.",
   "Focus on visible product details, shot language, motion, text overlays, and which storyboard roles this slice can serve.",
+  "Use ocrText for visible subtitles/text overlays. transcript is optional and should stay empty when no audio transcript is provided.",
   "Do not invent visual facts. If evidence is weak, use productVisibility=uncertain and add needs_review through low confidence fields.",
 ].join("\n");
 
@@ -125,6 +128,26 @@ const getStringArray = (value: unknown): string[] =>
     ? value.map((item) => getString(item)).filter((item): item is string => Boolean(item))
     : [];
 
+const wait = (milliseconds: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+
+const fetchWithNetworkRetry = async (url: string, init: RequestInit) => {
+  let lastError: unknown;
+  for (const delay of [0, 500, 1000]) {
+    if (delay > 0) {
+      await wait(delay);
+    }
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
+
 const normalizeAssetRole = (value: unknown, fallback: AssetRole): AssetRole => {
   const normalized = getString(value)?.toLowerCase().replaceAll("-", "_");
   return normalized && ASSET_ROLES.has(normalized as AssetRole)
@@ -149,26 +172,79 @@ const normalizeSceneRoles = (value: unknown, fallback: SceneRole[]): SceneRole[]
   return roles.length ? [...new Set(roles)] : fallback;
 };
 
+const addRole = (roles: Set<SceneRole>, role: SceneRole) => {
+  roles.add(role);
+};
+
+const enrichSceneRoles = (
+  roles: SceneRole[],
+  input: SliceUnderstandingInput,
+  fields: Array<string | undefined>,
+): SceneRole[] => {
+  const enrichedRoles = new Set<SceneRole>(roles);
+  const text = lowerTokens(fields);
+
+  if (
+    input.index === 0 &&
+    /(opening|open|unbox|unwrap|reveal|first|intro|开场|拆封|拆包|开箱|露出|第一眼)/i.test(text)
+  ) {
+    addRole(enrichedRoles, "hook");
+  }
+  if (/(pain|problem|annoying|worry|困扰|痛点|麻烦|担心|不好用|不方便)/i.test(text)) {
+    addRole(enrichedRoles, "pain");
+  }
+  if (/(solve|solution|fix|解决|改善|一招|轻松)/i.test(text)) {
+    addRole(enrichedRoles, "solution");
+  }
+  if (/(proof|review|material|quality|leak.?proof|easy to clean|trust|材质|质量|防漏|清洗|实测|测评|证明)/i.test(text)) {
+    addRole(enrichedRoles, "trust");
+  }
+  if (/(\$|¥|￥|\bprice\b|discount|deal|sale|元|价格|到手|折扣|优惠)/i.test(text)) {
+    addRole(enrichedRoles, "price");
+  }
+  if (/(buy|order|shop|cart|tap|link|purchase|购买|下单|入手|点击|链接|橱窗|加购)/i.test(text)) {
+    addRole(enrichedRoles, "cta");
+  }
+  if (
+    input.startSecond >= 12 &&
+    /(packshot|final|ending|display|showcase|overall|定格|收尾|结尾|展示|整体)/i.test(text)
+  ) {
+    addRole(enrichedRoles, "closure");
+  }
+
+  return [...enrichedRoles];
+};
+
 const normalizeEnumToken = (value: unknown, allowed: Set<string>, fallback: string) => {
   const normalized = getString(value)?.toLowerCase().replaceAll("-", "_").replace(/\s+/g, "_");
   return normalized && allowed.has(normalized) ? normalized : fallback;
 };
 
 const getProviderMode = () =>
-  (process.env.VISION_PROVIDER_MODE ?? "mock").trim().toLowerCase();
+  (process.env.VISION_PROVIDER_MODE ?? "ark").trim().toLowerCase();
 
 const isRealVisionMode = () =>
   ["ark", "doubao", "real", "volcengine-ark"].includes(getProviderMode());
 
 const getRequiredConfig = (): ArkVisionConfig | undefined => {
-  if (!isRealVisionMode()) {
+  const mode = getProviderMode();
+  if (mode === "mock") {
     return undefined;
   }
+  if (!isRealVisionMode()) {
+    throw new Error(
+      `Unsupported VISION_PROVIDER_MODE=${mode}. Use ark/real for business runs, or explicitly set mock for tests/demo fixtures.`,
+    );
+  }
 
-  const apiKey = firstEnv("AI_VISION_API_KEY", "ARK_API_KEY", "AI_API_KEY");
+  const apiKey = firstEnv("AI_VISION_API_KEY", "AI_GENERAL_API_KEY", "ARK_API_KEY", "AI_API_KEY");
   const model = firstEnv("AI_VISION_MODEL_ID", "AI_VISION_ENDPOINT_ID", "AI_GENERAL_MODEL_ID");
   if (!apiKey || !model) {
-    return undefined;
+    throw new Error(
+      `${VISION_PROVIDER_ID} is configured with VISION_PROVIDER_MODE=${mode}, but missing ${
+        !apiKey && !model ? "API key and model" : !apiKey ? "API key" : "model"
+      }. Set AI_VISION_API_KEY, AI_GENERAL_API_KEY, or ARK_API_KEY, and AI_VISION_MODEL_ID or AI_GENERAL_MODEL_ID.`,
+    );
   }
 
   const videoInputMode = (
@@ -263,8 +339,15 @@ const resolvePublicUrl = (value: string | undefined) => {
 const getAssetMediaUrl = (asset: AssetMetadata) =>
   resolvePublicUrl(asset.url) ?? resolvePublicUrl(`/api/assets/${asset.id}/content`);
 
-const frameUrlsFromKeys = (frameKeys: string[]) =>
-  frameKeys.map((key) => resolvePublicUrl(key)).filter((url): url is string => Boolean(url));
+const frameImageUrl = (frame: Pick<SampledFrame, "key" | "localPath">) => {
+  if (frame.localPath && existsSync(frame.localPath)) {
+    return `data:image/jpeg;base64,${readFileSync(frame.localPath).toString("base64")}`;
+  }
+  return resolvePublicUrl(frame.key);
+};
+
+const frameUrlsFromFrames = (frames: Array<Pick<SampledFrame, "key" | "localPath">>) =>
+  frames.map((frame) => frameImageUrl(frame)).filter((url): url is string => Boolean(url));
 
 const responseTextFromBody = (body: unknown): string | undefined => {
   if (!isRecord(body)) {
@@ -317,7 +400,7 @@ const postArkVision = async (
   systemPrompt: string,
   content: Array<Record<string, unknown>>,
 ) => {
-  const response = await fetch(`${config.baseUrl}/responses`, {
+  const response = await fetchWithNetworkRetry(`${config.baseUrl}/responses`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${config.apiKey}`,
@@ -384,8 +467,8 @@ const assetContextText = (
     `Format: ${probe.format ?? "unknown"}`,
     `Resolution: ${probe.width ?? "unknown"}x${probe.height ?? "unknown"}`,
     `Existing embedding text: ${asset.embeddingText ?? "none"}`,
-    `ASR summary: ${audio.asrSummary || "none"}`,
-    `Transcript: ${audio.transcript || "none"}`,
+    `Text extraction mode: ${audio.asrSummary || "OCR-first frame text extraction"}`,
+    `Optional audio transcript: ${audio.transcript || "none"}`,
     `Sampled frame references: ${frames.map((frame) => `${frame.second}s=${frame.key}`).join(", ") || "none"}`,
   ].join("\n");
 
@@ -399,8 +482,8 @@ const sliceContextText = (input: SliceUnderstandingInput) =>
     `Slice id: ${input.sliceId}`,
     `Slice index: ${input.index}`,
     `Time range: ${input.startSecond}-${input.endSecond}s`,
-    `ASR summary: ${input.audio.asrSummary || "none"}`,
-    `Transcript: ${input.audio.transcript || "none"}`,
+    `Text extraction mode: ${input.audio.asrSummary || "OCR-first frame text extraction"}`,
+    `Optional audio transcript: ${input.audio.transcript || "none"}`,
     `Frame references: ${input.frameKeys.join(", ") || "none"}`,
   ].join("\n");
 
@@ -411,12 +494,17 @@ const mediaContentForAsset = (
 ) => {
   const mediaContent: Array<Record<string, unknown>> = [];
   const assetMediaUrl = getAssetMediaUrl(asset);
-  const frameUrls = frameUrlsFromKeys(frames.map((frame) => frame.key));
+  const frameUrls = frameUrlsFromFrames(frames);
 
   if (asset.type === "image" && assetMediaUrl) {
     mediaContent.push({ type: "input_image", image_url: assetMediaUrl });
-  } else if (asset.type === "video" && config.videoInputMode === "video_url" && assetMediaUrl) {
-    mediaContent.push({ type: "input_video", video_url: assetMediaUrl });
+  } else if (
+    asset.type === "video" &&
+    asset.source !== "public_reference" &&
+    config.videoInputMode === "video_url" &&
+    assetMediaUrl
+  ) {
+    return [{ type: "input_video", video_url: assetMediaUrl }];
   }
 
   if (config.videoInputMode !== "text_only") {
@@ -433,32 +521,24 @@ const mediaContentForSlice = (input: SliceUnderstandingInput, config: ArkVisionC
     return [];
   }
 
-  const frameMedia = frameUrlsFromKeys(input.frameKeys)
-    .slice(0, 6)
-    .map((url) => ({ type: "input_image", image_url: url }));
-  if (frameMedia.length || config.videoInputMode !== "video_url") {
-    return frameMedia;
+  const assetMediaUrl = getAssetMediaUrl(input.asset);
+  if (
+    input.asset.source !== "public_reference" &&
+    config.videoInputMode === "video_url" &&
+    assetMediaUrl
+  ) {
+    return [{ type: "input_video", video_url: assetMediaUrl }];
   }
 
-  const assetMediaUrl = getAssetMediaUrl(input.asset);
-  return assetMediaUrl ? [{ type: "input_video", video_url: assetMediaUrl }] : [];
+  const frameMedia = frameUrlsFromFrames(
+    input.frames?.length
+      ? input.frames
+      : input.frameKeys.map((key) => ({ key })),
+  )
+    .slice(0, 6)
+    .map((url) => ({ type: "input_image", image_url: url }));
+  return frameMedia;
 };
-
-const withNeedsReview = (
-  metadata: StructuredAssetMetadata,
-  config: ArkVisionConfig,
-  error: unknown,
-): StructuredAssetMetadata => ({
-  ...metadata,
-  complianceFlags: [...new Set([...metadata.complianceFlags, "needs_review"])],
-  modelTrace: {
-    provider: VISION_PROVIDER_ID,
-    model: config.model,
-    confidence: metadata.modelTrace?.confidence,
-    fallbackUsed: true,
-    error: error instanceof Error ? error.message : "Unknown Ark vision provider error.",
-  },
-});
 
 const buildStructuredAsset = (
   input: {
@@ -537,7 +617,6 @@ const buildStructuredSlice = (
   raw: unknown,
 ): StructuredSliceMetadata => {
   const record = isRecord(raw) ? raw : {};
-  const suitableSceneRoles = normalizeSceneRoles(record.suitableSceneRoles, ["demo"]);
   const productVisibility = normalizeProductVisibility(record.productVisibility, "uncertain");
   const summary =
     getString(record.summary) ??
@@ -545,6 +624,11 @@ const buildStructuredSlice = (
   const transcript = getString(record.transcript) ?? input.audio.transcript;
   const ocrText = getString(record.ocrText) ?? "";
   const action = getString(record.action) ?? summary;
+  const suitableSceneRoles = enrichSceneRoles(
+    normalizeSceneRoles(record.suitableSceneRoles, ["demo"]),
+    input,
+    [summary, transcript, ocrText, action, getString(record.composition)],
+  );
   const keyElements = [
     ...new Set(["product", ...input.asset.tags.slice(0, 4), ...getStringArray(record.keyElements)]),
   ];
@@ -605,8 +689,11 @@ export const createArkVisionUnderstandingProvider = (): VisionUnderstandingProvi
         ]);
         return buildStructuredAsset(input, raw, config);
       } catch (error) {
-        const fallback = await fallbackProvider.understandAsset(input);
-        return withNeedsReview(fallback, config, error);
+        throw new Error(
+          `${VISION_PROVIDER_ID} asset understanding failed: ${
+            error instanceof Error ? error.message : "Unknown Ark vision provider error."
+          }`,
+        );
       }
     },
     understandSlice: async (input) => {
@@ -616,13 +703,12 @@ export const createArkVisionUnderstandingProvider = (): VisionUnderstandingProvi
           ...mediaContentForSlice(input, config),
         ]);
         return buildStructuredSlice(input, raw);
-      } catch {
-        const fallback = await fallbackProvider.understandSlice(input);
-        return {
-          ...fallback,
-          searchText: `${fallback.searchText} needs_review`,
-          embeddingText: `${fallback.embeddingText} needs_review`,
-        };
+      } catch (error) {
+        throw new Error(
+          `${VISION_PROVIDER_ID} slice understanding failed: ${
+            error instanceof Error ? error.message : "Unknown Ark vision provider error."
+          }`,
+        );
       }
     },
   };

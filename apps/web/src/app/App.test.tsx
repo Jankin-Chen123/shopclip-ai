@@ -38,6 +38,7 @@ import {
   createScriptGenerationRequestPayload,
   createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
+  importAndStructureFiles,
   getCreationAssetLibraryRefreshCategory,
   getCreationUsableAssets,
   getPreparedAssetsByBucket,
@@ -1813,6 +1814,112 @@ describe("App", () => {
     expect(normalized.general?.model).toBe("doubao-seed-2-0-pro-260215");
     expect(normalized.image?.model).toBe("doubao-seedream-5-0-260128");
     expect(normalized.video?.model).toBe("doubao-seedance-1-5-pro-251215");
+  });
+
+  it("uploads imported image and video files then triggers real structure processing", async () => {
+    const calls: string[] = [];
+    const imageFile = new File(["image-bytes"], "hero.png", { type: "image/png" });
+    const textFile = new File(["script copy"], "brief.txt", { type: "text/plain" });
+
+    const result = await importAndStructureFiles({
+      files: [imageFile, textFile],
+      language: "en",
+      projectId: "project-import",
+      createAssetUploadIntentFn: async (_projectId, asset) => {
+        calls.push(`intent:${asset.name}`);
+        return {
+          asset: makeAsset({
+            id: `asset-${asset.name}`,
+            name: asset.name,
+            type: asset.type,
+            mimeType: asset.mimeType,
+            status: "uploaded",
+          }),
+          upload: {
+            provider: "mock-cos",
+            bucket: "test",
+            region: "ap-guangzhou",
+            objectKey: `projects/project-import/raw/${asset.name}/source`,
+            uploadUrl: "https://cos.test/upload",
+            publicUrl: "https://cos.test/read",
+            method: "PUT",
+            headers: {},
+            expiresAt: "2026-05-30T00:10:00.000Z",
+          },
+          processingJob: {
+            id: "job-intent",
+            assetId: `asset-${asset.name}`,
+            status: "processing",
+            steps: ["upload"],
+            message: "Queued.",
+            createdAt: "2026-05-30T00:00:00.000Z",
+          },
+        };
+      },
+      uploadAssetFileToStorageFn: async (assetId, file) => {
+        calls.push(`upload:${file.name}`);
+        return {
+          asset: makeAsset({
+            id: assetId,
+            name: file.name,
+            type: file.type.startsWith("image/") ? "image" : "reference",
+            mimeType: file.type,
+            status: "ready",
+          }),
+          storage: {
+            provider: "mock-cos",
+            objectKey: `projects/project-import/raw/${assetId}/source`,
+            publicUrl: "https://cos.test/read",
+          },
+        };
+      },
+      processAssetStructureFn: async (assetId) => {
+        calls.push(`process:${assetId}`);
+        return {
+          asset: makeAsset({
+            id: assetId,
+            name: "hero.png",
+            type: "image",
+            mimeType: "image/png",
+            status: "ready",
+            metadata: {
+              structuredAssetObjectKey: `projects/project-import/derived/${assetId}/metadata/structured-asset.json`,
+            },
+          }),
+          events: [],
+          job: {
+            id: "job-process",
+            assetId,
+            status: "ready",
+            steps: ["probe", "sample_frames", "publish_artifacts", "understand"],
+            message: "Structured.",
+            createdAt: "2026-05-30T00:00:00.000Z",
+          },
+          slices: [
+            {
+              id: "slice-hero",
+              assetId,
+              label: "hero image",
+              tags: ["hero"],
+              searchText: "hero image",
+            },
+          ],
+        };
+      },
+    });
+
+    expect(calls).toEqual([
+      "intent:hero.png",
+      "upload:hero.png",
+      "process:asset-hero.png",
+      "intent:brief.txt",
+      "upload:brief.txt",
+    ]);
+    expect(result.assets.find((asset) => asset.id === "asset-hero.png")?.metadata).toMatchObject({
+      structuredAssetObjectKey:
+        "projects/project-import/derived/asset-hero.png/metadata/structured-asset.json",
+    });
+    expect(result.assetSlices).toHaveLength(1);
   });
 
   it("keeps model settings while defaulting credential source to custom", () => {

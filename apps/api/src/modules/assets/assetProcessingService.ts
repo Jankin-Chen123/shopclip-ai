@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import type {
   AssetMetadata,
   AssetProcessingEvent,
@@ -6,12 +8,16 @@ import type {
   AssetSlice,
 } from "@shopclip/shared";
 
-import { extractAssetAudioSummary } from "../media/audioExtractor.js";
+import {
+  extractAssetAudioSummary,
+  type ExtractedAudioSummary,
+} from "../media/audioExtractor.js";
 import { sampleAssetFrames } from "../media/frameSampler.js";
 import { probeAssetMedia } from "../media/mediaProbe.js";
 import type { ProjectStore } from "../projects/projectStore.js";
 import { createArkVisionUnderstandingProvider } from "../../providers/vision/arkVisionUnderstandingProvider.js";
 import type { VisionUnderstandingProvider } from "../../providers/vision/visionUnderstandingProvider.js";
+import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 
 export interface ProcessAssetInput {
   forceRegenerate?: boolean;
@@ -63,16 +69,90 @@ const createSliceDrafts = (asset: AssetMetadata, durationSeconds: number) => {
   return drafts;
 };
 
+const derivedPrefixForAsset = (asset: AssetMetadata): string =>
+  asset.projectId ? `projects/${asset.projectId}/derived/${asset.id}` : `library/derived/${asset.id}`;
+
+const publishStructuredArtifacts = async ({
+  asset,
+  frames,
+  storageProvider,
+}: {
+  asset: AssetMetadata;
+  frames: Awaited<ReturnType<typeof sampleAssetFrames>>;
+  storageProvider?: StorageProvider;
+}) => {
+  if (!storageProvider) {
+    return {
+      frames,
+      structuredAssetObjectKey: undefined,
+    };
+  }
+
+  const derivedPrefix = derivedPrefixForAsset(asset);
+  const publishedFrames = await Promise.all(
+    frames.map(async (frame) => {
+      if (!frame.localPath) {
+        return asset.type === "image" && asset.objectKey
+          ? { ...frame, key: asset.objectKey }
+          : frame;
+      }
+
+      const objectKey = `${derivedPrefix}/frames/${basename(frame.localPath)}`;
+      let body: Buffer;
+      try {
+        body = await readFile(frame.localPath);
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code?: unknown }).code === "ENOENT"
+        ) {
+          return frame;
+        }
+        throw error;
+      }
+      await storageProvider.uploadObject({
+        body,
+        contentType: "image/jpeg",
+        objectKey,
+      });
+      return {
+        ...frame,
+        key: objectKey,
+      };
+    }),
+  );
+
+  return {
+    frames: publishedFrames,
+    structuredAssetObjectKey: `${derivedPrefix}/metadata/structured-asset.json`,
+  };
+};
+
+const shouldExtractAudio = () => {
+  const mode = process.env.ASR_PROVIDER_MODE?.trim().toLowerCase() ?? "none";
+  return ["http", "real"].includes(mode);
+};
+
+const ocrFirstTextSummary = (): ExtractedAudioSummary => ({
+  asrSummary:
+    "OCR-first text extraction: subtitles and overlays are read from sampled frames by the vision model. ASR is disabled by default.",
+  transcript: "",
+});
+
 export const processAssetStructure = async ({
   input,
   store,
   assetId,
   visionProvider = createArkVisionUnderstandingProvider(),
+  storageProvider,
 }: {
   assetId: string;
   input: ProcessAssetInput;
   store: ProjectStore;
   visionProvider?: VisionUnderstandingProvider;
+  storageProvider?: StorageProvider;
 }): Promise<ProcessAssetResult | undefined> => {
   const asset = await store.getAsset(assetId);
   if (!asset) {
@@ -93,24 +173,53 @@ export const processAssetStructure = async ({
   }
 
   const events: AssetProcessingEvent[] = [];
-  const probe = probeAssetMedia(asset);
+  const probe = await probeAssetMedia(asset);
   events.push(await addStepEvent(store, job, asset.id, "probe", "Media metadata extracted.", 10));
 
-  const frames = sampleAssetFrames(asset, probe);
+  const sampledFrames = await sampleAssetFrames(asset, probe);
+  const publishedArtifacts = await publishStructuredArtifacts({
+    asset,
+    frames: sampledFrames,
+    storageProvider,
+  });
+  const frames = publishedArtifacts.frames;
   events.push(
     await addStepEvent(
       store,
       job,
       asset.id,
       "sample_frames",
-      `Sampled ${frames.length} deterministic frame references.`,
+      `Sampled ${frames.length} real frame references.`,
       25,
     ),
   );
+  if (storageProvider) {
+    events.push(
+      await addStepEvent(
+        store,
+        job,
+        asset.id,
+        "publish_artifacts",
+        "Published derived frame artifacts to object storage.",
+        32,
+      ),
+    );
+  }
 
-  const audio = extractAssetAudioSummary(asset);
+  const extractAudio = shouldExtractAudio();
+  const textStep = extractAudio ? "extract_audio" : "prepare_ocr";
+  const audio = extractAudio ? await extractAssetAudioSummary(asset) : ocrFirstTextSummary();
   events.push(
-    await addStepEvent(store, job, asset.id, "extract_audio", "Audio transcript summary prepared.", 40),
+    await addStepEvent(
+      store,
+      job,
+      asset.id,
+      textStep,
+      extractAudio
+        ? "Audio transcript summary prepared."
+        : "Sampled frames prepared for OCR/subtitle understanding.",
+      40,
+    ),
   );
 
   const structuredMetadata = await visionProvider.understandAsset({ asset, audio, frames, probe });
@@ -121,11 +230,15 @@ export const processAssetStructure = async ({
       const frameKeys = frames
         .filter((frame) => frame.second >= draft.startSecond && frame.second <= draft.endSecond)
         .map((frame) => frame.key);
+      const sliceFrames = frames.filter(
+        (frame) => frame.second >= draft.startSecond && frame.second <= draft.endSecond,
+      );
       const metadata = await visionProvider.understandSlice({
         asset,
         audio,
         endSecond: draft.endSecond,
         frameKeys: frameKeys.length ? frameKeys : frames.slice(0, 1).map((frame) => frame.key),
+        frames: sliceFrames.length ? sliceFrames : frames.slice(0, 1),
         index,
         sliceId,
         startSecond: draft.startSecond,
@@ -158,10 +271,18 @@ export const processAssetStructure = async ({
     metadata: {
       ...(asset.metadata ?? {}),
       structuredAsset: structuredMetadata,
+      structuredAssetObjectKey: publishedArtifacts.structuredAssetObjectKey,
       structuredAssetVersion: "asset-multigranularity-v1",
     },
     tags: [...new Set([...asset.tags, ...structuredMetadata.globalTags])],
   });
+  if (storageProvider && publishedArtifacts.structuredAssetObjectKey) {
+    await storageProvider.uploadObject({
+      body: Buffer.from(JSON.stringify(updatedAsset?.metadata?.structuredAsset ?? structuredMetadata, null, 2)),
+      contentType: "application/json",
+      objectKey: publishedArtifacts.structuredAssetObjectKey,
+    });
+  }
   events.push(
     await addStepEvent(store, job, asset.id, "persist_metadata", "Structured asset metadata persisted.", 85),
   );
@@ -169,7 +290,15 @@ export const processAssetStructure = async ({
 
   const readyJob = await store.updateAssetProcessingJob(job.id, {
     status: "ready",
-    steps: ["probe", "sample_frames", "extract_audio", "understand", "persist_metadata", "index"],
+    steps: [
+      "probe",
+      "sample_frames",
+      ...(storageProvider ? ["publish_artifacts"] : []),
+      textStep,
+      "understand",
+      "persist_metadata",
+      "index",
+    ],
     message: "Structured asset metadata is ready for script generation and smart editing.",
   });
 

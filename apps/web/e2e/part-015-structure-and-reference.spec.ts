@@ -1,11 +1,62 @@
-import { mkdir } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { importLocalAssets } from "./helpers";
 
+const require = createRequire(new URL("../../api/package.json", import.meta.url));
+const ffmpegPath = (require("@ffmpeg-installer/ffmpeg") as { path: string }).path;
 const evidenceDir = resolve(process.cwd(), "../../projects/shopclip-ai/evidence");
 const evidencePath = (filename: string) => resolve(evidenceDir, filename);
+
+const runFfmpeg = (args: string[]) =>
+  new Promise<void>((resolveRun, reject) => {
+    const child = spawn(ffmpegPath, args, { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolveRun();
+        return;
+      }
+      reject(new Error(`ffmpeg fixture generation failed with ${code}: ${stderr.slice(0, 800)}`));
+    });
+  });
+
+const createReferenceVideoPayload = async () => {
+  const workdir = await mkdtemp(resolve(tmpdir(), "shopclip-e2e-reference-"));
+  const videoPath = resolve(workdir, "self-shot-reference-demo.mp4");
+  await runFfmpeg([
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=320x180:rate=10",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=880:duration=9",
+    "-t",
+    "9",
+    "-c:v",
+    "mpeg4",
+    "-q:v",
+    "5",
+    "-c:a",
+    "aac",
+    videoPath,
+  ]);
+  return {
+    buffer: await readFile(videoPath),
+    cleanup: () => rm(workdir, { force: true, recursive: true }),
+  };
+};
 
 test.describe("Part 015 structured references", () => {
   test.beforeAll(async () => {
@@ -15,15 +66,26 @@ test.describe("Part 015 structured references", () => {
   test("analyzes an uploaded self-owned reference video and exposes it as a script reference", async ({
     page,
   }) => {
+    test.setTimeout(90_000);
     await page.goto("/#project");
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page.getByText("Project loaded")).toBeVisible();
 
-    await importLocalAssets(page, {
-      name: "Self shot reference demo.mp4",
-      mimeType: "video/mp4",
-      buffer: Buffer.from("demo-video-reference"),
-    });
+    const referenceVideo = await createReferenceVideoPayload();
+    try {
+      await importLocalAssets(page, {
+        name: "Self shot reference demo.mp4",
+        mimeType: "video/mp4",
+        buffer: referenceVideo.buffer,
+      });
+      await page.getByRole("button", { name: "Video" }).click();
+      await expect(page.getByRole("heading", { name: "Self shot reference demo.mp4" })).toBeVisible({
+        timeout: 60_000,
+      });
+      await expect(page.getByText("usage_demo")).toBeVisible({ timeout: 60_000 });
+    } finally {
+      await referenceVideo.cleanup();
+    }
 
     await page.goto("/#inspiration");
     await expect(page.getByRole("heading", { name: "Viral video breakdown" })).toBeVisible();

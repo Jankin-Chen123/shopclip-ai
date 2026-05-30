@@ -1,6 +1,8 @@
 import { Router, raw } from "express";
 import type { Response } from "express";
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 import type {
   AssetMetadata,
@@ -36,6 +38,7 @@ import { buildMockDashboard } from "../dashboard/mockDashboard.js";
 import { processAssetStructure } from "../assets/assetProcessingService.js";
 import { analyzeReferenceVideo } from "../references/referenceAnalysisService.js";
 import { buildViralTemplateFromReferences } from "../references/referenceTemplateService.js";
+import { mediaOutputDir } from "../media/mediaPaths.js";
 import { mergeAssetSearchResults } from "../retrieval/hybridAssetSearch.js";
 import { searchAssets } from "../retrieval/search.js";
 import { recallAssetsForScene } from "../scenes/assetRecallService.js";
@@ -48,6 +51,7 @@ import {
   createExternalAssetProvidersFromConfig,
   searchExternalAssets,
 } from "../../providers/assets/externalAssetProviders.js";
+import type { ReferenceDownloadProvider } from "../../providers/references/referenceDownloadProvider.js";
 import {
   generateEditingSuggestions,
 } from "../../providers/ai/editingAgentProvider.js";
@@ -293,7 +297,37 @@ const buildBrandDocumentPromptLines = (assets: AssetMetadata[]): string[] => {
   return lines;
 };
 
-const buildScriptAssetPromptLines = (
+const structuredAssetPromptContext = (asset: AssetMetadata): string => {
+  const metadata = getMetadataRecord(asset);
+  const structuredAsset = isRecord(metadata.structuredAsset) ? metadata.structuredAsset : undefined;
+  if (!structuredAsset) {
+    return "";
+  }
+
+  const summary =
+    typeof structuredAsset.overallSummary === "string" ? structuredAsset.overallSummary : "";
+  const role = typeof structuredAsset.role === "string" ? structuredAsset.role : "";
+  const ocrText = typeof structuredAsset.ocrText === "string" ? structuredAsset.ocrText : "";
+  const searchText =
+    typeof structuredAsset.searchText === "string" ? structuredAsset.searchText : "";
+  const qualitySignals = isRecord(structuredAsset.qualitySignals)
+    ? structuredAsset.qualitySignals
+    : {};
+  const productVisibility =
+    typeof qualitySignals.productVisibility === "string" ? qualitySignals.productVisibility : "";
+
+  return [
+    summary ? `结构化摘要=${summary}` : undefined,
+    role ? `素材角色=${role}` : undefined,
+    ocrText ? `OCR=${ocrText}` : undefined,
+    productVisibility ? `可见度=${productVisibility}` : undefined,
+    searchText ? `检索语义=${searchText}` : undefined,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("；");
+};
+
+export const buildScriptAssetPromptLines = (
   request: ScriptGenerationRequest,
   assets: AssetMetadata[],
 ): string[] => {
@@ -306,7 +340,10 @@ const buildScriptAssetPromptLines = (
     const material = materialsByAssetId.get(asset.id);
     const bucket = material?.bucketId ? `；素材槽位=${material.bucketId}` : "";
     const tags = asset.tags.length > 0 ? `；标签=${asset.tags.join("、")}` : "";
-    return `assetId=${asset.id}；文件名=${asset.name}${bucket}；类型=${asset.mimeType ?? asset.type}${tags}`;
+    const structuredContext = structuredAssetPromptContext(asset);
+    return `assetId=${asset.id}；文件名=${asset.name}${bucket}；类型=${asset.mimeType ?? asset.type}${tags}${
+      structuredContext ? `；${structuredContext}` : ""
+    }`;
   });
   const pendingMaterialLines = request.materials
     .filter((material) => !material.assetId)
@@ -361,12 +398,18 @@ const rewriteScriptWithConfiguredProvider = async (
   request: ScriptGenerationRequest,
   assets: AssetMetadata[],
 ) => {
-  const providerMode = (process.env.AI_PROVIDER_MODE ?? "mock").toLowerCase();
+  const providerMode = (process.env.AI_PROVIDER_MODE ?? "ark").toLowerCase();
+  const explicitMockMode = providerMode === "mock";
+  if (!request.apiConfig?.general && explicitMockMode) {
+    return rewriteFallbackScript(project, { assets, request });
+  }
   if (
     !request.apiConfig?.general &&
     (!["ark", "doubao", "real"].includes(providerMode) || !hasConfiguredTextProviderEnvironment())
   ) {
-    return rewriteFallbackScript(project, { assets, request });
+    throw new Error(
+      `Real script generation is not configured. Set AI_PROVIDER_MODE=ark plus AI_GENERAL_API_KEY/ARK_API_KEY and AI_GENERAL_MODEL_ID, or explicitly set AI_PROVIDER_MODE=mock for demo fixtures.`,
+    );
   }
 
   const generated = await generateInspiration({
@@ -385,7 +428,15 @@ const rewriteScriptWithConfiguredProvider = async (
     };
   }
 
-  return rewriteFallbackScript(project, { assets, request });
+  if (explicitMockMode) {
+    return rewriteFallbackScript(project, { assets, request });
+  }
+
+  throw new Error(
+    generated.fallback.reason
+      ? `Real script generation failed: ${generated.fallback.reason}`
+      : "Real script generation failed without returning usable content.",
+  );
 };
 
 const escapeSvgText = (value: string): string =>
@@ -440,6 +491,9 @@ const createStoryboardFallbackImageUrl = (
 
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 };
+
+const canUseStoryboardFallbackImage = () =>
+  (process.env.AI_PROVIDER_MODE ?? "ark").trim().toLowerCase() === "mock";
 
 const buildStoryboardImagePrompt = (
   project: ProjectSnapshot,
@@ -506,13 +560,15 @@ const generateStoryboardSceneImageUrl = async (
   assets: AssetMetadata[],
   videoFrameExtractor: VideoFrameExtractor,
 ): Promise<string> => {
+  let referenceImageUrls: string[] = [];
+  let prompt = "";
   try {
-    const referenceImageUrls = await resolveStoryboardReferenceImageUrls(
+    referenceImageUrls = await resolveStoryboardReferenceImageUrls(
       scene,
       assets,
       videoFrameExtractor,
     );
-    const prompt = buildStoryboardImagePrompt(project, scene, request, assets, referenceImageUrls);
+    prompt = buildStoryboardImagePrompt(project, scene, request, assets, referenceImageUrls);
     const generated = await generateInspiration({
       assetType: "image",
       prompt,
@@ -567,10 +623,39 @@ const generateStoryboardSceneImageUrl = async (
       }
     }
   } catch (error) {
-    console.warn("[storyboard] image generation failed; using deterministic fallback.", error);
+    if (referenceImageUrls.length > 0 && !canUseStoryboardFallbackImage()) {
+      const retried = await generateInspiration({
+        assetType: "image",
+        prompt,
+        apiConfig: request?.apiConfig,
+        options: {
+          image: {
+            aspectRatio: "9:16",
+            count: 1,
+            quality: "standard",
+          },
+        },
+      });
+      const retriedMaterial = retried.materials.find(
+        (candidate) => candidate.status === "ready" && candidate.url,
+      );
+      if (retriedMaterial?.url) {
+        return retriedMaterial.url;
+      }
+    }
+    if (canUseStoryboardFallbackImage()) {
+      console.warn("[storyboard] image generation failed; using deterministic fallback.", error);
+      return createStoryboardFallbackImageUrl(project, scene);
+    }
+    throw error;
   }
 
-  return createStoryboardFallbackImageUrl(project, scene);
+  if (canUseStoryboardFallbackImage()) {
+    return createStoryboardFallbackImageUrl(project, scene);
+  }
+  throw new Error(
+    "Real storyboard image generation did not return a usable image URL. Set AI_PROVIDER_MODE=mock only for demo fixtures.",
+  );
 };
 
 const renderStoryboardSceneImages = async (
@@ -687,6 +772,25 @@ const fileNameForExternalImport = (title: string, contentType: string): string =
   return title.toLowerCase().endsWith(extension) ? title : `${title}${extension}`;
 };
 
+const safeLocalFileName = (value: string): string =>
+  value.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").replace(/^\.+$/, "asset") || "asset";
+
+const writeDownloadedAssetCache = async ({
+  assetId,
+  body,
+  name,
+}: {
+  assetId: string;
+  body: Buffer;
+  name: string;
+}): Promise<string> => {
+  const directory = join(mediaOutputDir(), "downloaded-assets", assetId);
+  await mkdir(directory, { recursive: true });
+  const localFilePath = join(directory, safeLocalFileName(name));
+  await writeFile(localFilePath, body);
+  return localFilePath;
+};
+
 const allowedDownloadHostsBySource: Record<ExternalAssetResult["source"], string[]> = {
   freesound: ["freesound.org", "cdn.freesound.org"],
   pexels: ["pexels.com", "images.pexels.com", "videos.pexels.com"],
@@ -798,6 +902,7 @@ export interface P0RouterOptions {
   store?: ProjectStore;
   storageProvider?: StorageProvider;
   renderExportPublisher?: RenderExportPublisher;
+  referenceDownloader?: ReferenceDownloadProvider;
   sceneClipComposer?: SceneClipComposer;
   videoFrameExtractor?: VideoFrameExtractor;
 }
@@ -805,6 +910,7 @@ export interface P0RouterOptions {
 export const createP0Router = ({
   cosAssetSearch = searchCosIntelligentAssets,
   externalAssetDownloader = downloadExternalAsset,
+  referenceDownloader,
   renderExportPublisher,
   sceneClipComposer,
   store = new MemoryProjectStore(),
@@ -929,6 +1035,12 @@ export const createP0Router = ({
       });
       const sourceUrl =
         downloaded.sourceUrl || externalAsset.downloadUrl || externalAsset.previewUrl;
+      const importedFileName = fileNameForExternalImport(externalAsset.title, contentType);
+      const localFilePath = await writeDownloadedAssetCache({
+        assetId,
+        body: downloaded.body,
+        name: importedFileName,
+      });
 
       await store.updateAsset(assetId, {
         status: "ready",
@@ -944,15 +1056,41 @@ export const createP0Router = ({
           region: uploadIntent.region,
           downloadedFromUrl: sourceUrl,
           downloadedBytes: sizeBytes,
+          localFilePath,
           importedAt: new Date().toISOString(),
         }),
         tags: buildExternalImportTags(externalAsset, contentType, uploaded.provider),
       });
 
+      if (assetType === "image" || assetType === "video") {
+        await store.updateAssetProcessingJob(jobId, {
+          status: "processing",
+          steps: ["queued", "external-download", "cos-upload", "multigranularity-structure"],
+          message: "Generating structured asset metadata and slice index from the imported asset.",
+        });
+        await processAssetStructure({
+          assetId,
+          input: { forceRegenerate: true, mode: "full" },
+          store,
+          storageProvider,
+        });
+      }
+
       await store.updateAssetProcessingJob(jobId, {
         status: "ready",
-        steps: ["queued", "external-download", "cos-upload", "metadata-ready"],
-        message: "External asset imported into Tencent COS and metadata persisted.",
+        steps: [
+          "queued",
+          "external-download",
+          "cos-upload",
+          ...(assetType === "image" || assetType === "video"
+            ? ["multigranularity-structure"]
+            : []),
+          "metadata-ready",
+        ],
+        message:
+          assetType === "image" || assetType === "video"
+            ? "External asset imported into Tencent COS and structured metadata persisted."
+            : "External asset imported into Tencent COS and metadata persisted.",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "External asset import failed.";
@@ -1437,7 +1575,7 @@ export const createP0Router = ({
         checksum: parsedConfirmation.data.checksum,
         uploadConfirmedAt: confirmedAt,
         structuredAssetVersion: "asset-multigranularity-v1",
-        structureProvider: "mock-asset-processor",
+        structureStatus: "pending_structure",
       },
     });
     if (!updatedAsset) {
@@ -1477,6 +1615,7 @@ export const createP0Router = ({
       assetId: request.params.assetId,
       input: parsedRequest.data,
       store,
+      storageProvider,
     });
     if (!result) {
       sendNotFound(response, "ASSET_NOT_FOUND", "Asset was not found.");
@@ -1548,6 +1687,11 @@ export const createP0Router = ({
 
       const job = await store.getLatestAssetProcessingJob(asset.id);
       const uploadedAt = new Date().toISOString();
+      const localFilePath = await writeDownloadedAssetCache({
+        assetId: asset.id,
+        body: request.body,
+        name: asset.name,
+      });
       const documentText = await extractBrandDocumentText({
         body: request.body,
         mimeType: contentType,
@@ -1573,10 +1717,11 @@ export const createP0Router = ({
           : {}),
         metadata: {
           proxiedUpload: true,
+          localFilePath,
           uploadedBytes: request.body.length,
           uploadConfirmedAt: uploadedAt,
           structuredAssetVersion: "asset-multigranularity-v1",
-          structureProvider: "mock-asset-processor",
+          structureStatus: asset.type === "image" || asset.type === "video" ? "pending_structure" : "metadata_ready",
           ...documentTextMetadata,
         },
       });
@@ -1894,6 +2039,7 @@ export const createP0Router = ({
         assetId: sourceAsset.id,
         input: { mode: "full", forceRegenerate: false },
         store,
+        storageProvider,
       }))
     ) {
       response.status(500).json({
@@ -1911,9 +2057,11 @@ export const createP0Router = ({
         ...referenceInput,
         sourceAssetId,
         sourceUrl: referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
-      },
-      store,
-    });
+        },
+        store,
+        referenceDownloader,
+        storageProvider,
+      });
     if (!reference) {
       response.status(500).json({
         error: {

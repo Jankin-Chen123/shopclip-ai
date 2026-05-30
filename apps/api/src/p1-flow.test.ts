@@ -1,8 +1,52 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app";
+
+const require = createRequire(import.meta.url);
+const ffmpegPath = (require("@ffmpeg-installer/ffmpeg") as { path: string }).path;
+
+const runFfmpeg = (args: string[]) =>
+  new Promise<void>((resolve, reject) => {
+    const child = spawn(ffmpegPath, args, { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`ffmpeg fixture generation failed with ${code}: ${stderr.slice(0, 800)}`));
+    });
+  });
+
+const createFixtureVideoBuffer = async (directory: string) => {
+  const videoPath = join(directory, "external-provider-fixture.mp4");
+  await runFfmpeg([
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=320x180:rate=10",
+    "-t",
+    "6",
+    "-c:v",
+    "mpeg4",
+    "-q:v",
+    "5",
+    videoPath,
+  ]);
+  return readFile(videoPath);
+};
 
 const request = async <T>(
   baseUrl: string,
@@ -59,11 +103,21 @@ const createProject = async (baseUrl: string): Promise<string> => {
 describe("P1 asset retrieval and scene editing", () => {
   let server: Server;
   let baseUrl: string;
+  let workdir: string;
+  let videoFixture: Buffer;
 
   beforeEach(async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
+    process.env.VISION_PROVIDER_MODE = "mock";
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "mock";
+    workdir = await mkdtemp(join(tmpdir(), "shopclip-p1-flow-"));
+    videoFixture = await createFixtureVideoBuffer(workdir);
     const app = createApp({
       externalAssetDownloader: async (asset) => ({
-        body: Buffer.from(`downloaded:${asset.source}:${asset.externalId}`),
+        body:
+          asset.type === "video"
+            ? videoFixture
+            : Buffer.from(`downloaded:${asset.source}:${asset.externalId}`),
         contentType:
           asset.type === "video"
             ? "video/mp4"
@@ -82,6 +136,10 @@ describe("P1 asset retrieval and scene editing", () => {
   });
 
   afterEach(async () => {
+    delete process.env.AI_PROVIDER_MODE;
+    delete process.env.VISION_PROVIDER_MODE;
+    delete process.env.VIDEO_RENDER_PROVIDER_MODE;
+    await rm(workdir, { force: true, recursive: true });
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -291,6 +349,7 @@ describe("P1 asset retrieval and scene editing", () => {
       project: {
         assets: Array<{
           id: string;
+          metadata?: Record<string, unknown>;
           name: string;
           objectKey?: string;
           status: string;
@@ -308,6 +367,15 @@ describe("P1 asset retrieval and scene editing", () => {
       name: "Desk setup B-roll",
       status: "ready",
       storageProvider: "mock-cos",
+      metadata: expect.objectContaining({
+        structuredAsset: expect.objectContaining({
+          assetId: imported.body.asset.id,
+          type: "video",
+        }),
+        structuredAssetObjectKey: expect.stringMatching(
+          new RegExp(`^projects/${projectId}/derived/${imported.body.asset.id}/metadata/structured-asset\\.json$`),
+        ),
+      }),
     });
     expect(readyAsset?.objectKey).toMatch(
       new RegExp(`^projects/${projectId}/raw/${imported.body.asset.id}/source\\.mp4$`),

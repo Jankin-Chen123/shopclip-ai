@@ -40,6 +40,7 @@ describe("Seedance render API flow", () => {
   let baseUrl: string;
 
   beforeEach(async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
@@ -60,6 +61,7 @@ describe("Seedance render API flow", () => {
     for (const key of touchedKeys) {
       delete process.env[key];
     }
+    delete process.env.AI_PROVIDER_MODE;
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {

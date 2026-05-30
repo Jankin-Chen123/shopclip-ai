@@ -62,8 +62,15 @@ describe("createArkVisionUnderstandingProvider", () => {
           "type" in item &&
           (item as { type?: string }).type === "input_image",
       );
+      const hasVideoInput = content.some(
+        (item) =>
+          typeof item === "object" &&
+          item !== null &&
+          "type" in item &&
+          (item as { type?: string }).type === "input_video",
+      );
       const output =
-        isSliceRequest && hasImageInput
+        isSliceRequest && hasVideoInput
           ? {
               summary: "Hero close-up shows the phone stand grip and hinge clearly.",
               ocrText: "GlowGrip",
@@ -135,6 +142,15 @@ describe("createArkVisionUnderstandingProvider", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://ark.test/api/v3/responses");
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      input: Array<{ content: Array<{ type?: string; video_url?: string }> }>;
+    };
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
+      input: Array<{ content: Array<{ type?: string; video_url?: string }> }>;
+    };
+    expect(firstBody.input[1]?.content.some((item) => item.type === "input_video")).toBe(true);
+    expect(secondBody.input[1]?.content.some((item) => item.type === "input_video")).toBe(true);
+    expect(secondBody.input[1]?.content.some((item) => item.type === "input_image")).toBe(false);
     expect(assetMetadata.modelTrace).toMatchObject({
       provider: "volcengine-ark-vision",
       model: "ep-vision-test",
@@ -147,7 +163,7 @@ describe("createArkVisionUnderstandingProvider", () => {
     expect(sliceMetadata.modelTrace).toBeUndefined();
   });
 
-  it("falls back to deterministic metadata when Ark is not configured", async () => {
+  it("uses deterministic metadata only when mock mode is explicit", async () => {
     process.env.VISION_PROVIDER_MODE = "mock";
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -167,7 +183,71 @@ describe("createArkVisionUnderstandingProvider", () => {
     });
   });
 
-  it("marks fallback metadata as needs_review when Ark returns invalid JSON", async () => {
+  it("enriches slice roles from OCR subtitles and time-position cues", async () => {
+    process.env.VISION_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "test-key";
+    process.env.ARK_API_BASE_URL = "https://ark.test/api/v3";
+    process.env.AI_VISION_MODEL_ID = "ep-vision-test";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            output_text: JSON.stringify({
+              summary: "Opening reveal shows the product with a purchase prompt.",
+              ocrText: "限时优惠 点击下单",
+              shotType: "close_up",
+              cameraMovement: "static",
+              action: "unwrap and reveal the product",
+              keyElements: ["product"],
+              productVisibility: "clear",
+              suitableSceneRoles: ["demo"],
+              qualitySignals: {
+                productVisibility: "clear",
+                usableForAd: true,
+              },
+            }),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    const provider = createArkVisionUnderstandingProvider();
+    const sliceMetadata = await provider.understandSlice({
+      asset: baseAsset,
+      audio: {
+        asrSummary: "OCR-first text extraction; ASR disabled.",
+        transcript: "",
+      },
+      endSecond: 3,
+      frameKeys: ["https://cdn.example.com/frame-0.jpg"],
+      index: 0,
+      sliceId: "slice_vision_ocr_roles",
+      startSecond: 0,
+    });
+
+    expect(sliceMetadata.ocrText).toBe("限时优惠 点击下单");
+    expect(sliceMetadata.transcript).toBe("");
+    expect(sliceMetadata.suitableSceneRoles).toEqual(
+      expect.arrayContaining(["demo", "hook", "price", "cta"]),
+    );
+    expect(sliceMetadata.searchText).toContain("限时优惠");
+  });
+
+  it("fails fast instead of silently using mock when real vision mode misses config", () => {
+    process.env.VISION_PROVIDER_MODE = "ark";
+    delete process.env.ARK_API_KEY;
+    delete process.env.AI_VISION_API_KEY;
+    process.env.AI_VISION_MODEL_ID = "ep-vision-test";
+
+    expect(() => createArkVisionUnderstandingProvider()).toThrow(
+      /VISION_PROVIDER_MODE=ark.*missing API key/,
+    );
+  });
+
+  it("fails fast instead of silently using mock when Ark returns invalid JSON", async () => {
     process.env.VISION_PROVIDER_MODE = "ark";
     process.env.ARK_API_KEY = "test-key";
     process.env.AI_VISION_MODEL_ID = "ep-vision-test";
@@ -178,19 +258,11 @@ describe("createArkVisionUnderstandingProvider", () => {
     );
 
     const provider = createArkVisionUnderstandingProvider();
-    const metadata = await provider.understandAsset({
+    await expect(provider.understandAsset({
       asset: baseAsset,
       audio: { asrSummary: "", transcript: "" },
       frames: [],
       probe: { durationSeconds: 9, format: "mp4" },
-    });
-
-    expect(metadata.complianceFlags).toContain("needs_review");
-    expect(metadata.modelTrace).toMatchObject({
-      provider: "volcengine-ark-vision",
-      model: "ep-vision-test",
-      fallbackUsed: true,
-    });
-    expect(metadata.modelTrace?.error).toContain("valid JSON");
+    })).rejects.toThrow(/asset understanding failed.*valid JSON/);
   });
 });

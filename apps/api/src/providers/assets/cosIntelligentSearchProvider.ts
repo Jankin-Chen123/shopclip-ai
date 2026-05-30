@@ -255,8 +255,27 @@ export const searchCosIntelligentAssets = async (
 ): Promise<CosImageSearchMatch[] | undefined> => createCosIntelligentSearchProvider()?.search(input);
 
 const assetIdFromObjectKey = (objectKey?: string): string | undefined => {
-  const rawSegment = objectKey?.match(/(?:^|\/)raw\/([^/]+)\//)?.[1];
-  return rawSegment ? decodeURIComponent(rawSegment) : undefined;
+  const match = objectKey?.match(/(?:^|\/)(?:raw|derived)\/([^/]+)\//);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+};
+
+const findMatchingSlice = (
+  match: CosImageSearchMatch,
+  slices: AssetSlice[],
+): AssetSlice | undefined => {
+  const objectKey = match.objectKey;
+  if (!objectKey) {
+    return undefined;
+  }
+
+  return slices.find((slice) => {
+    const metadataFrameKeys = slice.metadata?.cosFrameObjectKeys ?? [];
+    return (
+      slice.thumbnailKey === objectKey ||
+      metadataFrameKeys.includes(objectKey) ||
+      slice.metadata?.frameKeys.includes(objectKey)
+    );
+  });
 };
 
 const findMatchingAsset = (
@@ -282,20 +301,28 @@ export const mapCosImageMatchesToAssetResults = (
   const results: AssetSearchResult[] = [];
 
   for (const match of matches.filter((candidate) => candidate.score >= defaultMatchThreshold)) {
-    const asset = findMatchingAsset(match, library.assets);
+    const matchingSlice = findMatchingSlice(match, library.assetSlices);
+    const asset =
+      (matchingSlice
+        ? library.assets.find((candidate) => candidate.id === matchingSlice.assetId)
+        : undefined) ?? findMatchingAsset(match, library.assets);
     if (!asset || seenAssetIds.has(asset.id)) {
       continue;
     }
 
+    const slices = matchingSlice
+      ? [matchingSlice]
+      : library.assetSlices.filter((slice) => slice.assetId === asset.id);
     seenAssetIds.add(asset.id);
     results.push({
       asset,
-      slices: library.assetSlices.filter((slice) => slice.assetId === asset.id),
+      slices,
       score: match.score,
       reasons: [
         "cos-intelligent-search",
         `cos-score:${match.score}`,
         `cos-uri:${match.uri}`,
+        ...(matchingSlice ? [`cos-slice:${matchingSlice.id}`] : []),
       ],
     });
   }

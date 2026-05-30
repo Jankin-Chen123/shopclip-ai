@@ -13,6 +13,7 @@ export interface SliceUnderstandingInput {
   audio: ExtractedAudioSummary;
   endSecond: number;
   frameKeys: string[];
+  frames?: SampledFrame[];
   index: number;
   sliceId: string;
   startSecond: number;
