@@ -63,6 +63,33 @@ test.describe("Part 015 structured references", () => {
     await mkdir(evidenceDir, { recursive: true });
   });
 
+  test("analyzes a public reference URL without creating a project first", async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.goto("/#inspiration");
+    await expect(page.getByRole("heading", { name: "Viral video breakdown" })).toBeVisible();
+
+    await page.getByLabel("Source URL").fill("https://example.test/video/global-viral-cup");
+    await page.getByLabel("Reference title").fill("Global viral cup proof");
+    const analyzeButton = page.getByRole("button", { name: "Analyze reference" });
+    await expect(analyzeButton).toBeEnabled();
+    await analyzeButton.click();
+
+    await expect(page.getByRole("heading", { name: "Global viral cup proof" })).toBeVisible({
+      timeout: 45_000,
+    });
+    await page.getByRole("button", { name: /script library/ }).click();
+
+    await expect(page).toHaveURL(/#create$/);
+    const scriptGeneration = page.getByRole("region", { name: "Script generation" });
+    await expect(scriptGeneration.getByLabel("Reference video")).toContainText(
+      "Global viral cup proof",
+    );
+    await page.screenshot({
+      fullPage: true,
+      path: evidencePath("part-015-global-reference-no-project.png"),
+    });
+  });
+
   test("analyzes an uploaded self-owned reference video and exposes it as a script reference", async ({
     page,
   }) => {
@@ -97,7 +124,7 @@ test.describe("Part 015 structured references", () => {
     await page.getByRole("button", { name: "Analyze reference" }).click();
 
     await expect(page.getByRole("heading", { name: "Self-shot proof demo" })).toBeVisible();
-    await expect(page.getByText("ready")).toBeVisible();
+    await expect(page.getByText("ready").first()).toBeVisible();
     await page.getByRole("button", { name: "Create template" }).click();
     await expect(page.getByText("1 template")).toBeVisible();
 

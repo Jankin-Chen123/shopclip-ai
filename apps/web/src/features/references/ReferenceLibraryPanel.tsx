@@ -18,11 +18,14 @@ interface ReferenceDraft {
 interface ReferenceLibraryPanelProps {
   disabled: boolean;
   error?: string;
+  initialDraft?: ReferenceDraft;
   isLoading: boolean;
   language: Language;
   onAnalyzeReference: (draft: ReferenceDraft) => void;
   onCreateTemplate: () => void;
+  onUseReference: (referenceId: string) => void;
   references: ReferenceVideo[];
+  selectedReferenceId?: string;
   sourceAssets: AssetMetadata[];
   templates: ViralTemplate[];
 }
@@ -41,6 +44,8 @@ const text = {
     referenceTitle: "Reference title",
     analyze: "Analyze reference",
     createTemplate: "Create template",
+    useReference: "Add to script library",
+    selectedReference: "Added to script library",
     empty: "No reference breakdowns yet",
     status: (count: number) => `${count} reference${count === 1 ? "" : "s"}`,
     templateStatus: (count: number) => `${count} template${count === 1 ? "" : "s"}`,
@@ -58,6 +63,8 @@ const text = {
     referenceTitle: "参考标题",
     analyze: "拆解参考视频",
     createTemplate: "提炼模板",
+    useReference: "加入剧本素材库",
+    selectedReference: "已加入剧本素材库",
     empty: "暂无参考视频拆解",
     status: (count: number) => `${count} 条参考`,
     templateStatus: (count: number) => `${count} 个模板`,
@@ -67,23 +74,28 @@ const text = {
 export const ReferenceLibraryPanel = ({
   disabled,
   error,
+  initialDraft,
   isLoading,
   language,
   onAnalyzeReference,
   onCreateTemplate,
+  onUseReference,
   references,
+  selectedReferenceId,
   sourceAssets,
   templates,
 }: ReferenceLibraryPanelProps) => {
   const copy = text[language];
-  const [draft, setDraft] = useState<ReferenceDraft>({
-    category: "Kitchen appliances",
-    sourceDeclaration: "Public reference URL; save structured analysis only.",
-    sourceAssetId: undefined,
-    sourcePlatform: "tiktok",
-    sourceUrl: "",
-    title: "",
-  });
+  const [draft, setDraft] = useState<ReferenceDraft>(
+    initialDraft ?? {
+      category: "Kitchen appliances",
+      sourceDeclaration: "Public reference URL; save structured analysis only.",
+      sourceAssetId: undefined,
+      sourcePlatform: "tiktok",
+      sourceUrl: "",
+      title: "",
+    },
+  );
 
   const updateDraft = (field: keyof ReferenceDraft, value: string | undefined) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -216,7 +228,13 @@ export const ReferenceLibraryPanel = ({
                   ))}
                 </div>
               </div>
-              <Plus size={18} aria-hidden="true" />
+              <Button
+                disabled={disabled || reference.status !== "ready"}
+                icon={<Plus size={18} />}
+                onClick={() => onUseReference(reference.id)}
+              >
+                {selectedReferenceId === reference.id ? copy.selectedReference : copy.useReference}
+              </Button>
             </article>
           ))
         )}

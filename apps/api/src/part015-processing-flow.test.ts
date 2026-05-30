@@ -143,6 +143,93 @@ describe("Part 015 structured asset and reference flow", () => {
     await rm(workdir, { recursive: true, force: true });
   });
 
+  it("analyzes public reference videos without a project and reuses them for later script generation", async () => {
+    const referenceResponse = await fetch(`${baseUrl}/api/references/analyze`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sourceUrl: "https://example.test/video/global-viral-blender",
+        sourcePlatform: "tiktok",
+        sourceDeclaration: "Public reference URL; save structured analysis only.",
+        title: "Global viral blender proof",
+        category: "Kitchen appliances",
+      }),
+    });
+    expect(referenceResponse.status).toBe(201);
+    const reference = (await referenceResponse.json()) as {
+      reference: {
+        id: string;
+        projectId?: string;
+        sourceAssetId?: string;
+        status: string;
+      };
+    };
+    expect(reference.reference.projectId).toBeUndefined();
+    expect(reference.reference.status).toBe("ready");
+    expect(reference.reference.sourceAssetId).toBeTruthy();
+
+    const referencesResponse = await fetch(`${baseUrl}/api/references`);
+    expect(referencesResponse.status).toBe(200);
+    const references = (await referencesResponse.json()) as {
+      references: Array<{ id: string; projectId?: string }>;
+    };
+    expect(references.references.some((candidate) => candidate.id === reference.reference.id)).toBe(
+      true,
+    );
+
+    const templateResponse = await fetch(`${baseUrl}/api/references/templates`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        category: "Kitchen appliances",
+        referenceIds: [reference.reference.id],
+        templateName: "Global Identity Hook Demo",
+      }),
+    });
+    expect(templateResponse.status).toBe(201);
+    const template = (await templateResponse.json()) as {
+      template: { templateId: string };
+    };
+
+    const templatesResponse = await fetch(`${baseUrl}/api/references/templates`);
+    expect(templatesResponse.status).toBe(200);
+    const templates = (await templatesResponse.json()) as {
+      templates: Array<{ templateId: string }>;
+    };
+    expect(
+      templates.templates.some((candidate) => candidate.templateId === template.template.templateId),
+    ).toBe(true);
+
+    const projectResponse = await fetch(`${baseUrl}/api/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Reuse global reference",
+        productName: "BlendGo Portable Blender",
+        audience: "Busy commuters",
+        sellingPoints: ["USB-C charging", "leak-proof lid"],
+        tone: "confident",
+        style: "fast demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    expect(projectResponse.status).toBe(201);
+    const { project } = (await projectResponse.json()) as { project: { id: string } };
+
+    const scriptResponse = await fetch(`${baseUrl}/api/projects/${project.id}/generate-script`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        productionMode: "template",
+        referenceId: reference.reference.id,
+        templateId: template.template.templateId,
+      }),
+    });
+    expect(scriptResponse.status).toBe(201);
+    const script = (await scriptResponse.json()) as { script: { constraints: string[] } };
+    expect(script.script.constraints.join(" ")).toContain("参考视频");
+  });
+
   it("processes video assets into searchable slices and stores reference breakdowns", async () => {
     const projectResponse = await fetch(`${baseUrl}/api/projects`, {
       method: "POST",

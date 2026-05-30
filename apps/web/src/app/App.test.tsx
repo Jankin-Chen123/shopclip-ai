@@ -2,6 +2,7 @@ import type {
   AssetMetadata,
   ExternalAssetResult,
   ProjectSummary,
+  ReferenceVideo,
   StoryboardScene,
 } from "@shopclip/shared";
 import { readFileSync } from "node:fs";
@@ -25,6 +26,7 @@ import {
   replaceInspirationSessionHistoryResult,
 } from "../features/inspiration/InspirationPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
+import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import {
@@ -76,6 +78,25 @@ const makeProjectSummary = (project: Partial<ProjectSummary>): ProjectSummary =>
   assetCount: 2,
   sceneCount: 4,
   ...project,
+});
+
+const makeReferenceVideo = (reference: Partial<ReferenceVideo>): ReferenceVideo => ({
+  id: "reference-1",
+  sourceUrl: "https://example.test/reference.mp4",
+  sourcePlatform: "tiktok",
+  sourceDeclaration: "Public reference URL; save structured analysis only.",
+  title: "Reference clip",
+  category: "Kitchen appliances",
+  publicStats: {
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    views: 0,
+  },
+  status: "ready",
+  createdAt: "2026-05-30T00:00:00.000Z",
+  updatedAt: "2026-05-30T00:00:00.000Z",
+  ...reference,
 });
 
 describe("App", () => {
@@ -1530,6 +1551,34 @@ describe("App", () => {
     expect(markup).not.toContain("Agent mode");
     expect(markup).not.toContain("Auto</button>");
     expect(markup).not.toContain("Current routing");
+  });
+
+  it("allows public reference analysis without a loaded project when the draft is complete", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        initialDraft={{
+          category: "Kitchen appliances",
+          sourceDeclaration: "Public reference URL; save structured analysis only.",
+          sourcePlatform: "tiktok",
+          sourceUrl: "https://example.test/reference.mp4",
+          title: "Reference clip",
+        }}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[makeReferenceVideo({})]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toMatch(
+      /<button class="button button-primary" type="button"><span class="button-icon">[\s\S]*?<span>Analyze reference<\/span><\/button>/,
+    );
+    expect(markup).toContain("Add to script library");
   });
 
   it("renders clickable inspiration session history with previous model artifacts", () => {

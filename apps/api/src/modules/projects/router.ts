@@ -2082,6 +2082,13 @@ export const createP0Router = ({
     });
   });
 
+  router.get("/references/templates", async (request, response) => {
+    const category = typeof request.query.category === "string" ? request.query.category : undefined;
+    response.json({
+      templates: await store.listViralTemplates(category),
+    });
+  });
+
   router.post("/references/templates", async (request, response) => {
     const parsedTemplate = TemplateCreateRequestSchema.safeParse(request.body);
     if (!parsedTemplate.success) {
@@ -2126,7 +2133,7 @@ export const createP0Router = ({
     }
 
     if (parsedRequest.data.referenceId) {
-      const reference = (await store.listReferenceVideos(project.id)).find(
+      const reference = (await store.listReferenceVideos()).find(
         (candidate) => candidate.id === parsedRequest.data.referenceId,
       );
       if (!reference) {

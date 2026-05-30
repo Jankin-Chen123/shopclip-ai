@@ -349,6 +349,16 @@ export const analyzeReferenceVideo = async (input: {
   return response.reference;
 };
 
+export const listReferenceVideos = async (projectId?: string): Promise<ReferenceVideo[]> => {
+  const params = new URLSearchParams();
+  if (projectId) {
+    params.set("projectId", projectId);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const response = await requestJson<{ references: ReferenceVideo[] }>(`/references${suffix}`);
+  return response.references;
+};
+
 export const createReferenceTemplate = async (input: {
   category: string;
   referenceIds: string[];
@@ -359,6 +369,18 @@ export const createReferenceTemplate = async (input: {
     body: JSON.stringify(input),
   });
   return response.template;
+};
+
+export const listReferenceTemplates = async (category?: string): Promise<ViralTemplate[]> => {
+  const params = new URLSearchParams();
+  if (category?.trim()) {
+    params.set("category", category.trim());
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const response = await requestJson<{ templates: ViralTemplate[] }>(
+    `/references/templates${suffix}`,
+  );
+  return response.templates;
 };
 
 export const searchExternalStockAssets = async (

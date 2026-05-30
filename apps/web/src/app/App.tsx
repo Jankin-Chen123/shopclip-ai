@@ -4,11 +4,13 @@ import type {
   AssetSlice,
   DashboardResponse,
   ProjectBrief,
+  ReferenceVideo,
   RenderTask,
   ScriptGenerationRequest,
   ScriptResult,
   StoryboardScene,
   TraceEvent,
+  ViralTemplate,
 } from "@shopclip/shared";
 
 import {
@@ -53,6 +55,8 @@ import {
   generateScript,
   importExternalAsset,
   loadDashboard,
+  listReferenceTemplates,
+  listReferenceVideos,
   listProjects,
   loadSceneSuggestions,
   loadProject,
@@ -180,6 +184,18 @@ const shouldAutoProcessImportedAsset = (asset: AssetMetadata): boolean =>
   asset.type === "image" ||
   asset.type === "video" ||
   Boolean(asset.mimeType?.startsWith("image/") || asset.mimeType?.startsWith("video/"));
+
+const mergeReferences = (...groups: ReferenceVideo[][]): ReferenceVideo[] => {
+  const referencesById = new Map<string, ReferenceVideo>();
+  groups.flat().forEach((reference) => referencesById.set(reference.id, reference));
+  return [...referencesById.values()];
+};
+
+const mergeTemplates = (...groups: ViralTemplate[][]): ViralTemplate[] => {
+  const templatesById = new Map<string, ViralTemplate>();
+  groups.flat().forEach((template) => templatesById.set(template.templateId, template));
+  return [...templatesById.values()];
+};
 
 interface ImportAndStructureFilesInput {
   createAssetUploadIntentFn?: typeof createAssetUploadIntent;
@@ -462,6 +478,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [projectHistory, setProjectHistory] = useState<ProjectSummary[]>([]);
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
   const [projectIdToLoad, setProjectIdToLoad] = useState("");
+  const [referenceLibrary, setReferenceLibrary] = useState<ReferenceVideo[]>([]);
   const [renderTask, setRenderTask] = useState<RenderTask>();
   const [script, setScript] = useState<ScriptResult>();
   const [scriptDraft, setScriptDraft] = useState("");
@@ -471,6 +488,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [selectedTemplateIdForScript, setSelectedTemplateIdForScript] = useState<string>();
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
+  const [viralTemplateLibrary, setViralTemplateLibrary] = useState<ViralTemplate[]>([]);
   const isRenderPollInFlight = useRef(false);
   const text = copy[language];
 
@@ -493,6 +511,14 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const preparedProjectAssetsByBucket = useMemo(
     () => getPreparedAssetsByBucket(project?.assets ?? []),
     [project?.assets],
+  );
+  const scriptReferenceLibrary = useMemo(
+    () => mergeReferences(referenceLibrary, project?.referenceVideos ?? []),
+    [project?.referenceVideos, referenceLibrary],
+  );
+  const scriptTemplateLibrary = useMemo(
+    () => mergeTemplates(viralTemplateLibrary, project?.viralTemplates ?? []),
+    [project?.viralTemplates, viralTemplateLibrary],
   );
   const activeAssetSearchResults = useMemo(
     () =>
@@ -706,6 +732,20 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       });
   };
 
+  const refreshReferenceLibrary = () => {
+    void Promise.all([listReferenceVideos(), listReferenceTemplates()])
+      .then(([references, templates]) => {
+        setReferenceLibrary(references);
+        setViralTemplateLibrary(templates);
+      })
+      .catch((error) => {
+        setErrors((current) => ({
+          ...current,
+          script: error instanceof Error ? error.message : "Reference library failed to load.",
+        }));
+      });
+  };
+
   useEffect(() => {
     if (activePage === "assets") {
       refreshAssetLibrary(activeAssetCategory);
@@ -722,6 +762,12 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   useEffect(() => {
     if (activePage === "project") {
       refreshProjectHistory();
+    }
+  }, [activePage]);
+
+  useEffect(() => {
+    if (activePage === "inspiration" || activePage === "create") {
+      refreshReferenceLibrary();
     }
   }, [activePage]);
 
@@ -1213,41 +1259,36 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     sourceUrl?: string;
     title: string;
   }) => {
-    if (!project) {
-      setErrors((current) => ({ ...current, script: "Create or load a project first." }));
-      return;
-    }
-
     void runAction("script", "reference", async () => {
       const reference = await analyzeReferenceVideo({
         ...draft,
-        projectId: project.id,
         sourceAssetId: draft.sourceAssetId?.trim() || undefined,
         sourceUrl: draft.sourceUrl?.trim() || undefined,
       });
-      const refreshedProject = await loadProject(project.id);
-      setProject(refreshedProject);
+      setReferenceLibrary((current) => mergeReferences([reference], current));
       setSelectedReferenceIdForScript(reference.id);
+      setSelectedTemplateIdForScript(undefined);
       setScriptProductionMode("viral-remix");
     });
   };
 
   const handleCreateReferenceTemplate = () => {
-    if (!project || project.referenceVideos.length === 0) {
+    if (scriptReferenceLibrary.length === 0) {
       return;
     }
 
-    const readyReferences = project.referenceVideos.filter((reference) => reference.status === "ready");
+    const readyReferences = scriptReferenceLibrary.filter((reference) => reference.status === "ready");
     if (readyReferences.length === 0) {
       return;
     }
 
     void runAction("script", "reference", async () => {
       const template = await createReferenceTemplate({
-        category: readyReferences[0]?.category ?? project.productName,
+        category: readyReferences[0]?.category ?? project?.productName ?? brief.productName,
         referenceIds: readyReferences.map((reference) => reference.id),
-        templateName: `${project.productName} viral template`,
+        templateName: `${project?.productName ?? brief.productName} viral template`,
       });
+      setViralTemplateLibrary((current) => mergeTemplates([template], current));
       setProject((current) =>
         current
           ? {
@@ -1264,6 +1305,13 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setSelectedTemplateIdForScript(template.templateId);
       setScriptProductionMode("template");
     });
+  };
+
+  const handleUseReferenceForScript = (referenceId: string) => {
+    setSelectedReferenceIdForScript(referenceId);
+    setSelectedTemplateIdForScript(undefined);
+    setScriptProductionMode("viral-remix");
+    handlePageChange("create");
   };
 
   const handleRewriteScript = () => {
@@ -1592,19 +1640,21 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         {activePage === "inspiration" ? (
           <section className="inspiration-reference-workspace" aria-label="Inspiration workspace">
             <ReferenceLibraryPanel
-              disabled={!project || busyState !== "idle"}
+              disabled={busyState !== "idle"}
               error={errors.script}
               isLoading={busyState === "reference"}
               language={language}
               onAnalyzeReference={handleAnalyzeReference}
               onCreateTemplate={handleCreateReferenceTemplate}
-              references={project?.referenceVideos ?? []}
+              onUseReference={handleUseReferenceForScript}
+              references={scriptReferenceLibrary}
+              selectedReferenceId={selectedReferenceIdForScript}
               sourceAssets={studioAssets.filter(
                 (asset) =>
                   (asset.type === "video" || asset.mimeType?.startsWith("video/")) &&
                   asset.source !== "public_reference",
               )}
-              templates={project?.viralTemplates ?? []}
+              templates={scriptTemplateLibrary}
             />
           </section>
         ) : null}
@@ -1674,12 +1724,12 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     onScriptDraftChange={setScriptDraft}
                     onTemplateChange={setSelectedTemplateIdForScript}
                     productionMode={scriptProductionMode}
-                    references={project?.referenceVideos ?? []}
+                    references={scriptReferenceLibrary}
                     script={script}
                     scriptDraft={scriptDraft}
                     selectedReferenceId={selectedReferenceIdForScript}
                     selectedTemplateId={selectedTemplateIdForScript}
-                    templates={project?.viralTemplates ?? []}
+                    templates={scriptTemplateLibrary}
                   />
                 </>
               ) : null}

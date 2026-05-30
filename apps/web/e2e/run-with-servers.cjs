@@ -110,6 +110,7 @@ process.on("SIGTERM", handleSignal);
     COS_PROVIDER_MODE: "mock",
     PORT: apiPort,
     PROJECT_STORE_MODE: "memory",
+    REFERENCE_DOWNLOAD_PROVIDER_MODE: "mock",
     REFERENCE_PROVIDER_MODE: "mock",
     VIDEO_RENDER_PROVIDER_MODE: "mock",
     VISION_PROVIDER_MODE: "mock",
