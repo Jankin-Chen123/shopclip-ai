@@ -116,7 +116,25 @@ export const resolveApiDownloadUrl = (url: string): string => {
   return new URL(url, apiBaseUrl).toString();
 };
 
-const getErrorMessage = (body: unknown): string => {
+const parseResponseBody = async (response: Response): Promise<unknown> => {
+  const text = await response.text();
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+};
+
+const compactResponseText = (value: string, maxLength = 220): string => {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  return compacted.length > maxLength ? `${compacted.slice(0, maxLength - 1)}...` : compacted;
+};
+
+const getErrorMessage = (body: unknown, response?: Response): string => {
   if (
     typeof body === "object" &&
     body !== null &&
@@ -127,6 +145,21 @@ const getErrorMessage = (body: unknown): string => {
     typeof body.error.message === "string"
   ) {
     return body.error.message;
+  }
+
+  const statusPrefix = response
+    ? `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`
+    : "Request failed";
+
+  if (typeof body === "string" && body.trim()) {
+    if (body.trimStart().startsWith("<")) {
+      return `${statusPrefix}. The server returned an HTML error page instead of JSON. This usually means the API timed out or was rejected by the reverse proxy; check the backend logs for the real provider error.`;
+    }
+    return `${statusPrefix}. ${compactResponseText(body)}`;
+  }
+
+  if (response) {
+    return `${statusPrefix}. Request failed.`;
   }
 
   return "Request failed.";
@@ -141,10 +174,10 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
     ...init,
   });
 
-  const body = (await response.json()) as unknown;
+  const body = await parseResponseBody(response);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body));
+    throw new Error(getErrorMessage(body, response));
   }
 
   return body as T;
@@ -279,10 +312,10 @@ export const uploadAssetFileToStorage = async (
     },
     body: file,
   });
-  const body = (await response.json()) as unknown;
+  const body = await parseResponseBody(response);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body));
+    throw new Error(getErrorMessage(body, response));
   }
 
   return body as {

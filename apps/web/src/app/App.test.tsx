@@ -49,7 +49,7 @@ import {
   pruneAssetPrepSnapshotDeletedAssets,
 } from "./App";
 import { copy } from "./i18n";
-import { regenerateScene, resolveApiDownloadUrl } from "../lib/api";
+import { listReferenceVideos, regenerateScene, resolveApiDownloadUrl } from "../lib/api";
 import { createExportDownloadFilename, triggerBrowserDownload } from "../lib/download";
 
 afterEach(() => {
@@ -502,6 +502,24 @@ describe("App", () => {
     expect(resolveApiDownloadUrl("https://cdn.example.test/export.mp4")).toBe(
       "https://cdn.example.test/export.mp4",
     );
+  });
+
+  it("reports non-JSON gateway errors without leaking JSON parser noise", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response("<html><body><h1>504 Gateway Time-out</h1></body></html>", {
+          status: 504,
+          statusText: "Gateway Time-out",
+          headers: { "content-type": "text/html" },
+        }),
+      ),
+    );
+
+    await expect(listReferenceVideos()).rejects.toThrow(
+      /HTTP 504 Gateway Time-out.*HTML error page/,
+    );
+    await expect(listReferenceVideos()).rejects.not.toThrow(/Unexpected token/);
   });
 
   it("triggers a browser download for exported demo videos", () => {

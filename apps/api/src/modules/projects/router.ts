@@ -2051,17 +2051,31 @@ export const createP0Router = ({
       return;
     }
 
-    const reference = await analyzeReferenceVideo({
-      projectId,
-      reference: {
-        ...referenceInput,
-        sourceAssetId,
-        sourceUrl: referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
+    let reference;
+    try {
+      reference = await analyzeReferenceVideo({
+        projectId,
+        reference: {
+          ...referenceInput,
+          sourceAssetId,
+          sourceUrl: referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
         },
         store,
         referenceDownloader,
         storageProvider,
       });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "REFERENCE_ANALYSIS_PROVIDER_FAILED",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Reference video provider failed during analysis.",
+        },
+      });
+      return;
+    }
     if (!reference) {
       response.status(500).json({
         error: {

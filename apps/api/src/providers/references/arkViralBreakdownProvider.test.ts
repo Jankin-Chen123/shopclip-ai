@@ -283,4 +283,17 @@ describe("createArkViralBreakdownProvider", () => {
       /REFERENCE_PROVIDER_MODE=ark.*missing API key/,
     );
   });
+
+  it("rejects Seedance video generation models before calling the Responses API", () => {
+    process.env.REFERENCE_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "test-key";
+    process.env.AI_REFERENCE_MODEL_ID = "doubao-seedance-1-5-pro-251215";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(() => createArkViralBreakdownProvider()).toThrow(
+      /reference breakdown uses the Ark Responses API.*Seedance\/video generation models/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

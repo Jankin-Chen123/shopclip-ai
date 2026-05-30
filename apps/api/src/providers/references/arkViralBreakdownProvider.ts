@@ -39,6 +39,11 @@ const referenceProviderMode = () =>
 
 const isRealReferenceMode = (mode = referenceProviderMode()) => REAL_REFERENCE_MODES.includes(mode);
 
+const isVideoGenerationModel = (model: string): boolean => {
+  const normalizedModel = model.trim().toLowerCase();
+  return normalizedModel.includes("seedance") || normalizedModel.includes("video-generation");
+};
+
 const getRequiredConfig = (): ArkReferenceConfig | undefined => {
   const mode = referenceProviderMode();
   if (mode === "mock") {
@@ -61,6 +66,11 @@ const getRequiredConfig = (): ArkReferenceConfig | undefined => {
             ? "API key"
             : "model"
       }. Set AI_REFERENCE_API_KEY or ARK_API_KEY, and AI_REFERENCE_MODEL_ID or AI_GENERAL_MODEL_ID.`,
+    );
+  }
+  if (isVideoGenerationModel(model)) {
+    throw new Error(
+      `${PROVIDER_ID} is configured with AI_REFERENCE_MODEL_ID=${model}, but reference breakdown uses the Ark Responses API and requires a text or multimodal understanding model. Do not use Seedance/video generation models here; set AI_REFERENCE_MODEL_ID to a Doubao Seed text/vision model or endpoint that has Responses API access.`,
     );
   }
 
@@ -331,6 +341,15 @@ const postArkReference = async (
     const responseSummary = isRecord(responseBody)
       ? ` ${JSON.stringify(responseBody).slice(0, 240)}`
       : "";
+    const rawSummary = responseSummary.toLowerCase();
+    if (
+      response.status === 403 &&
+      rawSummary.includes("does not have access to responses api")
+    ) {
+      throw new Error(
+        `Ark reference request failed with HTTP 403 because model ${config.model} cannot access the Responses API. Set AI_REFERENCE_MODEL_ID to a text or multimodal understanding model/endpoint, not a video generation model.`,
+      );
+    }
     throw new Error(`Ark reference request failed with HTTP ${response.status}.${responseSummary}`);
   }
 
