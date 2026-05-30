@@ -129,6 +129,15 @@ export interface ProjectStore {
     referenceId: string,
     analysis: ReferenceVideoAnalysis,
   ): MaybePromise<ReferenceVideo | undefined>;
+  updateReferenceVideo(
+    referenceId: string,
+    update: Partial<
+      Pick<
+        ReferenceVideo,
+        "errorMessage" | "publicStats" | "sourceAssetId" | "sourceUrl" | "status"
+      >
+    >,
+  ): MaybePromise<ReferenceVideo | undefined>;
   updateProjectPrepKeywords(
     projectId: string,
     keywords: string[],

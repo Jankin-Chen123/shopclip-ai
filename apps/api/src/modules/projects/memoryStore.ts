@@ -540,6 +540,52 @@ export class MemoryProjectStore implements ProjectStore {
     return undefined;
   }
 
+  updateReferenceVideo(
+    referenceId: string,
+    update: Partial<
+      Pick<
+        ReferenceVideo,
+        "errorMessage" | "publicStats" | "sourceAssetId" | "sourceUrl" | "status"
+      >
+    >,
+  ): ReferenceVideo | undefined {
+    const timestamp = now();
+    const updateReference = (reference: ReferenceVideo): ReferenceVideo => {
+      const nextReference: ReferenceVideo = {
+        ...reference,
+        ...update,
+        updatedAt: timestamp,
+      };
+      if (update.errorMessage === undefined && update.status && update.status !== "failed") {
+        delete nextReference.errorMessage;
+      }
+      return nextReference;
+    };
+
+    const globalIndex = this.globalReferenceVideos.findIndex((reference) => reference.id === referenceId);
+    if (globalIndex !== -1) {
+      const updatedReference = updateReference(this.globalReferenceVideos[globalIndex]!);
+      this.globalReferenceVideos[globalIndex] = updatedReference;
+      return updatedReference;
+    }
+
+    for (const project of this.projects.values()) {
+      const referenceIndex = project.referenceVideos.findIndex(
+        (reference) => reference.id === referenceId,
+      );
+      if (referenceIndex === -1) {
+        continue;
+      }
+
+      const updatedReference = updateReference(project.referenceVideos[referenceIndex]!);
+      project.referenceVideos[referenceIndex] = updatedReference;
+      project.updatedAt = timestamp;
+      return updatedReference;
+    }
+
+    return undefined;
+  }
+
   listReferenceVideos(projectId?: string): ReferenceVideo[] {
     if (projectId) {
       return this.projects.get(projectId)?.referenceVideos ?? [];

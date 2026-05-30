@@ -489,6 +489,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
   const [viralTemplateLibrary, setViralTemplateLibrary] = useState<ViralTemplate[]>([]);
+  const isReferencePollInFlight = useRef(false);
   const isRenderPollInFlight = useRef(false);
   const text = copy[language];
 
@@ -515,6 +516,13 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const scriptReferenceLibrary = useMemo(
     () => mergeReferences(referenceLibrary, project?.referenceVideos ?? []),
     [project?.referenceVideos, referenceLibrary],
+  );
+  const hasPendingReferences = useMemo(
+    () =>
+      scriptReferenceLibrary.some(
+        (reference) => reference.status === "registered" || reference.status === "analyzing",
+      ),
+    [scriptReferenceLibrary],
   );
   const scriptTemplateLibrary = useMemo(
     () => mergeTemplates(viralTemplateLibrary, project?.viralTemplates ?? []),
@@ -733,6 +741,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const refreshReferenceLibrary = () => {
+    if (isReferencePollInFlight.current) {
+      return;
+    }
+    isReferencePollInFlight.current = true;
     void Promise.all([listReferenceVideos(), listReferenceTemplates()])
       .then(([references, templates]) => {
         setReferenceLibrary(references);
@@ -743,6 +755,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
           ...current,
           script: error instanceof Error ? error.message : "Reference library failed to load.",
         }));
+      })
+      .finally(() => {
+        isReferencePollInFlight.current = false;
       });
   };
 
@@ -770,6 +785,16 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       refreshReferenceLibrary();
     }
   }, [activePage]);
+
+  useEffect(() => {
+    if (!hasPendingReferences) {
+      return;
+    }
+
+    const intervalId = window.setInterval(refreshReferenceLibrary, 3000);
+    refreshReferenceLibrary();
+    return () => window.clearInterval(intervalId);
+  }, [hasPendingReferences]);
 
   useEffect(() => {
     if (!renderTask || !isRenderTaskPollingActive(renderTask)) {
@@ -1266,9 +1291,11 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         sourceUrl: draft.sourceUrl?.trim() || undefined,
       });
       setReferenceLibrary((current) => mergeReferences([reference], current));
-      setSelectedReferenceIdForScript(reference.id);
-      setSelectedTemplateIdForScript(undefined);
-      setScriptProductionMode("viral-remix");
+      if (reference.status === "ready") {
+        setSelectedReferenceIdForScript(reference.id);
+        setSelectedTemplateIdForScript(undefined);
+        setScriptProductionMode("viral-remix");
+      }
     });
   };
 

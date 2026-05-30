@@ -218,9 +218,17 @@ export const ReferenceLibraryPanel = ({
             <article className="suggestion-row" key={reference.id}>
               <div>
                 <h4>{reference.title}</h4>
-                <p>{reference.analysis?.contentFormula ?? reference.sourceDeclaration}</p>
+                <p>
+                  {reference.status === "failed"
+                    ? (reference.errorMessage ?? "Reference analysis failed.")
+                    : reference.status === "ready"
+                      ? (reference.analysis?.contentFormula ?? reference.sourceDeclaration)
+                      : "Analyzing video structure, slices, hook, pacing, and reusable script factors."}
+                </p>
                 <div className="constraint-list">
-                  <StatusPill tone="info">{reference.status}</StatusPill>
+                  <StatusPill tone={reference.status === "failed" ? "danger" : "info"}>
+                    {reference.status}
+                  </StatusPill>
                   {reference.analysis?.keyViralFactors.slice(0, 3).map((factor) => (
                     <StatusPill key={factor} tone="info">
                       {factor}

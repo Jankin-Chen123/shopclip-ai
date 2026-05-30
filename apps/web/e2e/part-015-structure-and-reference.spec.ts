@@ -77,6 +77,7 @@ test.describe("Part 015 structured references", () => {
     await expect(page.getByRole("heading", { name: "Global viral cup proof" })).toBeVisible({
       timeout: 45_000,
     });
+    await expect(page.getByText("ready").first()).toBeVisible({ timeout: 45_000 });
     await page.getByRole("button", { name: /script library/ }).click();
 
     await expect(page).toHaveURL(/#create$/);

@@ -722,6 +722,36 @@ export class PrismaProjectStore implements ProjectStore {
     return toReferenceVideo(updated);
   }
 
+  async updateReferenceVideo(
+    referenceId: string,
+    update: Partial<
+      Pick<
+        ReferenceVideo,
+        "errorMessage" | "publicStats" | "sourceAssetId" | "sourceUrl" | "status"
+      >
+    >,
+  ): Promise<ReferenceVideo | undefined> {
+    const current = await this.prisma.referenceVideo.findUnique({ where: { id: referenceId } });
+    if (!current) {
+      return undefined;
+    }
+
+    const updated = await this.prisma.referenceVideo.update({
+      where: { id: referenceId },
+      data: {
+        errorMessage:
+          update.errorMessage === undefined && update.status && update.status !== "failed"
+            ? null
+            : update.errorMessage,
+        publicStats: update.publicStats as Prisma.InputJsonValue | undefined,
+        sourceAssetId: update.sourceAssetId,
+        sourceUrl: update.sourceUrl,
+        status: update.status,
+      },
+    });
+    return toReferenceVideo(updated);
+  }
+
   async listReferenceVideos(projectId?: string): Promise<ReferenceVideo[]> {
     const references = await this.prisma.referenceVideo.findMany({
       where: projectId ? { projectId } : undefined,

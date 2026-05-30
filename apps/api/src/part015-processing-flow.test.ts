@@ -56,6 +56,33 @@ const createFixtureVideo = async (directory: string, name: string) => {
   return videoPath;
 };
 
+const waitForReferenceStatus = async (
+  baseUrl: string,
+  referenceId: string,
+  status: string,
+) => {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const referencesResponse = await fetch(`${baseUrl}/api/references`);
+    expect(referencesResponse.status).toBe(200);
+    const references = (await referencesResponse.json()) as {
+      references: Array<{
+        analysis?: { commerceNarrativeSegments?: Array<{ role: string }> };
+        id: string;
+        projectId?: string;
+        sourceAssetId?: string;
+        sourceUrl?: string;
+        status: string;
+      }>;
+    };
+    const reference = references.references.find((candidate) => candidate.id === referenceId);
+    if (reference?.status === status) {
+      return reference;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Reference ${referenceId} did not reach status ${status}.`);
+};
+
 describe("Part 015 structured asset and reference flow", () => {
   let server: Server;
   let baseUrl: string;
@@ -155,7 +182,7 @@ describe("Part 015 structured asset and reference flow", () => {
         category: "Kitchen appliances",
       }),
     });
-    expect(referenceResponse.status).toBe(201);
+    expect(referenceResponse.status).toBe(202);
     const reference = (await referenceResponse.json()) as {
       reference: {
         id: string;
@@ -165,15 +192,16 @@ describe("Part 015 structured asset and reference flow", () => {
       };
     };
     expect(reference.reference.projectId).toBeUndefined();
-    expect(reference.reference.status).toBe("ready");
-    expect(reference.reference.sourceAssetId).toBeTruthy();
+    expect(reference.reference.status).toBe("analyzing");
+    const readyReference = await waitForReferenceStatus(baseUrl, reference.reference.id, "ready");
+    expect(readyReference.sourceAssetId).toBeTruthy();
 
     const referencesResponse = await fetch(`${baseUrl}/api/references`);
     expect(referencesResponse.status).toBe(200);
     const references = (await referencesResponse.json()) as {
       references: Array<{ id: string; projectId?: string }>;
     };
-    expect(references.references.some((candidate) => candidate.id === reference.reference.id)).toBe(
+    expect(references.references.some((candidate) => candidate.id === readyReference.id)).toBe(
       true,
     );
 
@@ -182,7 +210,7 @@ describe("Part 015 structured asset and reference flow", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         category: "Kitchen appliances",
-        referenceIds: [reference.reference.id],
+        referenceIds: [readyReference.id],
         templateName: "Global Identity Hook Demo",
       }),
     });
@@ -221,7 +249,7 @@ describe("Part 015 structured asset and reference flow", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         productionMode: "template",
-        referenceId: reference.reference.id,
+        referenceId: readyReference.id,
         templateId: template.template.templateId,
       }),
     });
@@ -352,13 +380,14 @@ describe("Part 015 structured asset and reference flow", () => {
         category: "Kitchen appliances",
       }),
     });
-    expect(ownedReferenceResponse.status).toBe(201);
+    expect(ownedReferenceResponse.status).toBe(202);
     const ownedReference = (await ownedReferenceResponse.json()) as {
-      reference: { sourceAssetId?: string; sourceUrl: string; status: string };
+      reference: { id: string; sourceAssetId?: string; sourceUrl: string; status: string };
     };
     expect(ownedReference.reference.sourceAssetId).toBe(ownedReferenceAsset.id);
     expect(ownedReference.reference.sourceUrl).toBe(ownedReferenceVideoPath);
-    expect(ownedReference.reference.status).toBe("ready");
+    expect(ownedReference.reference.status).toBe("analyzing");
+    await waitForReferenceStatus(baseUrl, ownedReference.reference.id, "ready");
 
     const ownedReferenceSearchResponse = await fetch(
       `${baseUrl}/api/assets/search?projectId=${project.id}&q=self-shot&level=slice`,
@@ -384,7 +413,7 @@ describe("Part 015 structured asset and reference flow", () => {
         publicStats: { likes: 120000, comments: 3200, shares: 8400, views: 1400000 },
       }),
     });
-    expect(referenceResponse.status).toBe(201);
+    expect(referenceResponse.status).toBe(202);
     const reference = (await referenceResponse.json()) as {
       reference: {
         analysis?: { commerceNarrativeSegments?: Array<{ role: string }> };
@@ -393,9 +422,10 @@ describe("Part 015 structured asset and reference flow", () => {
         status: string;
       };
     };
-    expect(reference.reference.status).toBe("ready");
-    expect(reference.reference.sourceAssetId).toBeTruthy();
-    expect(reference.reference.analysis?.commerceNarrativeSegments?.map((segment) => segment.role)).toContain(
+    expect(reference.reference.status).toBe("analyzing");
+    const readyReference = await waitForReferenceStatus(baseUrl, reference.reference.id, "ready");
+    expect(readyReference.sourceAssetId).toBeTruthy();
+    expect(readyReference.analysis?.commerceNarrativeSegments?.map((segment) => segment.role)).toContain(
       "hook",
     );
 
@@ -410,7 +440,7 @@ describe("Part 015 structured asset and reference flow", () => {
       }>;
     };
     const publicReferenceResult = publicReferenceSearch.results.find(
-      (result) => result.asset.id === reference.reference.sourceAssetId,
+      (result) => result.asset.id === readyReference.sourceAssetId,
     );
     expect(publicReferenceResult?.asset.source).toBe("public_reference");
     expect(publicReferenceResult?.slices.length).toBeGreaterThanOrEqual(3);
@@ -421,7 +451,7 @@ describe("Part 015 structured asset and reference flow", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         category: "Kitchen appliances",
-        referenceIds: [reference.reference.id],
+        referenceIds: [readyReference.id],
         templateName: "Identity Hook Demo",
       }),
     });
@@ -439,7 +469,7 @@ describe("Part 015 structured asset and reference flow", () => {
         keywords: ["close-up demo"],
         materials: [],
         productionMode: "template",
-        referenceId: reference.reference.id,
+        referenceId: readyReference.id,
         templateId: template.template.templateId,
       }),
     });
@@ -467,7 +497,7 @@ describe("Part 015 structured asset and reference flow", () => {
     };
     expect(recall.candidates[0]?.asset.id).toBe(asset.id);
     expect(
-      recall.candidates.some((candidate) => candidate.asset.id === reference.reference.sourceAssetId),
+      recall.candidates.some((candidate) => candidate.asset.id === readyReference.sourceAssetId),
     ).toBe(false);
     expect(recall.candidates[0]?.slice?.metadata?.productVisibility).toBe("clear");
     expect(recall.candidates[0]?.reasons.join(" ")).toContain("product-visibility:clear");

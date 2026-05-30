@@ -44,6 +44,11 @@ const structuredContextForAsset = async (
   };
 };
 
+type ReferenceAnalyzeInput = Omit<
+  ReferenceVideo,
+  "id" | "projectId" | "analysis" | "createdAt" | "updatedAt"
+>;
+
 const ingestPublicReferenceAsset = async ({
   projectId,
   reference,
@@ -52,7 +57,7 @@ const ingestPublicReferenceAsset = async ({
   store,
 }: {
   projectId?: string;
-  reference: Omit<ReferenceVideo, "id" | "projectId" | "analysis" | "createdAt" | "updatedAt">;
+  reference: ReferenceAnalyzeInput;
   referenceDownloader: ReferenceDownloadProvider;
   storageProvider?: StorageProvider;
   store: ProjectStore;
@@ -108,23 +113,48 @@ const ingestPublicReferenceAsset = async ({
   });
 };
 
-export const analyzeReferenceVideo = async ({
-  projectId,
-  reference,
-  referenceDownloader = createReferenceDownloadProviderFromEnv(),
-  storageProvider,
-  store,
-  viralProvider = createArkViralBreakdownProvider(),
-  visionProvider = createArkVisionUnderstandingProvider(),
-}: {
+interface ReferenceAnalysisDependencies {
   projectId?: string;
-  reference: Omit<ReferenceVideo, "id" | "projectId" | "analysis" | "createdAt" | "updatedAt">;
+  reference: ReferenceAnalyzeInput;
   referenceDownloader?: ReferenceDownloadProvider;
   storageProvider?: StorageProvider;
   store: ProjectStore;
   viralProvider?: ViralBreakdownProvider;
   visionProvider?: VisionUnderstandingProvider;
-}): Promise<ReferenceVideo | undefined> => {
+}
+
+interface RegisteredReferenceAnalysisDependencies
+  extends ReferenceAnalysisDependencies {
+  registeredReference: ReferenceVideo;
+}
+
+const getReferenceErrorMessage = (error: unknown): string =>
+  error instanceof Error
+    ? error.message
+    : "Reference video provider failed during background analysis.";
+
+export const registerReferenceForAnalysis = async ({
+  projectId,
+  reference,
+  store,
+}: Pick<ReferenceAnalysisDependencies, "projectId" | "reference" | "store">): Promise<
+  ReferenceVideo | undefined
+> =>
+  store.addReferenceVideo(projectId, {
+    ...reference,
+    status: "analyzing",
+  });
+
+const completeReferenceAnalysis = async ({
+  projectId,
+  reference,
+  referenceDownloader = createReferenceDownloadProviderFromEnv(),
+  registeredReference,
+  storageProvider,
+  store,
+  viralProvider = createArkViralBreakdownProvider(),
+  visionProvider = createArkVisionUnderstandingProvider(),
+}: RegisteredReferenceAnalysisDependencies): Promise<ReferenceVideo | undefined> => {
   let sourceAsset = reference.sourceAssetId ? await store.getAsset(reference.sourceAssetId) : undefined;
   if (!sourceAsset && reference.sourceUrl) {
     sourceAsset = await ingestPublicReferenceAsset({
@@ -136,13 +166,15 @@ export const analyzeReferenceVideo = async ({
     });
   }
 
-  const registered = await store.addReferenceVideo(projectId, {
-    ...reference,
-    sourceAssetId: reference.sourceAssetId ?? sourceAsset?.id,
-    status: "analyzing",
-  });
-  if (!registered) {
-    return undefined;
+  let registered = registeredReference;
+  if (sourceAsset?.id && registered.sourceAssetId !== sourceAsset.id) {
+    registered =
+      (await store.updateReferenceVideo(registered.id, {
+        sourceAssetId: sourceAsset.id,
+      })) ?? {
+        ...registered,
+        sourceAssetId: sourceAsset.id,
+      };
   }
 
   if (sourceAsset) {
@@ -161,4 +193,35 @@ export const analyzeReferenceVideo = async ({
     await structuredContextForAsset(store, sourceAsset),
   );
   return store.updateReferenceVideoAnalysis(registered.id, analysis);
+};
+
+export const runRegisteredReferenceAnalysis = async ({
+  registeredReference,
+  ...dependencies
+}: RegisteredReferenceAnalysisDependencies): Promise<ReferenceVideo | undefined> => {
+  try {
+    return await completeReferenceAnalysis({
+      ...dependencies,
+      registeredReference,
+    });
+  } catch (error) {
+    await dependencies.store.updateReferenceVideo(registeredReference.id, {
+      errorMessage: getReferenceErrorMessage(error),
+      status: "failed",
+    });
+    throw error;
+  }
+};
+
+export const analyzeReferenceVideo = async (
+  dependencies: ReferenceAnalysisDependencies,
+): Promise<ReferenceVideo | undefined> => {
+  const registeredReference = await registerReferenceForAnalysis(dependencies);
+  if (!registeredReference) {
+    return undefined;
+  }
+  return runRegisteredReferenceAnalysis({
+    ...dependencies,
+    registeredReference,
+  });
 };

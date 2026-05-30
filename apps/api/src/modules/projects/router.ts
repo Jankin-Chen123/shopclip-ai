@@ -36,7 +36,10 @@ import {
 } from "../assets/validation.js";
 import { buildMockDashboard } from "../dashboard/mockDashboard.js";
 import { processAssetStructure } from "../assets/assetProcessingService.js";
-import { analyzeReferenceVideo } from "../references/referenceAnalysisService.js";
+import {
+  registerReferenceForAnalysis,
+  runRegisteredReferenceAnalysis,
+} from "../references/referenceAnalysisService.js";
 import { buildViralTemplateFromReferences } from "../references/referenceTemplateService.js";
 import { mediaOutputDir } from "../media/mediaPaths.js";
 import { mergeAssetSearchResults } from "../retrieval/hybridAssetSearch.js";
@@ -2032,46 +2035,38 @@ export const createP0Router = ({
       );
       return;
     }
-    if (
-      sourceAsset &&
-      !sourceAsset.metadata?.structuredAsset &&
-      !(await processAssetStructure({
-        assetId: sourceAsset.id,
-        input: { mode: "full", forceRegenerate: false },
-        store,
-        storageProvider,
-      }))
-    ) {
-      response.status(500).json({
-        error: {
-          code: "REFERENCE_SOURCE_ASSET_PROCESSING_FAILED",
-          message: "Reference source asset could not be structured before analysis.",
-        },
-      });
-      return;
-    }
-
     let reference;
     try {
-      reference = await analyzeReferenceVideo({
+      const referencePayload = {
+        ...referenceInput,
+        sourceAssetId,
+        sourceUrl: referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
+      };
+      reference = await registerReferenceForAnalysis({
         projectId,
-        reference: {
-          ...referenceInput,
-          sourceAssetId,
-          sourceUrl: referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
-        },
+        reference: referencePayload,
         store,
-        referenceDownloader,
-        storageProvider,
       });
+      if (reference) {
+        void runRegisteredReferenceAnalysis({
+          projectId,
+          reference: referencePayload,
+          registeredReference: reference,
+          store,
+          referenceDownloader,
+          storageProvider,
+        }).catch((error) => {
+          console.error("Reference video background analysis failed", error);
+        });
+      }
     } catch (error) {
-      response.status(502).json({
+      response.status(500).json({
         error: {
-          code: "REFERENCE_ANALYSIS_PROVIDER_FAILED",
+          code: "REFERENCE_ANALYSIS_REGISTRATION_FAILED",
           message:
             error instanceof Error
               ? error.message
-              : "Reference video provider failed during analysis.",
+              : "Reference video analysis could not be registered.",
         },
       });
       return;
@@ -2080,13 +2075,13 @@ export const createP0Router = ({
       response.status(500).json({
         error: {
           code: "REFERENCE_ANALYSIS_FAILED",
-          message: "Reference video could not be analyzed.",
+          message: "Reference video could not be registered for analysis.",
         },
       });
       return;
     }
 
-    response.status(201).json({ reference });
+    response.status(202).json({ reference });
   });
 
   router.get("/references", async (request, response) => {
@@ -2119,6 +2114,14 @@ export const createP0Router = ({
     );
     if (references.length !== parsedTemplate.data.referenceIds.length) {
       sendNotFound(response, "REFERENCE_NOT_FOUND", "One or more reference videos were not found.");
+      return;
+    }
+    if (references.some((reference) => reference.status !== "ready")) {
+      sendInvalidRequest(
+        response,
+        "REFERENCE_NOT_READY",
+        "Reference videos must finish analysis before template extraction.",
+      );
       return;
     }
 

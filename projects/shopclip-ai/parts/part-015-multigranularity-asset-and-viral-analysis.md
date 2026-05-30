@@ -33,6 +33,7 @@ MVP 完成说明：
 - 真实火山/Ark 参考视频拆解已接入环境配置驱动的 provider wrapper；业务默认 `REFERENCE_PROVIDER_MODE=ark`/real 需要真实 key 与模型，缺配置会直接报错。只有显式 `REFERENCE_PROVIDER_MODE=mock` 才走 deterministic fixture。
 - 公开视频主动拆解已按“分析型下载”接入：用户只提供 `sourceUrl` 时，后端通过 `ReferenceDownloadProvider` 创建 `source=public_reference` 的视频资产，复用素材处理链路生成结构化 slice，再把结构化上下文提供给爆款拆解 provider。默认 downloader 为真实 HTTP 直链下载；只有显式 `REFERENCE_DOWNLOAD_PROVIDER_MODE=mock` 才返回 fixture。平台短链后续可接 `yt-dlp` 或托管下载服务。
 - 自有参考视频已通过 `sourceAssetId` 接入：商家先上传视频素材，再在灵感分区的参考视频拆解面板选择该视频，后端复用素材处理链路生成结构化 slice 后再跑爆款拆解；前端拆解完成后刷新项目快照，保证创作分区和 Studio 能消费最新结构化素材。公开视频资产仍禁止进入最终成片混剪候选，只用于分析、模板和剧本参考。
+- 2026-05-30 生产 504 修复：`POST /api/references/analyze` 已从同步长请求改为异步分析任务。接口只做参数校验与 `ReferenceVideo(status=analyzing)` 注册并立即返回 `202`；后台继续执行公开视频下载、COS 入库、ffprobe/ffmpeg 切片、视觉理解和爆款拆解，成功后更新为 `ready`，失败后写入 `failed + errorMessage`。前端灵感分区会轮询参考库，只有 `ready` 的参考视频才能加入剧本素材库或提炼模板。
 
 ## 2. 指定 GitHub 仓库代码调研结论
 
@@ -483,6 +484,7 @@ flowchart TD
 - [x] Ark provider 不再是 mock wrapper；配置 `REFERENCE_PROVIDER_MODE=ark` 和参考拆解模型后会调用 `/responses`，只有显式 mock 模式才回落 deterministic fixture；真实模式缺少 key 或模型 ID 会直接报配置错误。
 - [x] ViralX 9 段结构转为 JSON：`Hook`、`Pain`、`Fear`、`Solution`、`Demo`、`Trust`、`Price`、`CTA`、`Closure`。
 - [x] URL 参考可保存分析型下载资产、结构化 slice 和拆解结果，但 `public_reference` 仍被 Studio 召回过滤，不能作为原始混剪素材。
+- [x] 参考拆解已异步化，避免真实视频下载、切片和模型调用超过 Nginx/上游 HTTP 超时导致 `504 Gateway Time-out`；后台失败会持久化错误状态供前端展示。
 
 ### Task 015.7：模板提炼与剧本生成接入
 
@@ -551,7 +553,9 @@ corepack pnpm --filter @shopclip/web build
 corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts
 ```
 
-状态：已通过 `apps/web/e2e/part-015-structure-and-reference.spec.ts` 浏览器实跑。`corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts` 输出 `1 passed`，覆盖上传自有参考视频、参考拆解、模板提炼和剧本引用选择。
+状态：已通过 `apps/web/e2e/part-015-structure-and-reference.spec.ts` 浏览器实跑。`corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts` 输出 `2 passed`，覆盖无项目公开视频拆解、自有参考视频拆解、异步 ready 轮询、模板提炼和剧本引用选择。
+
+2026-05-30 参考拆解异步化跟进：`/api/references/analyze` 返回 `202 + analyzing`，后台完成后通过 `GET /api/references` 变为 `ready`，前端在灵感分区轮询状态并展示 `failed` 错误信息。验证命令：`corepack pnpm --filter @shopclip/api test -- referenceAnalysisService.test.ts` 实际跑完 API 全量 118 tests passed，`corepack pnpm --filter @shopclip/api typecheck` 与 build 通过，`corepack pnpm --filter @shopclip/web test -- App.test.tsx` 74 passed，`corepack pnpm --filter @shopclip/web typecheck` 与 build 通过，`corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts` 2 passed。
 
 2026-05-29 UI 跟进：用户要求灵感分区删除 AI 对话/会话记录区域，只保留视频拆解板块。已从 `apps/web/src/app/App.tsx` 的灵感页移除 `InspirationPanel` 渲染，并将侧栏灵感说明改为参考与视频拆解；新增页面级测试覆盖“只渲染参考视频拆解面板”。验证命令：`corepack pnpm --filter @shopclip/web test` 结果 `71 passed`，`corepack pnpm --filter @shopclip/web typecheck` 通过，`corepack pnpm --filter @shopclip/web build` 通过，Playwright 浏览器检查输出 `PLAYWRIGHT_OK inspiration page shows video breakdown only`。
 
