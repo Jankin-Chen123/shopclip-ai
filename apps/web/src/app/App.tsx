@@ -191,10 +191,22 @@ export const mergeReferences = (...groups: ReferenceVideo[][]): ReferenceVideo[]
   return [...referencesById.values()];
 };
 
-export const hasPendingReferenceAnalysis = (references: ReferenceVideo[]): boolean =>
-  references.some(
-    (reference) => reference.status === "registered" || reference.status === "analyzing",
-  );
+const activeReferencePollingWindowMs = 10 * 60 * 1000;
+
+export const hasActivePendingReferenceAnalysis = (
+  references: ReferenceVideo[],
+  nowMs = Date.now(),
+): boolean =>
+  references.some((reference) => {
+    if (reference.status !== "registered" && reference.status !== "analyzing") {
+      return false;
+    }
+    const updatedAtMs = Date.parse(reference.updatedAt);
+    if (Number.isNaN(updatedAtMs)) {
+      return true;
+    }
+    return nowMs - updatedAtMs <= activeReferencePollingWindowMs;
+  });
 
 const mergeTemplates = (...groups: ViralTemplate[][]): ViralTemplate[] => {
   const templatesById = new Map<string, ViralTemplate>();
@@ -523,7 +535,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     [project?.referenceVideos, referenceLibrary],
   );
   const hasPendingReferences = useMemo(
-    () => hasPendingReferenceAnalysis(scriptReferenceLibrary),
+    () => hasActivePendingReferenceAnalysis(scriptReferenceLibrary),
     [scriptReferenceLibrary],
   );
   const scriptTemplateLibrary = useMemo(

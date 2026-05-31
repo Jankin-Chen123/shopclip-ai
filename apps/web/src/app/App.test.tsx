@@ -40,7 +40,7 @@ import {
   createScriptGenerationRequestPayload,
   createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
-  hasPendingReferenceAnalysis,
+  hasActivePendingReferenceAnalysis,
   importAndStructureFiles,
   getCreationAssetLibraryRefreshCategory,
   getCreationUsableAssets,
@@ -1617,19 +1617,54 @@ describe("App", () => {
 
     expect(mergedReferences).toHaveLength(1);
     expect(mergedReferences[0]?.status).toBe("ready");
-    expect(hasPendingReferenceAnalysis(mergedReferences)).toBe(false);
+    expect(hasActivePendingReferenceAnalysis(mergedReferences)).toBe(false);
   });
 
-  it("detects pending reference analysis only for registered or analyzing statuses", () => {
+  it("detects active pending reference analysis only for recent registered or analyzing statuses", () => {
+    const nowMs = Date.parse("2026-05-30T00:05:00.000Z");
+
     expect(
-      hasPendingReferenceAnalysis([
-        makeReferenceVideo({ id: "reference-ready", status: "ready" }),
-        makeReferenceVideo({ id: "reference-failed", status: "failed" }),
-      ]),
+      hasActivePendingReferenceAnalysis(
+        [
+          makeReferenceVideo({ id: "reference-ready", status: "ready" }),
+          makeReferenceVideo({ id: "reference-failed", status: "failed" }),
+        ],
+        nowMs,
+      ),
     ).toBe(false);
-    expect(hasPendingReferenceAnalysis([makeReferenceVideo({ status: "analyzing" })])).toBe(
-      true,
-    );
+    expect(
+      hasActivePendingReferenceAnalysis(
+        [
+          makeReferenceVideo({
+            status: "analyzing",
+            updatedAt: "2026-05-30T00:04:00.000Z",
+          }),
+        ],
+        nowMs,
+      ),
+    ).toBe(true);
+    expect(
+      hasActivePendingReferenceAnalysis(
+        [
+          makeReferenceVideo({
+            status: "analyzing",
+            updatedAt: "2026-05-29T23:00:00.000Z",
+          }),
+        ],
+        nowMs,
+      ),
+    ).toBe(false);
+    expect(
+      hasActivePendingReferenceAnalysis(
+        [
+          makeReferenceVideo({
+            status: "registered",
+            updatedAt: "not-a-date",
+          }),
+        ],
+        nowMs,
+      ),
+    ).toBe(true);
   });
 
   it("renders clickable inspiration session history with previous model artifacts", () => {
