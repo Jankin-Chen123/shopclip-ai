@@ -1601,6 +1601,60 @@ describe("App", () => {
     expect(markup).toContain("Add to script library");
   });
 
+  it("shows immediate feedback while a public reference breakdown is being submitted", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        initialDraft={{
+          category: "Kitchen appliances",
+          sourceDeclaration: "Public reference URL; save structured analysis only.",
+          sourcePlatform: "tiktok",
+          sourceUrl: "https://example.test/reference.mp4",
+          title: "Reference clip",
+        }}
+        isLoading
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[makeReferenceVideo({ status: "analyzing" })]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toContain("Submitting...");
+    expect(markup).toContain("Reference breakdown is running");
+    expect(markup).toContain("downloading the video");
+    expect(markup).toContain("1 analyzing");
+  });
+
+  it("surfaces failed reference breakdowns with retry guidance", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[
+          makeReferenceVideo({
+            errorMessage: "Download failed with HTTP 403.",
+            status: "failed",
+          }),
+        ]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toContain("Some breakdowns need attention");
+    expect(markup).toContain("retry with a fresh playable URL");
+    expect(markup).toContain("Download failed with HTTP 403.");
+    expect(markup).toContain("1 failed");
+  });
+
   it("lets freshly polled reference status override stale project snapshot status", () => {
     const staleProjectReference = makeReferenceVideo({
       id: "reference-stale",

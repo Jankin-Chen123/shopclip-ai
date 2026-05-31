@@ -43,6 +43,12 @@ const text = {
     category: "Category",
     referenceTitle: "Reference title",
     analyze: "Analyze reference",
+    analyzing: "Submitting...",
+    activeTaskTitle: "Reference breakdown is running",
+    activeTaskBody:
+      "The backend is downloading the video, storing it, slicing real frames, and extracting reusable script factors. This usually takes 1-3 minutes and will switch to ready automatically.",
+    failedTaskTitle: "Some breakdowns need attention",
+    failedTaskBody: "Open the failed row below for the provider or download error, then retry with a fresh playable URL if needed.",
     createTemplate: "Create template",
     useReference: "Add to script library",
     selectedReference: "Added to script library",
@@ -62,6 +68,12 @@ const text = {
     category: "类目",
     referenceTitle: "参考标题",
     analyze: "拆解参考视频",
+    analyzing: "提交中...",
+    activeTaskTitle: "参考视频正在拆解",
+    activeTaskBody:
+      "后端正在下载视频、写入素材库、真实切片抽帧并提取可复用脚本因子，通常需要 1-3 分钟，完成后会自动变为 ready。",
+    failedTaskTitle: "有拆解任务需要处理",
+    failedTaskBody: "查看下方 failed 行的下载或模型错误；如果是公开视频链接失效，请换一个仍可播放的直链后重试。",
     createTemplate: "提炼模板",
     useReference: "加入剧本素材库",
     selectedReference: "已加入剧本素材库",
@@ -114,6 +126,10 @@ export const ReferenceLibraryPanel = ({
     draft.sourceDeclaration.trim() &&
     draft.title.trim() &&
     draft.category.trim();
+  const activeReferences = references.filter(
+    (reference) => reference.status === "registered" || reference.status === "analyzing",
+  );
+  const failedReferences = references.filter((reference) => reference.status === "failed");
 
   return (
     <section className="panel reference-library-panel" aria-labelledby="reference-library-title">
@@ -193,7 +209,7 @@ export const ReferenceLibraryPanel = ({
         onClick={submitDraft}
         variant="primary"
       >
-        {copy.analyze}
+        {isLoading ? copy.analyzing : copy.analyze}
       </Button>
       <Button
         disabled={disabled || isLoading || !references.some((reference) => reference.status === "ready")}
@@ -206,6 +222,25 @@ export const ReferenceLibraryPanel = ({
         <p className="inline-error" role="alert">
           {error}
         </p>
+      ) : null}
+      {activeReferences.length > 0 ? (
+        <div className="reference-task-summary" role="status">
+          <Loader2 className="spin" size={18} />
+          <div>
+            <strong>{copy.activeTaskTitle}</strong>
+            <p>{copy.activeTaskBody}</p>
+          </div>
+          <StatusPill tone="info">{activeReferences.length} analyzing</StatusPill>
+        </div>
+      ) : null}
+      {failedReferences.length > 0 ? (
+        <div className="reference-task-summary reference-task-summary-failed" role="status">
+          <div>
+            <strong>{copy.failedTaskTitle}</strong>
+            <p>{copy.failedTaskBody}</p>
+          </div>
+          <StatusPill tone="danger">{failedReferences.length} failed</StatusPill>
+        </div>
       ) : null}
 
       <div className="reference-breakdown-list">
