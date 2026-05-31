@@ -79,3 +79,36 @@ Observed:
 
 - Some older reference jobs can remain `analyzing`; this task did not change historical job cleanup.
 - Public VOD URLs can expire. If a future URL is no longer downloadable, the frontend now surfaces failed-job guidance and the row-level provider/download error.
+
+## Follow-up UX Optimization
+
+Date: 2026-06-01
+
+Additional changes:
+
+- The form now shows whether the draft is ready to submit or which required fields are missing.
+- Recent `registered` / `analyzing` jobs show a visible elapsed-time progress guide and the expected chain: queue, download/store, slice frames, extract factors, ready.
+- Pending jobs that have not updated for more than 10 minutes are no longer shown as normal running work. They are grouped as stalled jobs with retry guidance.
+- Failed and stalled rows expose a retry action that resubmits the same source metadata.
+
+Local verification:
+
+```powershell
+corepack pnpm --filter @shopclip/web test -- App.test.tsx
+corepack pnpm --filter @shopclip/web typecheck
+corepack pnpm --filter @shopclip/web build
+```
+
+Results:
+
+- `App.test.tsx`: 80 tests passed.
+- Web typecheck: passed.
+- Web production build: passed.
+
+Production verification:
+
+- Deployed commits `b6b8b91` and `d206ff7` through `./deploy.sh`.
+- Production build and PM2 restart passed.
+- `/health` returned `{"service":"api","status":"ok","version":"0.1.0"}` after deploy retry.
+- Browser check on `http://152.136.252.134/#inspiration` confirmed missing-field feedback, ready-to-submit feedback, running progress, stale-job grouping, failed-job summary, and retry buttons.
+- A fresh submit returned HTTP `202`, then the provider failed with `Reference download failed with HTTP 403`; the UI displayed the failed summary and retry action correctly. This indicates the tested public VOD URL had expired or denied download at verification time.
