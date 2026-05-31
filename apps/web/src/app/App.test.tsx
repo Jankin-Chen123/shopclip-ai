@@ -1619,7 +1619,13 @@ describe("App", () => {
         onAnalyzeReference={() => undefined}
         onCreateTemplate={() => undefined}
         onUseReference={() => undefined}
-        references={[makeReferenceVideo({ status: "analyzing" })]}
+        references={[
+          makeReferenceVideo({
+            createdAt: new Date().toISOString(),
+            status: "analyzing",
+            updatedAt: new Date().toISOString(),
+          }),
+        ]}
         sourceAssets={[]}
         templates={[]}
       />,
@@ -1631,6 +1637,32 @@ describe("App", () => {
     expect(markup).toContain("Estimated progress");
     expect(markup).toContain("Download &amp; store");
     expect(markup).toContain("1 analyzing");
+  });
+
+  it("separates stale reference breakdowns from active running jobs", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[
+          makeReferenceVideo({
+            status: "analyzing",
+            updatedAt: "2026-05-30T00:00:00.000Z",
+          }),
+        ]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).not.toContain("Reference breakdown is running");
+    expect(markup).toContain("Some breakdowns stopped updating");
+    expect(markup).toContain("1 stalled");
+    expect(markup).toContain("Retry breakdown");
   });
 
   it("explains why reference breakdown submit is disabled before required fields are complete", () => {

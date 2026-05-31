@@ -3929,6 +3929,19 @@ textarea {
   background: linear-gradient(90deg, #22d3ee, #a78bfa, #f472b6);
 }
 
+.reference-task-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.reference-task-progress-label strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .reference-task-steps {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

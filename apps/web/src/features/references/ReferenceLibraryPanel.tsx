@@ -62,6 +62,10 @@ const text = {
     failedTaskTitle: "Some breakdowns need attention",
     failedTaskBody:
       "Open the failed row below for the provider or download error, then retry with a fresh playable URL if needed.",
+    stalledTaskTitle: "Some breakdowns stopped updating",
+    stalledTaskBody:
+      "These jobs have not changed for more than 10 minutes. The source may have expired or the provider may have stalled; retry from the row below.",
+    stalledStatus: "stalled",
     readyToSubmitTitle: "Ready to submit",
     readyToSubmitBody: "This reference will be saved as structured analysis only.",
     blockedSubmitTitle: "Complete required fields",
@@ -102,6 +106,10 @@ const text = {
     failedTaskTitle: "有拆解任务需要处理",
     failedTaskBody:
       "查看下方 failed 行的下载或模型错误；如果是公开视频链接失效，请换一个仍可播放的直链后重试。",
+    stalledTaskTitle: "有拆解任务长时间未更新",
+    stalledTaskBody:
+      "这些任务超过 10 分钟没有状态变化，可能是链接过期或模型服务卡住；可在下方对应行重新拆解。",
+    stalledStatus: "未更新",
     readyToSubmitTitle: "可以提交",
     readyToSubmitBody: "该参考视频将仅保存结构化拆解结果。",
     blockedSubmitTitle: "请补全必填信息",
@@ -122,6 +130,7 @@ const text = {
 } as const;
 
 type ReferenceCopy = (typeof text)[Language];
+const activeReferenceWindowMs = 10 * 60 * 1000;
 
 const createReferenceDraft = (reference: ReferenceVideo): ReferenceDraft => ({
   category: reference.category,
@@ -184,6 +193,17 @@ const getEstimatedProgress = (reference: ReferenceVideo): number => {
   return 92;
 };
 
+const isPendingReference = (reference: ReferenceVideo): boolean =>
+  reference.status === "registered" || reference.status === "analyzing";
+
+const isStalledReference = (reference: ReferenceVideo, nowMs = Date.now()): boolean => {
+  if (!isPendingReference(reference)) {
+    return false;
+  }
+  const timestamp = Date.parse(reference.updatedAt || reference.createdAt);
+  return Number.isNaN(timestamp) || nowMs - timestamp > activeReferenceWindowMs;
+};
+
 export const ReferenceLibraryPanel = ({
   disabled,
   error,
@@ -229,8 +249,9 @@ export const ReferenceLibraryPanel = ({
     draft.category.trim();
   const missingFields = getMissingFields(draft, copy);
   const activeReferences = references.filter(
-    (reference) => reference.status === "registered" || reference.status === "analyzing",
+    (reference) => isPendingReference(reference) && !isStalledReference(reference),
   );
+  const stalledReferences = references.filter((reference) => isStalledReference(reference));
   const failedReferences = references.filter((reference) => reference.status === "failed");
 
   return (
@@ -363,6 +384,10 @@ export const ReferenceLibraryPanel = ({
                   >
                     <span style={{ width: `${progress}%` }} />
                   </div>
+                  <div className="reference-task-progress-label">
+                    <span>{copy.activeTaskProgressLabel}</span>
+                    <strong>{progress}%</strong>
+                  </div>
                   <div className="reference-task-steps" aria-label={copy.activeTaskProgressNote}>
                     {copy.activeTaskSteps.map((step, index) => (
                       <span
@@ -389,6 +414,17 @@ export const ReferenceLibraryPanel = ({
           <StatusPill tone="danger">{failedReferences.length} failed</StatusPill>
         </div>
       ) : null}
+      {stalledReferences.length > 0 ? (
+        <div className="reference-task-summary reference-task-summary-failed" role="status">
+          <div>
+            <strong>{copy.stalledTaskTitle}</strong>
+            <p>{copy.stalledTaskBody}</p>
+          </div>
+          <StatusPill tone="danger">
+            {stalledReferences.length} {copy.stalledStatus}
+          </StatusPill>
+        </div>
+      ) : null}
 
       <div className="reference-breakdown-list">
         {references.length === 0 ? (
@@ -401,15 +437,23 @@ export const ReferenceLibraryPanel = ({
               <div>
                 <h4>{reference.title}</h4>
                 <p>
-                  {reference.status === "failed"
-                    ? (reference.errorMessage ?? "Reference analysis failed.")
-                    : reference.status === "ready"
-                      ? (reference.analysis?.contentFormula ?? reference.sourceDeclaration)
-                      : "Analyzing video structure, slices, hook, pacing, and reusable script factors."}
+                  {isStalledReference(reference)
+                    ? copy.stalledTaskBody
+                    : reference.status === "failed"
+                      ? (reference.errorMessage ?? "Reference analysis failed.")
+                      : reference.status === "ready"
+                        ? (reference.analysis?.contentFormula ?? reference.sourceDeclaration)
+                        : "Analyzing video structure, slices, hook, pacing, and reusable script factors."}
                 </p>
                 <div className="constraint-list">
-                  <StatusPill tone={reference.status === "failed" ? "danger" : "info"}>
-                    {reference.status}
+                  <StatusPill
+                    tone={
+                      reference.status === "failed" || isStalledReference(reference)
+                        ? "danger"
+                        : "info"
+                    }
+                  >
+                    {isStalledReference(reference) ? copy.stalledStatus : reference.status}
                   </StatusPill>
                   {reference.analysis?.keyViralFactors.slice(0, 3).map((factor) => (
                     <StatusPill key={factor} tone="info">
@@ -420,16 +464,25 @@ export const ReferenceLibraryPanel = ({
               </div>
               <Button
                 disabled={
-                  disabled || (reference.status !== "ready" && reference.status !== "failed")
+                  disabled ||
+                  (reference.status !== "ready" &&
+                    reference.status !== "failed" &&
+                    !isStalledReference(reference))
                 }
-                icon={reference.status === "failed" ? <RefreshCw size={18} /> : <Plus size={18} />}
+                icon={
+                  reference.status === "failed" || isStalledReference(reference) ? (
+                    <RefreshCw size={18} />
+                  ) : (
+                    <Plus size={18} />
+                  )
+                }
                 onClick={() =>
-                  reference.status === "failed"
+                  reference.status === "failed" || isStalledReference(reference)
                     ? onAnalyzeReference(createReferenceDraft(reference))
                     : onUseReference(reference.id)
                 }
               >
-                {reference.status === "failed"
+                {reference.status === "failed" || isStalledReference(reference)
                   ? copy.retryReference
                   : selectedReferenceId === reference.id
                     ? copy.selectedReference
