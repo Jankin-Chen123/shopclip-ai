@@ -185,11 +185,16 @@ const shouldAutoProcessImportedAsset = (asset: AssetMetadata): boolean =>
   asset.type === "video" ||
   Boolean(asset.mimeType?.startsWith("image/") || asset.mimeType?.startsWith("video/"));
 
-const mergeReferences = (...groups: ReferenceVideo[][]): ReferenceVideo[] => {
+export const mergeReferences = (...groups: ReferenceVideo[][]): ReferenceVideo[] => {
   const referencesById = new Map<string, ReferenceVideo>();
   groups.flat().forEach((reference) => referencesById.set(reference.id, reference));
   return [...referencesById.values()];
 };
+
+export const hasPendingReferenceAnalysis = (references: ReferenceVideo[]): boolean =>
+  references.some(
+    (reference) => reference.status === "registered" || reference.status === "analyzing",
+  );
 
 const mergeTemplates = (...groups: ViralTemplate[][]): ViralTemplate[] => {
   const templatesById = new Map<string, ViralTemplate>();
@@ -514,14 +519,11 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     [project?.assets],
   );
   const scriptReferenceLibrary = useMemo(
-    () => mergeReferences(referenceLibrary, project?.referenceVideos ?? []),
+    () => mergeReferences(project?.referenceVideos ?? [], referenceLibrary),
     [project?.referenceVideos, referenceLibrary],
   );
   const hasPendingReferences = useMemo(
-    () =>
-      scriptReferenceLibrary.some(
-        (reference) => reference.status === "registered" || reference.status === "analyzing",
-      ),
+    () => hasPendingReferenceAnalysis(scriptReferenceLibrary),
     [scriptReferenceLibrary],
   );
   const scriptTemplateLibrary = useMemo(
@@ -740,15 +742,21 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       });
   };
 
-  const refreshReferenceLibrary = () => {
+  const refreshReferenceLibrary = (options: { includeTemplates?: boolean } = {}) => {
     if (isReferencePollInFlight.current) {
       return;
     }
+    const includeTemplates = options.includeTemplates ?? true;
     isReferencePollInFlight.current = true;
-    void Promise.all([listReferenceVideos(), listReferenceTemplates()])
+    const templatesRequest = includeTemplates
+      ? listReferenceTemplates()
+      : Promise.resolve<ViralTemplate[]>([]);
+    void Promise.all([listReferenceVideos(), templatesRequest])
       .then(([references, templates]) => {
         setReferenceLibrary(references);
-        setViralTemplateLibrary(templates);
+        if (includeTemplates) {
+          setViralTemplateLibrary(templates);
+        }
       })
       .catch((error) => {
         setErrors((current) => ({
@@ -782,19 +790,22 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   useEffect(() => {
     if (activePage === "inspiration" || activePage === "create") {
-      refreshReferenceLibrary();
+      refreshReferenceLibrary({ includeTemplates: true });
     }
   }, [activePage]);
 
   useEffect(() => {
-    if (!hasPendingReferences) {
+    if (!hasPendingReferences || (activePage !== "inspiration" && activePage !== "create")) {
       return;
     }
 
-    const intervalId = window.setInterval(refreshReferenceLibrary, 3000);
-    refreshReferenceLibrary();
+    const intervalId = window.setInterval(
+      () => refreshReferenceLibrary({ includeTemplates: false }),
+      5000,
+    );
+    refreshReferenceLibrary({ includeTemplates: false });
     return () => window.clearInterval(intervalId);
-  }, [hasPendingReferences]);
+  }, [activePage, hasPendingReferences]);
 
   useEffect(() => {
     if (!renderTask || !isRenderTaskPollingActive(renderTask)) {

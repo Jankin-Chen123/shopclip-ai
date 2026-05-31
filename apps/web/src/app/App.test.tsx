@@ -40,12 +40,14 @@ import {
   createScriptGenerationRequestPayload,
   createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
+  hasPendingReferenceAnalysis,
   importAndStructureFiles,
   getCreationAssetLibraryRefreshCategory,
   getCreationUsableAssets,
   getPreparedAssetsByBucket,
   hasUsableStockProviderCredential,
   isRenderTaskPollingActive,
+  mergeReferences,
   pruneAssetPrepSnapshotDeletedAssets,
 } from "./App";
 import { copy } from "./i18n";
@@ -1597,6 +1599,37 @@ describe("App", () => {
       /<button class="button button-primary" type="button"><span class="button-icon">[\s\S]*?<span>Analyze reference<\/span><\/button>/,
     );
     expect(markup).toContain("Add to script library");
+  });
+
+  it("lets freshly polled reference status override stale project snapshot status", () => {
+    const staleProjectReference = makeReferenceVideo({
+      id: "reference-stale",
+      status: "analyzing",
+      updatedAt: "2026-05-30T00:00:00.000Z",
+    });
+    const freshLibraryReference = makeReferenceVideo({
+      id: "reference-stale",
+      status: "ready",
+      updatedAt: "2026-05-30T00:01:00.000Z",
+    });
+
+    const mergedReferences = mergeReferences([staleProjectReference], [freshLibraryReference]);
+
+    expect(mergedReferences).toHaveLength(1);
+    expect(mergedReferences[0]?.status).toBe("ready");
+    expect(hasPendingReferenceAnalysis(mergedReferences)).toBe(false);
+  });
+
+  it("detects pending reference analysis only for registered or analyzing statuses", () => {
+    expect(
+      hasPendingReferenceAnalysis([
+        makeReferenceVideo({ id: "reference-ready", status: "ready" }),
+        makeReferenceVideo({ id: "reference-failed", status: "failed" }),
+      ]),
+    ).toBe(false);
+    expect(hasPendingReferenceAnalysis([makeReferenceVideo({ status: "analyzing" })])).toBe(
+      true,
+    );
   });
 
   it("renders clickable inspiration session history with previous model artifacts", () => {
