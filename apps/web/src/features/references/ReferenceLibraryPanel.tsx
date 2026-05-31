@@ -1,6 +1,14 @@
 import { useState } from "react";
 import type { AssetMetadata, ReferenceVideo, ViralTemplate } from "@shopclip/shared";
-import { Loader2, Plus, WandSparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  Plus,
+  RefreshCw,
+  WandSparkles,
+} from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
@@ -47,8 +55,23 @@ const text = {
     activeTaskTitle: "Reference breakdown is running",
     activeTaskBody:
       "The backend is downloading the video, storing it, slicing real frames, and extracting reusable script factors. This usually takes 1-3 minutes and will switch to ready automatically.",
+    activeTaskSteps: ["Queued", "Download & store", "Slice frames", "Extract factors", "Ready"],
+    activeTaskProgressLabel: "Estimated progress",
+    activeTaskProgressNote: "Elapsed-time guide; exact provider step may vary.",
+    elapsed: "elapsed",
     failedTaskTitle: "Some breakdowns need attention",
-    failedTaskBody: "Open the failed row below for the provider or download error, then retry with a fresh playable URL if needed.",
+    failedTaskBody:
+      "Open the failed row below for the provider or download error, then retry with a fresh playable URL if needed.",
+    readyToSubmitTitle: "Ready to submit",
+    readyToSubmitBody: "This reference will be saved as structured analysis only.",
+    blockedSubmitTitle: "Complete required fields",
+    missingSource: "source video",
+    missingTitle: "reference title",
+    missingPlatform: "platform",
+    missingCategory: "category",
+    missingDeclaration: "source declaration",
+    missingFields: (fields: string) => `Add ${fields} before submitting.`,
+    retryReference: "Retry breakdown",
     createTemplate: "Create template",
     useReference: "Add to script library",
     selectedReference: "Added to script library",
@@ -72,8 +95,23 @@ const text = {
     activeTaskTitle: "参考视频正在拆解",
     activeTaskBody:
       "后端正在下载视频、写入素材库、真实切片抽帧并提取可复用脚本因子，通常需要 1-3 分钟，完成后会自动变为 ready。",
+    activeTaskSteps: ["已排队", "下载入库", "切片抽帧", "提取因子", "完成"],
+    activeTaskProgressLabel: "预估进度",
+    activeTaskProgressNote: "基于已耗时估算，真实模型步骤可能略有差异。",
+    elapsed: "已耗时",
     failedTaskTitle: "有拆解任务需要处理",
-    failedTaskBody: "查看下方 failed 行的下载或模型错误；如果是公开视频链接失效，请换一个仍可播放的直链后重试。",
+    failedTaskBody:
+      "查看下方 failed 行的下载或模型错误；如果是公开视频链接失效，请换一个仍可播放的直链后重试。",
+    readyToSubmitTitle: "可以提交",
+    readyToSubmitBody: "该参考视频将仅保存结构化拆解结果。",
+    blockedSubmitTitle: "请补全必填信息",
+    missingSource: "来源视频",
+    missingTitle: "参考标题",
+    missingPlatform: "平台",
+    missingCategory: "类目",
+    missingDeclaration: "来源声明",
+    missingFields: (fields: string) => `提交前请补充：${fields}。`,
+    retryReference: "重新拆解",
     createTemplate: "提炼模板",
     useReference: "加入剧本素材库",
     selectedReference: "已加入剧本素材库",
@@ -82,6 +120,69 @@ const text = {
     templateStatus: (count: number) => `${count} 个模板`,
   },
 } as const;
+
+type ReferenceCopy = (typeof text)[Language];
+
+const createReferenceDraft = (reference: ReferenceVideo): ReferenceDraft => ({
+  category: reference.category,
+  sourceDeclaration: reference.sourceDeclaration,
+  sourceAssetId: reference.sourceAssetId,
+  sourcePlatform: reference.sourcePlatform,
+  sourceUrl: reference.sourceUrl,
+  title: reference.title,
+});
+
+const getMissingFields = (draft: ReferenceDraft, copy: ReferenceCopy): string[] => {
+  const fields: string[] = [];
+  if (!draft.sourceAssetId && !draft.sourceUrl?.trim()) {
+    fields.push(copy.missingSource);
+  }
+  if (!draft.title.trim()) {
+    fields.push(copy.missingTitle);
+  }
+  if (!draft.sourcePlatform.trim()) {
+    fields.push(copy.missingPlatform);
+  }
+  if (!draft.category.trim()) {
+    fields.push(copy.missingCategory);
+  }
+  if (!draft.sourceDeclaration.trim()) {
+    fields.push(copy.missingDeclaration);
+  }
+  return fields;
+};
+
+const getElapsedLabel = (reference: ReferenceVideo): string => {
+  const timestamp = Date.parse(reference.updatedAt || reference.createdAt);
+  if (Number.isNaN(timestamp)) {
+    return "<1m";
+  }
+  const elapsedSeconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds}s`;
+  }
+  return `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`;
+};
+
+const getEstimatedProgress = (reference: ReferenceVideo): number => {
+  if (reference.status === "registered") {
+    return 12;
+  }
+  const timestamp = Date.parse(reference.createdAt);
+  const elapsedSeconds = Number.isNaN(timestamp)
+    ? 30
+    : Math.max(0, (Date.now() - timestamp) / 1000);
+  if (elapsedSeconds < 30) {
+    return 34;
+  }
+  if (elapsedSeconds < 90) {
+    return 58;
+  }
+  if (elapsedSeconds < 150) {
+    return 78;
+  }
+  return 92;
+};
 
 export const ReferenceLibraryPanel = ({
   disabled,
@@ -126,6 +227,7 @@ export const ReferenceLibraryPanel = ({
     draft.sourceDeclaration.trim() &&
     draft.title.trim() &&
     draft.category.trim();
+  const missingFields = getMissingFields(draft, copy);
   const activeReferences = references.filter(
     (reference) => reference.status === "registered" || reference.status === "analyzing",
   );
@@ -151,9 +253,7 @@ export const ReferenceLibraryPanel = ({
         <label>
           {copy.sourceAsset}
           <select
-            onChange={(event) =>
-              updateDraft("sourceAssetId", event.target.value || undefined)
-            }
+            onChange={(event) => updateDraft("sourceAssetId", event.target.value || undefined)}
             value={draft.sourceAssetId ?? ""}
           >
             <option value="">{copy.noSourceAsset}</option>
@@ -203,6 +303,18 @@ export const ReferenceLibraryPanel = ({
           value={draft.sourceDeclaration}
         />
       </label>
+      <div
+        className={`reference-readiness ${canAnalyze ? "is-ready" : "is-blocked"}`}
+        role="status"
+      >
+        {canAnalyze ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+        <div>
+          <strong>{canAnalyze ? copy.readyToSubmitTitle : copy.blockedSubmitTitle}</strong>
+          <p>
+            {canAnalyze ? copy.readyToSubmitBody : copy.missingFields(missingFields.join(", "))}
+          </p>
+        </div>
+      </div>
       <Button
         disabled={disabled || isLoading || !canAnalyze}
         icon={isLoading ? <Loader2 className="spin" size={18} /> : <WandSparkles size={18} />}
@@ -212,7 +324,9 @@ export const ReferenceLibraryPanel = ({
         {isLoading ? copy.analyzing : copy.analyze}
       </Button>
       <Button
-        disabled={disabled || isLoading || !references.some((reference) => reference.status === "ready")}
+        disabled={
+          disabled || isLoading || !references.some((reference) => reference.status === "ready")
+        }
         icon={<WandSparkles size={18} />}
         onClick={onCreateTemplate}
       >
@@ -231,6 +345,39 @@ export const ReferenceLibraryPanel = ({
             <p>{copy.activeTaskBody}</p>
           </div>
           <StatusPill tone="info">{activeReferences.length} analyzing</StatusPill>
+          <div className="reference-task-progress-list">
+            {activeReferences.slice(0, 3).map((reference) => {
+              const progress = getEstimatedProgress(reference);
+              return (
+                <div className="reference-task-progress" key={reference.id}>
+                  <div className="reference-task-progress-header">
+                    <span>{reference.title}</span>
+                    <span>
+                      <Clock3 size={14} />
+                      {copy.elapsed} {getElapsedLabel(reference)}
+                    </span>
+                  </div>
+                  <div
+                    className="reference-progress-track"
+                    aria-label={`${copy.activeTaskProgressLabel}: ${progress}%`}
+                  >
+                    <span style={{ width: `${progress}%` }} />
+                  </div>
+                  <div className="reference-task-steps" aria-label={copy.activeTaskProgressNote}>
+                    {copy.activeTaskSteps.map((step, index) => (
+                      <span
+                        key={step}
+                        className={index <= Math.floor(progress / 25) ? "is-active" : undefined}
+                      >
+                        {step}
+                      </span>
+                    ))}
+                  </div>
+                  <small>{copy.activeTaskProgressNote}</small>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
       {failedReferences.length > 0 ? (
@@ -272,11 +419,21 @@ export const ReferenceLibraryPanel = ({
                 </div>
               </div>
               <Button
-                disabled={disabled || reference.status !== "ready"}
-                icon={<Plus size={18} />}
-                onClick={() => onUseReference(reference.id)}
+                disabled={
+                  disabled || (reference.status !== "ready" && reference.status !== "failed")
+                }
+                icon={reference.status === "failed" ? <RefreshCw size={18} /> : <Plus size={18} />}
+                onClick={() =>
+                  reference.status === "failed"
+                    ? onAnalyzeReference(createReferenceDraft(reference))
+                    : onUseReference(reference.id)
+                }
               >
-                {selectedReferenceId === reference.id ? copy.selectedReference : copy.useReference}
+                {reference.status === "failed"
+                  ? copy.retryReference
+                  : selectedReferenceId === reference.id
+                    ? copy.selectedReference
+                    : copy.useReference}
               </Button>
             </article>
           ))

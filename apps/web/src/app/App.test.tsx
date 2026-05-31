@@ -343,7 +343,8 @@ describe("App", () => {
               subtitle: "Hook",
               status: "completed",
               progress: 100,
-              videoUrl: "https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com/long-provider-url.mp4?Signature=secret",
+              videoUrl:
+                "https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com/long-provider-url.mp4?Signature=secret",
             },
           ],
           createdAt: "2026-05-28T00:00:00.000Z",
@@ -509,12 +510,13 @@ describe("App", () => {
   it("reports non-JSON gateway errors without leaking JSON parser noise", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response("<html><body><h1>504 Gateway Time-out</h1></body></html>", {
-          status: 504,
-          statusText: "Gateway Time-out",
-          headers: { "content-type": "text/html" },
-        }),
+      vi.fn(
+        async () =>
+          new Response("<html><body><h1>504 Gateway Time-out</h1></body></html>", {
+            status: 504,
+            statusText: "Gateway Time-out",
+            headers: { "content-type": "text/html" },
+          }),
       ),
     );
 
@@ -1626,7 +1628,38 @@ describe("App", () => {
     expect(markup).toContain("Submitting...");
     expect(markup).toContain("Reference breakdown is running");
     expect(markup).toContain("downloading the video");
+    expect(markup).toContain("Estimated progress");
+    expect(markup).toContain("Download &amp; store");
     expect(markup).toContain("1 analyzing");
+  });
+
+  it("explains why reference breakdown submit is disabled before required fields are complete", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        initialDraft={{
+          category: "",
+          sourceDeclaration: "Public reference URL; save structured analysis only.",
+          sourcePlatform: "tiktok",
+          sourceUrl: "",
+          title: "",
+        }}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toContain("Complete required fields");
+    expect(markup).toContain("source video");
+    expect(markup).toContain("reference title");
+    expect(markup).toContain("category");
+    expect(markup).toContain("disabled");
   });
 
   it("surfaces failed reference breakdowns with retry guidance", () => {
@@ -1653,6 +1686,7 @@ describe("App", () => {
     expect(markup).toContain("retry with a fresh playable URL");
     expect(markup).toContain("Download failed with HTTP 403.");
     expect(markup).toContain("1 failed");
+    expect(markup).toContain("Retry breakdown");
   });
 
   it("lets freshly polled reference status override stale project snapshot status", () => {
