@@ -1603,6 +1603,79 @@ describe("App", () => {
     expect(markup).toContain("Add to script library");
   });
 
+  it("renders ready reference rows with merchant-friendly fields only", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[
+          makeReferenceVideo({
+            analysis: {
+              referenceId: "reference-1",
+              sourceUrl: "https://example.test/reference.mp4",
+              sourcePlatform: "tiktok",
+              sourceDeclaration: "Public reference URL; save structured analysis only.",
+              title: "Reference clip",
+              publicStats: { likes: 0, comments: 0, shares: 0, views: 0 },
+              durationSeconds: 12,
+              category: "Kitchen appliances",
+              hookScore: 0.9,
+              hookAnalysis: "Technical hook analysis should not be exposed.",
+              pacingAnalysis: "Technical pacing analysis should not be exposed.",
+              emotionalArc: ["curiosity"],
+              targetAudience: ["busy shoppers"],
+              contentFormula: "Aesthetic product hook + sequential 3-second per feature demo.",
+              keyViralFactors: [
+                "Mute-friendly design with prominent text overlays for every key benefit",
+                "Visually appealing cute cartoon prints with high shareability",
+              ],
+              commerceNarrativeSegments: [
+                {
+                  role: "hook",
+                  startSecond: 0,
+                  endSecond: 2,
+                  summary: "Opens with a visual product reveal.",
+                  copywriting: "Look at this cup",
+                  visualPrompt: "Cup reveal",
+                },
+                {
+                  role: "demo",
+                  startSecond: 2,
+                  endSecond: 8,
+                  summary: "Shows the product in use.",
+                  copywriting: "Use it daily",
+                  visualPrompt: "Cup demo",
+                },
+              ],
+              recreationBlueprint: {
+                visual: "Use merchant-owned visuals.",
+                copywriting: "Keep copy concise.",
+                shootingGuide: "Do not remix the source video.",
+              },
+              commentInsights: [],
+              derivedTemplates: [],
+            },
+            status: "ready",
+          }),
+        ]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toContain("Usable");
+    expect(markup).toContain("Reusable ideas have been extracted");
+    expect(markup).toContain("Opening hook");
+    expect(markup).toContain("Product demo");
+    expect(markup).not.toContain("ready");
+    expect(markup).not.toContain("Aesthetic product hook");
+    expect(markup).not.toContain("Mute-friendly design");
+  });
+
   it("shows immediate feedback while a public reference breakdown is being submitted", () => {
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
@@ -1633,10 +1706,13 @@ describe("App", () => {
 
     expect(markup).toContain("Submitting...");
     expect(markup).toContain("Reference breakdown is running");
-    expect(markup).toContain("downloading the video");
-    expect(markup).toContain("Estimated progress");
-    expect(markup).toContain("Download &amp; store");
-    expect(markup).toContain("1 analyzing");
+    expect(markup).toContain("understanding the scenes");
+    expect(markup).toContain("Progress");
+    expect(markup).toContain("Reading video");
+    expect(markup).toContain("1 processing");
+    expect(markup).toContain("Processing");
+    expect(markup).not.toContain("Download &amp; store");
+    expect(markup).not.toContain("analyzing");
   });
 
   it("separates stale reference breakdowns from active running jobs", () => {
@@ -1660,9 +1736,11 @@ describe("App", () => {
     );
 
     expect(markup).not.toContain("Reference breakdown is running");
-    expect(markup).toContain("Some breakdowns stopped updating");
-    expect(markup).toContain("1 stalled");
+    expect(markup).toContain("Some videos stopped updating");
+    expect(markup).toContain("1 need retry");
+    expect(markup).toContain("Needs retry");
     expect(markup).toContain("Retry breakdown");
+    expect(markup).not.toContain("stalled");
   });
 
   it("explains why reference breakdown submit is disabled before required fields are complete", () => {
@@ -1714,11 +1792,14 @@ describe("App", () => {
       />,
     );
 
-    expect(markup).toContain("Some breakdowns need attention");
-    expect(markup).toContain("retry with a fresh playable URL");
-    expect(markup).toContain("Download failed with HTTP 403.");
-    expect(markup).toContain("1 failed");
+    expect(markup).toContain("Some videos need a new link");
+    expect(markup).toContain("Use a direct link that still plays");
+    expect(markup).toContain("This video link cannot be read now");
+    expect(markup).toContain("1 need attention");
+    expect(markup).toContain("Needs new link");
     expect(markup).toContain("Retry breakdown");
+    expect(markup).not.toContain("HTTP 403");
+    expect(markup).not.toContain("Download failed");
   });
 
   it("lets freshly polled reference status override stale project snapshot status", () => {

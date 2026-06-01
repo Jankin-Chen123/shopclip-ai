@@ -54,18 +54,37 @@ const text = {
     analyzing: "Submitting...",
     activeTaskTitle: "Reference breakdown is running",
     activeTaskBody:
-      "The backend is downloading the video, storing it, slicing real frames, and extracting reusable script factors. This usually takes 1-3 minutes and will switch to ready automatically.",
-    activeTaskSteps: ["Queued", "Download & store", "Slice frames", "Extract factors", "Ready"],
-    activeTaskProgressLabel: "Estimated progress",
-    activeTaskProgressNote: "Elapsed-time guide; exact provider step may vary.",
-    elapsed: "elapsed",
-    failedTaskTitle: "Some breakdowns need attention",
+      "We are reading the video, understanding the scenes, and summarizing reusable ideas for scripts. This usually takes 1-3 minutes.",
+    activeTaskSteps: [
+      "Queued",
+      "Reading video",
+      "Understanding scenes",
+      "Summarizing ideas",
+      "Ready",
+    ],
+    activeTaskProgressLabel: "Progress",
+    activeTaskProgressNote: "Progress is an estimate while the video is being processed.",
+    elapsed: "used",
+    processingCount: (count: number) => `${count} processing`,
+    failedTaskTitle: "Some videos need a new link",
     failedTaskBody:
-      "Open the failed row below for the provider or download error, then retry with a fresh playable URL if needed.",
-    stalledTaskTitle: "Some breakdowns stopped updating",
+      "The video could not be read. Use a direct link that still plays in the browser, then retry.",
+    failedCount: (count: number) => `${count} need attention`,
+    stalledTaskTitle: "Some videos stopped updating",
     stalledTaskBody:
-      "These jobs have not changed for more than 10 minutes. The source may have expired or the provider may have stalled; retry from the row below.",
-    stalledStatus: "stalled",
+      "These videos have not updated for more than 10 minutes. Retry them or replace the source link.",
+    stalledCount: (count: number) => `${count} need retry`,
+    rowReadyStatus: "Usable",
+    rowPendingStatus: "Processing",
+    rowFailedStatus: "Needs new link",
+    rowStalledStatus: "Needs retry",
+    rowReadySummary:
+      "Reusable ideas have been extracted. You can add this reference to the script library.",
+    rowPendingSummary: "The system is reading this video and preparing reusable script ideas.",
+    rowFailedSummary:
+      "This video link cannot be read now. Replace it with a playable direct link and retry.",
+    reusableIdeas: "Reusable ideas",
+    defaultIdeaTags: ["Opening hook", "Product demo", "Trust point", "Call to action"],
     readyToSubmitTitle: "Ready to submit",
     readyToSubmitBody: "This reference will be saved as structured analysis only.",
     blockedSubmitTitle: "Complete required fields",
@@ -97,19 +116,27 @@ const text = {
     analyze: "拆解参考视频",
     analyzing: "提交中...",
     activeTaskTitle: "参考视频正在拆解",
-    activeTaskBody:
-      "后端正在下载视频、写入素材库、真实切片抽帧并提取可复用脚本因子，通常需要 1-3 分钟，完成后会自动变为 ready。",
-    activeTaskSteps: ["已排队", "下载入库", "切片抽帧", "提取因子", "完成"],
-    activeTaskProgressLabel: "预估进度",
-    activeTaskProgressNote: "基于已耗时估算，真实模型步骤可能略有差异。",
+    activeTaskBody: "系统正在读取视频、理解画面内容，并整理可复用的剧本灵感，通常需要 1-3 分钟。",
+    activeTaskSteps: ["排队中", "读取视频", "理解画面", "整理灵感", "可使用"],
+    activeTaskProgressLabel: "处理进度",
+    activeTaskProgressNote: "进度为处理中的预估值。",
     elapsed: "已耗时",
-    failedTaskTitle: "有拆解任务需要处理",
-    failedTaskBody:
-      "查看下方 failed 行的下载或模型错误；如果是公开视频链接失效，请换一个仍可播放的直链后重试。",
-    stalledTaskTitle: "有拆解任务长时间未更新",
-    stalledTaskBody:
-      "这些任务超过 10 分钟没有状态变化，可能是链接过期或模型服务卡住；可在下方对应行重新拆解。",
-    stalledStatus: "未更新",
+    processingCount: (count: number) => `${count} 个处理中`,
+    failedTaskTitle: "有视频需要更换链接",
+    failedTaskBody: "当前视频无法读取。请换成浏览器仍能直接播放的视频链接后重试。",
+    failedCount: (count: number) => `${count} 个需处理`,
+    stalledTaskTitle: "有视频长时间未更新",
+    stalledTaskBody: "这些视频超过 10 分钟没有进展，可重新拆解或更换来源链接。",
+    stalledCount: (count: number) => `${count} 个需重试`,
+    rowReadyStatus: "可使用",
+    rowPendingStatus: "处理中",
+    rowFailedStatus: "需更换链接",
+    rowStalledStatus: "需重试",
+    rowReadySummary: "已整理出可复用灵感，可加入剧本素材库。",
+    rowPendingSummary: "系统正在读取该视频并整理可复用剧本灵感。",
+    rowFailedSummary: "当前视频链接无法读取，请换成可直接播放的视频链接后重试。",
+    reusableIdeas: "可复用内容",
+    defaultIdeaTags: ["开头吸引", "产品展示", "信任证明", "购买引导"],
     readyToSubmitTitle: "可以提交",
     readyToSubmitBody: "该参考视频将仅保存结构化拆解结果。",
     blockedSubmitTitle: "请补全必填信息",
@@ -202,6 +229,70 @@ const isStalledReference = (reference: ReferenceVideo, nowMs = Date.now()): bool
   }
   const timestamp = Date.parse(reference.updatedAt || reference.createdAt);
   return Number.isNaN(timestamp) || nowMs - timestamp > activeReferenceWindowMs;
+};
+
+const segmentRoleLabels: Record<Language, Record<string, string>> = {
+  en: {
+    cta: "Call to action",
+    demo: "Product demo",
+    hook: "Opening hook",
+    pain: "Buyer pain point",
+    price: "Value point",
+    solution: "Product solution",
+    trust: "Trust proof",
+  },
+  zh: {
+    cta: "购买引导",
+    demo: "产品展示",
+    hook: "开头吸引",
+    pain: "痛点切入",
+    price: "价格价值",
+    solution: "解决方案",
+    trust: "信任证明",
+  },
+};
+
+const getReferenceStatusLabel = (reference: ReferenceVideo, copy: ReferenceCopy): string => {
+  if (isStalledReference(reference)) {
+    return copy.rowStalledStatus;
+  }
+  if (reference.status === "failed") {
+    return copy.rowFailedStatus;
+  }
+  if (reference.status === "ready") {
+    return copy.rowReadyStatus;
+  }
+  return copy.rowPendingStatus;
+};
+
+const getReferenceSummary = (reference: ReferenceVideo, copy: ReferenceCopy): string => {
+  if (isStalledReference(reference)) {
+    return copy.stalledTaskBody;
+  }
+  if (reference.status === "failed") {
+    return copy.rowFailedSummary;
+  }
+  if (reference.status === "ready") {
+    return copy.rowReadySummary;
+  }
+  return copy.rowPendingSummary;
+};
+
+const getReferenceIdeaTags = (
+  reference: ReferenceVideo,
+  language: Language,
+  copy: ReferenceCopy,
+): string[] => {
+  if (reference.status !== "ready") {
+    return [];
+  }
+  const labels = segmentRoleLabels[language];
+  const roles =
+    reference.analysis?.commerceNarrativeSegments
+      .map((segment) => labels[segment.role] ?? segment.summary)
+      .filter(Boolean) ?? [];
+  const uniqueRoles = Array.from(new Set(roles));
+  return (uniqueRoles.length ? uniqueRoles : copy.defaultIdeaTags).slice(0, 4);
 };
 
 export const ReferenceLibraryPanel = ({
@@ -365,7 +456,7 @@ export const ReferenceLibraryPanel = ({
             <strong>{copy.activeTaskTitle}</strong>
             <p>{copy.activeTaskBody}</p>
           </div>
-          <StatusPill tone="info">{activeReferences.length} analyzing</StatusPill>
+          <StatusPill tone="info">{copy.processingCount(activeReferences.length)}</StatusPill>
           <div className="reference-task-progress-list">
             {activeReferences.slice(0, 3).map((reference) => {
               const progress = getEstimatedProgress(reference);
@@ -411,7 +502,7 @@ export const ReferenceLibraryPanel = ({
             <strong>{copy.failedTaskTitle}</strong>
             <p>{copy.failedTaskBody}</p>
           </div>
-          <StatusPill tone="danger">{failedReferences.length} failed</StatusPill>
+          <StatusPill tone="danger">{copy.failedCount(failedReferences.length)}</StatusPill>
         </div>
       ) : null}
       {stalledReferences.length > 0 ? (
@@ -420,9 +511,7 @@ export const ReferenceLibraryPanel = ({
             <strong>{copy.stalledTaskTitle}</strong>
             <p>{copy.stalledTaskBody}</p>
           </div>
-          <StatusPill tone="danger">
-            {stalledReferences.length} {copy.stalledStatus}
-          </StatusPill>
+          <StatusPill tone="danger">{copy.stalledCount(stalledReferences.length)}</StatusPill>
         </div>
       ) : null}
 
@@ -436,15 +525,7 @@ export const ReferenceLibraryPanel = ({
             <article className="suggestion-row" key={reference.id}>
               <div>
                 <h4>{reference.title}</h4>
-                <p>
-                  {isStalledReference(reference)
-                    ? copy.stalledTaskBody
-                    : reference.status === "failed"
-                      ? (reference.errorMessage ?? "Reference analysis failed.")
-                      : reference.status === "ready"
-                        ? (reference.analysis?.contentFormula ?? reference.sourceDeclaration)
-                        : "Analyzing video structure, slices, hook, pacing, and reusable script factors."}
-                </p>
+                <p>{getReferenceSummary(reference, copy)}</p>
                 <div className="constraint-list">
                   <StatusPill
                     tone={
@@ -453,11 +534,11 @@ export const ReferenceLibraryPanel = ({
                         : "info"
                     }
                   >
-                    {isStalledReference(reference) ? copy.stalledStatus : reference.status}
+                    {getReferenceStatusLabel(reference, copy)}
                   </StatusPill>
-                  {reference.analysis?.keyViralFactors.slice(0, 3).map((factor) => (
-                    <StatusPill key={factor} tone="info">
-                      {factor}
+                  {getReferenceIdeaTags(reference, language, copy).map((tag) => (
+                    <StatusPill key={tag} tone="info">
+                      {tag}
                     </StatusPill>
                   ))}
                 </div>
