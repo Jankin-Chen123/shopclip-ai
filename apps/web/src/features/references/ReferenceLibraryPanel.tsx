@@ -84,6 +84,7 @@ const text = {
     rowFailedSummary:
       "This video link cannot be read now. Replace it with a playable direct link and retry.",
     reusableIdeas: "Reusable ideas",
+    untitledReference: "Reference video",
     defaultIdeaTags: ["Opening hook", "Product demo", "Trust point", "Call to action"],
     readyToSubmitTitle: "Ready to submit",
     readyToSubmitBody: "This reference will be saved as structured analysis only.",
@@ -136,6 +137,7 @@ const text = {
     rowPendingSummary: "系统正在读取该视频并整理可复用剧本灵感。",
     rowFailedSummary: "当前视频链接无法读取，请换成可直接播放的视频链接后重试。",
     reusableIdeas: "可复用内容",
+    untitledReference: "参考视频",
     defaultIdeaTags: ["开头吸引", "产品展示", "信任证明", "购买引导"],
     readyToSubmitTitle: "可以提交",
     readyToSubmitBody: "该参考视频将仅保存结构化拆解结果。",
@@ -293,6 +295,14 @@ const getReferenceIdeaTags = (
       .filter(Boolean) ?? [];
   const uniqueRoles = Array.from(new Set(roles));
   return (uniqueRoles.length ? uniqueRoles : copy.defaultIdeaTags).slice(0, 4);
+};
+
+const getReferenceDisplayTitle = (reference: ReferenceVideo, copy: ReferenceCopy): string => {
+  const normalized = reference.title.replace(/[？?\s#]+/g, "");
+  if (!normalized || /[�]{2,}/.test(reference.title)) {
+    return copy.untitledReference;
+  }
+  return reference.title;
 };
 
 export const ReferenceLibraryPanel = ({
@@ -463,7 +473,7 @@ export const ReferenceLibraryPanel = ({
               return (
                 <div className="reference-task-progress" key={reference.id}>
                   <div className="reference-task-progress-header">
-                    <span>{reference.title}</span>
+                    <span>{getReferenceDisplayTitle(reference, copy)}</span>
                     <span>
                       <Clock3 size={14} />
                       {copy.elapsed} {getElapsedLabel(reference)}
@@ -524,7 +534,7 @@ export const ReferenceLibraryPanel = ({
           references.map((reference) => (
             <article className="suggestion-row" key={reference.id}>
               <div>
-                <h4>{reference.title}</h4>
+                <h4>{getReferenceDisplayTitle(reference, copy)}</h4>
                 <p>{getReferenceSummary(reference, copy)}</p>
                 <div className="constraint-list">
                   <StatusPill

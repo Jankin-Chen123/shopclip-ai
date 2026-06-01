@@ -1676,6 +1676,25 @@ describe("App", () => {
     expect(markup).not.toContain("Mute-friendly design");
   });
 
+  it("replaces unreadable reference titles with a clear fallback label", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[makeReferenceVideo({ title: "????????????????#?? #??? #??????" })]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toContain("Reference video");
+    expect(markup).not.toContain("????????");
+  });
+
   it("shows immediate feedback while a public reference breakdown is being submitted", () => {
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
