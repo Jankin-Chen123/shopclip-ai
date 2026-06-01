@@ -318,7 +318,9 @@ describe("P0 backend lifecycle", () => {
 
     expect(deleted.status).toBe(200);
     expect(deleted.body.deletedProject.id).toBe(projectId);
-    expect(deleted.body.deletedAssets.map((asset) => asset.id)).toEqual([projectAsset.body.asset.id]);
+    expect(deleted.body.deletedAssets.map((asset) => asset.id)).toEqual([
+      projectAsset.body.asset.id,
+    ]);
 
     const loadedProject = await request(baseUrl, `/api/projects/${projectId}`);
     expect(loadedProject.status).toBe(404);
@@ -380,8 +382,9 @@ describe("P0 backend lifecycle", () => {
       }),
     });
     expect(generated.status).toBe(201);
-    expect(generated.body.script.scenes.every((scene) => scene.assetId === globalAsset.body.asset.id))
-      .toBe(true);
+    expect(
+      generated.body.script.scenes.every((scene) => scene.assetId === globalAsset.body.asset.id),
+    ).toBe(true);
 
     const deleted = await request<{
       deletedAssets: Array<{ id: string }>;
@@ -390,7 +393,9 @@ describe("P0 backend lifecycle", () => {
       body: JSON.stringify({ assetIds: [globalAsset.body.asset.id] }),
     });
     expect(deleted.status).toBe(200);
-    expect(deleted.body.deletedAssets.map((asset) => asset.id)).toEqual([globalAsset.body.asset.id]);
+    expect(deleted.body.deletedAssets.map((asset) => asset.id)).toEqual([
+      globalAsset.body.asset.id,
+    ]);
 
     const loadedProject = await request<{
       project: {
@@ -894,7 +899,9 @@ describe("P0 backend lifecycle", () => {
     });
 
     expect(imageGenerated.status).toBe(201);
-    expect(imageGenerated.body.script.scenes[0]?.visualPrompt).toContain("产品外观必须与绑定素材一致");
+    expect(imageGenerated.body.script.scenes[0]?.visualPrompt).toContain(
+      "产品外观必须与绑定素材一致",
+    );
     expect(imageGenerated.body.script.scenes[0]?.subtitle).toContain("痛点");
     expect(imageGenerated.body.script.scenes[0]?.voiceover).toContain("还在");
 
@@ -1021,9 +1028,7 @@ describe("P0 backend lifecycle", () => {
       "https://cdn.custom-image.test/storyboard-scene.png",
     );
     const externalCalls = fetchMock.mock.calls.filter(([url]) =>
-      String(url instanceof Request ? url.url : url).startsWith(
-        "https://api.custom-image.test",
-      ),
+      String(url instanceof Request ? url.url : url).startsWith("https://api.custom-image.test"),
     );
     expect(externalCalls.length).toBeGreaterThan(0);
     const body = JSON.parse(String((externalCalls[0]?.[1] as RequestInit).body));
@@ -1141,7 +1146,8 @@ describe("P0 backend lifecycle", () => {
         choices: [
           {
             message: {
-              content: "| 时间 | 旁白 | 字幕 | 画面 |\n|---|---|---|---|\n| 0-3s | 测试旁白 | 测试字幕 | 测试画面，产品外观必须与用户素材一致 |",
+              content:
+                "| 时间 | 旁白 | 字幕 | 画面 |\n|---|---|---|---|\n| 0-3s | 测试旁白 | 测试字幕 | 测试画面，产品外观必须与用户素材一致 |",
             },
           },
         ],
@@ -1215,7 +1221,9 @@ describe("P0 backend lifecycle", () => {
     expect(body.messages[1].content).toContain("目标人群：通勤女生");
     expect(body.messages[1].content).toContain("已准备素材清单：assetId=");
     expect(body.messages[1].content).toContain("文件名=小猫水杯主图");
-    expect(body.messages[1].content).toContain("参考素材列必须只填写一个已准备素材的文件名或 assetId");
+    expect(body.messages[1].content).toContain(
+      "参考素材列必须只填写一个已准备素材的文件名或 assetId",
+    );
     expect(body.messages[1].content).toContain("关键词：便携、防漏");
     expect(body.messages[1].content).toContain("用户草稿：强调小包装得下和通勤防漏。");
   });
@@ -1368,6 +1376,7 @@ describe("P0 backend lifecycle", () => {
     const generated = await request<{
       fallback: { used: boolean; provider: string };
       script: {
+        constraints: string[];
         narrative: string;
         scenes: Array<{
           durationSeconds: number;
@@ -1406,6 +1415,8 @@ describe("P0 backend lifecycle", () => {
       provider: "openai-compatible",
     });
     expect(generated.body.script.narrative).toContain("Model generated hook");
+    expect(generated.body.script.constraints.join(" ")).not.toMatch(/fallback|mock/i);
+    expect(generated.body.script.constraints.join(" ")).toContain("真实文本模型");
     expect(generated.body.script.scenes).toHaveLength(2);
     expect(generated.body.script.scenes[0]).toMatchObject({
       durationSeconds: 3,
@@ -1600,11 +1611,7 @@ describe("P0 backend lifecycle", () => {
     }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
       method: "POST",
       body: JSON.stringify({
-        assetIds: [
-          heroAsset.body.asset.id,
-          strawAsset.body.asset.id,
-          travelAsset.body.asset.id,
-        ],
+        assetIds: [heroAsset.body.asset.id, strawAsset.body.asset.id, travelAsset.body.asset.id],
         draftScript: [
           "| 时间 | 旁白 | 字幕 | 画面 |",
           "|---|---|---|---|",
@@ -1623,9 +1630,7 @@ describe("P0 backend lifecycle", () => {
       subtitle: "小包塞不下？",
       voiceover: "小包塞不下水杯？",
     });
-    expect(generated.body.script.scenes[0]?.visualPrompt).toContain(
-      "手拿小包和小猫水杯做尺寸对比",
-    );
+    expect(generated.body.script.scenes[0]?.visualPrompt).toContain("手拿小包和小猫水杯做尺寸对比");
     expect(generated.body.script.scenes[1]).toMatchObject({
       durationSeconds: 4,
       subtitle: "轻松塞进口袋",
@@ -1729,11 +1734,7 @@ describe("P0 backend lifecycle", () => {
     }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
       method: "POST",
       body: JSON.stringify({
-        assetIds: [
-          mainAsset.body.asset.id,
-          detailAsset.body.asset.id,
-          sceneAsset.body.asset.id,
-        ],
+        assetIds: [mainAsset.body.asset.id, detailAsset.body.asset.id, sceneAsset.body.asset.id],
         apiConfig: {
           general: {
             provider: "openai-compatible",
@@ -1884,7 +1885,9 @@ describe("P0 backend lifecycle", () => {
       voiceover: "Current edited CTA voiceover",
       visualPrompt: "Current edited CTA visual prompt with exact product framing",
     });
-    expect(regenerated.body.scene.imageUrl).toEqual(expect.stringMatching(/^data:image\/svg\+xml,/));
+    expect(regenerated.body.scene.imageUrl).toEqual(
+      expect.stringMatching(/^data:image\/svg\+xml,/),
+    );
     expect(regenerated.body.traceEvent).toMatchObject({
       step: "scene-regenerated",
       status: "completed",
@@ -1917,9 +1920,6 @@ describe("P0 backend lifecycle", () => {
       subtitle: "Current edited CTA subtitle",
       voiceover: "Current edited CTA voiceover",
     });
-    expect(untouchedScenes.map((scene) => scene.subtitle)).toEqual([
-      "证明核心卖点",
-      "行动号召",
-    ]);
+    expect(untouchedScenes.map((scene) => scene.subtitle)).toEqual(["证明核心卖点", "行动号召"]);
   });
 });

@@ -2777,6 +2777,7 @@ export const createP0Router = ({
           ? parsedRequest.data.draftScript
           : textProviderResult.scriptText,
       },
+      scriptSource: textProviderResult.fallback.used ? "fallback" : "model",
     });
     const scriptWithSceneImages = await renderStoryboardSceneImages(
       workingProject,
