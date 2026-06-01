@@ -1,6 +1,6 @@
 import type { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, UIEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { AssetMetadata } from "@shopclip/shared";
+import type { AssetMetadata, ViralTemplate } from "@shopclip/shared";
 import {
   Check,
   ExternalLink,
@@ -8,6 +8,7 @@ import {
   FileText,
   Globe2,
   Image,
+  LayoutTemplate,
   Loader2,
   Music,
   Plus,
@@ -48,6 +49,7 @@ interface AssetsPanelProps {
   onAssetDraftChange: (asset: CreateAssetInput) => void;
   onCategoryChange: (category: AssetCategory) => void;
   onDeleteAssets?: (assetIds: string[]) => void;
+  onExtractTemplateFromScripts?: (assetIds: string[]) => Promise<void> | void;
   onImportExternalAsset?: (asset: ExternalAssetResult) => Promise<void> | void;
   onImportFiles: (files: File[]) => void;
   onProcessAsset?: (assetId: string) => void;
@@ -64,6 +66,7 @@ interface AssetsPanelProps {
   searchQuery: string;
   searchResults: AssetSearchResult[];
   stockProviderConfigs?: StockProviderConfig[];
+  templates?: ViralTemplate[];
 }
 
 const categoryIcons = {
@@ -71,6 +74,7 @@ const categoryIcons = {
   video: Video,
   audio: Music,
   script: FileText,
+  template: LayoutTemplate,
 } as const;
 
 const formatBytes = (bytes?: number) => {
@@ -179,6 +183,179 @@ const structuredAssetSummary = (asset: AssetMetadata) => {
   };
 };
 
+interface ReferenceScriptStoryboardPreview {
+  copy?: string;
+  role: string;
+  summary?: string;
+  timeRange?: string;
+  visual?: string;
+}
+
+interface ReferenceScriptPreview {
+  audience: string[];
+  category?: string;
+  factors: string[];
+  formula?: string;
+  hook?: string;
+  pacing?: string;
+  reuseGuide: {
+    copywriting?: string;
+    shootingGuide?: string;
+    visual?: string;
+  };
+  source?: string;
+  story: string[];
+  storyboard: ReferenceScriptStoryboardPreview[];
+  title: string;
+}
+
+const readLineValue = (line: string, label: string) =>
+  line.toLowerCase().startsWith(`${label.toLowerCase()}:`)
+    ? line.slice(label.length + 1).trim()
+    : undefined;
+
+const splitListValue = (value?: string) =>
+  value
+    ?.split(/[,，、;]/)
+    .map((item) => item.trim())
+    .filter(Boolean) ?? [];
+
+const parseStoryboardHeader = (line: string) => {
+  const match = /^\d+\.\s+([a-z_-]+)\s+([0-9.]+-[0-9.]+s)$/i.exec(line.trim());
+  if (!match) {
+    return undefined;
+  }
+  return {
+    role: match[1] ?? "scene",
+    timeRange: match[2],
+  };
+};
+
+export const parseReferenceScriptPreview = (
+  asset: AssetMetadata,
+): ReferenceScriptPreview | undefined => {
+  const metadata = asset.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
+  if (metadata.kind !== "reference_script_asset" && !asset.embeddingText) {
+    return undefined;
+  }
+
+  const lines = (asset.embeddingText ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return undefined;
+  }
+
+  const preview: ReferenceScriptPreview = {
+    title: asset.name,
+    audience: [],
+    factors: [],
+    story: [],
+    storyboard: [],
+    reuseGuide: {},
+  };
+  let currentStoryboard: ReferenceScriptStoryboardPreview | undefined;
+  let isStoryboardSection = false;
+
+  for (const line of lines) {
+    const reference = readLineValue(line, "Reference");
+    const category = readLineValue(line, "Category");
+    const source = readLineValue(line, "Source");
+    const hook = readLineValue(line, "Hook");
+    const pacing = readLineValue(line, "Pacing");
+    const formula = readLineValue(line, "Formula");
+    const audience = readLineValue(line, "Audience");
+    const factors = readLineValue(line, "Viral factors");
+    const visualGuide = readLineValue(line, "Recreation visual");
+    const copyGuide = readLineValue(line, "Recreation copywriting");
+    const shootingGuide = readLineValue(line, "Shooting guide");
+    const commentInsights = readLineValue(line, "Comment insights");
+
+    if (reference) {
+      preview.title = reference;
+      continue;
+    }
+    if (category) {
+      preview.category = category;
+      continue;
+    }
+    if (source) {
+      preview.source = source;
+      continue;
+    }
+    if (hook) {
+      preview.hook = hook;
+      continue;
+    }
+    if (pacing) {
+      preview.pacing = pacing;
+      continue;
+    }
+    if (formula) {
+      preview.formula = formula;
+      continue;
+    }
+    if (audience) {
+      preview.audience = splitListValue(audience);
+      continue;
+    }
+    if (factors) {
+      preview.factors = splitListValue(factors);
+      continue;
+    }
+    if (line === "Reusable storyboard:") {
+      isStoryboardSection = true;
+      continue;
+    }
+    if (visualGuide) {
+      preview.reuseGuide.visual = visualGuide;
+      isStoryboardSection = false;
+      continue;
+    }
+    if (copyGuide) {
+      preview.reuseGuide.copywriting = copyGuide;
+      isStoryboardSection = false;
+      continue;
+    }
+    if (shootingGuide) {
+      preview.reuseGuide.shootingGuide = shootingGuide;
+      isStoryboardSection = false;
+      continue;
+    }
+    if (commentInsights) {
+      preview.story.push(commentInsights);
+      continue;
+    }
+
+    const header = parseStoryboardHeader(line);
+    if (header) {
+      currentStoryboard = {
+        role: header.role,
+        timeRange: header.timeRange,
+      };
+      preview.storyboard.push(currentStoryboard);
+      isStoryboardSection = true;
+      continue;
+    }
+
+    if (isStoryboardSection && currentStoryboard) {
+      const summary = readLineValue(line, "Summary");
+      const copy = readLineValue(line, "Copy");
+      const visual = readLineValue(line, "Visual");
+      if (summary) {
+        currentStoryboard.summary = summary;
+      } else if (copy) {
+        currentStoryboard.copy = copy;
+      } else if (visual) {
+        currentStoryboard.visual = visual;
+      }
+    }
+  }
+
+  return preview;
+};
+
 const genericImportUi = {
   en: {
     action: "Import assets",
@@ -205,7 +382,7 @@ const genericImportUi = {
 const categoryUi: Record<
   Language,
   Record<
-    AssetCategory,
+    Exclude<AssetCategory, "template">,
     {
       title: string;
       importAction: string;
@@ -340,6 +517,23 @@ const categoryUi: Record<
   },
 };
 
+const templateUi = {
+  en: {
+    title: "Template library",
+    emptyTitle: "No templates yet",
+    emptyBody: "Select script materials and extract a reusable template.",
+    searchLabel: "Search template library",
+    searchPlaceholder: "Search templates locally",
+  },
+  zh: {
+    title: "模板库",
+    emptyTitle: "暂无模板",
+    emptyBody: "在剧本板块勾选素材后，点击提炼模板生成可复用方法论。",
+    searchLabel: "搜索模板库",
+    searchPlaceholder: "搜索模板",
+  },
+} as const;
+
 export const AssetsPanel = ({
   activeCategory,
   assets,
@@ -357,12 +551,14 @@ export const AssetsPanel = ({
   onRecallAsset,
   onCategoryChange,
   onDeleteAssets,
+  onExtractTemplateFromScripts,
   onSearchExternalAssets,
   onSearchAssets,
   onSearchQueryChange,
   searchQuery,
   searchResults,
   stockProviderConfigs = [],
+  templates = [],
 }: AssetsPanelProps) => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isExternalSearchOpen, setIsExternalSearchOpen] = useState(false);
@@ -380,12 +576,14 @@ export const AssetsPanel = ({
     () => new Set(),
   );
   const [previewAsset, setPreviewAsset] = useState<AssetMetadata>();
+  const [previewTemplate, setPreviewTemplate] = useState<ViralTemplate>();
   const [previewExternalAsset, setPreviewExternalAsset] = useState<ExternalAssetResult>();
   const [isExternalModalSearching, setIsExternalModalSearching] = useState(false);
   const [isExternalModalLoadingMore, setIsExternalModalLoadingMore] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const ui = categoryUi[language][activeCategory];
+  const isTemplateCategory = activeCategory === "template";
+  const ui = isTemplateCategory ? templateUi[language] : categoryUi[language][activeCategory];
   const importUi = genericImportUi[language];
   const CategoryIcon = categoryIcons[activeCategory];
   const searchInputId = `asset-search-${activeCategory}`;
@@ -401,23 +599,48 @@ export const AssetsPanel = ({
   const externalSearchType = externalSearchTypeForCategory(externalModalType);
   const hasConfiguredStockProvider = configuredSearchProviders.length > 0;
   const isShowingSearchResults = hasSearched && searchQuery.trim().length > 0;
+  const normalizedTemplateQuery = isTemplateCategory ? searchQuery.trim().toLowerCase() : "";
+  const visibleTemplates =
+    isTemplateCategory && normalizedTemplateQuery
+      ? templates.filter((template) =>
+          [
+            template.name,
+            template.category,
+            template.strategy,
+            ...template.factorSet,
+            ...template.copywritingRules,
+            ...template.shotRequirements,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedTemplateQuery),
+        )
+      : templates;
   const previewAssets = isShowingSearchResults
     ? searchResults.map((result) => result.asset)
     : assets;
   const searchScoreByAssetId = new Map(
     searchResults.map((result) => [result.asset.id, result.score] as const),
   );
-  const searchResultByAssetId = new Map(searchResults.map((result) => [result.asset.id, result] as const));
+  const searchResultByAssetId = new Map(
+    searchResults.map((result) => [result.asset.id, result] as const),
+  );
   const selectedExternalAssets = externalModalResults.filter((result) =>
     selectedExternalAssetIds.has(result.id),
   );
   const selectedExternalAssetCount = selectedExternalAssets.length;
   const selectedAssetCount = previewAssets.filter((asset) => selectedAssetIds.has(asset.id)).length;
+  const selectedScriptAssetIds = previewAssets
+    .filter((asset) => selectedAssetIds.has(asset.id) && isScriptAsset(asset))
+    .map((asset) => asset.id);
   const closeAssetPreview = () => setPreviewAsset(undefined);
   const detailLabel = language === "zh" ? "查看详情" : "View details";
   const previewAssetReady = previewAsset?.status === "ready";
   const previewAssetUrl =
     previewAsset && previewAssetReady ? getAssetContentUrl(previewAsset.id) : "";
+  const previewReferenceScript = previewAsset
+    ? parseReferenceScriptPreview(previewAsset)
+    : undefined;
 
   useEffect(() => {
     const currentAssetIds = new Set(assets.map((asset) => asset.id));
@@ -608,6 +831,14 @@ export const AssetsPanel = ({
     }
   };
 
+  const handleExtractTemplateFromSelectedScripts = async () => {
+    if (selectedScriptAssetIds.length === 0 || !onExtractTemplateFromScripts) {
+      return;
+    }
+    await onExtractTemplateFromScripts(selectedScriptAssetIds);
+    setSelectedAssetIds(new Set());
+  };
+
   const isInteractivePreviewTarget = (target: EventTarget | null) =>
     target instanceof HTMLElement && Boolean(target.closest("button, a"));
 
@@ -676,23 +907,59 @@ export const AssetsPanel = ({
         <h2 id="assets-title">{ui.title}</h2>
       </div>
 
-      <div className="asset-library-toolbar">
-        <button
-          aria-label={importUi.aria}
-          className="asset-import-button asset-import-card"
-          onClick={() => setIsImportOpen(true)}
-          type="button"
-        >
-          <span className="asset-import-icon" aria-hidden="true">
-            <Plus size={28} strokeWidth={2.2} />
-          </span>
-          <span>
-            <strong>{importUi.action}</strong>
-            <small>{importUi.helper}</small>
-          </span>
-        </button>
+      {!isTemplateCategory ? (
+        <div className="asset-library-toolbar">
+          <button
+            aria-label={importUi.aria}
+            className="asset-import-button asset-import-card"
+            onClick={() => setIsImportOpen(true)}
+            type="button"
+          >
+            <span className="asset-import-icon" aria-hidden="true">
+              <Plus size={28} strokeWidth={2.2} />
+            </span>
+            <span>
+              <strong>{importUi.action}</strong>
+              <small>{importUi.helper}</small>
+            </span>
+          </button>
 
-        <div className="asset-search-box asset-search-panel">
+          <div className="asset-search-box asset-search-panel">
+            <label className="sr-only" htmlFor={searchInputId}>
+              {ui.searchLabel}
+            </label>
+            <div className="asset-search-input-shell">
+              <Search size={20} aria-hidden="true" />
+              <input
+                id={searchInputId}
+                value={searchQuery}
+                onChange={(event) => onSearchQueryChange(event.target.value)}
+                placeholder={ui.searchPlaceholder}
+              />
+            </div>
+            <Button
+              disabled={disabled || isSearching}
+              icon={isSearching ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+              onClick={onSearchAssets}
+            >
+              {copy.search}
+            </Button>
+            {activeCategory === "script" ? (
+              <Button
+                disabled={
+                  disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0
+                }
+                icon={<LayoutTemplate size={18} />}
+                onClick={() => void handleExtractTemplateFromSelectedScripts()}
+                variant="primary"
+              >
+                {language === "zh" ? "提炼模板" : "Extract template"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="asset-search-box asset-search-panel asset-template-search-panel">
           <label className="sr-only" htmlFor={searchInputId}>
             {ui.searchLabel}
           </label>
@@ -705,15 +972,8 @@ export const AssetsPanel = ({
               placeholder={ui.searchPlaceholder}
             />
           </div>
-          <Button
-            disabled={disabled || isSearching}
-            icon={isSearching ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
-            onClick={onSearchAssets}
-          >
-            {copy.search}
-          </Button>
         </div>
-      </div>
+      )}
 
       <AssetCategoryTabs
         activeCategory={activeCategory}
@@ -727,36 +987,42 @@ export const AssetsPanel = ({
         </p>
       ) : null}
 
-      <section className="external-stock-entry" aria-labelledby="external-stock-entry-title">
-        <div>
-          <span className="external-source-pill">
-            <Globe2 size={14} aria-hidden="true" />
-            {language === "zh" ? "第三方素材库" : "Third-party stock"}
-          </span>
-          <h3 id="external-stock-entry-title">
-            {language === "zh" ? "搜索可直接导入的外部素材" : "Search external stock assets"}
-          </h3>
-          <p>
-            {hasProject
-              ? language === "zh"
-                ? "在悬浮窗中搜索已配置素材库，勾选后可一键导入腾讯 COS。"
-                : "Search configured stock libraries, select results, and import them to Tencent COS."
-              : language === "zh"
-                ? "无需先切回项目页；勾选素材会直接导入腾讯 COS 并写入素材库。"
-                : "No need to switch pages first; selected assets import directly to Tencent COS."}
-          </p>
-        </div>
-        <Button
-          disabled={disabled || isSearching || !onSearchExternalAssets}
-          icon={
-            isExternalModalSearching ? <Loader2 className="spin" size={18} /> : <Search size={18} />
-          }
-          onClick={openExternalSearch}
-          variant="primary"
-        >
-          {language === "zh" ? "搜索第三方素材" : "Search stock"}
-        </Button>
-      </section>
+      {!isTemplateCategory ? (
+        <section className="external-stock-entry" aria-labelledby="external-stock-entry-title">
+          <div>
+            <span className="external-source-pill">
+              <Globe2 size={14} aria-hidden="true" />
+              {language === "zh" ? "第三方素材库" : "Third-party stock"}
+            </span>
+            <h3 id="external-stock-entry-title">
+              {language === "zh" ? "搜索可直接导入的外部素材" : "Search external stock assets"}
+            </h3>
+            <p>
+              {hasProject
+                ? language === "zh"
+                  ? "在悬浮窗中搜索已配置素材库，勾选后可一键导入腾讯 COS。"
+                  : "Search configured stock libraries, select results, and import them to Tencent COS."
+                : language === "zh"
+                  ? "无需先切回项目页；勾选素材会直接导入腾讯 COS 并写入素材库。"
+                  : "No need to switch pages first; selected assets import directly to Tencent COS."}
+            </p>
+          </div>
+          <Button
+            disabled={disabled || isSearching || !onSearchExternalAssets}
+            icon={
+              isExternalModalSearching ? (
+                <Loader2 className="spin" size={18} />
+              ) : (
+                <Search size={18} />
+              )
+            }
+            onClick={openExternalSearch}
+            variant="primary"
+          >
+            {language === "zh" ? "搜索第三方素材" : "Search stock"}
+          </Button>
+        </section>
+      ) : null}
 
       {previewAssets.length > 0 ? (
         <div className="asset-bulk-actions">
@@ -776,138 +1042,31 @@ export const AssetsPanel = ({
         </div>
       ) : null}
 
-      <div className="asset-grid" aria-live="polite">
-        {previewAssets.length === 0 ? (
-          <div className="empty-state asset-empty-state">
-            <span className="asset-empty-icon" aria-hidden="true">
-              <CategoryIcon size={34} />
-            </span>
-            <strong>
-              {isShowingSearchResults
-                ? language === "zh"
-                  ? `没有匹配 ${searchQuery.trim()} 的${getAssetCategoryLabel(activeCategory, language)}素材`
-                  : `No ${getAssetCategoryLabel(activeCategory, language).toLowerCase()} matched ${searchQuery.trim()}`
-                : ui.emptyTitle}
-            </strong>
-            <span>
-              {isShowingSearchResults
-                ? language === "zh"
-                  ? "可以换一个关键词，或先导入更多图片素材。"
-                  : "Try another keyword, or import more image assets first."
-                : ui.emptyBody}
-            </span>
-            <button
-              className="asset-empty-action"
-              onClick={() => setIsImportOpen(true)}
-              type="button"
-            >
-              {importUi.emptyAction}
-            </button>
-          </div>
-        ) : (
-          previewAssets.map((asset) => {
-            const AssetIcon = isAudioAsset(asset)
-              ? Music
-              : isScriptAsset(asset)
-                ? FileText
-                : CategoryIcon;
-            const isReady = asset.status === "ready";
-            const isSelected = selectedAssetIds.has(asset.id);
-            const searchScore = searchScoreByAssetId.get(asset.id);
-            const searchResult = searchResultByAssetId.get(asset.id);
-            const structuredSummary = structuredAssetSummary(asset);
-            const firstStructuredSlice = searchResult?.slices.find((slice) => slice.metadata);
-
-            return (
-              <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
-                <div className="asset-card-actions">
-                  <button
-                    aria-label={
-                      language === "zh"
-                        ? `${isSelected ? "取消选择" : "选择"} ${asset.name}`
-                        : `${isSelected ? "Deselect" : "Select"} ${asset.name}`
-                    }
-                    aria-pressed={isSelected}
-                    className="asset-selection-control"
-                    onClick={() => toggleAssetSelection(asset.id)}
-                    type="button"
-                  >
-                    {isSelected ? <Check size={13} aria-hidden="true" /> : null}
-                  </button>
-                  {onProcessAsset ? (
-                    <button
-                      aria-label={
-                        language === "zh"
-                          ? `结构化分析 ${asset.name}`
-                          : `Run structured analysis for ${asset.name}`
-                      }
-                      className="asset-card-delete"
-                      disabled={disabled}
-                      onClick={() => onProcessAsset(asset.id)}
-                      type="button"
-                    >
-                      <WandSparkles size={13} aria-hidden="true" />
-                    </button>
-                  ) : null}
-                  <button
-                    aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
-                    className="asset-card-delete"
-                    disabled={disabled || !onDeleteAssets}
-                    onClick={() => handleDeleteAsset(asset.id)}
-                    type="button"
-                  >
-                    <Trash2 size={13} aria-hidden="true" />
-                  </button>
-                </div>
+      {isTemplateCategory ? (
+        <div className="asset-grid asset-template-grid" aria-live="polite">
+          {visibleTemplates.length === 0 ? (
+            <div className="empty-state asset-empty-state">
+              <span className="asset-empty-icon" aria-hidden="true">
+                <LayoutTemplate size={34} />
+              </span>
+              <strong>{ui.emptyTitle}</strong>
+              <span>{ui.emptyBody}</span>
+            </div>
+          ) : (
+            visibleTemplates.map((template) => (
+              <article className="asset-card asset-template-card" key={template.templateId}>
                 <button
                   aria-label={
-                    language === "zh" ? `打开 ${asset.name} 详情` : `Open details for ${asset.name}`
+                    language === "zh"
+                      ? `查看模板 ${template.name}`
+                      : `Open template ${template.name}`
                   }
                   className="asset-card-frame asset-card-preview"
-                  onClick={() => setPreviewAsset(asset)}
+                  onClick={() => setPreviewTemplate(template)}
                   type="button"
                 >
-                  {!isReady ? (
-                    <span
-                      aria-label={
-                        language === "zh" ? `${asset.name} 正在上传` : `${asset.name} is uploading`
-                      }
-                      className="asset-uploading-placeholder"
-                      role="status"
-                    >
-                      <span className="asset-uploading-spinner" aria-hidden="true" />
-                    </span>
-                  ) : isImageAsset(asset) ? (
-                    <img
-                      alt={asset.name}
-                      decoding="async"
-                      loading="lazy"
-                      src={getAssetContentUrl(asset.id)}
-                    />
-                  ) : isVideoAsset(asset) ? (
-                    <video
-                      aria-label={asset.name}
-                      muted
-                      preload="metadata"
-                      src={getAssetContentUrl(asset.id)}
-                    />
-                  ) : isAudioAsset(asset) ? (
-                    <span className="asset-audio-preview" aria-hidden="true">
-                      <Music size={28} />
-                      <span className="external-audio-waveform">
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                      </span>
-                    </span>
-                  ) : (
-                    <>
-                      <span className="asset-preview-glow" aria-hidden="true" />
-                      <AssetIcon size={32} aria-hidden="true" />
-                    </>
-                  )}
+                  <span className="asset-preview-glow" aria-hidden="true" />
+                  <LayoutTemplate size={32} aria-hidden="true" />
                   <span className="asset-card-detail-chip">
                     <Eye size={15} aria-hidden="true" />
                     {detailLabel}
@@ -915,29 +1074,246 @@ export const AssetsPanel = ({
                 </button>
                 <div className="asset-card-meta">
                   <div>
-                    <h3 title={asset.name}>{asset.name}</h3>
-                    <p>{asset.mimeType ?? asset.type}</p>
+                    <h3 title={template.name}>{template.name}</h3>
+                    <p>{template.category}</p>
                   </div>
-                  <span>
-                    {isShowingSearchResults && searchScore !== undefined
-                      ? copy.score(searchScore)
-                      : formatBytes(asset.sizeBytes)}
-                  </span>
+                  <span>{template.sourceReferenceIds.length} refs</span>
                 </div>
-                {structuredSummary || firstStructuredSlice ? (
-                  <div className="asset-card-structure">
-                    <span>{structuredSummary?.role ?? firstStructuredSlice?.metadata?.shotType}</span>
-                    <small>
-                      {firstStructuredSlice?.metadata?.suitableSceneRoles.join(", ") ??
-                        structuredSummary?.qualitySignals?.productVisibility}
-                    </small>
-                  </div>
-                ) : null}
+                <div className="asset-card-structure">
+                  <span>{template.narrativeStructure.join(" → ")}</span>
+                  <small>{template.strategy}</small>
+                </div>
               </article>
-            );
-          })
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="asset-grid" aria-live="polite">
+          {previewAssets.length === 0 ? (
+            <div className="empty-state asset-empty-state">
+              <span className="asset-empty-icon" aria-hidden="true">
+                <CategoryIcon size={34} />
+              </span>
+              <strong>
+                {isShowingSearchResults
+                  ? language === "zh"
+                    ? `没有匹配 ${searchQuery.trim()} 的${getAssetCategoryLabel(activeCategory, language)}素材`
+                    : `No ${getAssetCategoryLabel(activeCategory, language).toLowerCase()} matched ${searchQuery.trim()}`
+                  : ui.emptyTitle}
+              </strong>
+              <span>
+                {isShowingSearchResults
+                  ? language === "zh"
+                    ? "可以换一个关键词，或先导入更多图片素材。"
+                    : "Try another keyword, or import more image assets first."
+                  : ui.emptyBody}
+              </span>
+              <button
+                className="asset-empty-action"
+                onClick={() => setIsImportOpen(true)}
+                type="button"
+              >
+                {importUi.emptyAction}
+              </button>
+            </div>
+          ) : (
+            previewAssets.map((asset) => {
+              const AssetIcon = isAudioAsset(asset)
+                ? Music
+                : isScriptAsset(asset)
+                  ? FileText
+                  : CategoryIcon;
+              const isReady = asset.status === "ready";
+              const isSelected = selectedAssetIds.has(asset.id);
+              const searchScore = searchScoreByAssetId.get(asset.id);
+              const searchResult = searchResultByAssetId.get(asset.id);
+              const structuredSummary = structuredAssetSummary(asset);
+              const firstStructuredSlice = searchResult?.slices.find((slice) => slice.metadata);
+
+              return (
+                <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
+                  <div className="asset-card-actions">
+                    <button
+                      aria-label={
+                        language === "zh"
+                          ? `${isSelected ? "取消选择" : "选择"} ${asset.name}`
+                          : `${isSelected ? "Deselect" : "Select"} ${asset.name}`
+                      }
+                      aria-pressed={isSelected}
+                      className="asset-selection-control"
+                      onClick={() => toggleAssetSelection(asset.id)}
+                      type="button"
+                    >
+                      {isSelected ? <Check size={13} aria-hidden="true" /> : null}
+                    </button>
+                    {onProcessAsset ? (
+                      <button
+                        aria-label={
+                          language === "zh"
+                            ? `结构化分析 ${asset.name}`
+                            : `Run structured analysis for ${asset.name}`
+                        }
+                        className="asset-card-delete"
+                        disabled={disabled}
+                        onClick={() => onProcessAsset(asset.id)}
+                        type="button"
+                      >
+                        <WandSparkles size={13} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                    <button
+                      aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
+                      className="asset-card-delete"
+                      disabled={disabled || !onDeleteAssets}
+                      onClick={() => handleDeleteAsset(asset.id)}
+                      type="button"
+                    >
+                      <Trash2 size={13} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <button
+                    aria-label={
+                      language === "zh"
+                        ? `打开 ${asset.name} 详情`
+                        : `Open details for ${asset.name}`
+                    }
+                    className="asset-card-frame asset-card-preview"
+                    onClick={() => setPreviewAsset(asset)}
+                    type="button"
+                  >
+                    {!isReady ? (
+                      <span
+                        aria-label={
+                          language === "zh"
+                            ? `${asset.name} 正在上传`
+                            : `${asset.name} is uploading`
+                        }
+                        className="asset-uploading-placeholder"
+                        role="status"
+                      >
+                        <span className="asset-uploading-spinner" aria-hidden="true" />
+                      </span>
+                    ) : isImageAsset(asset) ? (
+                      <img
+                        alt={asset.name}
+                        decoding="async"
+                        loading="lazy"
+                        src={getAssetContentUrl(asset.id)}
+                      />
+                    ) : isVideoAsset(asset) ? (
+                      <video
+                        aria-label={asset.name}
+                        muted
+                        preload="metadata"
+                        src={getAssetContentUrl(asset.id)}
+                      />
+                    ) : isAudioAsset(asset) ? (
+                      <span className="asset-audio-preview" aria-hidden="true">
+                        <Music size={28} />
+                        <span className="external-audio-waveform">
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      </span>
+                    ) : (
+                      <>
+                        <span className="asset-preview-glow" aria-hidden="true" />
+                        <AssetIcon size={32} aria-hidden="true" />
+                      </>
+                    )}
+                    <span className="asset-card-detail-chip">
+                      <Eye size={15} aria-hidden="true" />
+                      {detailLabel}
+                    </span>
+                  </button>
+                  <div className="asset-card-meta">
+                    <div>
+                      <h3 title={asset.name}>{asset.name}</h3>
+                      <p>{asset.mimeType ?? asset.type}</p>
+                    </div>
+                    <span>
+                      {isShowingSearchResults && searchScore !== undefined
+                        ? copy.score(searchScore)
+                        : formatBytes(asset.sizeBytes)}
+                    </span>
+                  </div>
+                  {structuredSummary || firstStructuredSlice ? (
+                    <div className="asset-card-structure">
+                      <span>
+                        {structuredSummary?.role ?? firstStructuredSlice?.metadata?.shotType}
+                      </span>
+                      <small>
+                        {firstStructuredSlice?.metadata?.suitableSceneRoles.join(", ") ??
+                          structuredSummary?.qualitySignals?.productVisibility}
+                      </small>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {previewTemplate ? (
+        <div className="external-preview-backdrop" role="presentation">
+          <section
+            aria-labelledby="template-preview-title"
+            aria-modal="true"
+            className="external-preview-dialog asset-preview-dialog"
+            role="dialog"
+          >
+            <div className="asset-import-dialog-heading external-preview-heading">
+              <div>
+                <p className="eyebrow">{language === "zh" ? "模板详情" : "Template details"}</p>
+                <h3 id="template-preview-title">{previewTemplate.name}</h3>
+              </div>
+              <button
+                aria-label={language === "zh" ? "关闭模板详情" : "Close template details"}
+                className="icon-button"
+                onClick={() => setPreviewTemplate(undefined)}
+                type="button"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="external-preview-content">
+              <div className="asset-document-preview">
+                <LayoutTemplate size={42} aria-hidden="true" />
+                <strong>{previewTemplate.category}</strong>
+                <span>{previewTemplate.narrativeStructure.join(" → ")}</span>
+              </div>
+              <aside className="external-preview-details asset-template-preview-details">
+                <h4>{language === "zh" ? "创作策略" : "Strategy"}</h4>
+                <p>{previewTemplate.strategy}</p>
+                <h4>{language === "zh" ? "共性因子" : "Shared factors"}</h4>
+                <p>{previewTemplate.factorSet.join(", ")}</p>
+                <h4>{language === "zh" ? "镜头要求" : "Shot requirements"}</h4>
+                <ul>
+                  {previewTemplate.shotRequirements.map((requirement) => (
+                    <li key={requirement}>{requirement}</li>
+                  ))}
+                </ul>
+                <h4>{language === "zh" ? "文案规则" : "Copywriting rules"}</h4>
+                <ul>
+                  {previewTemplate.copywritingRules.map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+                <h4>{language === "zh" ? "合规提醒" : "Risk rules"}</h4>
+                <ul>
+                  {previewTemplate.riskRules.map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+              </aside>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {previewAsset ? (
         <div className="external-preview-backdrop" role="presentation">
@@ -1011,6 +1387,59 @@ export const AssetsPanel = ({
                   <Globe2 size={14} aria-hidden="true" />
                   {assetSourceLabel(previewAsset, language)}
                 </span>
+                {previewReferenceScript ? (
+                  <div className="reference-script-readable-preview">
+                    <h4>{language === "zh" ? "可复用拆解" : "Reusable breakdown"}</h4>
+                    <p>{previewReferenceScript.hook ?? previewReferenceScript.formula}</p>
+                    <dl>
+                      {previewReferenceScript.category ? (
+                        <div>
+                          <dt>{language === "zh" ? "品类" : "Category"}</dt>
+                          <dd>{previewReferenceScript.category}</dd>
+                        </div>
+                      ) : null}
+                      {previewReferenceScript.pacing ? (
+                        <div>
+                          <dt>{language === "zh" ? "节奏" : "Pacing"}</dt>
+                          <dd>{previewReferenceScript.pacing}</dd>
+                        </div>
+                      ) : null}
+                      {previewReferenceScript.audience.length > 0 ? (
+                        <div>
+                          <dt>{language === "zh" ? "适合人群" : "Audience"}</dt>
+                          <dd>{previewReferenceScript.audience.join(", ")}</dd>
+                        </div>
+                      ) : null}
+                      {previewReferenceScript.factors.length > 0 ? (
+                        <div>
+                          <dt>{language === "zh" ? "关键手法" : "Key methods"}</dt>
+                          <dd>{previewReferenceScript.factors.join(", ")}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    {previewReferenceScript.storyboard.length > 0 ? (
+                      <div className="reference-script-storyboard-preview">
+                        <h4>{language === "zh" ? "分镜拆解" : "Storyboard"}</h4>
+                        {previewReferenceScript.storyboard.map((scene, index) => (
+                          <article key={`${scene.role}-${index}`}>
+                            <strong>
+                              {scene.role}
+                              {scene.timeRange ? ` · ${scene.timeRange}` : ""}
+                            </strong>
+                            {scene.summary ? <p>{scene.summary}</p> : null}
+                            {scene.copy ? <small>{scene.copy}</small> : null}
+                            {scene.visual ? <small>{scene.visual}</small> : null}
+                          </article>
+                        ))}
+                      </div>
+                    ) : null}
+                    {previewReferenceScript.reuseGuide.shootingGuide ? (
+                      <p className="asset-template-risk-note">
+                        {previewReferenceScript.reuseGuide.shootingGuide}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <dl>
                   <div>
                     <dt>{language === "zh" ? "名称" : "Name"}</dt>
@@ -1040,7 +1469,7 @@ export const AssetsPanel = ({
                       <dd>{previewAsset.tags.join(", ")}</dd>
                     </div>
                   ) : null}
-                  {previewAsset.embeddingText ? (
+                  {previewAsset.embeddingText && !previewReferenceScript ? (
                     <div>
                       <dt>{language === "zh" ? "检索描述" : "Retrieval text"}</dt>
                       <dd>{previewAsset.embeddingText}</dd>

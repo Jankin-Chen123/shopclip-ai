@@ -236,6 +236,25 @@ describe("Part 015 structured asset and reference flow", () => {
       true,
     );
 
+    const scriptTemplateResponse = await fetch(
+      `${baseUrl}/api/references/templates/from-script-assets`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assetIds: [scriptAsset.asset.id],
+          category: "Kitchen appliances",
+          templateName: "Script asset common method",
+        }),
+      },
+    );
+    expect(scriptTemplateResponse.status).toBe(201);
+    const scriptTemplate = (await scriptTemplateResponse.json()) as {
+      template: { name: string; sourceReferenceIds: string[]; templateId: string };
+    };
+    expect(scriptTemplate.template.name).toBe("Script asset common method");
+    expect(scriptTemplate.template.sourceReferenceIds).toContain(readyReference.id);
+
     const templateResponse = await fetch(`${baseUrl}/api/references/templates`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -258,6 +277,11 @@ describe("Part 015 structured asset and reference flow", () => {
     expect(
       templates.templates.some(
         (candidate) => candidate.templateId === template.template.templateId,
+      ),
+    ).toBe(true);
+    expect(
+      templates.templates.some(
+        (candidate) => candidate.templateId === scriptTemplate.template.templateId,
       ),
     ).toBe(true);
 

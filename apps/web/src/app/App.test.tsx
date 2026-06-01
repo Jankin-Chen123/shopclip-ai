@@ -4,6 +4,7 @@ import type {
   ProjectSummary,
   ReferenceVideo,
   StoryboardScene,
+  ViralTemplate,
 } from "@shopclip/shared";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -20,7 +21,11 @@ import {
   filterPrepLibraryAssets,
   hydratePrepUploadsWithLibraryAssets,
 } from "../features/assets/AssetPrepPanel";
-import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
+import {
+  AssetsPanel,
+  hasSearchableStockProviderCredential,
+  parseReferenceScriptPreview,
+} from "../features/assets/AssetsPanel";
 import {
   InspirationPanel,
   replaceInspirationSessionHistoryResult,
@@ -99,6 +104,20 @@ const makeReferenceVideo = (reference: Partial<ReferenceVideo>): ReferenceVideo 
   createdAt: "2026-05-30T00:00:00.000Z",
   updatedAt: "2026-05-30T00:00:00.000Z",
   ...reference,
+});
+
+const makeViralTemplate = (template: Partial<ViralTemplate>): ViralTemplate => ({
+  templateId: "template-1",
+  name: "Identity hook fast demo",
+  category: "Water cup",
+  strategy: "Open with a precise buyer identity, prove the product quickly, then close with CTA.",
+  factorSet: ["identity hook", "fast demo", "detail proof"],
+  narrativeStructure: ["hook", "demo", "trust", "cta"],
+  shotRequirements: ["0-2s product reveal", "close-up proof shot"],
+  copywritingRules: ["Use short spoken lines", "Keep claims tied to owned material"],
+  riskRules: ["Do not reuse public source footage"],
+  sourceReferenceIds: ["reference-1"],
+  ...template,
 });
 
 describe("App", () => {
@@ -1210,6 +1229,93 @@ describe("App", () => {
     expect(markup).toContain('alt="GlowGrip packshot"');
     expect(markup).toContain("View details");
     expect(markup).toContain("Open details for GlowGrip packshot");
+  });
+
+  it("renders templates as a first-class asset library section", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "reference",
+          name: "Script reference",
+          mimeType: "text/plain",
+          sizeBytes: 220000,
+          tags: ["script", "copy"],
+        }}
+        assets={[]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject={false}
+        hasSearched={false}
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="template"
+        onAssetDraftChange={() => undefined}
+        onImportFiles={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery=""
+        searchResults={[]}
+        templates={[makeViralTemplate({})]}
+      />,
+    );
+
+    expect(markup).toContain("Template library");
+    expect(markup).toContain("Identity hook fast demo");
+    expect(markup).toContain("Open with a precise buyer identity");
+    expect(markup).toContain("hook → demo → trust → cta");
+    expect(markup).not.toContain("Import assets");
+    expect(markup).not.toContain("Search external stock assets");
+  });
+
+  it("parses reference script assets into readable preview sections", () => {
+    const preview = parseReferenceScriptPreview(
+      makeAsset({
+        name: "Cheap cup reference ideas",
+        embeddingText: [
+          "Reference: Cheap cup proof",
+          "Category: Water cup",
+          "Source: tiktok https://example.test/video",
+          "Hook: Opens with a student budget identity.",
+          "Pacing: Fast hook, compact demo, detail proof, CTA.",
+          "Formula: Identity hook + price surprise + proof + CTA.",
+          "Audience: students, budget buyers",
+          "Viral factors: identity_label, price_anchor",
+          "Reusable storyboard:",
+          "1. hook 0-2s",
+          "Summary: Calls out budget buyers.",
+          "Copy: Bought it for cheap, but it looks premium.",
+          "Visual: Close-up cup on desk.",
+          "2. demo 2-8s",
+          "Summary: Shows lid and straw in use.",
+          "Copy: It fits my daily bag.",
+          "Visual: Handheld product demo.",
+          "Recreation visual: Use merchant-owned close-ups.",
+          "Recreation copywriting: Keep every line short.",
+          "Shooting guide: Use the method only; do not remix source footage.",
+          "Comment insights: Buyers ask about cleaning.",
+        ].join("\n"),
+        metadata: {
+          kind: "reference_script_asset",
+          referenceId: "reference-1",
+        },
+      }),
+    );
+
+    expect(preview?.title).toBe("Cheap cup proof");
+    expect(preview?.category).toBe("Water cup");
+    expect(preview?.hook).toContain("student budget");
+    expect(preview?.audience).toEqual(["students", "budget buyers"]);
+    expect(preview?.storyboard).toHaveLength(2);
+    expect(preview?.storyboard[0]).toMatchObject({
+      role: "hook",
+      timeRange: "0-2s",
+      summary: "Calls out budget buyers.",
+      copy: "Bought it for cheap, but it looks premium.",
+      visual: "Close-up cup on desk.",
+    });
+    expect(preview?.reuseGuide.shootingGuide).toContain("do not remix");
   });
 
   it("renders searched asset matches inside the main preview grid", () => {
@@ -2333,6 +2439,7 @@ describe("App", () => {
     expect(markup).toContain("Video");
     expect(markup).toContain("Audio");
     expect(markup).toContain("Scripts");
+    expect(markup).toContain("Templates");
     expect(markup).not.toContain("Canvas");
     expect(markup).not.toContain("Image editor");
     expect(markup).not.toContain("Documents");
@@ -2353,7 +2460,7 @@ describe("App", () => {
     expect(markup).not.toContain("Scripts");
   });
 
-  it("classifies only image, video, audio, and script assets", () => {
+  it("classifies only image, video, audio, script assets, and keeps templates separate", () => {
     expect(assetMatchesCategory(makeAsset({ type: "image", mimeType: "image/png" }), "image")).toBe(
       true,
     );
@@ -2371,6 +2478,7 @@ describe("App", () => {
         "script",
       ),
     ).toBe(true);
+    expect(assetMatchesCategory(makeAsset({ tags: ["template"] }), "template")).toBe(false);
   });
 
   it("classifies Freesound audio results into the audio category", () => {

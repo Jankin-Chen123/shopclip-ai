@@ -53,6 +53,7 @@ import {
   deleteProject as deleteProjectRequest,
   deleteReferenceVideo,
   deleteScene,
+  extractTemplateFromScriptAssets,
   exportProject,
   generateScript,
   importExternalAsset,
@@ -788,6 +789,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   useEffect(() => {
     if (activePage === "assets") {
+      if (activeAssetCategory === "template") {
+        refreshReferenceLibrary({ includeTemplates: true });
+        return;
+      }
       refreshAssetLibrary(activeAssetCategory);
       return;
     }
@@ -1132,6 +1137,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const handleSearchAssets = () => {
+    if (activeAssetCategory === "template") {
+      return;
+    }
     void runAction("asset", "search", async () => {
       const response = await searchAssets(project?.id, assetSearchQuery, [], {
         level: activeAssetCategory === "video" ? "slice" : undefined,
@@ -1194,7 +1202,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         query,
         page,
         perPage,
-        type,
+        type: type === "template" ? undefined : type,
         providers: enabledProviders,
       });
       return response;
@@ -1360,6 +1368,27 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       );
       setSelectedTemplateIdForScript(template.templateId);
       setScriptProductionMode("template");
+    });
+  };
+
+  const handleExtractTemplateFromScripts = (assetIds: string[]) => {
+    if (assetIds.length === 0) {
+      return;
+    }
+
+    void runAction("script", "script", async () => {
+      const template = await extractTemplateFromScriptAssets({
+        assetIds,
+        category: project?.productName || brief.productName || undefined,
+        templateName: `${project?.productName || brief.productName || "Script"} reusable template`,
+        apiConfig,
+      });
+      setViralTemplateLibrary((current) => mergeTemplates([template], current));
+      setActiveAssetCategory("template");
+      setAssetSearchQuery("");
+      setHasAssetSearchRun(false);
+      setAssetSearchResults([]);
+      setExternalAssetSearchResults([]);
     });
   };
 
@@ -1791,6 +1820,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               onImportExternalAsset={handleImportExternalAsset}
               onImportFiles={handleImportFiles}
               onDeleteAssets={handleDeleteAssets}
+              onExtractTemplateFromScripts={handleExtractTemplateFromScripts}
               onProcessAsset={handleProcessAsset}
               onRecallAsset={selectedSceneId ? handleRecallAsset : undefined}
               onSearchExternalAssets={handleSearchExternalAssets}
@@ -1801,6 +1831,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               stockProviderConfigs={stockProviderConfigs}
               externalSearchResults={activeExternalAssetSearchResults}
               searchResults={activeAssetSearchResults}
+              templates={scriptTemplateLibrary}
             />
           </section>
         ) : null}

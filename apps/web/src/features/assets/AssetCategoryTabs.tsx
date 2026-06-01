@@ -1,10 +1,10 @@
 import type { AssetMetadata, ExternalAssetResult } from "@shopclip/shared";
-import { FileText, Image, Music, Video } from "lucide-react";
+import { FileText, Image, LayoutTemplate, Music, Video } from "lucide-react";
 
 import type { Language } from "../../app/i18n";
 import type { CreateAssetInput } from "../../lib/api";
 
-export type AssetCategory = "image" | "video" | "audio" | "script";
+export type AssetCategory = "image" | "video" | "audio" | "script" | "template";
 
 const categoryLabels: Record<Language, Record<AssetCategory, string>> = {
   en: {
@@ -12,12 +12,14 @@ const categoryLabels: Record<Language, Record<AssetCategory, string>> = {
     video: "Video",
     audio: "Audio",
     script: "Scripts",
+    template: "Templates",
   },
   zh: {
     image: "图片",
     video: "视频",
     audio: "音频",
     script: "剧本",
+    template: "模板",
   },
 };
 
@@ -26,6 +28,7 @@ const categoryIcons = {
   video: Video,
   audio: Music,
   script: FileText,
+  template: LayoutTemplate,
 } as const;
 
 const documentScriptMimeTypes = new Set([
@@ -65,6 +68,12 @@ const draftDefaults: Record<
       name: "Script reference",
       tags: ["script", "copy"],
     },
+    template: {
+      type: "reference",
+      mimeType: "text/plain",
+      name: "Template reference",
+      tags: ["template", "script"],
+    },
   },
   zh: {
     image: {
@@ -91,10 +100,16 @@ const draftDefaults: Record<
       name: "剧本素材",
       tags: ["剧本", "文案"],
     },
+    template: {
+      type: "reference",
+      mimeType: "text/plain",
+      name: "模板素材",
+      tags: ["模板", "剧本"],
+    },
   },
 };
 
-export const assetCategories: AssetCategory[] = ["image", "video", "audio", "script"];
+export const assetCategories: AssetCategory[] = ["image", "video", "audio", "script", "template"];
 
 export const getAssetCategoryLabel = (category: AssetCategory, language: Language) =>
   categoryLabels[language][category];
@@ -102,10 +117,15 @@ export const getAssetCategoryLabel = (category: AssetCategory, language: Languag
 export const getAssetDraftDefaults = (
   category: AssetCategory,
   language: Language = "en",
-): Pick<CreateAssetInput, "type" | "mimeType" | "name" | "tags"> => draftDefaults[language][category];
+): Pick<CreateAssetInput, "type" | "mimeType" | "name" | "tags"> =>
+  draftDefaults[language][category];
 
 export const assetMatchesCategory = (asset: AssetMetadata, category: AssetCategory) => {
   const tags = asset.tags.map((tag) => tag.toLowerCase());
+
+  if (category === "template") {
+    return false;
+  }
 
   if (category === "image") {
     return asset.type === "image";
@@ -130,6 +150,10 @@ export const externalAssetMatchesCategory = (
   asset: ExternalAssetResult,
   category: AssetCategory,
 ) => {
+  if (category === "template") {
+    return false;
+  }
+
   if (category === "image") {
     return asset.type === "image";
   }

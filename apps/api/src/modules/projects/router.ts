@@ -17,6 +17,7 @@ import type {
 } from "@shopclip/shared";
 import {
   ExternalAssetSearchRequestSchema,
+  InspirationGenerateRequestSchema,
   ProjectBriefSchema,
   ProjectPrepUpdateSchema,
   ExternalAssetResultSchema,
@@ -58,6 +59,7 @@ import {
 import type { ReferenceDownloadProvider } from "../../providers/references/referenceDownloadProvider.js";
 import { generateEditingSuggestions } from "../../providers/ai/editingAgentProvider.js";
 import { generateInspiration } from "../../providers/ai/arkInspirationProvider.js";
+import { extractScriptTemplateWithGeneralModel } from "../../providers/ai/scriptTemplateExtractionProvider.js";
 import {
   generateFallbackScript,
   rewriteFallbackScript,
@@ -147,6 +149,13 @@ const TemplateCreateRequestSchema = z.object({
   templateName: z.string().trim().min(1),
 });
 
+const ScriptAssetTemplateCreateRequestSchema = z.object({
+  assetIds: z.array(z.string().trim().min(1)).min(1).max(20),
+  category: OptionalNonEmptyStringSchema,
+  templateName: OptionalNonEmptyStringSchema,
+  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
+});
+
 const ReferenceScriptAssetRequestSchema = z
   .object({
     projectId: OptionalNonEmptyStringSchema,
@@ -226,6 +235,18 @@ const buildReferenceScriptAssetTags = (reference: ReferenceVideo): string[] => {
     ...(analysis?.keyViralFactors ?? []),
     ...(analysis?.derivedTemplates ?? []),
   ]);
+};
+
+const isScriptLibraryAsset = (asset: AssetMetadata): boolean => {
+  const tags = asset.tags.map((tag) => tag.toLowerCase());
+  const metadata = getMetadataRecord(asset);
+  return (
+    metadata.kind === "reference_script_asset" ||
+    asset.mimeType === "text/plain" ||
+    asset.mimeType === "text/markdown" ||
+    asset.mimeType?.startsWith("text/") ||
+    tags.some((tag) => tag === "script" || tag === "copy" || tag === "text" || tag === "剧本")
+  );
 };
 
 const isReferenceScriptAssetFor = (
@@ -2385,6 +2406,54 @@ export const createP0Router = ({
     );
 
     response.status(201).json({ template });
+  });
+
+  router.post("/references/templates/from-script-assets", async (request, response) => {
+    const parsedTemplate = ScriptAssetTemplateCreateRequestSchema.safeParse(request.body ?? {});
+    if (!parsedTemplate.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_ASSET_TEMPLATE_REQUEST",
+        "Script asset template request failed validation.",
+      );
+      return;
+    }
+
+    const assetIds = [...new Set(parsedTemplate.data.assetIds)];
+    const assets = (await Promise.all(assetIds.map((assetId) => store.getAsset(assetId)))).filter(
+      (asset): asset is AssetMetadata => Boolean(asset),
+    );
+    if (assets.length !== assetIds.length) {
+      sendNotFound(response, "SCRIPT_ASSET_NOT_FOUND", "One or more script assets were not found.");
+      return;
+    }
+    if (assets.some((asset) => !isScriptLibraryAsset(asset))) {
+      sendInvalidRequest(
+        response,
+        "SCRIPT_ASSET_REQUIRED",
+        "Template extraction only supports script material assets.",
+      );
+      return;
+    }
+
+    try {
+      const extractedTemplate = await extractScriptTemplateWithGeneralModel({
+        assets,
+        category: parsedTemplate.data.category,
+        templateName: parsedTemplate.data.templateName,
+        apiConfig: parsedTemplate.data.apiConfig,
+      });
+      const template = await store.addViralTemplate(extractedTemplate);
+      response.status(201).json({ template });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "SCRIPT_TEMPLATE_EXTRACTION_FAILED",
+          message:
+            error instanceof Error ? error.message : "Script asset template extraction failed.",
+        },
+      });
+    }
   });
 
   router.post("/projects/:projectId/rewrite-script", async (request, response) => {

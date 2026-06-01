@@ -431,6 +431,22 @@ export const createReferenceTemplate = async (input: {
   return response.template;
 };
 
+export const extractTemplateFromScriptAssets = async (input: {
+  apiConfig?: UserApiConfig;
+  assetIds: string[];
+  category?: string;
+  templateName?: string;
+}): Promise<ViralTemplate> => {
+  const response = await requestJson<{ template: ViralTemplate }>(
+    "/references/templates/from-script-assets",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return response.template;
+};
+
 export const listReferenceTemplates = async (category?: string): Promise<ViralTemplate[]> => {
   const params = new URLSearchParams();
   if (category?.trim()) {
