@@ -56,11 +56,7 @@ const createFixtureVideo = async (directory: string, name: string) => {
   return videoPath;
 };
 
-const waitForReferenceStatus = async (
-  baseUrl: string,
-  referenceId: string,
-  status: string,
-) => {
+const waitForReferenceStatus = async (baseUrl: string, referenceId: string, status: string) => {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const referencesResponse = await fetch(`${baseUrl}/api/references`);
     expect(referencesResponse.status).toBe(200);
@@ -205,6 +201,41 @@ describe("Part 015 structured asset and reference flow", () => {
       true,
     );
 
+    const scriptAssetResponse = await fetch(
+      `${baseUrl}/api/references/${readyReference.id}/script-asset`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(scriptAssetResponse.status).toBe(201);
+    const scriptAsset = (await scriptAssetResponse.json()) as {
+      asset: {
+        id: string;
+        metadata?: { kind?: string; referenceId?: string; searchText?: string };
+        mimeType?: string;
+        projectId?: string;
+        tags: string[];
+      };
+    };
+    expect(scriptAsset.asset.projectId).toBeUndefined();
+    expect(scriptAsset.asset.mimeType).toBe("text/plain");
+    expect(scriptAsset.asset.tags).toContain("script");
+    expect(scriptAsset.asset.tags).toContain("copy");
+    expect(scriptAsset.asset.metadata?.kind).toBe("reference_script_asset");
+    expect(scriptAsset.asset.metadata?.referenceId).toBe(readyReference.id);
+    expect(scriptAsset.asset.metadata?.searchText).toContain("Reusable storyboard");
+
+    const scriptLibraryResponse = await fetch(`${baseUrl}/api/assets?category=script`);
+    expect(scriptLibraryResponse.status).toBe(200);
+    const scriptLibrary = (await scriptLibraryResponse.json()) as {
+      assets: Array<{ id: string }>;
+    };
+    expect(scriptLibrary.assets.some((candidate) => candidate.id === scriptAsset.asset.id)).toBe(
+      true,
+    );
+
     const templateResponse = await fetch(`${baseUrl}/api/references/templates`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -225,7 +256,9 @@ describe("Part 015 structured asset and reference flow", () => {
       templates: Array<{ templateId: string }>;
     };
     expect(
-      templates.templates.some((candidate) => candidate.templateId === template.template.templateId),
+      templates.templates.some(
+        (candidate) => candidate.templateId === template.template.templateId,
+      ),
     ).toBe(true);
 
     const projectResponse = await fetch(`${baseUrl}/api/projects`, {
@@ -348,21 +381,24 @@ describe("Part 015 structured asset and reference flow", () => {
       true,
     );
 
-    const ownedReferenceAssetResponse = await fetch(`${baseUrl}/api/projects/${project.id}/assets`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        type: "video",
-        name: "self-shot-reference-demo.mp4",
-        mimeType: "video/mp4",
-        sizeBytes: 3_200_000,
-        url: ownedReferenceVideoPath,
-        tags: ["self-shot", "reference", "demo"],
-        metadata: {
-          localFilePath: ownedReferenceVideoPath,
-        },
-      }),
-    });
+    const ownedReferenceAssetResponse = await fetch(
+      `${baseUrl}/api/projects/${project.id}/assets`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "video",
+          name: "self-shot-reference-demo.mp4",
+          mimeType: "video/mp4",
+          sizeBytes: 3_200_000,
+          url: ownedReferenceVideoPath,
+          tags: ["self-shot", "reference", "demo"],
+          metadata: {
+            localFilePath: ownedReferenceVideoPath,
+          },
+        }),
+      },
+    );
     expect(ownedReferenceAssetResponse.status).toBe(201);
     const { asset: ownedReferenceAsset } = (await ownedReferenceAssetResponse.json()) as {
       asset: { id: string };
@@ -375,7 +411,8 @@ describe("Part 015 structured asset and reference flow", () => {
         projectId: project.id,
         sourceAssetId: ownedReferenceAsset.id,
         sourcePlatform: "merchant_upload",
-        sourceDeclaration: "Merchant-owned uploaded reference video; may analyze frames and transcript.",
+        sourceDeclaration:
+          "Merchant-owned uploaded reference video; may analyze frames and transcript.",
         title: "Self-shot commuter smoothie proof",
         category: "Kitchen appliances",
       }),
@@ -396,9 +433,9 @@ describe("Part 015 structured asset and reference flow", () => {
     const ownedReferenceSearch = (await ownedReferenceSearchResponse.json()) as {
       results: Array<{ asset: { id: string }; slices: Array<{ searchText?: string }> }>;
     };
-    expect(ownedReferenceSearch.results.some((result) => result.asset.id === ownedReferenceAsset.id)).toBe(
-      true,
-    );
+    expect(
+      ownedReferenceSearch.results.some((result) => result.asset.id === ownedReferenceAsset.id),
+    ).toBe(true);
 
     const referenceResponse = await fetch(`${baseUrl}/api/references/analyze`, {
       method: "POST",
@@ -425,9 +462,9 @@ describe("Part 015 structured asset and reference flow", () => {
     expect(reference.reference.status).toBe("analyzing");
     const readyReference = await waitForReferenceStatus(baseUrl, reference.reference.id, "ready");
     expect(readyReference.sourceAssetId).toBeTruthy();
-    expect(readyReference.analysis?.commerceNarrativeSegments?.map((segment) => segment.role)).toContain(
-      "hook",
-    );
+    expect(
+      readyReference.analysis?.commerceNarrativeSegments?.map((segment) => segment.role),
+    ).toContain("hook");
 
     const publicReferenceSearchResponse = await fetch(
       `${baseUrl}/api/assets/search?projectId=${project.id}&q=viral%20blender&level=slice`,

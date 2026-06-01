@@ -9,6 +9,7 @@ import type {
   AssetProcessingJob,
   AssetUploadIntent,
   ExternalAssetResult,
+  ReferenceVideo,
   ScriptGenerationRequest,
   ScriptResult,
   SceneRenderClip,
@@ -55,9 +56,7 @@ import {
   searchExternalAssets,
 } from "../../providers/assets/externalAssetProviders.js";
 import type { ReferenceDownloadProvider } from "../../providers/references/referenceDownloadProvider.js";
-import {
-  generateEditingSuggestions,
-} from "../../providers/ai/editingAgentProvider.js";
+import { generateEditingSuggestions } from "../../providers/ai/editingAgentProvider.js";
 import { generateInspiration } from "../../providers/ai/arkInspirationProvider.js";
 import {
   generateFallbackScript,
@@ -111,34 +110,36 @@ const OptionalNonEmptyStringSchema = z.preprocess(
   z.string().trim().min(1).optional(),
 );
 
-const ReferenceAnalyzeRequestSchema = z.object({
-  projectId: OptionalNonEmptyStringSchema,
-  sourceAssetId: OptionalNonEmptyStringSchema,
-  sourceUrl: OptionalNonEmptyStringSchema,
-  sourcePlatform: z.string().trim().min(1),
-  sourceDeclaration: z.string().trim().min(1),
-  title: z.string().trim().min(1),
-  author: z.string().trim().min(1).optional(),
-  category: z.string().trim().min(1),
-  publicStats: z
-    .object({
-      likes: z.number().int().nonnegative().default(0),
-      comments: z.number().int().nonnegative().default(0),
-      shares: z.number().int().nonnegative().default(0),
-      views: z.number().int().nonnegative().default(0),
-    })
-    .default({ likes: 0, comments: 0, shares: 0, views: 0 }),
-  status: z.enum(["registered", "analyzing", "ready", "failed"]).default("registered"),
-  errorMessage: z.string().trim().min(1).optional(),
-}).superRefine((reference, context) => {
-  if (!reference.sourceUrl && !reference.sourceAssetId) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Either sourceUrl or sourceAssetId is required.",
-      path: ["sourceUrl"],
-    });
-  }
-});
+const ReferenceAnalyzeRequestSchema = z
+  .object({
+    projectId: OptionalNonEmptyStringSchema,
+    sourceAssetId: OptionalNonEmptyStringSchema,
+    sourceUrl: OptionalNonEmptyStringSchema,
+    sourcePlatform: z.string().trim().min(1),
+    sourceDeclaration: z.string().trim().min(1),
+    title: z.string().trim().min(1),
+    author: z.string().trim().min(1).optional(),
+    category: z.string().trim().min(1),
+    publicStats: z
+      .object({
+        likes: z.number().int().nonnegative().default(0),
+        comments: z.number().int().nonnegative().default(0),
+        shares: z.number().int().nonnegative().default(0),
+        views: z.number().int().nonnegative().default(0),
+      })
+      .default({ likes: 0, comments: 0, shares: 0, views: 0 }),
+    status: z.enum(["registered", "analyzing", "ready", "failed"]).default("registered"),
+    errorMessage: z.string().trim().min(1).optional(),
+  })
+  .superRefine((reference, context) => {
+    if (!reference.sourceUrl && !reference.sourceAssetId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Either sourceUrl or sourceAssetId is required.",
+        path: ["sourceUrl"],
+      });
+    }
+  });
 
 const TemplateCreateRequestSchema = z.object({
   category: z.string().trim().min(1),
@@ -146,11 +147,99 @@ const TemplateCreateRequestSchema = z.object({
   templateName: z.string().trim().min(1),
 });
 
+const ReferenceScriptAssetRequestSchema = z
+  .object({
+    projectId: OptionalNonEmptyStringSchema,
+  })
+  .default({});
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const getMetadataRecord = (asset: AssetMetadata): Record<string, unknown> =>
   isRecord(asset.metadata) ? asset.metadata : {};
+
+const compactText = (values: Array<string | undefined>): string =>
+  values
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+    .join("\n");
+
+const uniqueNonEmpty = (values: Array<string | undefined>): string[] => [
+  ...new Set(
+    values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)),
+  ),
+];
+
+const buildReferenceScriptAssetBody = (reference: ReferenceVideo): string => {
+  const analysis = reference.analysis;
+  if (!analysis) {
+    return compactText([
+      `Reference: ${reference.title}`,
+      `Category: ${reference.category}`,
+      `Source: ${reference.sourcePlatform} ${reference.sourceUrl}`,
+      reference.sourceDeclaration,
+    ]);
+  }
+
+  const segments = analysis.commerceNarrativeSegments
+    .map((segment, index) =>
+      [
+        `${index + 1}. ${segment.role} ${segment.startSecond}-${segment.endSecond}s`,
+        `Summary: ${segment.summary}`,
+        `Copy: ${segment.copywriting}`,
+        `Visual: ${segment.visualPrompt}`,
+      ].join("\n"),
+    )
+    .join("\n\n");
+
+  return compactText([
+    `Reference: ${analysis.title}`,
+    `Category: ${analysis.category}`,
+    `Source: ${analysis.sourcePlatform} ${analysis.sourceUrl}`,
+    analysis.sourceDeclaration,
+    `Hook: ${analysis.hookAnalysis}`,
+    `Pacing: ${analysis.pacingAnalysis}`,
+    `Formula: ${analysis.contentFormula}`,
+    `Audience: ${analysis.targetAudience.join(", ")}`,
+    `Viral factors: ${analysis.keyViralFactors.join(", ")}`,
+    segments ? `Reusable storyboard:\n${segments}` : undefined,
+    `Recreation visual: ${analysis.recreationBlueprint.visual}`,
+    `Recreation copywriting: ${analysis.recreationBlueprint.copywriting}`,
+    `Shooting guide: ${analysis.recreationBlueprint.shootingGuide}`,
+    analysis.commentInsights.length > 0
+      ? `Comment insights: ${analysis.commentInsights.join(", ")}`
+      : undefined,
+  ]);
+};
+
+const buildReferenceScriptAssetTags = (reference: ReferenceVideo): string[] => {
+  const analysis = reference.analysis;
+  return uniqueNonEmpty([
+    "script",
+    "copy",
+    "reference-video",
+    "viral-breakdown",
+    reference.category,
+    reference.sourcePlatform,
+    ...(analysis?.commerceNarrativeSegments.map((segment) => segment.role) ?? []),
+    ...(analysis?.keyViralFactors ?? []),
+    ...(analysis?.derivedTemplates ?? []),
+  ]);
+};
+
+const isReferenceScriptAssetFor = (
+  asset: AssetMetadata,
+  referenceId: string,
+  projectId: string | undefined,
+): boolean => {
+  const metadata = getMetadataRecord(asset);
+  return (
+    metadata.kind === "reference_script_asset" &&
+    metadata.referenceId === referenceId &&
+    asset.projectId === projectId
+  );
+};
 
 const getAppearanceAnchorLines = (asset: AssetMetadata | undefined): string[] => {
   if (!asset) {
@@ -242,7 +331,13 @@ const resolveStoryboardReferenceImageUrls = async (
     }
 
     try {
-      return (await videoFrameExtractor({ assetId: boundAsset.id, maxFrames: 3, videoUrl: boundAsset.url }))
+      return (
+        await videoFrameExtractor({
+          assetId: boundAsset.id,
+          maxFrames: 3,
+          videoUrl: boundAsset.url,
+        })
+      )
         .map((frame) => frame.imageUrl)
         .slice(0, 3);
     } catch (error) {
@@ -391,9 +486,9 @@ const scriptGenerationPrompt = (
 const hasConfiguredTextProviderEnvironment = (): boolean =>
   Boolean(
     process.env.AI_GENERAL_API_KEY?.trim() ||
-      process.env.AI_TEXT_API_KEY?.trim() ||
-      process.env.AI_GENERAL_MODEL_ID?.trim() ||
-      process.env.AI_TEXT_MODEL_ID?.trim(),
+    process.env.AI_TEXT_API_KEY?.trim() ||
+    process.env.AI_GENERAL_MODEL_ID?.trim() ||
+    process.env.AI_TEXT_MODEL_ID?.trim(),
   );
 
 const rewriteScriptWithConfiguredProvider = async (
@@ -814,9 +909,7 @@ const assertAllowedExternalDownloadUrl = (asset: ExternalAssetResult, sourceUrl:
 
   const hostname = parsedUrl.hostname.toLowerCase();
   const allowedHosts = allowedDownloadHostsBySource[asset.source];
-  const allowed = allowedHosts.some(
-    (host) => hostname === host || hostname.endsWith(`.${host}`),
-  );
+  const allowed = allowedHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
   if (!allowed) {
     throw new Error(`External asset download host is not allowed for ${asset.source}.`);
   }
@@ -1085,9 +1178,7 @@ export const createP0Router = ({
           "queued",
           "external-download",
           "cos-upload",
-          ...(assetType === "image" || assetType === "video"
-            ? ["multigranularity-structure"]
-            : []),
+          ...(assetType === "image" || assetType === "video" ? ["multigranularity-structure"] : []),
           "metadata-ready",
         ],
         message:
@@ -1565,7 +1656,11 @@ export const createP0Router = ({
 
     const job = await store.getLatestAssetProcessingJob(request.params.assetId);
     if (!job) {
-      sendNotFound(response, "ASSET_PROCESSING_JOB_NOT_FOUND", "Asset processing job was not found.");
+      sendNotFound(
+        response,
+        "ASSET_PROCESSING_JOB_NOT_FOUND",
+        "Asset processing job was not found.",
+      );
       return;
     }
 
@@ -1593,7 +1688,11 @@ export const createP0Router = ({
         "Upload confirmed. Asset metadata is ready for script generation and storyboard recall.",
     });
     if (!processingJob) {
-      sendNotFound(response, "ASSET_PROCESSING_JOB_NOT_FOUND", "Asset processing job was not found.");
+      sendNotFound(
+        response,
+        "ASSET_PROCESSING_JOB_NOT_FOUND",
+        "Asset processing job was not found.",
+      );
       return;
     }
 
@@ -1631,7 +1730,11 @@ export const createP0Router = ({
   router.get("/asset-processing-jobs/:jobId", async (request, response) => {
     const job = await store.getAssetProcessingJob(request.params.jobId);
     if (!job) {
-      sendNotFound(response, "ASSET_PROCESSING_JOB_NOT_FOUND", "Asset processing job was not found.");
+      sendNotFound(
+        response,
+        "ASSET_PROCESSING_JOB_NOT_FOUND",
+        "Asset processing job was not found.",
+      );
       return;
     }
 
@@ -1724,7 +1827,10 @@ export const createP0Router = ({
           uploadedBytes: request.body.length,
           uploadConfirmedAt: uploadedAt,
           structuredAssetVersion: "asset-multigranularity-v1",
-          structureStatus: asset.type === "image" || asset.type === "video" ? "pending_structure" : "metadata_ready",
+          structureStatus:
+            asset.type === "image" || asset.type === "video"
+              ? "pending_structure"
+              : "metadata_ready",
           ...documentTextMetadata,
         },
       });
@@ -1778,7 +1884,8 @@ export const createP0Router = ({
       response.status(502).json({
         error: {
           code: "STORAGE_READ_URL_FAILED",
-          message: error instanceof Error ? error.message : "Storage read URL could not be created.",
+          message:
+            error instanceof Error ? error.message : "Storage read URL could not be created.",
         },
       });
       return;
@@ -1909,7 +2016,8 @@ export const createP0Router = ({
       request.query.level === "slice" || request.query.level === "asset"
         ? request.query.level
         : undefined;
-    const sceneRole = typeof request.query.sceneRole === "string" ? request.query.sceneRole : undefined;
+    const sceneRole =
+      typeof request.query.sceneRole === "string" ? request.query.sceneRole : undefined;
 
     const searchLibrary = project ?? {
       id: "global-asset-library",
@@ -2011,15 +2119,14 @@ export const createP0Router = ({
 
     const sourceAsset = sourceAssetId ? await store.getAsset(sourceAssetId) : undefined;
     if (sourceAssetId && !sourceAsset) {
-      sendNotFound(response, "REFERENCE_SOURCE_ASSET_NOT_FOUND", "Reference source asset was not found.");
+      sendNotFound(
+        response,
+        "REFERENCE_SOURCE_ASSET_NOT_FOUND",
+        "Reference source asset was not found.",
+      );
       return;
     }
-    if (
-      sourceAsset &&
-      projectId &&
-      sourceAsset.projectId &&
-      sourceAsset.projectId !== projectId
-    ) {
+    if (sourceAsset && projectId && sourceAsset.projectId && sourceAsset.projectId !== projectId) {
       sendInvalidRequest(
         response,
         "REFERENCE_SOURCE_ASSET_PROJECT_MISMATCH",
@@ -2027,7 +2134,11 @@ export const createP0Router = ({
       );
       return;
     }
-    if (sourceAsset && sourceAsset.type !== "video" && !sourceAsset.mimeType?.startsWith("video/")) {
+    if (
+      sourceAsset &&
+      sourceAsset.type !== "video" &&
+      !sourceAsset.mimeType?.startsWith("video/")
+    ) {
       sendInvalidRequest(
         response,
         "REFERENCE_SOURCE_ASSET_NOT_VIDEO",
@@ -2040,7 +2151,8 @@ export const createP0Router = ({
       const referencePayload = {
         ...referenceInput,
         sourceAssetId,
-        sourceUrl: referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
+        sourceUrl:
+          referenceInput.sourceUrl ?? sourceAsset?.url ?? `/api/assets/${sourceAssetId}/content`,
       };
       reference = await registerReferenceForAnalysis({
         projectId,
@@ -2085,14 +2197,104 @@ export const createP0Router = ({
   });
 
   router.get("/references", async (request, response) => {
-    const projectId = typeof request.query.projectId === "string" ? request.query.projectId : undefined;
+    const projectId =
+      typeof request.query.projectId === "string" ? request.query.projectId : undefined;
     response.json({
       references: await store.listReferenceVideos(projectId),
     });
   });
 
+  router.post("/references/:referenceId/script-asset", async (request, response) => {
+    const parsedRequest = ReferenceScriptAssetRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRequest.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_REFERENCE_SCRIPT_ASSET_REQUEST",
+        "Reference script asset request failed validation.",
+      );
+      return;
+    }
+
+    const projectId = parsedRequest.data.projectId;
+    if (projectId && !(await store.getProject(projectId))) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const reference = (await store.listReferenceVideos()).find(
+      (candidate) => candidate.id === request.params.referenceId,
+    );
+    if (!reference) {
+      sendNotFound(response, "REFERENCE_NOT_FOUND", "Reference video was not found.");
+      return;
+    }
+    if (reference.status !== "ready" || !reference.analysis) {
+      sendInvalidRequest(
+        response,
+        "REFERENCE_NOT_READY",
+        "Reference video must finish analysis before it can be added to the script library.",
+      );
+      return;
+    }
+
+    const existingAsset = (await store.listAssets()).assets.find((asset) =>
+      isReferenceScriptAssetFor(asset, reference.id, projectId),
+    );
+    if (existingAsset) {
+      response.json({ asset: existingAsset });
+      return;
+    }
+
+    const body = buildReferenceScriptAssetBody(reference);
+    const title = reference.title.trim() || "Reference video script ideas";
+    const storedAsset = await store.addAsset(projectId, {
+      type: "reference",
+      status: "ready",
+      url: reference.sourceUrl,
+      name: `${title} - script ideas`,
+      mimeType: "text/plain",
+      sizeBytes: Math.max(1, Buffer.byteLength(body, "utf8")),
+      source: "public_reference",
+      embeddingText: body,
+      metadata: {
+        kind: "reference_script_asset",
+        referenceId: reference.id,
+        sourceUrl: reference.sourceUrl,
+        sourcePlatform: reference.sourcePlatform,
+        sourceDeclaration: reference.sourceDeclaration,
+        title: reference.title,
+        category: reference.category,
+        content: body,
+        searchText: body,
+        reusableSegments: reference.analysis.commerceNarrativeSegments,
+        recreationBlueprint: reference.analysis.recreationBlueprint,
+        keyViralFactors: reference.analysis.keyViralFactors,
+        derivedTemplates: reference.analysis.derivedTemplates,
+      },
+      tags: inferAssetTags({
+        name: `${title} script ideas reference video ${reference.category}`,
+        mimeType: "text/plain",
+        source: "public_reference",
+        tags: buildReferenceScriptAssetTags(reference),
+      }),
+    });
+
+    if (!storedAsset) {
+      response.status(500).json({
+        error: {
+          code: "REFERENCE_SCRIPT_ASSET_CREATE_FAILED",
+          message: "Reference script asset could not be created.",
+        },
+      });
+      return;
+    }
+
+    response.status(201).json({ asset: storedAsset });
+  });
+
   router.get("/references/templates", async (request, response) => {
-    const category = typeof request.query.category === "string" ? request.query.category : undefined;
+    const category =
+      typeof request.query.category === "string" ? request.query.category : undefined;
     response.json({
       templates: await store.listViralTemplates(category),
     });
@@ -2145,7 +2347,11 @@ export const createP0Router = ({
 
     const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
     if (!parsedRequest.success) {
-      sendInvalidRequest(response, "INVALID_SCRIPT_REQUEST", "Script generation request is invalid.");
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_REQUEST",
+        "Script generation request is invalid.",
+      );
       return;
     }
 
@@ -2174,7 +2380,8 @@ export const createP0Router = ({
       "keywords",
     );
     const workingProject = shouldPersistKeywords
-      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ?? project)
+      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ??
+        project)
       : project;
 
     const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
@@ -2205,7 +2412,11 @@ export const createP0Router = ({
 
     const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
     if (!parsedRequest.success) {
-      sendInvalidRequest(response, "INVALID_SCRIPT_REQUEST", "Script generation request is invalid.");
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_REQUEST",
+        "Script generation request is invalid.",
+      );
       return;
     }
 
@@ -2214,7 +2425,8 @@ export const createP0Router = ({
       "keywords",
     );
     const workingProject = shouldPersistKeywords
-      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ?? project)
+      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ??
+        project)
       : project;
 
     const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
@@ -2349,9 +2561,7 @@ export const createP0Router = ({
               status: "failed",
               step: "render-export-publish-failed",
               message:
-                error instanceof Error
-                  ? error.message
-                  : "Final render export publishing failed.",
+                error instanceof Error ? error.message : "Final render export publishing failed.",
             });
           }
         }
@@ -2377,8 +2587,7 @@ export const createP0Router = ({
             {
               status: "failed",
               step: "seedance-task-poll-failed",
-              message:
-                error instanceof Error ? error.message : "Seedance render polling failed.",
+              message: error instanceof Error ? error.message : "Seedance render polling failed.",
             },
           ],
         );
@@ -2459,24 +2668,19 @@ export const createP0Router = ({
       try {
         exportUrl = await publishRenderExport(project.id, completedRender.sceneClips);
         if (exportUrl) {
-          await store.updateRenderTask(
-            completedRender.id,
-            { exportUrl },
-            [
-              {
-                status: "completed",
-                step: "render-export-published",
-                message: "Seedance scene clips composed and published as a final export video.",
-              },
-            ],
-          );
+          await store.updateRenderTask(completedRender.id, { exportUrl }, [
+            {
+              status: "completed",
+              step: "render-export-published",
+              message: "Seedance scene clips composed and published as a final export video.",
+            },
+          ]);
         }
       } catch (error) {
         response.status(502).json({
           error: {
             code: "EXPORT_COMPOSE_FAILED",
-            message:
-              error instanceof Error ? error.message : "Final video composition failed.",
+            message: error instanceof Error ? error.message : "Final video composition failed.",
           },
         });
         return;

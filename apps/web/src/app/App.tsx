@@ -43,6 +43,7 @@ import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import { copy, isLanguage, type Language } from "./i18n";
 import {
   addAsset,
+  addReferenceToScriptLibrary,
   applySceneSuggestion,
   analyzeReferenceVideo,
   createReferenceTemplate,
@@ -230,7 +231,10 @@ export const importAndStructureFiles = async ({
   processAssetStructureFn = processAssetStructure,
   projectId,
   uploadAssetFileToStorageFn = uploadAssetFileToStorage,
-}: ImportAndStructureFilesInput): Promise<{ assets: AssetMetadata[]; assetSlices: AssetSlice[] }> => {
+}: ImportAndStructureFilesInput): Promise<{
+  assets: AssetMetadata[];
+  assetSlices: AssetSlice[];
+}> => {
   const importedAssets: AssetMetadata[] = [];
   const assetSlices: AssetSlice[] = [];
 
@@ -489,8 +493,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     assetSlices: AssetSlice[];
   }>({ assets: [], assetSlices: [] });
   const [mediaSettings, setMediaSettings] = useState<MediaSettings>(defaultMediaSettings);
-  const [videoSettings, setVideoSettings] =
-    useState<VideoGenerationSettings>(defaultVideoSettings);
+  const [videoSettings, setVideoSettings] = useState<VideoGenerationSettings>(defaultVideoSettings);
   const [project, setProject] = useState<ProjectSnapshot>();
   const [projectHistory, setProjectHistory] = useState<ProjectSummary[]>([]);
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
@@ -516,7 +519,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     [activeAssetCategory, assetLibrary.assets],
   );
   const creationUsableAssets = useMemo(
-    () => getCreationUsableAssets(project?.id, [...(project?.assets ?? []), ...assetLibrary.assets]),
+    () =>
+      getCreationUsableAssets(project?.id, [...(project?.assets ?? []), ...assetLibrary.assets]),
     [assetLibrary.assets, project?.assets, project?.id],
   );
   const studioAssets = useMemo(() => {
@@ -1092,7 +1096,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         assets: [...current.assets, ...importedAssets],
         assetSlices: [
           ...current.assetSlices.filter(
-            (slice) => !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
+            (slice) =>
+              !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
           ),
           ...imported.assetSlices,
         ],
@@ -1108,9 +1113,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               assetSlices: [
                 ...current.assetSlices.filter(
                   (slice) =>
-                    !imported.assetSlices.some(
-                      (candidate) => candidate.assetId === slice.assetId,
-                    ),
+                    !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
                 ),
                 ...imported.assetSlices.filter((slice) =>
                   importedAssets.some(
@@ -1327,7 +1330,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       return;
     }
 
-    const readyReferences = scriptReferenceLibrary.filter((reference) => reference.status === "ready");
+    const readyReferences = scriptReferenceLibrary.filter(
+      (reference) => reference.status === "ready",
+    );
     if (readyReferences.length === 0) {
       return;
     }
@@ -1358,10 +1363,26 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const handleUseReferenceForScript = (referenceId: string) => {
-    setSelectedReferenceIdForScript(referenceId);
-    setSelectedTemplateIdForScript(undefined);
-    setScriptProductionMode("viral-remix");
-    handlePageChange("create");
+    void runAction("script", "asset", async () => {
+      const asset = await addReferenceToScriptLibrary(referenceId, project?.id);
+      setAssetLibrary((current) => ({
+        ...current,
+        assets: [...current.assets.filter((candidate) => candidate.id !== asset.id), asset],
+      }));
+      setProject((current) =>
+        current && asset.projectId === current.id
+          ? {
+              ...current,
+              assets: [...current.assets.filter((candidate) => candidate.id !== asset.id), asset],
+            }
+          : current,
+      );
+      setSelectedReferenceIdForScript(referenceId);
+      setSelectedTemplateIdForScript(undefined);
+      setScriptProductionMode("viral-remix");
+      setActiveAssetCategory("script");
+      handlePageChange("assets");
+    });
   };
 
   const handleRewriteScript = () => {

@@ -226,8 +226,8 @@ export const addAsset = async (
   const response = await requestJson<{ asset: AssetMetadata }>(
     projectId ? `/projects/${projectId}/assets` : "/assets",
     {
-    method: "POST",
-    body: JSON.stringify(asset),
+      method: "POST",
+      body: JSON.stringify(asset),
     },
   );
   return response.asset;
@@ -238,7 +238,11 @@ export const loadProjectAssets = async (
   category: AssetLibraryCategory,
 ): Promise<AssetLibraryResponse> => {
   const params = new URLSearchParams({ category });
-  return requestJson(projectId ? `/projects/${projectId}/assets?${params.toString()}` : `/assets?${params.toString()}`);
+  return requestJson(
+    projectId
+      ? `/projects/${projectId}/assets?${params.toString()}`
+      : `/assets?${params.toString()}`,
+  );
 };
 
 export const deleteAssets = async (
@@ -271,9 +275,7 @@ export const confirmAssetUpload = async (
     body: JSON.stringify(confirmation),
   });
 
-export const loadAssetProcessingJob = async (
-  jobId: string,
-): Promise<AssetProcessingJob> => {
+export const loadAssetProcessingJob = async (jobId: string): Promise<AssetProcessingJob> => {
   const response = await requestJson<{ processingJob: AssetProcessingJob }>(
     `/asset-processing-jobs/${jobId}`,
   );
@@ -390,6 +392,20 @@ export const listReferenceVideos = async (projectId?: string): Promise<Reference
   const suffix = params.toString() ? `?${params.toString()}` : "";
   const response = await requestJson<{ references: ReferenceVideo[] }>(`/references${suffix}`);
   return response.references;
+};
+
+export const addReferenceToScriptLibrary = async (
+  referenceId: string,
+  projectId?: string,
+): Promise<AssetMetadata> => {
+  const response = await requestJson<{ asset: AssetMetadata }>(
+    `/references/${encodeURIComponent(referenceId)}/script-asset`,
+    {
+      method: "POST",
+      body: JSON.stringify({ projectId }),
+    },
+  );
+  return response.asset;
 };
 
 export const createReferenceTemplate = async (input: {
