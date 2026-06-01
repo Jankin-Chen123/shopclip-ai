@@ -1644,6 +1644,17 @@ describe("App", () => {
     );
   });
 
+  it("keeps asset preview details scrollable when metadata is long", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(
+      /\.external-preview-content\s*\{[^}]*max-height:\s*min\(620px,\s*calc\(100dvh - 210px\)\);[^}]*overflow:\s*hidden;/s,
+    );
+    expect(styles).toMatch(
+      /\.external-preview-details\s*\{[^}]*max-height:\s*min\(620px,\s*calc\(100dvh - 210px\)\);[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
+    );
+  });
+
   it("uses one import entry for every asset category", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
 

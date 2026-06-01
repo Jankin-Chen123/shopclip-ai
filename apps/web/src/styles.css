@@ -2667,7 +2667,9 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: 16px;
+  max-height: min(620px, calc(100dvh - 210px));
   min-height: 0;
+  overflow: hidden;
 }
 
 .external-preview-media {
@@ -2709,6 +2711,8 @@ textarea {
 }
 
 .external-preview-details {
+  max-height: min(620px, calc(100dvh - 210px));
+  min-height: 0;
   min-width: 0;
   overflow-y: auto;
   padding: 12px;
@@ -4777,11 +4781,18 @@ textarea {
 
   .external-preview-content {
     grid-template-columns: 1fr;
+    max-height: calc(100dvh - 170px);
     overflow-y: auto;
   }
 
   .external-preview-media {
+    max-height: none;
     min-height: 280px;
+  }
+
+  .external-preview-details {
+    max-height: none;
+    overflow-y: visible;
   }
 
   .asset-import-button {
