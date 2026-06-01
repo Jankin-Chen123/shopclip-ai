@@ -51,6 +51,7 @@ import {
   createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
   deleteProject as deleteProjectRequest,
+  deleteReferenceVideo,
   deleteScene,
   exportProject,
   generateScript,
@@ -1385,6 +1386,102 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
+  const handleDeleteReference = (referenceId: string) => {
+    const shouldDelete =
+      typeof window === "undefined" ||
+      window.confirm(
+        language === "zh"
+          ? "确认删除这条拆解任务？相关的脚本素材和公开视频分析素材也会一并删除。"
+          : "Delete this breakdown? Related script material and public reference analysis assets will also be removed.",
+      );
+    if (!shouldDelete) {
+      return;
+    }
+
+    void runAction("script", "reference", async () => {
+      const deleted = await deleteReferenceVideo(referenceId);
+      const deletedAssetIds = new Set(deleted.deletedAssets.map((asset) => asset.id));
+      const deletedTemplateIds = new Set(deleted.deletedTemplateIds);
+
+      setReferenceLibrary((current) =>
+        current.filter((reference) => reference.id !== deleted.deletedReference.id),
+      );
+      setAssetLibrary((current) => ({
+        assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
+        assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
+      }));
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
+              assetSlices: current.assetSlices.filter(
+                (slice) => !deletedAssetIds.has(slice.assetId),
+              ),
+              assetProcessingEvents: current.assetProcessingEvents.filter(
+                (event) => !deletedAssetIds.has(event.assetId),
+              ),
+              assetProcessingJobs: current.assetProcessingJobs.filter(
+                (job) => !deletedAssetIds.has(job.assetId),
+              ),
+              referenceVideos: current.referenceVideos.filter(
+                (reference) => reference.id !== deleted.deletedReference.id,
+              ),
+              viralTemplates: current.viralTemplates.filter(
+                (template) => !deletedTemplateIds.has(template.templateId),
+              ),
+              scenes: current.scenes.map((scene) =>
+                scene.assetId && deletedAssetIds.has(scene.assetId)
+                  ? { ...scene, assetId: undefined }
+                  : scene,
+              ),
+              scripts: current.scripts.map((currentScript) => ({
+                ...currentScript,
+                scenes: currentScript.scenes.map((scene) =>
+                  scene.assetId && deletedAssetIds.has(scene.assetId)
+                    ? { ...scene, assetId: undefined }
+                    : scene,
+                ),
+              })),
+            }
+          : current,
+      );
+      setScript((current) =>
+        current
+          ? {
+              ...current,
+              scenes: current.scenes.map((scene) =>
+                scene.assetId && deletedAssetIds.has(scene.assetId)
+                  ? { ...scene, assetId: undefined }
+                  : scene,
+              ),
+            }
+          : current,
+      );
+      setAssetPrepSnapshot((current) =>
+        pruneAssetPrepSnapshotDeletedAssets(current, deletedAssetIds),
+      );
+      setAssetSearchResults((current) =>
+        current.filter((result) => !deletedAssetIds.has(result.asset.id)),
+      );
+      setViralTemplateLibrary((current) =>
+        current.filter((template) => !deletedTemplateIds.has(template.templateId)),
+      );
+      setSelectedReferenceIdForScript((current) =>
+        current === deleted.deletedReference.id ? undefined : current,
+      );
+      setSelectedTemplateIdForScript((current) =>
+        current && deletedTemplateIds.has(current) ? undefined : current,
+      );
+      if (
+        selectedReferenceIdForScript === deleted.deletedReference.id ||
+        (selectedTemplateIdForScript && deletedTemplateIds.has(selectedTemplateIdForScript))
+      ) {
+        setScriptProductionMode("automatic");
+      }
+    });
+  };
+
   const handleRewriteScript = () => {
     if (!project) {
       setErrors((current) => ({ ...current, script: "Create or load a project first." }));
@@ -1717,6 +1814,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               language={language}
               onAnalyzeReference={handleAnalyzeReference}
               onCreateTemplate={handleCreateReferenceTemplate}
+              onDeleteReference={handleDeleteReference}
               onUseReference={handleUseReferenceForScript}
               references={scriptReferenceLibrary}
               selectedReferenceId={selectedReferenceIdForScript}

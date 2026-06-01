@@ -26,7 +26,7 @@ import {
   VideoGenerationSettingsSchema,
 } from "@shopclip/shared";
 
-import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
+import type { DeleteReferenceVideoResult, ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
 type AssetWithSlices = Prisma.AssetGetPayload<{ include: { slices: true } }>;
 
@@ -169,15 +169,17 @@ const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): Render
   errorMessage: task.errorMessage ?? undefined,
   provider: task.provider ?? undefined,
   providerTaskId: task.providerTaskId ?? undefined,
-  sceneClips: Array.isArray(task.sceneClips) ? RenderTaskSchema.parse({
-    id: task.id,
-    projectId: task.projectId,
-    status: task.status,
-    progress: task.progress,
-    sceneClips: task.sceneClips,
-    createdAt: toIso(task.createdAt),
-    updatedAt: toIso(task.updatedAt),
-  }).sceneClips : undefined,
+  sceneClips: Array.isArray(task.sceneClips)
+    ? RenderTaskSchema.parse({
+        id: task.id,
+        projectId: task.projectId,
+        status: task.status,
+        progress: task.progress,
+        sceneClips: task.sceneClips,
+        createdAt: toIso(task.createdAt),
+        updatedAt: toIso(task.updatedAt),
+      }).sceneClips
+    : undefined,
   mediaSettings: MediaSettingsSchema.safeParse(task.mediaSettings).success
     ? MediaSettingsSchema.parse(task.mediaSettings)
     : undefined,
@@ -550,6 +552,56 @@ export class PrismaProjectStore implements ProjectStore {
       }),
     ]);
     return true;
+  }
+
+  async deleteReferenceVideo(referenceId: string): Promise<DeleteReferenceVideoResult | undefined> {
+    const reference = await this.prisma.referenceVideo.findUnique({ where: { id: referenceId } });
+    if (!reference) {
+      return undefined;
+    }
+
+    const publicReferenceAssets = await this.prisma.asset.findMany({
+      where: { source: "public_reference" },
+      include: { slices: true },
+    });
+    const assetsToDelete = publicReferenceAssets.filter((asset) => {
+      const metadata =
+        asset.metadata && typeof asset.metadata === "object" && !Array.isArray(asset.metadata)
+          ? (asset.metadata as Record<string, unknown>)
+          : {};
+      return (
+        (metadata.kind === "reference_script_asset" && metadata.referenceId === referenceId) ||
+        (asset.id === reference.sourceAssetId && asset.source === "public_reference")
+      );
+    });
+    const templatesToDelete = await this.prisma.viralTemplate.findMany({
+      where: { sourceReferenceIds: { has: referenceId } },
+      select: { id: true },
+    });
+    const deletedAssetIds = assetsToDelete.map((asset) => asset.id);
+    const deletedTemplateIds = templatesToDelete.map((template) => template.id);
+
+    await this.prisma.$transaction(async (prisma) => {
+      if (deletedTemplateIds.length > 0) {
+        await prisma.viralTemplate.deleteMany({
+          where: { id: { in: deletedTemplateIds } },
+        });
+      }
+      await prisma.referenceVideo.delete({
+        where: { id: referenceId },
+      });
+      if (deletedAssetIds.length > 0) {
+        await prisma.asset.deleteMany({
+          where: { id: { in: deletedAssetIds } },
+        });
+      }
+    });
+
+    return {
+      deletedAssets: assetsToDelete.map(toAsset),
+      deletedReference: toReferenceVideo(reference),
+      deletedTemplateIds,
+    };
   }
 
   async addAssetProcessingJob(
@@ -929,7 +981,10 @@ export class PrismaProjectStore implements ProjectStore {
     return toScene(updated);
   }
 
-  async reorderScenes(projectId: string, sceneIds: string[]): Promise<StoryboardScene[] | undefined> {
+  async reorderScenes(
+    projectId: string,
+    sceneIds: string[],
+  ): Promise<StoryboardScene[] | undefined> {
     const scenes = await this.prisma.storyboardScene.findMany({ where: { projectId } });
     if (
       sceneIds.length !== scenes.length ||
@@ -1091,7 +1146,9 @@ export class PrismaProjectStore implements ProjectStore {
 
   async getRenderTask(
     renderTaskId: string,
-  ): Promise<{ project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined> {
+  ): Promise<
+    { project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined
+  > {
     const renderTask = await this.prisma.renderTask.findUnique({
       where: { id: renderTaskId },
       include: {

@@ -7,6 +7,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ interface ReferenceLibraryPanelProps {
   language: Language;
   onAnalyzeReference: (draft: ReferenceDraft) => void;
   onCreateTemplate: () => void;
+  onDeleteReference?: (referenceId: string) => void;
   onUseReference: (referenceId: string) => void;
   references: ReferenceVideo[];
   selectedReferenceId?: string;
@@ -96,6 +98,7 @@ const text = {
     missingDeclaration: "source declaration",
     missingFields: (fields: string) => `Add ${fields} before submitting.`,
     retryReference: "Retry breakdown",
+    deleteReference: "Delete",
     createTemplate: "Create template",
     useReference: "Add to script library",
     selectedReference: "Added to script library",
@@ -149,6 +152,7 @@ const text = {
     missingDeclaration: "来源声明",
     missingFields: (fields: string) => `提交前请补充：${fields}。`,
     retryReference: "重新拆解",
+    deleteReference: "删除",
     createTemplate: "提炼模板",
     useReference: "加入剧本素材库",
     selectedReference: "已加入剧本素材库",
@@ -313,6 +317,7 @@ export const ReferenceLibraryPanel = ({
   language,
   onAnalyzeReference,
   onCreateTemplate,
+  onDeleteReference = () => undefined,
   onUseReference,
   references,
   selectedReferenceId,
@@ -553,32 +558,43 @@ export const ReferenceLibraryPanel = ({
                   ))}
                 </div>
               </div>
-              <Button
-                disabled={
-                  disabled ||
-                  (reference.status !== "ready" &&
-                    reference.status !== "failed" &&
-                    !isStalledReference(reference))
-                }
-                icon={
-                  reference.status === "failed" || isStalledReference(reference) ? (
-                    <RefreshCw size={18} />
-                  ) : (
-                    <Plus size={18} />
-                  )
-                }
-                onClick={() =>
-                  reference.status === "failed" || isStalledReference(reference)
-                    ? onAnalyzeReference(createReferenceDraft(reference))
-                    : onUseReference(reference.id)
-                }
-              >
-                {reference.status === "failed" || isStalledReference(reference)
-                  ? copy.retryReference
-                  : selectedReferenceId === reference.id
-                    ? copy.selectedReference
-                    : copy.useReference}
-              </Button>
+              <div className="reference-row-actions">
+                <Button
+                  disabled={
+                    disabled ||
+                    (reference.status !== "ready" &&
+                      reference.status !== "failed" &&
+                      !isStalledReference(reference))
+                  }
+                  icon={
+                    reference.status === "failed" || isStalledReference(reference) ? (
+                      <RefreshCw size={18} />
+                    ) : (
+                      <Plus size={18} />
+                    )
+                  }
+                  onClick={() =>
+                    reference.status === "failed" || isStalledReference(reference)
+                      ? onAnalyzeReference(createReferenceDraft(reference))
+                      : onUseReference(reference.id)
+                  }
+                >
+                  {reference.status === "failed" || isStalledReference(reference)
+                    ? copy.retryReference
+                    : selectedReferenceId === reference.id
+                      ? copy.selectedReference
+                      : copy.useReference}
+                </Button>
+                <Button
+                  aria-label={`${copy.deleteReference} ${getReferenceDisplayTitle(reference, copy)}`}
+                  disabled={disabled}
+                  icon={<Trash2 size={18} />}
+                  onClick={() => onDeleteReference(reference.id)}
+                  variant="danger"
+                >
+                  {copy.deleteReference}
+                </Button>
+              </div>
             </article>
           ))
         )}

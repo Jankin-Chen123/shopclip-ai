@@ -3804,6 +3804,13 @@ textarea {
   font-size: 0.84rem;
 }
 
+.reference-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .reference-task-summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -4776,6 +4783,14 @@ textarea {
 
   .suggestion-actions {
     justify-content: stretch;
+  }
+
+  .reference-row-actions {
+    justify-content: stretch;
+  }
+
+  .reference-row-actions .button {
+    flex: 1 1 160px;
   }
 
   .load-project {

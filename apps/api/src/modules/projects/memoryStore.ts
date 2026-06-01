@@ -16,7 +16,7 @@ import type {
   TraceEvent,
   ViralTemplate,
 } from "@shopclip/shared";
-import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
+import type { DeleteReferenceVideoResult, ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
 const now = (): string => new Date().toISOString();
 
@@ -246,7 +246,9 @@ export class MemoryProjectStore implements ProjectStore {
     }
 
     for (const project of this.projects.values()) {
-      const projectDeletedAssets = project.assets.filter((asset) => requestedAssetIds.has(asset.id));
+      const projectDeletedAssets = project.assets.filter((asset) =>
+        requestedAssetIds.has(asset.id),
+      );
       deletedAssets.push(...projectDeletedAssets);
       const nextAssets = project.assets.filter((asset) => !requestedAssetIds.has(asset.id));
       const nextAssetSlices = project.assetSlices.filter(
@@ -328,6 +330,54 @@ export class MemoryProjectStore implements ProjectStore {
     }
 
     return true;
+  }
+
+  deleteReferenceVideo(referenceId: string): DeleteReferenceVideoResult | undefined {
+    const timestamp = now();
+    const globalReferenceIndex = this.globalReferenceVideos.findIndex(
+      (reference) => reference.id === referenceId,
+    );
+    const projectWithReference = [...this.projects.values()].find((project) =>
+      project.referenceVideos.some((reference) => reference.id === referenceId),
+    );
+    const projectReferenceIndex =
+      projectWithReference?.referenceVideos.findIndex(
+        (reference) => reference.id === referenceId,
+      ) ?? -1;
+    const deletedReference =
+      globalReferenceIndex !== -1
+        ? this.globalReferenceVideos[globalReferenceIndex]
+        : projectReferenceIndex !== -1
+          ? projectWithReference?.referenceVideos[projectReferenceIndex]
+          : undefined;
+
+    if (!deletedReference) {
+      return undefined;
+    }
+
+    const allAssets = [
+      ...this.globalAssets,
+      ...[...this.projects.values()].flatMap((project) => project.assets),
+    ];
+    const deletedAssetIds = allAssets
+      .filter((asset) => this.isReferenceOwnedAsset(asset, deletedReference))
+      .map((asset) => asset.id);
+
+    if (globalReferenceIndex !== -1) {
+      this.globalReferenceVideos.splice(globalReferenceIndex, 1);
+    } else if (projectWithReference && projectReferenceIndex !== -1) {
+      projectWithReference.referenceVideos.splice(projectReferenceIndex, 1);
+      projectWithReference.updatedAt = timestamp;
+    }
+
+    const deletedTemplateIds = this.deleteTemplatesForReference(referenceId);
+    const deletedAssets = this.deleteAssets(deletedAssetIds);
+
+    return {
+      deletedAssets,
+      deletedReference,
+      deletedTemplateIds,
+    };
   }
 
   addAssetProcessingJob(
@@ -506,7 +556,9 @@ export class MemoryProjectStore implements ProjectStore {
     analysis: ReferenceVideoAnalysis,
   ): ReferenceVideo | undefined {
     const timestamp = now();
-    const globalIndex = this.globalReferenceVideos.findIndex((reference) => reference.id === referenceId);
+    const globalIndex = this.globalReferenceVideos.findIndex(
+      (reference) => reference.id === referenceId,
+    );
     if (globalIndex !== -1) {
       const updatedReference: ReferenceVideo = {
         ...this.globalReferenceVideos[globalIndex]!,
@@ -562,7 +614,9 @@ export class MemoryProjectStore implements ProjectStore {
       return nextReference;
     };
 
-    const globalIndex = this.globalReferenceVideos.findIndex((reference) => reference.id === referenceId);
+    const globalIndex = this.globalReferenceVideos.findIndex(
+      (reference) => reference.id === referenceId,
+    );
     if (globalIndex !== -1) {
       const updatedReference = updateReference(this.globalReferenceVideos[globalIndex]!);
       this.globalReferenceVideos[globalIndex] = updatedReference;
@@ -903,6 +957,41 @@ export class MemoryProjectStore implements ProjectStore {
     }
 
     return undefined;
+  }
+
+  private deleteTemplatesForReference(referenceId: string): string[] {
+    const deletedTemplateIds = new Set<string>();
+    for (let index = this.viralTemplates.length - 1; index >= 0; index -= 1) {
+      const template = this.viralTemplates[index];
+      if (template?.sourceReferenceIds.includes(referenceId)) {
+        deletedTemplateIds.add(template.templateId);
+        this.viralTemplates.splice(index, 1);
+      }
+    }
+
+    for (const project of this.projects.values()) {
+      const nextTemplates = project.viralTemplates.filter((template) => {
+        const shouldDelete = template.sourceReferenceIds.includes(referenceId);
+        if (shouldDelete) {
+          deletedTemplateIds.add(template.templateId);
+        }
+        return !shouldDelete;
+      });
+      if (nextTemplates.length !== project.viralTemplates.length) {
+        project.viralTemplates = nextTemplates;
+        project.updatedAt = now();
+      }
+    }
+
+    return [...deletedTemplateIds];
+  }
+
+  private isReferenceOwnedAsset(asset: AssetMetadata, reference: ReferenceVideo): boolean {
+    const metadata = asset.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
+    return (
+      (metadata.kind === "reference_script_asset" && metadata.referenceId === reference.id) ||
+      (asset.id === reference.sourceAssetId && asset.source === "public_reference")
+    );
   }
 
   private replaceScene(project: ProjectSnapshot, updatedScene: StoryboardScene): void {

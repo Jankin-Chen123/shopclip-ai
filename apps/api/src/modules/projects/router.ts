@@ -241,6 +241,14 @@ const isReferenceScriptAssetFor = (
   );
 };
 
+const isReferenceOwnedAsset = (asset: AssetMetadata, reference: ReferenceVideo): boolean => {
+  const metadata = getMetadataRecord(asset);
+  return (
+    (metadata.kind === "reference_script_asset" && metadata.referenceId === reference.id) ||
+    (asset.id === reference.sourceAssetId && asset.source === "public_reference")
+  );
+};
+
 const getAppearanceAnchorLines = (asset: AssetMetadata | undefined): string[] => {
   if (!asset) {
     return ["素材不足：未绑定可用素材。"];
@@ -2202,6 +2210,47 @@ export const createP0Router = ({
     response.json({
       references: await store.listReferenceVideos(projectId),
     });
+  });
+
+  router.delete("/references/:referenceId", async (request, response) => {
+    const reference = (await store.listReferenceVideos()).find(
+      (candidate) => candidate.id === request.params.referenceId,
+    );
+    if (!reference) {
+      sendNotFound(response, "REFERENCE_NOT_FOUND", "Reference video was not found.");
+      return;
+    }
+
+    const assetsToDelete = (await store.listAssets()).assets.filter((asset) =>
+      isReferenceOwnedAsset(asset, reference),
+    );
+    const objectKeys = collectStorageObjectKeys(assetsToDelete);
+
+    try {
+      await Promise.all(
+        [...objectKeys].map((objectKey) =>
+          storageProvider.deleteObject({
+            objectKey,
+          }),
+        ),
+      );
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "STORAGE_DELETE_FAILED",
+          message: error instanceof Error ? error.message : "Storage delete failed.",
+        },
+      });
+      return;
+    }
+
+    const deleted = await store.deleteReferenceVideo(reference.id);
+    if (!deleted) {
+      sendNotFound(response, "REFERENCE_NOT_FOUND", "Reference video was not found.");
+      return;
+    }
+
+    response.json(deleted);
   });
 
   router.post("/references/:referenceId/script-asset", async (request, response) => {

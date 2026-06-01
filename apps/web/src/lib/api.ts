@@ -408,6 +408,17 @@ export const addReferenceToScriptLibrary = async (
   return response.asset;
 };
 
+export const deleteReferenceVideo = async (
+  referenceId: string,
+): Promise<{
+  deletedAssets: AssetMetadata[];
+  deletedReference: ReferenceVideo;
+  deletedTemplateIds: string[];
+}> =>
+  requestJson(`/references/${encodeURIComponent(referenceId)}`, {
+    method: "DELETE",
+  });
+
 export const createReferenceTemplate = async (input: {
   category: string;
   referenceIds: string[];

@@ -31,6 +31,12 @@ export interface ProjectSnapshot extends Project {
 
 export type MaybePromise<T> = T | Promise<T>;
 
+export interface DeleteReferenceVideoResult {
+  deletedAssets: AssetMetadata[];
+  deletedReference: ReferenceVideo;
+  deletedTemplateIds: string[];
+}
+
 export interface ProjectStore {
   appendTraceEvent(
     traceKey: string,
@@ -76,6 +82,7 @@ export interface ProjectStore {
   createProject(brief: ProjectBrief): MaybePromise<ProjectSnapshot>;
   deleteAssets(assetIds: string[]): MaybePromise<AssetMetadata[]>;
   deleteProject(projectId: string): MaybePromise<boolean>;
+  deleteReferenceVideo(referenceId: string): MaybePromise<DeleteReferenceVideoResult | undefined>;
   deleteScene(sceneId: string): MaybePromise<StoryboardScene[] | undefined>;
   getAssetProcessingJob(jobId: string): MaybePromise<AssetProcessingJob | undefined>;
   getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;
@@ -88,7 +95,9 @@ export interface ProjectStore {
   listViralTemplates(category?: string): MaybePromise<ViralTemplate[]>;
   getRenderTask(
     renderTaskId: string,
-  ): MaybePromise<{ project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined>;
+  ): MaybePromise<
+    { project: ProjectSnapshot; renderTask: RenderTask; traceEvents: TraceEvent[] } | undefined
+  >;
   getSceneContext(
     sceneId: string,
   ): MaybePromise<{ project: ProjectSnapshot; scene: StoryboardScene } | undefined>;

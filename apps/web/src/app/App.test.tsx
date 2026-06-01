@@ -1601,6 +1601,7 @@ describe("App", () => {
       /<button class="button button-primary" type="button"><span class="button-icon">[\s\S]*?<span>Analyze reference<\/span><\/button>/,
     );
     expect(markup).toContain("Add to script library");
+    expect(markup).toContain("Delete");
   });
 
   it("renders ready reference rows with merchant-friendly fields only", () => {

@@ -288,6 +288,50 @@ describe("Part 015 structured asset and reference flow", () => {
     });
     expect(scriptResponse.status).toBe(201);
     const script = (await scriptResponse.json()) as { script: { constraints: string[] } };
+    const deleteReferenceResponse = await fetch(`${baseUrl}/api/references/${readyReference.id}`, {
+      method: "DELETE",
+    });
+    expect(deleteReferenceResponse.status).toBe(200);
+    const deletedReference = (await deleteReferenceResponse.json()) as {
+      deletedAssets: Array<{ id: string }>;
+      deletedReference: { id: string };
+      deletedTemplateIds: string[];
+    };
+    expect(deletedReference.deletedReference.id).toBe(readyReference.id);
+    expect(deletedReference.deletedAssets.map((asset) => asset.id)).toContain(scriptAsset.asset.id);
+    expect(deletedReference.deletedAssets.map((asset) => asset.id)).toContain(
+      readyReference.sourceAssetId,
+    );
+    expect(deletedReference.deletedTemplateIds).toContain(template.template.templateId);
+
+    const referencesAfterDeleteResponse = await fetch(`${baseUrl}/api/references`);
+    expect(referencesAfterDeleteResponse.status).toBe(200);
+    const referencesAfterDelete = (await referencesAfterDeleteResponse.json()) as {
+      references: Array<{ id: string }>;
+    };
+    expect(
+      referencesAfterDelete.references.some((candidate) => candidate.id === readyReference.id),
+    ).toBe(false);
+
+    const scriptLibraryAfterDeleteResponse = await fetch(`${baseUrl}/api/assets?category=script`);
+    expect(scriptLibraryAfterDeleteResponse.status).toBe(200);
+    const scriptLibraryAfterDelete = (await scriptLibraryAfterDeleteResponse.json()) as {
+      assets: Array<{ id: string }>;
+    };
+    expect(
+      scriptLibraryAfterDelete.assets.some((candidate) => candidate.id === scriptAsset.asset.id),
+    ).toBe(false);
+
+    const templatesAfterDeleteResponse = await fetch(`${baseUrl}/api/references/templates`);
+    expect(templatesAfterDeleteResponse.status).toBe(200);
+    const templatesAfterDelete = (await templatesAfterDeleteResponse.json()) as {
+      templates: Array<{ templateId: string }>;
+    };
+    expect(
+      templatesAfterDelete.templates.some(
+        (candidate) => candidate.templateId === template.template.templateId,
+      ),
+    ).toBe(false);
     expect(script.script.constraints.join(" ")).toContain("参考视频");
   });
 
