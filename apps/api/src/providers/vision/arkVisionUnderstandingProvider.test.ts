@@ -55,13 +55,6 @@ describe("createArkVisionUnderstandingProvider", () => {
         )
         .join("\n");
       const isSliceRequest = contextText.includes("shotType");
-      const hasImageInput = content.some(
-        (item) =>
-          typeof item === "object" &&
-          item !== null &&
-          "type" in item &&
-          (item as { type?: string }).type === "input_image",
-      );
       const hasVideoInput = content.some(
         (item) =>
           typeof item === "object" &&
@@ -191,26 +184,27 @@ describe("createArkVisionUnderstandingProvider", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            output_text: JSON.stringify({
-              summary: "Opening reveal shows the product with a purchase prompt.",
-              ocrText: "限时优惠 点击下单",
-              shotType: "close_up",
-              cameraMovement: "static",
-              action: "unwrap and reveal the product",
-              keyElements: ["product"],
-              productVisibility: "clear",
-              suitableSceneRoles: ["demo"],
-              qualitySignals: {
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              output_text: JSON.stringify({
+                summary: "Opening reveal shows the product with a purchase prompt.",
+                ocrText: "限时优惠 点击下单",
+                shotType: "close_up",
+                cameraMovement: "static",
+                action: "unwrap and reveal the product",
+                keyElements: ["product"],
                 productVisibility: "clear",
-                usableForAd: true,
-              },
+                suitableSceneRoles: ["demo"],
+                qualitySignals: {
+                  productVisibility: "clear",
+                  usableForAd: true,
+                },
+              }),
             }),
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
       ),
     );
 
@@ -258,11 +252,13 @@ describe("createArkVisionUnderstandingProvider", () => {
     );
 
     const provider = createArkVisionUnderstandingProvider();
-    await expect(provider.understandAsset({
-      asset: baseAsset,
-      audio: { asrSummary: "", transcript: "" },
-      frames: [],
-      probe: { durationSeconds: 9, format: "mp4" },
-    })).rejects.toThrow(/asset understanding failed.*valid JSON/);
+    await expect(
+      provider.understandAsset({
+        asset: baseAsset,
+        audio: { asrSummary: "", transcript: "" },
+        frames: [],
+        probe: { durationSeconds: 9, format: "mp4" },
+      }),
+    ).rejects.toThrow(/asset understanding failed.*valid JSON/);
   });
 });

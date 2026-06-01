@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app.js";
 import { MemoryProjectStore } from "./modules/projects/memoryStore.js";
@@ -154,6 +154,7 @@ describe("Part 015 structured asset and reference flow", () => {
     delete process.env.REFERENCE_PROVIDER_MODE;
     delete process.env.REFERENCE_DOWNLOAD_PROVIDER_MODE;
     delete process.env.AI_PROVIDER_MODE;
+    vi.unstubAllGlobals();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -235,6 +236,82 @@ describe("Part 015 structured asset and reference flow", () => {
     expect(scriptLibrary.assets.some((candidate) => candidate.id === scriptAsset.asset.id)).toBe(
       true,
     );
+
+    process.env.AI_PROVIDER_MODE = "ark";
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: [
+                "| Time | Voiceover | Subtitle | Visual | Reference asset |",
+                "|---|---|---|---|---|",
+                "| 0-3s | Viral reference hook | Viral hook | Merchant-owned product reveal | asset-1 |",
+              ].join("\n"),
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projectForRewriteResponse = await fetch(`${baseUrl}/api/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Reference prompt proof",
+        productName: "BlendGo Portable Blender",
+        audience: "Busy commuters",
+        sellingPoints: ["USB-C charging", "leak-proof lid"],
+        tone: "confident",
+        style: "fast demo",
+        targetDurationSeconds: 15,
+      }),
+    });
+    expect(projectForRewriteResponse.status).toBe(201);
+    const projectForRewrite = (await projectForRewriteResponse.json()) as {
+      project: { id: string };
+    };
+
+    const rewriteResponse = await fetch(
+      `${baseUrl}/api/projects/${projectForRewrite.project.id}/rewrite-script`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          productionMode: "viral-remix",
+          referenceId: readyReference.id,
+          apiConfig: {
+            general: {
+              provider: "openai-compatible",
+              apiBaseUrl: "https://api.example.test/v1",
+              model: "custom-text-model",
+              apiKey: "user-api-key",
+            },
+          },
+        }),
+      },
+    );
+    expect(rewriteResponse.status).toBe(201);
+    const modelCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    expect(modelCalls).toHaveLength(1);
+    const modelBody = JSON.parse(String((modelCalls[0]?.[1] as RequestInit).body));
+    const prompt = String(modelBody.messages[1].content);
+    expect(prompt).toContain("【爆款参考拆解】");
+    expect(prompt).toContain("Global viral blender proof");
+    expect(prompt).toContain("内容公式");
+    expect(prompt).toContain("Reusable storyboard");
+    expect(prompt).toContain("不得复刻、搬运、混剪");
+    process.env.AI_PROVIDER_MODE = "mock";
+    vi.unstubAllGlobals();
 
     const scriptTemplateResponse = await fetch(
       `${baseUrl}/api/references/templates/from-script-assets`,

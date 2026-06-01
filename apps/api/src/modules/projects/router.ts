@@ -14,6 +14,7 @@ import type {
   ScriptResult,
   SceneRenderClip,
   StoryboardScene,
+  ViralTemplate,
 } from "@shopclip/shared";
 import {
   ExternalAssetSearchRequestSchema,
@@ -454,6 +455,89 @@ const structuredAssetPromptContext = (asset: AssetMetadata): string => {
     .join("；");
 };
 
+interface ScriptPromptContext {
+  reference?: ReferenceVideo;
+  referenceScriptAsset?: AssetMetadata;
+  template?: ViralTemplate;
+}
+
+const compactPromptList = (values: string[]): string =>
+  values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join("、");
+
+const metadataString = (asset: AssetMetadata | undefined, key: string): string | undefined => {
+  const metadata = asset ? getMetadataRecord(asset) : {};
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+};
+
+const buildReferencePromptLines = (
+  reference: ReferenceVideo | undefined,
+  scriptAsset: AssetMetadata | undefined,
+): string[] => {
+  if (!reference) {
+    return [];
+  }
+
+  const analysis = reference.analysis;
+  const scriptAssetText =
+    scriptAsset?.embeddingText ??
+    metadataString(scriptAsset, "content") ??
+    metadataString(scriptAsset, "searchText");
+  const segmentLines =
+    analysis?.commerceNarrativeSegments.map(
+      (segment, index) =>
+        `${index + 1}. ${segment.role} ${segment.startSecond}-${segment.endSecond}s：${segment.summary}；台词=${segment.copywriting}；画面=${segment.visualPrompt}`,
+    ) ?? [];
+
+  return [
+    "【爆款参考拆解】",
+    `参考ID：${reference.id}`,
+    `参考标题：${analysis?.title ?? reference.title}`,
+    `参考平台：${analysis?.sourcePlatform ?? reference.sourcePlatform}`,
+    `参考类目：${analysis?.category ?? reference.category}`,
+    analysis?.hookAnalysis ? `Hook手法：${analysis.hookAnalysis}` : undefined,
+    analysis?.pacingAnalysis ? `节奏拆解：${analysis.pacingAnalysis}` : undefined,
+    analysis?.contentFormula ? `内容公式：${analysis.contentFormula}` : undefined,
+    analysis?.targetAudience.length
+      ? `参考目标人群：${compactPromptList(analysis.targetAudience)}`
+      : undefined,
+    analysis?.keyViralFactors.length
+      ? `爆款因子：${compactPromptList(analysis.keyViralFactors)}`
+      : undefined,
+    segmentLines.length ? `参考分镜结构：\n${segmentLines.join("\n")}` : undefined,
+    analysis?.recreationBlueprint
+      ? `可复用拍法：视觉=${analysis.recreationBlueprint.visual}；文案=${analysis.recreationBlueprint.copywriting}；拍摄约束=${analysis.recreationBlueprint.shootingGuide}`
+      : undefined,
+    analysis?.commentInsights.length
+      ? `评论洞察：${compactPromptList(analysis.commentInsights)}`
+      : undefined,
+    scriptAssetText ? `剧本素材库正文：${scriptAssetText.slice(0, 3000)}` : undefined,
+    "使用要求：只学习参考视频的Hook、节奏、叙事结构和转化手法；不得复刻、搬运、混剪或要求使用公开视频原素材。",
+  ].filter((line): line is string => Boolean(line));
+};
+
+const buildTemplatePromptLines = (template: ViralTemplate | undefined): string[] => {
+  if (!template) {
+    return [];
+  }
+
+  return [
+    "【灵感模板】",
+    `模板ID：${template.templateId}`,
+    `模板名称：${template.name}`,
+    `模板类目：${template.category}`,
+    `创作策略：${template.strategy}`,
+    `核心因子：${compactPromptList(template.factorSet) || "无"}`,
+    `叙事结构：${compactPromptList(template.narrativeStructure)}`,
+    `镜头要求：${compactPromptList(template.shotRequirements) || "无"}`,
+    `文案规则：${compactPromptList(template.copywritingRules) || "无"}`,
+    `风险约束：${compactPromptList(template.riskRules) || "无"}`,
+  ];
+};
+
 export const buildScriptAssetPromptLines = (
   request: ScriptGenerationRequest,
   assets: AssetMetadata[],
@@ -482,15 +566,18 @@ export const buildScriptAssetPromptLines = (
   return [...assetLines, ...pendingMaterialLines];
 };
 
-const scriptGenerationPrompt = (
+export const scriptGenerationPrompt = (
   project: ProjectSnapshot,
   request: ScriptGenerationRequest,
   assets: AssetMetadata[],
+  context: ScriptPromptContext = {},
 ) => {
   const targetDurationSeconds = project.targetDurationSeconds;
   const keywords = request.keywords.length > 0 ? request.keywords : project.prepKeywords;
   const materialLines = buildScriptAssetPromptLines(request, assets);
   const brandDocumentLines = buildBrandDocumentPromptLines(assets);
+  const referenceLines = buildReferencePromptLines(context.reference, context.referenceScriptAsset);
+  const templateLines = buildTemplatePromptLines(context.template);
 
   return [
     "请改写电商短视频脚本。必须使用中文输出，内容要简洁、转化导向，并可直接用于分镜生成。",
@@ -507,9 +594,13 @@ const scriptGenerationPrompt = (
     `核心卖点：${project.sellingPoints.join("、")}`,
     `已准备素材清单：${materialLines.slice(0, 20).join("\n") || "无"}`,
     `品牌资料内容：${brandDocumentLines.join("; ") || "无可读取品牌资料正文"}`,
+    referenceLines.length ? referenceLines.join("\n") : undefined,
+    templateLines.length ? templateLines.join("\n") : undefined,
     `关键词：${keywords.join("、") || "无"}`,
     `用户草稿：${request.draftScript || "未提供草稿，请直接生成一个强脚本。"}`,
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 };
 
 const hasConfiguredTextProviderEnvironment = (): boolean =>
@@ -520,10 +611,121 @@ const hasConfiguredTextProviderEnvironment = (): boolean =>
     process.env.AI_TEXT_MODEL_ID?.trim(),
   );
 
+interface ScriptPromptContextResolution {
+  context: ScriptPromptContext;
+  error?: {
+    code: string;
+    message: string;
+    status: 400 | 404;
+  };
+}
+
+const getReferenceIdFromAsset = (asset: AssetMetadata): string | undefined => {
+  const metadata = getMetadataRecord(asset);
+  return metadata.kind === "reference_script_asset" && typeof metadata.referenceId === "string"
+    ? metadata.referenceId
+    : undefined;
+};
+
+const findReferenceScriptAsset = async (
+  store: ProjectStore,
+  referenceId: string,
+): Promise<AssetMetadata | undefined> => {
+  const library = await store.listAssets();
+  return library.assets.find((asset) => getReferenceIdFromAsset(asset) === referenceId);
+};
+
+const resolveScriptPromptContext = async (
+  store: ProjectStore,
+  request: ScriptGenerationRequest,
+): Promise<ScriptPromptContextResolution> => {
+  const context: ScriptPromptContext = {};
+
+  if (request.referenceId) {
+    const reference = (await store.listReferenceVideos()).find(
+      (candidate) => candidate.id === request.referenceId,
+    );
+    if (!reference) {
+      return {
+        context,
+        error: {
+          code: "REFERENCE_NOT_FOUND",
+          message: "Reference video was not found.",
+          status: 404,
+        },
+      };
+    }
+    if (request.productionMode === "viral-remix" && reference.status !== "ready") {
+      return {
+        context,
+        error: {
+          code: "REFERENCE_NOT_READY",
+          message: "Reference video must finish analysis before viral remix script generation.",
+          status: 400,
+        },
+      };
+    }
+    if (request.productionMode === "viral-remix" && !reference.analysis) {
+      return {
+        context,
+        error: {
+          code: "REFERENCE_ANALYSIS_REQUIRED",
+          message: "Reference video analysis is required for viral remix script generation.",
+          status: 400,
+        },
+      };
+    }
+    context.reference = reference;
+    context.referenceScriptAsset = await findReferenceScriptAsset(store, reference.id);
+  }
+
+  if (request.templateId) {
+    const template = (await store.listViralTemplates()).find(
+      (candidate) => candidate.templateId === request.templateId,
+    );
+    if (!template) {
+      return {
+        context,
+        error: {
+          code: "VIRAL_TEMPLATE_NOT_FOUND",
+          message: "Viral template was not found.",
+          status: 404,
+        },
+      };
+    }
+    context.template = template;
+  }
+
+  if (request.productionMode === "viral-remix" && !context.reference) {
+    return {
+      context,
+      error: {
+        code: "REFERENCE_REQUIRED",
+        message: "Viral remix script generation requires a selected reference video.",
+        status: 400,
+      },
+    };
+  }
+
+  if (request.productionMode === "template" && !context.template) {
+    return {
+      context,
+      error: {
+        code: "VIRAL_TEMPLATE_REQUIRED",
+        message: "Template script generation requires a selected viral template.",
+        status: 400,
+      },
+    };
+  }
+
+  return { context };
+};
+
 const rewriteScriptWithConfiguredProvider = async (
   project: ProjectSnapshot,
   request: ScriptGenerationRequest,
   assets: AssetMetadata[],
+  promptContext: ScriptPromptContext = {},
 ) => {
   const providerMode = (process.env.AI_PROVIDER_MODE ?? "ark").toLowerCase();
   const explicitMockMode = providerMode === "mock";
@@ -541,7 +743,7 @@ const rewriteScriptWithConfiguredProvider = async (
 
   const generated = await generateInspiration({
     assetType: "text",
-    prompt: scriptGenerationPrompt(project, request, assets),
+    prompt: scriptGenerationPrompt(project, request, assets, promptContext),
     apiConfig: request.apiConfig,
   });
   const material = generated.materials.find((candidate) => candidate.status === "ready");
@@ -900,6 +1102,7 @@ const fileNameForExternalImport = (title: string, contentType: string): string =
 };
 
 const safeLocalFileName = (value: string): string =>
+  // eslint-disable-next-line no-control-regex
   value.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").replace(/^\.+$/, "asset") || "asset";
 
 const writeDownloadedAssetCache = async ({
@@ -2473,24 +2676,15 @@ export const createP0Router = ({
       return;
     }
 
-    if (parsedRequest.data.referenceId) {
-      const reference = (await store.listReferenceVideos()).find(
-        (candidate) => candidate.id === parsedRequest.data.referenceId,
-      );
-      if (!reference) {
-        sendNotFound(response, "REFERENCE_NOT_FOUND", "Reference video was not found.");
-        return;
+    const promptContextResult = await resolveScriptPromptContext(store, parsedRequest.data);
+    if (promptContextResult.error) {
+      const { code, message, status } = promptContextResult.error;
+      if (status === 404) {
+        sendNotFound(response, code, message);
+      } else {
+        sendInvalidRequest(response, code, message);
       }
-    }
-
-    if (parsedRequest.data.templateId) {
-      const template = (await store.listViralTemplates()).find(
-        (candidate) => candidate.templateId === parsedRequest.data.templateId,
-      );
-      if (!template) {
-        sendNotFound(response, "VIRAL_TEMPLATE_NOT_FOUND", "Viral template was not found.");
-        return;
-      }
+      return;
     }
 
     const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
@@ -2516,6 +2710,7 @@ export const createP0Router = ({
       workingProject,
       parsedRequest.data,
       preparedAssets,
+      promptContextResult.context,
     );
 
     response.status(201).json(providerResult);
@@ -2535,6 +2730,17 @@ export const createP0Router = ({
         "INVALID_SCRIPT_REQUEST",
         "Script generation request is invalid.",
       );
+      return;
+    }
+
+    const promptContextResult = await resolveScriptPromptContext(store, parsedRequest.data);
+    if (promptContextResult.error) {
+      const { code, message, status } = promptContextResult.error;
+      if (status === 404) {
+        sendNotFound(response, code, message);
+      } else {
+        sendInvalidRequest(response, code, message);
+      }
       return;
     }
 
@@ -2561,6 +2767,7 @@ export const createP0Router = ({
       workingProject,
       parsedRequest.data,
       preparedAssets,
+      promptContextResult.context,
     );
     const providerResult = generateFallbackScript(workingProject, {
       assets: preparedAssets,
