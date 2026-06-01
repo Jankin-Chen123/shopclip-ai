@@ -33,6 +33,7 @@ interface ReferenceLibraryPanelProps {
   onAnalyzeReference: (draft: ReferenceDraft) => void;
   onCreateTemplate: () => void;
   onDeleteReference?: (referenceId: string) => void;
+  onDeleteReferences?: (referenceIds: string[]) => void;
   onUseReference: (referenceId: string) => void;
   references: ReferenceVideo[];
   selectedReferenceId?: string;
@@ -99,6 +100,9 @@ const text = {
     missingFields: (fields: string) => `Add ${fields} before submitting.`,
     retryReference: "Retry breakdown",
     deleteReference: "Delete",
+    deleteSelected: "Delete selected",
+    selectedCount: (count: number) => `${count} selected`,
+    selectReference: (title: string) => `Select ${title}`,
     createTemplate: "Create template",
     useReference: "Add to script library",
     selectedReference: "Added to script library",
@@ -153,6 +157,9 @@ const text = {
     missingFields: (fields: string) => `提交前请补充：${fields}。`,
     retryReference: "重新拆解",
     deleteReference: "删除",
+    deleteSelected: "删除已选",
+    selectedCount: (count: number) => `已选 ${count} 条`,
+    selectReference: (title: string) => `选择 ${title}`,
     createTemplate: "提炼模板",
     useReference: "加入剧本素材库",
     selectedReference: "已加入剧本素材库",
@@ -316,8 +323,8 @@ export const ReferenceLibraryPanel = ({
   isLoading,
   language,
   onAnalyzeReference,
-  onCreateTemplate,
   onDeleteReference = () => undefined,
+  onDeleteReferences,
   onUseReference,
   references,
   selectedReferenceId,
@@ -335,6 +342,7 @@ export const ReferenceLibraryPanel = ({
       title: "",
     },
   );
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(new Set());
 
   const updateDraft = (field: keyof ReferenceDraft, value: string | undefined) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -359,6 +367,29 @@ export const ReferenceLibraryPanel = ({
   );
   const stalledReferences = references.filter((reference) => isStalledReference(reference));
   const failedReferences = references.filter((reference) => reference.status === "failed");
+  const selectedCount = selectedReferenceIds.size;
+  const deleteReferences = (referenceIds: string[]) => {
+    if (referenceIds.length === 0) {
+      return;
+    }
+    if (onDeleteReferences) {
+      onDeleteReferences(referenceIds);
+    } else {
+      referenceIds.forEach((referenceId) => onDeleteReference(referenceId));
+    }
+    setSelectedReferenceIds(new Set());
+  };
+  const toggleReferenceSelection = (referenceId: string) => {
+    setSelectedReferenceIds((current) => {
+      const next = new Set(current);
+      if (next.has(referenceId)) {
+        next.delete(referenceId);
+      } else {
+        next.add(referenceId);
+      }
+      return next;
+    });
+  };
 
   return (
     <section className="panel reference-library-panel" aria-labelledby="reference-library-title">
@@ -450,15 +481,6 @@ export const ReferenceLibraryPanel = ({
       >
         {isLoading ? copy.analyzing : copy.analyze}
       </Button>
-      <Button
-        disabled={
-          disabled || isLoading || !references.some((reference) => reference.status === "ready")
-        }
-        icon={<WandSparkles size={18} />}
-        onClick={onCreateTemplate}
-      >
-        {copy.createTemplate}
-      </Button>
       {error ? (
         <p className="inline-error" role="alert">
           {error}
@@ -536,67 +558,94 @@ export const ReferenceLibraryPanel = ({
             <strong>{copy.empty}</strong>
           </div>
         ) : (
-          references.map((reference) => (
-            <article className="suggestion-row" key={reference.id}>
-              <div>
-                <h4>{getReferenceDisplayTitle(reference, copy)}</h4>
-                <p>{getReferenceSummary(reference, copy)}</p>
-                <div className="constraint-list">
-                  <StatusPill
-                    tone={
-                      reference.status === "failed" || isStalledReference(reference)
-                        ? "danger"
-                        : "info"
-                    }
+          <>
+            <div className="reference-bulk-actions">
+              <strong>{copy.selectedCount(selectedCount)}</strong>
+              <Button
+                disabled={disabled || selectedCount === 0}
+                icon={<Trash2 size={18} />}
+                onClick={() => deleteReferences([...selectedReferenceIds])}
+                variant="danger"
+              >
+                {copy.deleteSelected}
+              </Button>
+            </div>
+            {references.map((reference) => {
+              const displayTitle = getReferenceDisplayTitle(reference, copy);
+              const isSelected = selectedReferenceIds.has(reference.id);
+              return (
+                <article className="suggestion-row reference-history-row" key={reference.id}>
+                  <button
+                    aria-label={copy.selectReference(displayTitle)}
+                    aria-pressed={isSelected}
+                    className="asset-selection-control reference-selection-control"
+                    disabled={disabled}
+                    onClick={() => toggleReferenceSelection(reference.id)}
+                    type="button"
                   >
-                    {getReferenceStatusLabel(reference, copy)}
-                  </StatusPill>
-                  {getReferenceIdeaTags(reference, language, copy).map((tag) => (
-                    <StatusPill key={tag} tone="info">
-                      {tag}
-                    </StatusPill>
-                  ))}
-                </div>
-              </div>
-              <div className="reference-row-actions">
-                <Button
-                  disabled={
-                    disabled ||
-                    (reference.status !== "ready" &&
-                      reference.status !== "failed" &&
-                      !isStalledReference(reference))
-                  }
-                  icon={
-                    reference.status === "failed" || isStalledReference(reference) ? (
-                      <RefreshCw size={18} />
-                    ) : (
-                      <Plus size={18} />
-                    )
-                  }
-                  onClick={() =>
-                    reference.status === "failed" || isStalledReference(reference)
-                      ? onAnalyzeReference(createReferenceDraft(reference))
-                      : onUseReference(reference.id)
-                  }
-                >
-                  {reference.status === "failed" || isStalledReference(reference)
-                    ? copy.retryReference
-                    : selectedReferenceId === reference.id
-                      ? copy.selectedReference
-                      : copy.useReference}
-                </Button>
-                <Button
-                  aria-label={`${copy.deleteReference} ${getReferenceDisplayTitle(reference, copy)}`}
-                  disabled={disabled}
-                  icon={<Trash2 size={18} />}
-                  onClick={() => onDeleteReference(reference.id)}
-                  variant="danger"
-                >
-                  {copy.deleteReference}
-                </Button>
-              </div>
-            </article>
-          ))
+                    {isSelected ? <CheckCircle2 size={16} /> : null}
+                  </button>
+                  <div>
+                    <h4>{displayTitle}</h4>
+                    <p>{getReferenceSummary(reference, copy)}</p>
+                    <div className="constraint-list">
+                      <StatusPill
+                        tone={
+                          reference.status === "failed" || isStalledReference(reference)
+                            ? "danger"
+                            : "info"
+                        }
+                      >
+                        {getReferenceStatusLabel(reference, copy)}
+                      </StatusPill>
+                      {getReferenceIdeaTags(reference, language, copy).map((tag) => (
+                        <StatusPill key={tag} tone="info">
+                          {tag}
+                        </StatusPill>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="reference-row-actions">
+                    <Button
+                      disabled={
+                        disabled ||
+                        (reference.status !== "ready" &&
+                          reference.status !== "failed" &&
+                          !isStalledReference(reference))
+                      }
+                      icon={
+                        reference.status === "failed" || isStalledReference(reference) ? (
+                          <RefreshCw size={18} />
+                        ) : (
+                          <Plus size={18} />
+                        )
+                      }
+                      onClick={() =>
+                        reference.status === "failed" || isStalledReference(reference)
+                          ? onAnalyzeReference(createReferenceDraft(reference))
+                          : onUseReference(reference.id)
+                      }
+                    >
+                      {reference.status === "failed" || isStalledReference(reference)
+                        ? copy.retryReference
+                        : selectedReferenceId === reference.id
+                          ? copy.selectedReference
+                          : copy.useReference}
+                    </Button>
+                    <Button
+                      aria-label={`${copy.deleteReference} ${displayTitle}`}
+                      disabled={disabled}
+                      icon={<Trash2 size={18} />}
+                      onClick={() => deleteReferences([reference.id])}
+                      variant="danger"
+                    >
+                      {copy.deleteReference}
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </>
         )}
       </div>
     </section>

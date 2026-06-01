@@ -563,6 +563,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 2026-06-01 script production mode UI follow-up: step 02 script generation now exposes only three production modes: no reference, viral remix, and inspiration template. No-reference mode hides both selectors. Viral remix mode reads options from ready `reference_script_asset` records in the script asset library and sends their `metadata.referenceId` to script generation. Inspiration template mode shows only template options. Verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed with 88 tests, `corepack pnpm --filter @shopclip/web typecheck` passed, and `corepack pnpm --filter @shopclip/web build` passed.
 
+2026-06-01 inspiration reference history follow-up: the inspiration page no longer exposes the reference-level template extraction button. Reference breakdown history now supports row selection and batch deletion; batch deletion reuses the real `DELETE /references/:referenceId` path for each selected breakdown and then clears related script assets, public reference analysis assets, templates, search results, and current script/template selections from frontend state. Verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed with 89 tests, `corepack pnpm --filter @shopclip/web typecheck` passed, and `corepack pnpm --filter @shopclip/web build` passed.
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。

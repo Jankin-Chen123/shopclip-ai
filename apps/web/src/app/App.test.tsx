@@ -1833,6 +1833,34 @@ describe("App", () => {
     );
     expect(markup).toContain("Add to script library");
     expect(markup).toContain("Delete");
+    expect(markup).toContain("Select Reference clip");
+    expect(markup).toContain("Delete selected");
+    expect(markup).not.toContain("Create template");
+  });
+
+  it("renders reference breakdown history with batch selection controls", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onDeleteReferences={() => undefined}
+        onUseReference={() => undefined}
+        references={[
+          makeReferenceVideo({ id: "reference-1", title: "Cup hook reference" }),
+          makeReferenceVideo({ id: "reference-2", title: "Bottle demo reference" }),
+        ]}
+        sourceAssets={[]}
+        templates={[makeViralTemplate({})]}
+      />,
+    );
+
+    expect(markup).toContain("Select Cup hook reference");
+    expect(markup).toContain("Select Bottle demo reference");
+    expect(markup).toContain("Delete selected");
+    expect(markup).not.toContain("Create template");
   });
 
   it("renders ready reference rows with merchant-friendly fields only", () => {

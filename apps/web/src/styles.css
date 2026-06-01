@@ -3811,6 +3811,31 @@ textarea {
   justify-content: flex-end;
 }
 
+.reference-history-row {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+}
+
+.reference-selection-control {
+  align-self: center;
+}
+
+.reference-bulk-actions {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.reference-bulk-actions strong {
+  color: #f8fafc;
+  font-size: 0.86rem;
+}
+
 .reference-task-summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -4791,6 +4816,14 @@ textarea {
 
   .reference-row-actions .button {
     flex: 1 1 160px;
+  }
+
+  .reference-history-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .reference-history-row .reference-row-actions {
+    grid-column: 1 / -1;
   }
 
   .load-project {

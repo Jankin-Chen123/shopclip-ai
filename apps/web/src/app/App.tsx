@@ -1460,25 +1460,43 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
-  const handleDeleteReference = (referenceId: string) => {
+  const handleDeleteReferences = (referenceIds: string[]) => {
+    const uniqueReferenceIds = Array.from(new Set(referenceIds)).filter(Boolean);
+    if (uniqueReferenceIds.length === 0) {
+      return;
+    }
     const shouldDelete =
       typeof window === "undefined" ||
       window.confirm(
         language === "zh"
-          ? "确认删除这条拆解任务？相关的脚本素材和公开视频分析素材也会一并删除。"
-          : "Delete this breakdown? Related script material and public reference analysis assets will also be removed.",
+          ? uniqueReferenceIds.length === 1
+            ? "确认删除这条拆解任务？相关的脚本素材和公开视频分析素材也会一并删除。"
+            : `确认删除选中的 ${uniqueReferenceIds.length} 条拆解任务？相关的脚本素材和公开视频分析素材也会一并删除。`
+          : uniqueReferenceIds.length === 1
+            ? "Delete this breakdown? Related script material and public reference analysis assets will also be removed."
+            : `Delete ${uniqueReferenceIds.length} selected breakdowns? Related script material and public reference analysis assets will also be removed.`,
       );
     if (!shouldDelete) {
       return;
     }
 
     void runAction("script", "reference", async () => {
-      const deleted = await deleteReferenceVideo(referenceId);
-      const deletedAssetIds = new Set(deleted.deletedAssets.map((asset) => asset.id));
-      const deletedTemplateIds = new Set(deleted.deletedTemplateIds);
+      const deletedResults = [];
+      for (const referenceId of uniqueReferenceIds) {
+        deletedResults.push(await deleteReferenceVideo(referenceId));
+      }
+      const deletedAssetIds = new Set(
+        deletedResults.flatMap((deleted) => deleted.deletedAssets.map((asset) => asset.id)),
+      );
+      const deletedReferenceIds = new Set(
+        deletedResults.map((deleted) => deleted.deletedReference.id),
+      );
+      const deletedTemplateIds = new Set(
+        deletedResults.flatMap((deleted) => deleted.deletedTemplateIds),
+      );
 
       setReferenceLibrary((current) =>
-        current.filter((reference) => reference.id !== deleted.deletedReference.id),
+        current.filter((reference) => !deletedReferenceIds.has(reference.id)),
       );
       setAssetLibrary((current) => ({
         assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
@@ -1499,7 +1517,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                 (job) => !deletedAssetIds.has(job.assetId),
               ),
               referenceVideos: current.referenceVideos.filter(
-                (reference) => reference.id !== deleted.deletedReference.id,
+                (reference) => !deletedReferenceIds.has(reference.id),
               ),
               viralTemplates: current.viralTemplates.filter(
                 (template) => !deletedTemplateIds.has(template.templateId),
@@ -1542,18 +1560,22 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         current.filter((template) => !deletedTemplateIds.has(template.templateId)),
       );
       setSelectedReferenceIdForScript((current) =>
-        current === deleted.deletedReference.id ? undefined : current,
+        current && deletedReferenceIds.has(current) ? undefined : current,
       );
       setSelectedTemplateIdForScript((current) =>
         current && deletedTemplateIds.has(current) ? undefined : current,
       );
       if (
-        selectedReferenceIdForScript === deleted.deletedReference.id ||
+        (selectedReferenceIdForScript && deletedReferenceIds.has(selectedReferenceIdForScript)) ||
         (selectedTemplateIdForScript && deletedTemplateIds.has(selectedTemplateIdForScript))
       ) {
         setScriptProductionMode("automatic");
       }
     });
+  };
+
+  const handleDeleteReference = (referenceId: string) => {
+    handleDeleteReferences([referenceId]);
   };
 
   const handleRewriteScript = () => {
@@ -1891,6 +1913,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               onAnalyzeReference={handleAnalyzeReference}
               onCreateTemplate={handleCreateReferenceTemplate}
               onDeleteReference={handleDeleteReference}
+              onDeleteReferences={handleDeleteReferences}
               onUseReference={handleUseReferenceForScript}
               references={scriptReferenceLibrary}
               selectedReferenceId={selectedReferenceIdForScript}
