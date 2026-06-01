@@ -57,10 +57,11 @@ const getRequiredConfig = (
   apiConfig?: InspirationGenerateRequest["apiConfig"],
 ): ProviderConfig | undefined => {
   const mode = providerMode();
-  if (mode === "mock") {
+  const hasUserConfig = hasUserGeneralConfigInput(apiConfig);
+  if (mode === "mock" && !hasUserConfig) {
     return undefined;
   }
-  if (!isRealProviderMode(mode)) {
+  if (!isRealProviderMode(mode) && !hasUserConfig) {
     throw new Error(
       `Unsupported AI_PROVIDER_MODE=${mode}. Use ark/real for business runs, or explicitly set mock for tests.`,
     );
@@ -248,6 +249,7 @@ const getAssetText = (asset: AssetMetadata) => {
   const metadata = isRecord(asset.metadata) ? asset.metadata : {};
   return (
     asset.embeddingText ??
+    getString(metadata.content) ??
     getString(metadata.searchText) ??
     getString(metadata.referenceAnalysisText) ??
     `${asset.name}\n${asset.tags.join(", ")}`
@@ -388,7 +390,7 @@ export const extractScriptTemplateWithGeneralModel = async (
     throw new Error("At least one script asset is required for template extraction.");
   }
 
-  if (providerMode() === "mock") {
+  if (providerMode() === "mock" && !hasUserGeneralConfigInput(input.apiConfig)) {
     return createMockTemplate(input);
   }
 

@@ -244,6 +244,44 @@ describe("Part 015 structured asset and reference flow", () => {
       if (requestUrl.startsWith(baseUrl)) {
         return originalFetch(url, init);
       }
+      if (requestUrl.endsWith("/images/generations")) {
+        return Response.json({
+          data: [{ url: "https://cdn.example.test/generated-storyboard-frame.png" }],
+        });
+      }
+
+      const requestBody = init?.body ? JSON.parse(String(init.body)) : {};
+      const messages = Array.isArray(requestBody.messages) ? requestBody.messages : [];
+      const templatePrompt = String(messages[1]?.content ?? "");
+      if (templatePrompt.includes("Extract one reusable ecommerce video template")) {
+        return Response.json({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  name: "Script asset common method",
+                  category: "Kitchen appliances",
+                  strategy:
+                    "Open with the shared reference hook, prove the product through merchant-owned footage, then close with a clear CTA.",
+                  factorSet: ["reference hook", "fast demo", "proof detail", "CTA"],
+                  narrativeStructure: ["hook", "demo", "trust", "cta"],
+                  shotRequirements: [
+                    "0-2s buyer hook",
+                    "2-8s product demo",
+                    "8-12s proof detail",
+                    "final CTA packshot",
+                  ],
+                  copywritingRules: [
+                    "Keep lines short",
+                    "Translate the reference method to the merchant product",
+                  ],
+                  riskRules: ["Do not reuse public source footage"],
+                }),
+              },
+            },
+          ],
+        });
+      }
 
       return Response.json({
         choices: [
@@ -310,8 +348,6 @@ describe("Part 015 structured asset and reference flow", () => {
     expect(prompt).toContain("内容公式");
     expect(prompt).toContain("Reusable storyboard");
     expect(prompt).toContain("不得复刻、搬运、混剪");
-    process.env.AI_PROVIDER_MODE = "mock";
-    vi.unstubAllGlobals();
 
     const scriptTemplateResponse = await fetch(
       `${baseUrl}/api/references/templates/from-script-assets`,
@@ -322,10 +358,40 @@ describe("Part 015 structured asset and reference flow", () => {
           assetIds: [scriptAsset.asset.id],
           category: "Kitchen appliances",
           templateName: "Script asset common method",
+          apiConfig: {
+            general: {
+              provider: "openai-compatible",
+              apiBaseUrl: "https://api.example.test/v1",
+              model: "custom-text-model",
+              apiKey: "user-api-key",
+            },
+          },
         }),
       },
     );
     expect(scriptTemplateResponse.status).toBe(201);
+    const templateModelCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      const requestUrl = String(url instanceof Request ? url.url : url);
+      if (!requestUrl.startsWith("https://api.example.test")) {
+        return false;
+      }
+      const body = JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}"));
+      const messages = Array.isArray(body.messages) ? body.messages : [];
+      return String(messages[1]?.content ?? "").includes(
+        "Extract one reusable ecommerce video template",
+      );
+    });
+    expect(templateModelCalls).toHaveLength(1);
+    const templateModelBody = JSON.parse(
+      String((templateModelCalls[0]?.[1] as RequestInit).body),
+    );
+    const templatePrompt = String(templateModelBody.messages[1].content);
+    expect(templatePrompt).toContain("Script asset 1");
+    expect(templatePrompt).toContain("Global viral blender proof");
+    expect(templatePrompt).toContain("Reusable storyboard");
+    expect(templatePrompt).toContain("identity_label");
+    expect(templatePrompt).toContain("buyer identity question");
+    expect(templatePrompt).toContain("Do not include raw public video copying instructions");
     const scriptTemplate = (await scriptTemplateResponse.json()) as {
       template: { name: string; sourceReferenceIds: string[]; templateId: string };
     };
@@ -385,6 +451,20 @@ describe("Part 015 structured asset and reference flow", () => {
         productionMode: "template",
         referenceId: readyReference.id,
         templateId: template.template.templateId,
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+          image: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-image-model",
+            apiKey: "user-api-key",
+          },
+        },
       }),
     });
     expect(scriptResponse.status).toBe(201);

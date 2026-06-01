@@ -108,4 +108,61 @@ describe("script template extraction provider", () => {
     expect(template.narrativeStructure).toEqual(["hook", "demo", "trust", "cta"]);
     expect(template.sourceReferenceIds).toEqual(["reference-1"]);
   });
+
+  it("honors an explicit user general model config instead of mock mode", async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    name: "User configured method",
+                    category: "Water cup",
+                    strategy: "Use the selected script assets to derive a reusable proof flow.",
+                    factorSet: ["script asset proof", "merchant-owned demo"],
+                    narrativeStructure: ["hook", "demo", "cta"],
+                    shotRequirements: ["Open with hook", "Show owned product demo"],
+                    copywritingRules: ["Do not copy source wording"],
+                    riskRules: ["Use merchant-owned assets only"],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const template = await extractScriptTemplateWithGeneralModel({
+      assets: [makeScriptAsset({ embeddingText: undefined })],
+      category: "Water cup",
+      apiConfig: {
+        general: {
+          provider: "openai-compatible",
+          apiBaseUrl: "https://user-model.test/v1",
+          model: "user-general-model",
+          apiKey: "user-key",
+        },
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://user-model.test/v1/chat/completions");
+    const body = JSON.parse(String(init.body)) as {
+      messages: Array<{ content: string }>;
+      model: string;
+    };
+    expect(body.model).toBe("user-general-model");
+    expect(body.messages[1]?.content).toContain(
+      "Identity hook + fast demo + price proof + CTA",
+    );
+    expect(template.name).toBe("User configured method");
+    expect(template.sourceReferenceIds).toEqual(["reference-1"]);
+  });
 });
