@@ -1356,6 +1356,59 @@ describe("App", () => {
     expect(markup).toContain("Open details for GlowGrip packshot");
   });
 
+  it("keeps the script asset library focused on script reuse actions", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "reference",
+          name: "Cup hook script",
+          mimeType: "text/plain",
+          sizeBytes: 1200,
+          tags: ["script", "copy"],
+        }}
+        assets={[
+          makeAsset({
+            id: "asset-script",
+            type: "reference",
+            name: "Cup hook script",
+            mimeType: "text/plain",
+            tags: ["script", "copy"],
+          }),
+        ]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject
+        hasSearched={false}
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="script"
+        onAssetDraftChange={() => undefined}
+        onDeleteAssets={() => undefined}
+        onExtractTemplateFromScripts={() => undefined}
+        onImportFiles={() => undefined}
+        onProcessAsset={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery=""
+        searchResults={[]}
+      />,
+    );
+
+    expect(markup).toContain("Script library");
+    expect(markup).not.toContain("asset-library-toolbar");
+    expect(markup).not.toContain("Search script library");
+    expect(markup).not.toContain("Search external stock assets");
+    expect(markup).not.toContain("Run structured analysis for Cup hook script");
+
+    const extractIndex = markup.indexOf("Extract template");
+    const deleteIndex = markup.indexOf("Delete selected");
+
+    expect(extractIndex).toBeGreaterThan(-1);
+    expect(deleteIndex).toBeGreaterThan(extractIndex);
+  });
+
   it("renders templates as a first-class asset library section", () => {
     const markup = renderToStaticMarkup(
       <AssetsPanel

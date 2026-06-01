@@ -583,6 +583,9 @@ export const AssetsPanel = ({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isTemplateCategory = activeCategory === "template";
+  const isScriptCategory = activeCategory === "script";
+  const shouldShowAssetToolbar = !isTemplateCategory && !isScriptCategory;
+  const shouldShowExternalStockEntry = !isTemplateCategory && !isScriptCategory;
   const ui = isTemplateCategory ? templateUi[language] : categoryUi[language][activeCategory];
   const importUi = genericImportUi[language];
   const CategoryIcon = categoryIcons[activeCategory];
@@ -907,7 +910,7 @@ export const AssetsPanel = ({
         <h2 id="assets-title">{ui.title}</h2>
       </div>
 
-      {!isTemplateCategory ? (
+      {shouldShowAssetToolbar ? (
         <div className="asset-library-toolbar">
           <button
             aria-label={importUi.aria}
@@ -944,21 +947,9 @@ export const AssetsPanel = ({
             >
               {copy.search}
             </Button>
-            {activeCategory === "script" ? (
-              <Button
-                disabled={
-                  disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0
-                }
-                icon={<LayoutTemplate size={18} />}
-                onClick={() => void handleExtractTemplateFromSelectedScripts()}
-                variant="primary"
-              >
-                {language === "zh" ? "提炼模板" : "Extract template"}
-              </Button>
-            ) : null}
           </div>
         </div>
-      ) : (
+      ) : isTemplateCategory ? (
         <div className="asset-search-box asset-search-panel asset-template-search-panel">
           <label className="sr-only" htmlFor={searchInputId}>
             {ui.searchLabel}
@@ -973,7 +964,7 @@ export const AssetsPanel = ({
             />
           </div>
         </div>
-      )}
+      ) : null}
 
       <AssetCategoryTabs
         activeCategory={activeCategory}
@@ -987,7 +978,7 @@ export const AssetsPanel = ({
         </p>
       ) : null}
 
-      {!isTemplateCategory ? (
+      {shouldShowExternalStockEntry ? (
         <section className="external-stock-entry" aria-labelledby="external-stock-entry-title">
           <div>
             <span className="external-source-pill">
@@ -1031,6 +1022,16 @@ export const AssetsPanel = ({
               ? `已选择 ${selectedAssetCount} 个素材`
               : `${selectedAssetCount} selected`}
           </strong>
+          {isScriptCategory ? (
+            <Button
+              disabled={disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0}
+              icon={<LayoutTemplate size={18} />}
+              onClick={() => void handleExtractTemplateFromSelectedScripts()}
+              variant="primary"
+            >
+              {language === "zh" ? "提炼模板" : "Extract template"}
+            </Button>
+          ) : null}
           <Button
             disabled={disabled || !onDeleteAssets || selectedAssetCount === 0}
             icon={<Trash2 size={18} />}
@@ -1146,21 +1147,6 @@ export const AssetsPanel = ({
                     >
                       {isSelected ? <Check size={13} aria-hidden="true" /> : null}
                     </button>
-                    {onProcessAsset ? (
-                      <button
-                        aria-label={
-                          language === "zh"
-                            ? `结构化分析 ${asset.name}`
-                            : `Run structured analysis for ${asset.name}`
-                        }
-                        className="asset-card-delete"
-                        disabled={disabled}
-                        onClick={() => onProcessAsset(asset.id)}
-                        type="button"
-                      >
-                        <WandSparkles size={13} aria-hidden="true" />
-                      </button>
-                    ) : null}
                     <button
                       aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
                       className="asset-card-delete"
