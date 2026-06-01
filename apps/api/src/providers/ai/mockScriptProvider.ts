@@ -395,3 +395,44 @@ export const generateFallbackScript = (
     },
   };
 };
+
+export const structureModelScript = (
+  project: ProjectSnapshot,
+  context: ScriptGenerationContext,
+  provider: string,
+): ScriptProviderResult => {
+  const draftScript = context.request?.draftScript?.trim();
+  const assets = context.assets ?? project.assets;
+  const primaryAsset = assets[0] ?? project.assets[0];
+  const parsedScenes = parseDraftScriptScenes(project, draftScript, assets, primaryAsset?.id);
+  if (!draftScript || parsedScenes.length === 0) {
+    throw new Error(
+      "Real script generation returned text that could not be parsed into storyboard scenes. The model must return a Markdown table with time, voiceover, subtitle, visual, and material columns.",
+    );
+  }
+
+  const targetDurationSeconds = targetDurationForProject(project);
+  const keywordSummary = compactList(
+    [...effectiveKeywords(project, context.request), ...project.sellingPoints].slice(0, 4),
+    project.sellingPoints[0] ?? "清晰产品卖点",
+  );
+
+  return {
+    fallback: {
+      used: false,
+      provider,
+    },
+    script: {
+      hook: parsedScenes[0]?.voiceover ?? `${project.productName} 真实模型生成脚本`,
+      narrative: draftScript,
+      constraints: [
+        "使用中文生成视频脚本和分镜描述",
+        `完整分镜总时长必须等于 ${targetDurationSeconds} 秒`,
+        "分镜字段已根据真实文本模型返回的脚本文本结构化生成",
+        `参考准备关键词：${keywordSummary}`,
+        ...productionConstraints(context.request),
+      ],
+      scenes: parsedScenes,
+    },
+  };
+};

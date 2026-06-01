@@ -64,6 +64,7 @@ import { extractScriptTemplateWithGeneralModel } from "../../providers/ai/script
 import {
   generateFallbackScript,
   rewriteFallbackScript,
+  structureModelScript,
 } from "../../providers/ai/mockScriptProvider.js";
 import {
   extractVideoReferenceFrames,
@@ -97,6 +98,18 @@ const sendInvalidRequest = (response: Response, code: string, message: string) =
     error: {
       code,
       message,
+    },
+  });
+};
+
+const sendScriptGenerationFailure = (response: Response, error: unknown) => {
+  response.status(502).json({
+    error: {
+      code: "SCRIPT_GENERATION_FAILED",
+      message:
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Real script generation failed.",
     },
   });
 };
@@ -2706,12 +2719,18 @@ export const createP0Router = ({
       return;
     }
     const preparedAssets = preparedAssetResult.assets;
-    const providerResult = await rewriteScriptWithConfiguredProvider(
-      workingProject,
-      parsedRequest.data,
-      preparedAssets,
-      promptContextResult.context,
-    );
+    let providerResult: Awaited<ReturnType<typeof rewriteScriptWithConfiguredProvider>>;
+    try {
+      providerResult = await rewriteScriptWithConfiguredProvider(
+        workingProject,
+        parsedRequest.data,
+        preparedAssets,
+        promptContextResult.context,
+      );
+    } catch (error) {
+      sendScriptGenerationFailure(response, error);
+      return;
+    }
 
     response.status(201).json(providerResult);
   });
@@ -2763,22 +2782,36 @@ export const createP0Router = ({
       return;
     }
     const preparedAssets = preparedAssetResult.assets;
-    const textProviderResult = await rewriteScriptWithConfiguredProvider(
-      workingProject,
-      parsedRequest.data,
-      preparedAssets,
-      promptContextResult.context,
-    );
-    const providerResult = generateFallbackScript(workingProject, {
-      assets: preparedAssets,
-      request: {
-        ...parsedRequest.data,
-        draftScript: textProviderResult.fallback.used
-          ? parsedRequest.data.draftScript
-          : textProviderResult.scriptText,
-      },
-      scriptSource: textProviderResult.fallback.used ? "fallback" : "model",
-    });
+    let textProviderResult: Awaited<ReturnType<typeof rewriteScriptWithConfiguredProvider>>;
+    let providerResult: ReturnType<typeof generateFallbackScript>;
+    try {
+      textProviderResult = await rewriteScriptWithConfiguredProvider(
+        workingProject,
+        parsedRequest.data,
+        preparedAssets,
+        promptContextResult.context,
+      );
+      const scriptContext = {
+        assets: preparedAssets,
+        request: {
+          ...parsedRequest.data,
+          draftScript: textProviderResult.fallback.used
+            ? parsedRequest.data.draftScript
+            : textProviderResult.scriptText,
+        },
+        scriptSource: textProviderResult.fallback.used ? "fallback" : "model",
+      } as const;
+      providerResult = textProviderResult.fallback.used
+        ? generateFallbackScript(workingProject, scriptContext)
+        : structureModelScript(
+            workingProject,
+            scriptContext,
+            textProviderResult.fallback.provider,
+          );
+    } catch (error) {
+      sendScriptGenerationFailure(response, error);
+      return;
+    }
     const scriptWithSceneImages = await renderStoryboardSceneImages(
       workingProject,
       providerResult.script,

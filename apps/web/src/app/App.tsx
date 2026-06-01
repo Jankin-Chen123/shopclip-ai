@@ -1586,7 +1586,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
     void runAction("script", "script", async () => {
       const rewritten = await rewriteScript(project.id, createScriptGenerationRequest());
-      setFallbackProvider(rewritten.fallback.provider);
+      setFallbackProvider(rewritten.fallback.used ? rewritten.fallback.provider : undefined);
       setScriptDraft(rewritten.scriptText);
     });
   };
@@ -1599,7 +1599,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
     void runAction("script", "script", async () => {
       const generated = await generateScript(project.id, createScriptGenerationRequest());
-      setFallbackProvider(generated.fallback.provider);
+      setFallbackProvider(generated.fallback.used ? generated.fallback.provider : undefined);
       setDashboard(undefined);
       setScript(generated.script);
       setScriptDraft(generated.script.narrative);

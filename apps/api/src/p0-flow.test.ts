@@ -1436,6 +1436,63 @@ describe("P0 backend lifecycle", () => {
     expect(body.messages[1].content).toContain("用户草稿：Focus on desk portability.");
   });
 
+  it("fails real storyboard generation when the text model response cannot be parsed", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: "This is not a storyboard table.",
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Real parser failure",
+        productName: "Fold Stand",
+        audience: "desk workers",
+        sellingPoints: ["folds flat"],
+        tone: "clear",
+        style: "desk demo",
+      }),
+    });
+
+    const generated = await request<{
+      error: { code: string; message: string };
+    }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+      method: "POST",
+      body: JSON.stringify({
+        apiConfig: {
+          general: {
+            provider: "openai-compatible",
+            apiBaseUrl: "https://api.example.test/v1",
+            model: "custom-text-model",
+            apiKey: "user-api-key",
+          },
+        },
+      }),
+    });
+
+    expect(generated.status).toBe(502);
+    expect(generated.body.error.code).toBe("SCRIPT_GENERATION_FAILED");
+    expect(generated.body.error.message).toContain("could not be parsed");
+    const externalCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url instanceof Request ? url.url : url).startsWith("https://api.example.test"),
+    );
+    expect(externalCalls).toHaveLength(1);
+  });
+
   it("passes visual style and exact target duration to the configured text model", async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {

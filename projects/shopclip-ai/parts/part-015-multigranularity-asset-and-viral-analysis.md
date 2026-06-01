@@ -565,6 +565,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 2026-06-01 inspiration reference history follow-up: the inspiration page no longer exposes the reference-level template extraction button. Reference breakdown history now supports row selection and batch deletion; batch deletion reuses the real `DELETE /references/:referenceId` path for each selected breakdown and then clears related script assets, public reference analysis assets, templates, search results, and current script/template selections from frontend state. Verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed with 89 tests, `corepack pnpm --filter @shopclip/web typecheck` passed, and `corepack pnpm --filter @shopclip/web build` passed.
 
+2026-06-01 script real-provider hardening follow-up: script generation now separates real text-model structuring from deterministic fallback generation. In real-provider mode, generated script text must parse into storyboard scenes; otherwise `/api/projects/:projectId/generate-script` returns `502 SCRIPT_GENERATION_FAILED` instead of silently creating fallback scenes. The frontend now shows fallback notices only when the API explicitly returns `fallback.used=true`, so successful real model calls no longer appear as deterministic fallback output. Verification: `corepack pnpm test`, `corepack pnpm --filter @shopclip/api typecheck`, `corepack pnpm --filter @shopclip/web typecheck`, `corepack pnpm --filter @shopclip/api lint`, `corepack pnpm --filter @shopclip/web lint`, `corepack pnpm --filter @shopclip/api build`, `corepack pnpm --filter @shopclip/web build`, and `git diff --check` passed.
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。
