@@ -561,6 +561,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 2026-05-30 前端真实结构化闭环跟进：本地文件导入已改为上传后自动调用 `processAssetStructure()`；服务端上传会同时写 COS raw object 与本地 media cache，外部图片/视频导入会生成结构化 metadata、slice 和 COS 派生 JSON。剧本 prompt 与 Studio 召回已读取 `structuredAsset`/slice 语义信息。新增/更新测试覆盖外部图片结构化、外部真实 MP4 导入结构化、结构化 prompt 上下文、分镜 role 召回和前端自动结构化导入。最新验证：`@shopclip/api test` 27 files / 115 tests passed，`@shopclip/shared test` 21 passed，`@shopclip/web test` 72 passed，API/Web typecheck 与 build 通过，`corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-reference.spec.ts` 1 passed。
 
+2026-06-01 script production mode UI follow-up: step 02 script generation now exposes only three production modes: no reference, viral remix, and inspiration template. No-reference mode hides both selectors. Viral remix mode reads options from ready `reference_script_asset` records in the script asset library and sends their `metadata.referenceId` to script generation. Inspiration template mode shows only template options. Verification: `corepack pnpm --filter @shopclip/web test -- App.test.tsx` passed with 88 tests, `corepack pnpm --filter @shopclip/web typecheck` passed, and `corepack pnpm --filter @shopclip/web build` passed.
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。

@@ -127,9 +127,9 @@ export const copy = {
       noReferenceVideo: "No reference",
       noViralTemplate: "No template",
       modes: {
-        automatic: "Automatic",
+        automatic: "No reference",
         viralRemix: "Viral remix",
-        template: "Template",
+        template: "Inspiration template",
         agentic: "Agentic",
       },
       oneClickGenerate: "One-click generate",
@@ -413,9 +413,9 @@ export const copy = {
       noReferenceVideo: "不使用参考",
       noViralTemplate: "不使用模板",
       modes: {
-        automatic: "自动",
+        automatic: "不参考",
         viralRemix: "爆款仿写",
-        template: "模板生成",
+        template: "灵感模板",
         agentic: "Agent 编排",
       },
       oneClickGenerate: "一键生成",

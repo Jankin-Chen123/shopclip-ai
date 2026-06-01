@@ -33,6 +33,7 @@ import {
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
+import { ScriptPanel } from "../features/script/ScriptPanel";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
 import {
   SettingsPanel,
@@ -50,6 +51,7 @@ import {
   getCreationAssetLibraryRefreshCategory,
   getCreationUsableAssets,
   getPreparedAssetsByBucket,
+  getReferenceScriptAssets,
   hasUsableStockProviderCredential,
   isRenderTaskPollingActive,
   mergeReferences,
@@ -236,7 +238,109 @@ describe("App", () => {
     expect(markup).toContain("Write or paste your draft script");
     expect(markup).toContain("One-click generate");
     expect(markup).toContain("Generate storyboard");
+    expect(markup).toContain("No reference");
+    expect(markup).not.toContain("Agentic");
     expect(markup).not.toContain("Viral video breakdown");
+  });
+
+  it("hides reference and template selectors when script production mode uses no reference", () => {
+    const markup = renderToStaticMarkup(
+      <ScriptPanel
+        copy={copy.en.script}
+        disabled={false}
+        isLoading={false}
+        isStoryboardGenerating={false}
+        onGenerateScript={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onProductionModeChange={() => undefined}
+        onReferenceChange={() => undefined}
+        onScriptDraftChange={() => undefined}
+        onTemplateChange={() => undefined}
+        productionMode="automatic"
+        referenceScriptAssets={[
+          makeAsset({
+            id: "asset-reference-script",
+            name: "Cup reference breakdown",
+            metadata: { kind: "reference_script_asset", referenceId: "reference-1" },
+          }),
+        ]}
+        scriptDraft=""
+        templates={[makeViralTemplate({})]}
+      />,
+    );
+
+    expect(markup).toContain("No reference");
+    expect(markup).toContain("Viral remix");
+    expect(markup).toContain("Inspiration template");
+    expect(markup).not.toContain("Reference video");
+    expect(markup).not.toContain("Viral template");
+    expect(markup).not.toContain("Agentic");
+  });
+
+  it("shows only script-library reference assets for viral remix mode", () => {
+    const markup = renderToStaticMarkup(
+      <ScriptPanel
+        copy={copy.en.script}
+        disabled={false}
+        isLoading={false}
+        isStoryboardGenerating={false}
+        onGenerateScript={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onProductionModeChange={() => undefined}
+        onReferenceChange={() => undefined}
+        onScriptDraftChange={() => undefined}
+        onTemplateChange={() => undefined}
+        productionMode="viral-remix"
+        referenceScriptAssets={[
+          makeAsset({
+            id: "asset-reference-script",
+            name: "Cup reference breakdown",
+            metadata: { kind: "reference_script_asset", referenceId: "reference-1" },
+          }),
+        ]}
+        scriptDraft=""
+        selectedReferenceId="reference-1"
+        templates={[makeViralTemplate({ name: "Template should be hidden" })]}
+      />,
+    );
+
+    expect(markup).toContain("Reference video");
+    expect(markup).toContain("Cup reference breakdown");
+    expect(markup).not.toContain("Viral template");
+    expect(markup).not.toContain("Template should be hidden");
+  });
+
+  it("shows only template assets for inspiration template mode", () => {
+    const markup = renderToStaticMarkup(
+      <ScriptPanel
+        copy={copy.en.script}
+        disabled={false}
+        isLoading={false}
+        isStoryboardGenerating={false}
+        onGenerateScript={() => undefined}
+        onGenerateStoryboard={() => undefined}
+        onProductionModeChange={() => undefined}
+        onReferenceChange={() => undefined}
+        onScriptDraftChange={() => undefined}
+        onTemplateChange={() => undefined}
+        productionMode="template"
+        referenceScriptAssets={[
+          makeAsset({
+            id: "asset-reference-script",
+            name: "Reference should be hidden",
+            metadata: { kind: "reference_script_asset", referenceId: "reference-1" },
+          }),
+        ]}
+        scriptDraft=""
+        selectedTemplateId="template-1"
+        templates={[makeViralTemplate({ name: "Cup proof template" })]}
+      />,
+    );
+
+    expect(markup).toContain("Viral template");
+    expect(markup).toContain("Cup proof template");
+    expect(markup).not.toContain("Reference video");
+    expect(markup).not.toContain("Reference should be hidden");
   });
 
   it("renders video generation settings in the render panel", () => {
@@ -708,6 +812,27 @@ describe("App", () => {
       "current-project-asset",
       "global-library-asset",
     ]);
+  });
+
+  it("keeps only ready reference script assets available for viral remix selection", () => {
+    const assets = getReferenceScriptAssets([
+      makeAsset({
+        id: "script-asset-ready",
+        name: "Ready reference script",
+        metadata: { kind: "reference_script_asset", referenceId: "reference-ready" },
+      }),
+      makeAsset({
+        id: "script-asset-processing",
+        status: "processing",
+        metadata: { kind: "reference_script_asset", referenceId: "reference-processing" },
+      }),
+      makeAsset({
+        id: "regular-script",
+        metadata: { kind: "merchant_script_asset", referenceId: "reference-other" },
+      }),
+    ]);
+
+    expect(assets.map((asset) => asset.id)).toEqual(["script-asset-ready"]);
   });
 
   it("hydrates pending prep uploads with imported library assets for immediate previews", () => {

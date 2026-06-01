@@ -1,5 +1,10 @@
 import type { ChangeEvent } from "react";
-import type { ReferenceVideo, ScriptGenerationRequest, ScriptResult, ViralTemplate } from "@shopclip/shared";
+import type {
+  AssetMetadata,
+  ScriptGenerationRequest,
+  ScriptResult,
+  ViralTemplate,
+} from "@shopclip/shared";
 import { ArrowRight, Loader2, WandSparkles } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -20,7 +25,7 @@ interface ScriptPanelProps {
   onScriptDraftChange: (scriptDraft: string) => void;
   onTemplateChange: (templateId: string | undefined) => void;
   productionMode: NonNullable<ScriptGenerationRequest["productionMode"]>;
-  references: ReferenceVideo[];
+  referenceScriptAssets: AssetMetadata[];
   script?: ScriptResult;
   scriptDraft: string;
   selectedReferenceId?: string;
@@ -42,7 +47,7 @@ export const ScriptPanel = ({
   onScriptDraftChange,
   onTemplateChange,
   productionMode,
-  references,
+  referenceScriptAssets,
   script,
   scriptDraft,
   selectedReferenceId,
@@ -52,6 +57,20 @@ export const ScriptPanel = ({
   const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     onScriptDraftChange(event.target.value);
   };
+  const referenceScriptOptions = referenceScriptAssets
+    .map((asset) => {
+      const referenceId =
+        asset.metadata &&
+        typeof asset.metadata === "object" &&
+        "referenceId" in asset.metadata &&
+        typeof asset.metadata.referenceId === "string"
+          ? asset.metadata.referenceId
+          : undefined;
+      return referenceId ? { asset, referenceId } : undefined;
+    })
+    .filter((option): option is { asset: AssetMetadata; referenceId: string } =>
+      Boolean(option),
+    );
 
   return (
     <section className="panel script-generation-panel" id="script" aria-labelledby="script-title">
@@ -90,37 +109,40 @@ export const ScriptPanel = ({
             <option value="automatic">{copy.modes.automatic}</option>
             <option value="viral-remix">{copy.modes.viralRemix}</option>
             <option value="template">{copy.modes.template}</option>
-            <option value="agentic">{copy.modes.agentic}</option>
           </select>
         </label>
-        <label>
-          {copy.referenceVideo}
-          <select
-            onChange={(event) => onReferenceChange(event.target.value || undefined)}
-            value={selectedReferenceId ?? ""}
-          >
-            <option value="">{copy.noReferenceVideo}</option>
-            {references.map((reference) => (
-              <option key={reference.id} value={reference.id}>
-                {reference.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {copy.viralTemplate}
-          <select
-            onChange={(event) => onTemplateChange(event.target.value || undefined)}
-            value={selectedTemplateId ?? ""}
-          >
-            <option value="">{copy.noViralTemplate}</option>
-            {templates.map((template) => (
-              <option key={template.templateId} value={template.templateId}>
-                {template.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {productionMode === "viral-remix" ? (
+          <label>
+            {copy.referenceVideo}
+            <select
+              onChange={(event) => onReferenceChange(event.target.value || undefined)}
+              value={selectedReferenceId ?? ""}
+            >
+              <option value="">{copy.noReferenceVideo}</option>
+              {referenceScriptOptions.map(({ asset, referenceId }) => (
+                <option key={asset.id} value={referenceId}>
+                  {asset.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {productionMode === "template" ? (
+          <label>
+            {copy.viralTemplate}
+            <select
+              onChange={(event) => onTemplateChange(event.target.value || undefined)}
+              value={selectedTemplateId ?? ""}
+            >
+              <option value="">{copy.noViralTemplate}</option>
+              {templates.map((template) => (
+                <option key={template.templateId} value={template.templateId}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       <div className="script-generation-actions">

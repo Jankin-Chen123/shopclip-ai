@@ -376,6 +376,31 @@ export const getCreationUsableAssets = (
   return [...assetsById.values()];
 };
 
+const getReferenceIdFromScriptAsset = (asset: AssetMetadata): string | undefined => {
+  if (!asset.metadata || typeof asset.metadata !== "object" || !("referenceId" in asset.metadata)) {
+    return undefined;
+  }
+  return typeof asset.metadata.referenceId === "string" ? asset.metadata.referenceId : undefined;
+};
+
+export const getReferenceScriptAssets = (assets: AssetMetadata[]): AssetMetadata[] => {
+  const assetsById = new Map<string, AssetMetadata>();
+  assets.forEach((asset) => {
+    const kind =
+      asset.metadata && typeof asset.metadata === "object" && "kind" in asset.metadata
+        ? asset.metadata.kind
+        : undefined;
+    if (
+      kind === "reference_script_asset" &&
+      asset.status === "ready" &&
+      getReferenceIdFromScriptAsset(asset)
+    ) {
+      assetsById.set(asset.id, asset);
+    }
+  });
+  return [...assetsById.values()];
+};
+
 export const isRenderTaskPollingActive = (
   renderTask: Pick<RenderTask, "status"> | undefined,
 ): boolean =>
@@ -539,6 +564,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const scriptReferenceLibrary = useMemo(
     () => mergeReferences(project?.referenceVideos ?? [], referenceLibrary),
     [project?.referenceVideos, referenceLibrary],
+  );
+  const scriptReferenceAssets = useMemo(
+    () => getReferenceScriptAssets([...(project?.assets ?? []), ...assetLibrary.assets]),
+    [assetLibrary.assets, project?.assets],
   );
   const hasPendingReferences = useMemo(
     () => hasActivePendingReferenceAnalysis(scriptReferenceLibrary),
@@ -1311,6 +1340,22 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       templateId: selectedTemplateIdForScript,
     }) satisfies ScriptGenerationRequest;
 
+  const handleScriptProductionModeChange = (mode: ScriptProductionMode) => {
+    setScriptProductionMode(mode);
+    if (mode === "automatic") {
+      setSelectedReferenceIdForScript(undefined);
+      setSelectedTemplateIdForScript(undefined);
+      return;
+    }
+    if (mode === "viral-remix") {
+      setSelectedTemplateIdForScript(undefined);
+      return;
+    }
+    if (mode === "template") {
+      setSelectedReferenceIdForScript(undefined);
+    }
+  };
+
   const handleAnalyzeReference = (draft: {
     category: string;
     sourceDeclaration: string;
@@ -1919,12 +1964,12 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                     isStoryboardGenerating={busyState === "script"}
                     onGenerateScript={handleRewriteScript}
                     onGenerateStoryboard={() => handleGenerateScript("studio")}
-                    onProductionModeChange={setScriptProductionMode}
+                    onProductionModeChange={handleScriptProductionModeChange}
                     onReferenceChange={setSelectedReferenceIdForScript}
                     onScriptDraftChange={setScriptDraft}
                     onTemplateChange={setSelectedTemplateIdForScript}
                     productionMode={scriptProductionMode}
-                    references={scriptReferenceLibrary}
+                    referenceScriptAssets={scriptReferenceAssets}
                     script={script}
                     scriptDraft={scriptDraft}
                     selectedReferenceId={selectedReferenceIdForScript}
