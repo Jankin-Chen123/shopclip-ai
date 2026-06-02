@@ -25,7 +25,9 @@ export const formatFfmpegExitError = (
   stderr: string,
 ): Error => {
   const exit = code === null ? `signal ${signal ?? "unknown"}` : `code ${code}`;
-  return new Error(`ffmpeg exited with ${exit}. ${stderr.slice(0, 1200)}`);
+  const clippedStderr =
+    stderr.length > 2400 ? `${stderr.slice(0, 800)}\n...\n${stderr.slice(-1600)}` : stderr;
+  return new Error(`ffmpeg exited with ${exit}. ${clippedStderr}`);
 };
 
 const runCommand: CommandRunner = (command: string, args: string[]) =>
@@ -49,19 +51,14 @@ const isRemoteUrl = (url: string): boolean => /^https?:\/\//iu.test(url);
 
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
-const escapeDrawtextText = (text: string): string =>
-  text
-    .replace(/\r?\n/gu, " ")
-    .replace(/\\/gu, "\\\\")
-    .replace(/'/gu, "\\'")
-    .replace(/:/gu, "\\:")
-    .replace(/%/gu, "\\%");
+const escapeDrawtextPath = (path: string): string =>
+  path.replace(/\\/gu, "/").replace(/'/gu, "\\'").replace(/:/gu, "\\:");
 
-export const buildDrawtextFilter = (subtitle: string): string => {
-  const escapedSubtitle = escapeDrawtextText(subtitle.trim());
+export const buildDrawtextFilter = (subtitleTextPath: string): string => {
+  const escapedSubtitleTextPath = escapeDrawtextPath(subtitleTextPath);
   return [
     "drawtext=",
-    `text='${escapedSubtitle}'`,
+    `textfile='${escapedSubtitleTextPath}'`,
     "x=(w-text_w)/2",
     "y=h-text_h-96",
     "fontsize=42",
@@ -134,7 +131,7 @@ const runFfmpegSubtitleOverlay = async (
   command: string,
   inputPath: string,
   outputPath: string,
-  subtitle: string,
+  subtitleTextPath: string,
   commandRunner: CommandRunner = runCommand,
 ) => {
   await commandRunner(command, [
@@ -142,7 +139,11 @@ const runFfmpegSubtitleOverlay = async (
     "-i",
     inputPath,
     "-vf",
-    buildDrawtextFilter(subtitle),
+    buildDrawtextFilter(subtitleTextPath),
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a?",
     "-c:v",
     "libx264",
     "-preset",
@@ -153,6 +154,7 @@ const runFfmpegSubtitleOverlay = async (
     "yuv420p",
     "-c:a",
     "aac",
+    "-shortest",
     "-movflags",
     "+faststart",
     outputPath,
@@ -187,19 +189,20 @@ export const composeSceneClipsToLocalFile = async (
     workdir,
     options.fetchImpl ?? fetch,
   );
-  const captionedPaths = await Promise.all(
-    inputPaths.map(async (inputPath, index) => {
-      const captionedPath = join(workdir, `captioned-${index + 1}.mp4`);
-      await runFfmpegSubtitleOverlay(
-        options.command ?? commandFromEnv(),
-        inputPath,
-        captionedPath,
-        sortedClips[index]?.subtitle ?? "",
-        options.runCommand ?? runCommand,
-      );
-      return captionedPath;
-    }),
-  );
+  const captionedPaths: string[] = [];
+  for (const [index, inputPath] of inputPaths.entries()) {
+    const captionedPath = join(workdir, `captioned-${index + 1}.mp4`);
+    const subtitleTextPath = join(workdir, `subtitle-${index + 1}.txt`);
+    await writeFile(subtitleTextPath, sortedClips[index]?.subtitle?.trim() ?? "", "utf8");
+    await runFfmpegSubtitleOverlay(
+      options.command ?? commandFromEnv(),
+      inputPath,
+      captionedPath,
+      subtitleTextPath,
+      options.runCommand ?? runCommand,
+    );
+    captionedPaths.push(captionedPath);
+  }
   await writeFile(
     concatListPath,
     captionedPaths.map((url) => `file '${escapeConcatPath(url)}'`).join("\n"),

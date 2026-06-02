@@ -108,6 +108,9 @@ export const RenderPanel = ({
   const activeRender = isActiveRenderStatus(renderTask?.status);
   const sceneClipCount = renderTask?.sceneClips?.length ?? 0;
   const readySceneClipCount = completedSceneClipCount(renderTask);
+  const finalPreviewUrl = renderTask?.exportUrl ?? renderTask?.previewUrl;
+  const renderMediaSettings = renderTask?.mediaSettings;
+  const sceneClips = playableSceneClips(renderTask);
 
   return (
     <section className="panel render-panel" id="trace" aria-labelledby="trace-title">
@@ -175,11 +178,30 @@ export const RenderPanel = ({
         <h2 id="export-title">{copy.exportTitle}</h2>
       </div>
       <div className="preview-box">
-        {playableSceneClips(renderTask).length > 0 ? (
+        {renderTask?.exportUrl ? (
+          <>
+            <strong>{copy.previewArtifact}</strong>
+            <video controls playsInline preload="metadata" src={renderTask.exportUrl}>
+              <a href={renderTask.exportUrl}>{renderTask.exportUrl}</a>
+            </video>
+            {renderMediaSettings ? (
+              <small className="media-summary">
+                <Volume2 size={14} aria-hidden="true" />
+                {copy.mediaSummary(
+                  renderMediaSettings.ttsVoice,
+                  renderMediaSettings.subtitlesEnabled
+                    ? renderMediaSettings.subtitleStyle
+                    : "off",
+                  renderMediaSettings.bgmTrack,
+                )}
+              </small>
+            ) : null}
+          </>
+        ) : sceneClips.length > 0 ? (
           <>
             <strong>{copy.clipPreviewTitle}</strong>
             <div className="scene-clip-grid">
-              {playableSceneClips(renderTask).map((clip) => (
+              {sceneClips.map((clip) => (
                 <article className="scene-clip-card" key={clip.sceneId}>
                   <video
                     controls
@@ -200,19 +222,19 @@ export const RenderPanel = ({
               ))}
             </div>
           </>
-        ) : renderTask?.previewUrl ? (
+        ) : finalPreviewUrl ? (
           <>
             <strong>{copy.previewArtifact}</strong>
-            <span>{renderTask.previewUrl}</span>
-            {renderTask.mediaSettings ? (
+            <span>{finalPreviewUrl}</span>
+            {renderMediaSettings ? (
               <small className="media-summary">
                 <Volume2 size={14} aria-hidden="true" />
                 {copy.mediaSummary(
-                  renderTask.mediaSettings.ttsVoice,
-                  renderTask.mediaSettings.subtitlesEnabled
-                    ? renderTask.mediaSettings.subtitleStyle
+                  renderMediaSettings.ttsVoice,
+                  renderMediaSettings.subtitlesEnabled
+                    ? renderMediaSettings.subtitleStyle
                     : "off",
-                  renderTask.mediaSettings.bgmTrack,
+                  renderMediaSettings.bgmTrack,
                 )}
               </small>
             ) : null}

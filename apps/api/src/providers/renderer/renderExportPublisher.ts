@@ -42,8 +42,8 @@ export const publishRenderExportToStorage = async (
     .map((clip) => clip.videoUrl)
     .filter((url): url is string => Boolean(url));
 
-  if (videoUrls.length <= 1) {
-    return videoUrls[0];
+  if (videoUrls.length === 0) {
+    return undefined;
   }
 
   const localExport = await localComposer(projectId, clips);

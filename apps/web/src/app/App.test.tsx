@@ -405,7 +405,6 @@ describe("App", () => {
           progress: 100,
           provider: "volcengine-seedance",
           previewUrl: "https://cdn.example.test/scene-1.mp4",
-          exportUrl: "https://cdn.example.test/scene-1.mp4",
           sceneClips: [
             {
               sceneId: "scene-1",
@@ -488,10 +487,12 @@ describe("App", () => {
     );
 
     expect(markup).toContain("Ready to download");
+    expect(markup).toContain('<video controls="" playsInline="" preload="metadata" src="https://cos.example.test/export.mp4">');
     expect(markup).toContain("Technical details");
     expect(markup).not.toContain(
       "<span>https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com",
     );
+    expect(markup).not.toContain("Signature=secret");
     expect(markup).not.toContain("seedance-scene-task-submitted");
   });
 

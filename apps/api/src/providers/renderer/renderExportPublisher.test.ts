@@ -40,6 +40,33 @@ const createStorageProvider = (): StorageProvider => ({
 });
 
 describe("render export publisher", () => {
+  it("uploads a locally composed single-scene export instead of returning the raw scene URL", async () => {
+    const workdir = await mkdtemp(join(tmpdir(), "shopclip-export-publisher-"));
+    const outputPath = join(workdir, "export.mp4");
+    await writeFile(outputPath, Buffer.from("captioned-single-scene-video"));
+    const storageProvider = createStorageProvider();
+    const localComposer = vi.fn(async () => ({
+      exportId: "export-single",
+      localUrl: "/api/render-exports/project-1/export-single/export.mp4",
+      outputPath,
+    }));
+
+    const exportUrl = await publishRenderExportToStorage("project-1", [clips[0]!], {
+      localComposer,
+      storageProvider,
+    });
+
+    expect(exportUrl).toBe(
+      "https://cdn.example.test/projects/project-1/exports/export-single/export.mp4",
+    );
+    expect(localComposer).toHaveBeenCalledWith("project-1", [clips[0]!]);
+    expect(storageProvider.uploadObject).toHaveBeenCalledWith({
+      body: Buffer.from("captioned-single-scene-video"),
+      contentType: "video/mp4",
+      objectKey: "projects/project-1/exports/export-single/export.mp4",
+    });
+  });
+
   it("uploads a locally composed multi-scene export to COS and returns the public object URL", async () => {
     const workdir = await mkdtemp(join(tmpdir(), "shopclip-export-publisher-"));
     const outputPath = join(workdir, "export.mp4");
