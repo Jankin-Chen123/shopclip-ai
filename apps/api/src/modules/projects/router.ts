@@ -1253,24 +1253,46 @@ const segmentOutputsByScene = (
 ): Map<string, SmartEditSegmentOutput> =>
   new Map(outputs.map((output) => [output.sceneId, output]));
 
+const containsReadableTimelineText = (text: string): boolean =>
+  /[\p{L}\p{N}]/u.test(text) && !/^[\s?？�□■◇◆]+$/u.test(text.trim());
+
+const readableTimelineText = (...candidates: Array<string | undefined>): string | undefined =>
+  candidates.find((candidate) => candidate && containsReadableTimelineText(candidate));
+
+const sanitizeSmartEditSegmentText = (
+  segment: SmartEditPlan["segments"][number],
+  scene: StoryboardScene | undefined,
+): SmartEditPlan["segments"][number] => ({
+  ...segment,
+  subtitle:
+    readableTimelineText(segment.subtitle, segment.voiceover, scene?.subtitle, scene?.voiceover) ??
+    segment.subtitle,
+  voiceover:
+    readableTimelineText(segment.voiceover, segment.subtitle, scene?.voiceover, scene?.subtitle) ??
+    segment.voiceover,
+});
+
 const buildSmartEditRefreshPlan = ({
   currentPlan,
   projectId,
   refreshedSegment,
   segmentOutputs,
+  scenes,
   targetSceneId,
 }: {
   currentPlan: SmartEditPlan;
   projectId: string;
   refreshedSegment: SmartEditPlan["segments"][number];
   segmentOutputs: SmartEditSegmentOutput[];
+  scenes: StoryboardScene[];
   targetSceneId: string;
 }): SmartEditPlan => {
   const outputsByScene = segmentOutputsByScene(segmentOutputs);
+  const scenesById = new Map(scenes.map((scene) => [scene.id, scene]));
   const segments = currentPlan.segments.map((segment) => {
     if (segment.sceneId === targetSceneId) {
       return {
-        ...refreshedSegment,
+        ...sanitizeSmartEditSegmentText(refreshedSegment, scenesById.get(segment.sceneId)),
         id: `edit_segment_${targetSceneId}_${randomUUID()}`,
         order: segment.order,
       };
@@ -1285,7 +1307,7 @@ const buildSmartEditRefreshPlan = ({
       );
     }
     return {
-      ...segment,
+      ...sanitizeSmartEditSegmentText(segment, scenesById.get(segment.sceneId)),
       rationale: `${segment.rationale} Reused the previous uploaded segment during partial refresh.`,
       source: {
         kind: "generated-scene-clip" as const,
@@ -1558,6 +1580,7 @@ const runSmartEditSegmentRefreshJob = async ({
       projectId: project.id,
       refreshedSegment,
       segmentOutputs: requestData.segmentOutputs,
+      scenes: project.scenes,
       targetSceneId: targetScene.id,
     });
   } catch (error) {

@@ -201,6 +201,31 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api build`
   - `corepack pnpm --filter @shopclip/web build`
 
+## 2026-06-02 Partial Refresh Text Safety
+
+- Issue found during live API verification:
+  - A hand-written PowerShell refresh request could corrupt Chinese `currentPlan` copy into replacement-symbol text such as `????????`.
+  - The browser path sends UTF-8 correctly, but accepting corrupted client-side plan text is still unsafe because it can flow into reused unchanged segments during partial refresh.
+- Fix:
+  - `buildSmartEditRefreshPlan` now sanitizes both refreshed and reused segments against the project storyboard scenes.
+  - If segment `subtitle` or `voiceover` is unreadable replacement-symbol text, the backend falls back to readable text from the segment's other field or the authoritative storyboard scene.
+  - Unchanged segments still reuse prior uploaded segment clips through `generated-scene-clip`; only their unsafe copy fields are repaired before the final compose metadata is stored.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/smart-edit-flow.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/shared exec vitest run src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts src/providers/renderer/smartEditComposer.test.ts src/smart-edit-flow.test.ts`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+- Live UI verification before this backend hardening:
+  - Loaded the latest `水杯` project on `http://152.136.252.134/#edit`.
+  - Step 05 showed the completed smart edit timeline with `4s - cut/fade` labels and readable Chinese copy.
+  - Filling the duration spinbutton with `3` clamped it back to `4`.
+
 ## 2026-06-02 Subtitle Rendering Fix
 
 - Root cause investigation:

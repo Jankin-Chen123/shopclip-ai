@@ -48,7 +48,7 @@ const planFromScenes = (
   segments: scenes.map((scene, index) => ({
     id: `segment-${scene.id}`,
     assetTags: ["hero", "demo"],
-    durationSeconds: scene.durationSeconds,
+    durationSeconds: Math.max(4, Math.min(12, scene.durationSeconds)),
     enabled: true,
     order: index + 1,
     rationale: "Planner selected the scene-linked asset.",
@@ -63,7 +63,10 @@ const planFromScenes = (
     voiceover: scene.voiceover,
   })),
   strategy: "Use real smart edit route planning and ffmpeg composition.",
-  targetDurationSeconds: scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
+  targetDurationSeconds: scenes.reduce(
+    (sum, scene) => sum + Math.max(4, Math.min(12, scene.durationSeconds)),
+    0,
+  ),
 });
 
 interface RenderSnapshot {
@@ -227,13 +230,25 @@ describe("smart edit API flow", () => {
     expect(plannerCalls[0]?.scenes).toHaveLength(generated.body.script.scenes.length);
 
     const sceneToRefresh = generated.body.script.scenes[1]!;
+    const currentPlanForRefresh = {
+      ...completedFullEdit.renderTask.smartEditPlan!,
+      segments: completedFullEdit.renderTask.smartEditPlan!.segments.map((segment, index) =>
+        index === 0
+          ? {
+              ...segment,
+              subtitle: "????????",
+              voiceover: "????????",
+            }
+          : segment,
+      ),
+    };
     const refreshed = await request<RenderSnapshot>(
       baseUrl,
       `/api/projects/${created.body.project.id}/smart-edit/segments/${sceneToRefresh.id}/refresh`,
       {
         method: "POST",
         body: JSON.stringify({
-          currentPlan: completedFullEdit.renderTask.smartEditPlan,
+          currentPlan: currentPlanForRefresh,
           segmentOutputs: completedFullEdit.renderTask
             .smartEditSegmentOutputs as SmartEditSegmentOutput[],
           segment: {
@@ -246,13 +261,16 @@ describe("smart edit API flow", () => {
         }),
       },
     );
-    expect(refreshed.status).toBe(202);
+    expect(refreshed.status, JSON.stringify(refreshed.body)).toBe(202);
 
     const completedRefresh = await waitForRenderTask(baseUrl, refreshed.body.renderTask.id);
     expect(completedRefresh.renderTask.status).toBe("completed");
     expect(completedRefresh.renderTask.exportUrl).toContain("/export-2.mp4");
     expect(completedRefresh.renderTask.smartEditPlan?.segments[1]?.subtitle).toBe(
       "Refreshed single-scene copy",
+    );
+    expect(completedRefresh.renderTask.smartEditPlan?.segments[0]?.subtitle).toBe(
+      generated.body.script.scenes[0]?.subtitle,
     );
     expect(plannerCalls[1]?.scenes).toHaveLength(1);
     expect(plannerCalls[1]?.scenes[0]?.id).toBe(sceneToRefresh.id);
