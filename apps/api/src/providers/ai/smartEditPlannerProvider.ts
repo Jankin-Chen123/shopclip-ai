@@ -165,7 +165,22 @@ const getRequiredConfig = (
   }
 
   if (hasUserGeneralConfigInput(apiConfig)) {
-    return undefined;
+    const apiKey = firstEnv("AI_GENERAL_API_KEY", "AI_TEXT_API_KEY", "ARK_API_KEY", "AI_API_KEY");
+    if (!apiKey) {
+      return undefined;
+    }
+    return {
+      apiKey,
+      baseUrl: (userConfig?.apiBaseUrl?.trim() || process.env.ARK_API_BASE_URL || DEFAULT_ARK_BASE_URL).replace(
+        /\/$/,
+        "",
+      ),
+      model:
+        userConfig?.model?.trim() ||
+        firstEnv("AI_GENERAL_MODEL_ID", "AI_TEXT_MODEL_ID", "AI_TEXT_ENDPOINT_ID") ||
+        DEFAULT_GENERAL_MODEL,
+      provider: userConfig?.provider?.trim() || "volcengine-ark",
+    };
   }
 
   const apiKey = firstEnv("AI_GENERAL_API_KEY", "AI_TEXT_API_KEY", "ARK_API_KEY", "AI_API_KEY");

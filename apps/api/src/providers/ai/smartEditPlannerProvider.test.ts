@@ -149,4 +149,96 @@ describe("smart edit planner provider", () => {
     expect(result.plan.segments[0]?.subtitle).toContain("gatito");
     expect(result.plan.segments[0]?.voiceover).toContain("gatito");
   });
+
+  it("uses server env credentials when the frontend sends partial official model settings", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.AI_GENERAL_API_KEY = "env-general-key";
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>;
+      expect(headers.authorization).toBe("Bearer env-general-key");
+      const body = JSON.parse(String(init?.body));
+      expect(body.model).toBe("frontend-model");
+      return new Response(
+        JSON.stringify({
+          output_text: JSON.stringify({
+            audio: {
+              bgmTrack: "none",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            createdAt: "2026-06-02T00:00:00.000Z",
+            id: "plan-partial-config",
+            projectId: "project-smart-edit",
+            segments: [
+              {
+                assetTags: ["hero", "cup"],
+                durationSeconds: 4,
+                enabled: true,
+                id: "segment-1",
+                order: 1,
+                rationale: "Use configured model with server credentials.",
+                sceneId: "scene-1",
+                source: {
+                  assetId: "asset-image",
+                  imageUrl: "https://storage.example.test/cat-cup.png",
+                  kind: "image-asset",
+                },
+                subtitle: "Env key works",
+                transition: "cut",
+                voiceover: "Env key works",
+              },
+            ],
+            strategy: "Use server env key for partial frontend config.",
+            targetDurationSeconds: 4,
+          }),
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createSmartEditPlan } = await import("./smartEditPlannerProvider.js");
+    const result = await createSmartEditPlan({
+      apiConfig: {
+        general: {
+          apiBaseUrl: "https://frontend.example.test/api/v3",
+          model: "frontend-model",
+          provider: "volcengine-ark",
+        },
+      },
+      assets,
+      assetSlices,
+      project,
+      request: {
+        apiConfig: {
+          general: {
+            apiBaseUrl: "https://frontend.example.test/api/v3",
+            model: "frontend-model",
+            provider: "volcengine-ark",
+          },
+        },
+        locale: "zh-CN",
+        mediaSettings: {
+          bgmTrack: "none",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        },
+        segments: [],
+        targetLanguage: "zh-CN",
+        videoSettings: {
+          generateAudio: false,
+          ratio: "9:16",
+          resolution: "720p",
+          watermark: false,
+        },
+      },
+      scenes,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://frontend.example.test/api/v3/responses",
+      expect.any(Object),
+    );
+    expect(result.fallback.used).toBe(false);
+  });
 });
