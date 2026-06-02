@@ -164,14 +164,32 @@ const isMostlyReplacementSymbols = (text: string): boolean => {
   return symbolCount / compact.length >= 0.6;
 };
 
+const isLikelyMojibake = (text: string): boolean => {
+  const compact = text.replace(/\s/gu, "");
+  if (!compact) {
+    return false;
+  }
+
+  const mojibakeMarkerMatches =
+    compact.match(/[ÃÂ�]|(?:â[€€™€œ])|[鍊掕繃鏉ユ憞涔熶笉婕滄灏辩偣鍟搧]/gu) ?? [];
+  const replacementMatches = compact.match(/[?？�□■◇◆]/gu) ?? [];
+  const markerRatio = mojibakeMarkerMatches.length / compact.length;
+  const replacementRatio = replacementMatches.length / compact.length;
+
+  return markerRatio >= 0.35 || (markerRatio >= 0.2 && replacementRatio >= 0.05);
+};
+
+const isReadableSubtitleText = (text: string): boolean =>
+  containsReadableText(text) && !isMostlyReplacementSymbols(text) && !isLikelyMojibake(text);
+
 export const subtitleTextForSegment = (segment: SmartEditSegment): string => {
   const subtitle = segment.subtitle.trim();
-  if (subtitle && containsReadableText(subtitle) && !isMostlyReplacementSymbols(subtitle)) {
+  if (subtitle && isReadableSubtitleText(subtitle)) {
     return subtitle;
   }
 
   const voiceover = segment.voiceover.trim();
-  if (voiceover && containsReadableText(voiceover) && !isMostlyReplacementSymbols(voiceover)) {
+  if (voiceover && isReadableSubtitleText(voiceover)) {
     return voiceover;
   }
 

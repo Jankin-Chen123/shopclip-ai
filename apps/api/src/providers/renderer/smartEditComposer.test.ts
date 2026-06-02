@@ -369,6 +369,42 @@ describe("smart edit composer", () => {
     await expect(readFile(subtitlePath!, "utf8")).resolves.toContain(readableVoiceover);
   });
 
+  it("falls back to voiceover text when subtitle text is mojibake", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    const readableVoiceover = "倒过来摇也不漏";
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      subtitle: "鍊掕繃鏉ユ憞涔熶笉婕?",
+      voiceover: readableVoiceover,
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const subtitleCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.includes("segment-video.ass")),
+    );
+    const subtitlePath = subtitleCommand?.args
+      .find((arg) => arg.includes("segment-video.ass"))
+      ?.match(/filename='([^']+)'/)?.[1]
+      ?.replace(/\\:/gu, ":");
+    expect(subtitlePath).toBeTruthy();
+    await expect(readFile(subtitlePath!, "utf8")).resolves.toContain(readableVoiceover);
+    await expect(readFile(subtitlePath!, "utf8")).resolves.not.toContain("鍊掕繃");
+  });
+
   it("skips ASS subtitle burn-in when subtitles are disabled", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
