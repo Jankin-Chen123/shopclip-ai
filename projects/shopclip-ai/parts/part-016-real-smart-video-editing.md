@@ -221,6 +221,13 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/shared build`
   - `corepack pnpm --filter @shopclip/api build`
   - `corepack pnpm --filter @shopclip/web build`
+- Live verification after deploy:
+  - Deployed commit `adabb8c` with `/www/wwwroot/shopclip-ai/deploy.sh`.
+  - `http://152.136.252.134/health` returned `{"service":"api","status":"ok","version":"0.1.0"}` and homepage returned HTTP 200.
+  - Posted a real segment refresh request for project `cmpqigao80001whl4g32ii0bv` using an intentionally corrupted `currentPlan` containing `????????` and `ins???????,?????????`.
+  - Refresh task `fccce941-409c-4194-9773-339400dd9304` completed with readable Chinese subtitles restored from the authoritative storyboard scenes.
+  - Export URL: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmpqigao80001whl4g32ii0bv/smart-edits/19a5b26f-14f0-4025-be80-39f0723fd34b/export.mp4`.
+  - Server ffmpeg extracted a frame from the export; visual inspection confirmed the bottom burn-in subtitle is readable Chinese text, not symbol blocks.
 - Live UI verification before this backend hardening:
   - Loaded the latest `水杯` project on `http://152.136.252.134/#edit`.
   - Step 05 showed the completed smart edit timeline with `4s - cut/fade` labels and readable Chinese copy.
