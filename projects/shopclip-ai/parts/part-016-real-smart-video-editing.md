@@ -172,3 +172,14 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts src/smart-edit-flow.test.ts`
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/api lint`
+
+## 2026-06-02 Ark Endpoint Routing Fix
+
+- Browser verification after the configuration fix showed the planner reached Ark, but `AI_GENERAL_MODEL_ID=ep-...` was still sent to `/responses` and Ark returned `InvalidEndpointOrModel.ModelIDAccessDisabled`.
+- Fix:
+  - Ark versioned model IDs continue to use `/responses`.
+  - Ark custom endpoint IDs beginning with `ep-` now use `/chat/completions`.
+  - Added a planner provider regression test proving `ep-` routes through chat completions and still uses server env credentials.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`

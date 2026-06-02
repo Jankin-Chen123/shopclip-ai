@@ -241,4 +241,102 @@ describe("smart edit planner provider", () => {
     );
     expect(result.fallback.used).toBe(false);
   });
+
+  it("routes Ark custom endpoint IDs through chat completions instead of responses", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.AI_GENERAL_API_KEY = "env-general-key";
+    process.env.AI_GENERAL_MODEL_ID = "ep-custom-general";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>;
+      expect(headers.authorization).toBe("Bearer env-general-key");
+      const body = JSON.parse(String(init?.body));
+      expect(body.model).toBe("ep-custom-general");
+      expect(body.messages[0].role).toBe("system");
+      expect(body.messages[1].role).toBe("user");
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  audio: {
+                    bgmTrack: "none",
+                    targetLanguage: "zh-CN",
+                    voice: "clear-host",
+                  },
+                  createdAt: "2026-06-02T00:00:00.000Z",
+                  id: "plan-chat-endpoint",
+                  projectId: "project-smart-edit",
+                  segments: [
+                    {
+                      assetTags: ["hero", "cup"],
+                      durationSeconds: 4,
+                      enabled: true,
+                      id: "segment-1",
+                      order: 1,
+                      rationale: "Use custom endpoint chat completions.",
+                      sceneId: "scene-1",
+                      source: {
+                        assetId: "asset-image",
+                        imageUrl: "https://storage.example.test/cat-cup.png",
+                        kind: "image-asset",
+                      },
+                      subtitle: "Custom endpoint works",
+                      transition: "cut",
+                      voiceover: "Custom endpoint works",
+                    },
+                  ],
+                  strategy: "Use chat completions for Ark endpoint IDs.",
+                  targetDurationSeconds: 4,
+                }),
+              },
+            },
+          ],
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createSmartEditPlan } = await import("./smartEditPlannerProvider.js");
+    const result = await createSmartEditPlan({
+      apiConfig: {
+        general: {
+          credentialSource: "official",
+        },
+      },
+      assets,
+      assetSlices,
+      project,
+      request: {
+        apiConfig: {
+          general: {
+            credentialSource: "official",
+          },
+        },
+        locale: "zh-CN",
+        mediaSettings: {
+          bgmTrack: "none",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        },
+        segments: [],
+        targetLanguage: "zh-CN",
+        videoSettings: {
+          generateAudio: false,
+          ratio: "9:16",
+          resolution: "720p",
+          watermark: false,
+        },
+      },
+      scenes,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://ark.example.test/api/v3/chat/completions",
+      expect.any(Object),
+    );
+    expect(result.fallback.used).toBe(false);
+  });
 });

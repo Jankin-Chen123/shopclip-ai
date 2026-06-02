@@ -114,6 +114,11 @@ const isArkProvider = (provider?: string) => {
   return providerId === "volcengine-ark" || providerId === "ark" || providerId === "doubao";
 };
 
+const usesArkCustomEndpoint = (model: string): boolean => model.trim().toLowerCase().startsWith("ep-");
+
+const shouldUseResponsesApi = (config: ProviderConfig): boolean =>
+  isArkProvider(config.provider) && !usesArkCustomEndpoint(config.model);
+
 const hasUserGeneralConfigInput = (apiConfig?: InspirationGenerateRequest["apiConfig"]) => {
   const general = apiConfig?.general;
   return Boolean(
@@ -399,7 +404,7 @@ export const createSmartEditPlan = async (
 
   try {
     const prompt = buildPrompt(input);
-    const body = isArkProvider(config.provider)
+    const body = shouldUseResponsesApi(config)
       ? await postJson("/responses", config, {
           model: config.model,
           input: [
