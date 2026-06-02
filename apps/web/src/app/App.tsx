@@ -1892,7 +1892,34 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       return;
     }
     void runAction("export", "export", async () => {
-      setExportResult(await exportProject(project.id));
+      const exported = await exportProject(project.id);
+      setExportResult(exported);
+      setRenderTask((current) =>
+        current
+          ? {
+              ...current,
+              exportUrl: exported.exportUrl,
+              previewUrl: exported.exportUrl,
+            }
+          : current,
+      );
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              renderTasks: current.renderTasks.map((task) =>
+                task.id === renderTask?.id
+                  ? {
+                      ...task,
+                      exportUrl: exported.exportUrl,
+                      previewUrl: exported.exportUrl,
+                    }
+                  : task,
+              ),
+              status: "completed",
+            }
+          : current,
+      );
     });
   };
 

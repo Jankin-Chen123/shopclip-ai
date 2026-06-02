@@ -108,7 +108,8 @@ export const RenderPanel = ({
   const activeRender = isActiveRenderStatus(renderTask?.status);
   const sceneClipCount = renderTask?.sceneClips?.length ?? 0;
   const readySceneClipCount = completedSceneClipCount(renderTask);
-  const finalPreviewUrl = renderTask?.exportUrl ?? renderTask?.previewUrl;
+  const finalExportUrl = renderTask?.exportUrl ?? exportResult?.exportUrl;
+  const finalPreviewUrl = finalExportUrl ?? renderTask?.previewUrl;
   const renderMediaSettings = renderTask?.mediaSettings;
   const sceneClips = playableSceneClips(renderTask);
 
@@ -178,11 +179,11 @@ export const RenderPanel = ({
         <h2 id="export-title">{copy.exportTitle}</h2>
       </div>
       <div className="preview-box">
-        {renderTask?.exportUrl ? (
+        {finalExportUrl ? (
           <>
             <strong>{copy.previewArtifact}</strong>
-            <video controls playsInline preload="metadata" src={renderTask.exportUrl}>
-              <a href={renderTask.exportUrl}>{renderTask.exportUrl}</a>
+            <video controls playsInline preload="metadata" src={finalExportUrl}>
+              <a href={finalExportUrl}>{finalExportUrl}</a>
             </video>
             {renderMediaSettings ? (
               <small className="media-summary">
