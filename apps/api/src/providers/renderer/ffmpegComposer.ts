@@ -68,19 +68,26 @@ const subtitleFontFamily = (): string =>
 export const buildSubtitleFilter = (subtitleAssPath: string): string =>
   `ass=filename='${escapeFilterPath(subtitleAssPath)}'`;
 
-export const buildSubtitleAss = (subtitle: string): string => {
+export const buildSubtitleAss = (
+  subtitle: string,
+  options: { fontSize?: number; height?: number; marginV?: number; width?: number } = {},
+): string => {
   const escapedSubtitle = escapeAssText(subtitle);
+  const width = options.width ?? 720;
+  const height = options.height ?? 1280;
+  const fontSize = options.fontSize ?? 42;
+  const marginV = options.marginV ?? 96;
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
-    "PlayResX: 720",
-    "PlayResY: 1280",
+    `PlayResX: ${width}`,
+    `PlayResY: ${height}`,
     "WrapStyle: 0",
     "ScaledBorderAndShadow: yes",
     "",
     "[V4+ Styles]",
     "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    `Style: Default,${subtitleFontFamily()},42,&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,96,1`,
+    `Style: Default,${subtitleFontFamily()},${fontSize},&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},1`,
     "",
     "[Events]",
     "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",

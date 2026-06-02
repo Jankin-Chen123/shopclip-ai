@@ -225,6 +225,53 @@ describe("smart edit composer", () => {
     expect(bgmCommand?.args.join(" ")).toContain("amix=inputs=2");
   });
 
+  it("uses requested video ratio and resolution for segment filters and ASS subtitles", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage, smartEditOutputDimensions } = await import(
+      "./smartEditComposer.js"
+    );
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+
+    expect(smartEditOutputDimensions({ generateAudio: false, ratio: "16:9", resolution: "480p", watermark: false })).toEqual({
+      height: 480,
+      width: 854,
+    });
+
+    await composeSmartEditToStorage("project-smart-edit", createPlan(), assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      videoSettings: {
+        generateAudio: false,
+        ratio: "16:9",
+        resolution: "480p",
+        watermark: false,
+      },
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const videoSliceCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    expect(videoSliceCommand?.args.join(" ")).toContain("scale=854:480");
+    expect(videoSliceCommand?.args.join(" ")).toContain("crop=854:480");
+
+    const firstSubtitlePath = commands
+      .flatMap((entry) => entry.args)
+      .find((arg) => arg.includes("ass=filename="))
+      ?.match(/filename='([^']+)'/)?.[1]
+      ?.replace(/\\:/gu, ":");
+    expect(firstSubtitlePath).toBeTruthy();
+    const subtitleAss = await readFile(firstSubtitlePath!, "utf8");
+    expect(subtitleAss).toContain("PlayResX: 854");
+    expect(subtitleAss).toContain("PlayResY: 480");
+  });
+
   it("uses real ffmpeg fade and xfade filters for requested visual transitions", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

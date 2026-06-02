@@ -309,3 +309,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Deployed commit `c052959` with `/www/wwwroot/shopclip-ai/deploy.sh`.
   - Live checks: `http://152.136.252.134/health` returned ok, homepage returned 200.
   - Server smoke: importing `apps/api/dist/providers/renderer/smartEditComposer.js` returned `倒过来摇也不漏` for a mojibake subtitle with readable voiceover.
+
+## 2026-06-02 Smart Edit Output Geometry Fix
+
+- Issue found during completion audit:
+  - Step 05 requests already carried `videoSettings.ratio` and `videoSettings.resolution`, but the ffmpeg smart-edit composer always normalized clips to fixed `720x1280`.
+  - This meant horizontal, square, or 1080p edit requests were accepted by the API but not reflected in the final edited video.
+- Fix:
+  - `smartEditComposer` now derives output dimensions from `videoSettings`, using the requested resolution as the short side and preserving even dimensions for H.264.
+  - Segment scale/crop filters now use the derived dimensions, for example `16:9 + 480p` becomes `854x480`.
+  - Burned subtitle ASS metadata now uses the same dynamic `PlayResX` / `PlayResY` and scales font size and bottom margin by output height.
+  - Smart-edit full render and segment refresh routes now pass `videoSettings` into the ffmpeg composer.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/smart-edit-flow.test.ts src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/api build`

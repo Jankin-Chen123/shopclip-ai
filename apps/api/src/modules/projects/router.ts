@@ -1445,6 +1445,7 @@ const runSmartEditJob = async ({
     exportResult = await smartEditComposer(project.id, plannerResult.plan, project.assets, {
       storageProvider,
       subtitlesEnabled: requestData.mediaSettings.subtitlesEnabled,
+      videoSettings: requestData.videoSettings,
     });
   } catch (error) {
     await store.updateRenderTask(
@@ -1638,6 +1639,7 @@ const runSmartEditSegmentRefreshJob = async ({
     exportResult = await smartEditComposer(project.id, refreshPlan, project.assets, {
       storageProvider,
       subtitlesEnabled: requestData.mediaSettings.subtitlesEnabled,
+      videoSettings: requestData.videoSettings,
     });
   } catch (error) {
     await store.updateRenderTask(

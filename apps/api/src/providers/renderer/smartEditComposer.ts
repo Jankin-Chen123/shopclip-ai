@@ -9,6 +9,7 @@ import type {
   SmartEditPlan,
   SmartEditSegment,
   SmartEditSegmentOutput,
+  VideoGenerationSettings,
 } from "@shopclip/shared";
 
 import type { StorageProvider } from "../storage/storageProvider.js";
@@ -23,6 +24,7 @@ interface ComposeSmartEditOptions {
   storageProvider: StorageProvider;
   subtitlesEnabled?: boolean;
   ttsCommand?: string;
+  videoSettings?: VideoGenerationSettings;
 }
 
 export interface SmartEditLocalExport {
@@ -117,13 +119,47 @@ const sourceUrlForSegment = (segment: SmartEditSegment, assets: AssetMetadata[])
   return segment.source.sceneClipUrl || segment.source.imageUrl || asset?.url;
 };
 
-const buildScaleFilter = () =>
-  "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,fps=30,format=yuv420p";
-
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
 const normalizeDuration = (segment: SmartEditSegment): number =>
   Math.max(4, Math.min(12, segment.durationSeconds));
+
+type OutputDimensions = {
+  height: number;
+  width: number;
+};
+
+const even = (value: number): number => {
+  const rounded = Math.round(value);
+  return rounded % 2 === 0 ? rounded : rounded + 1;
+};
+
+export const smartEditOutputDimensions = (
+  videoSettings?: VideoGenerationSettings,
+): OutputDimensions => {
+  const base = Number.parseInt(videoSettings?.resolution ?? "720p", 10) || 720;
+  const ratio = videoSettings?.ratio ?? "9:16";
+  const [ratioWidth = 9, ratioHeight = 16] = ratio.split(":").map((part) => Number(part));
+  if (!Number.isFinite(ratioWidth) || !Number.isFinite(ratioHeight) || ratioWidth <= 0 || ratioHeight <= 0) {
+    return { height: even(base * (16 / 9)), width: even(base) };
+  }
+  if (ratioWidth === ratioHeight) {
+    return { height: even(base), width: even(base) };
+  }
+  if (ratioWidth > ratioHeight) {
+    return {
+      height: even(base),
+      width: even(base * (ratioWidth / ratioHeight)),
+    };
+  }
+  return {
+    height: even(base * (ratioHeight / ratioWidth)),
+    width: even(base),
+  };
+};
+
+const buildScaleFilter = (dimensions: OutputDimensions) =>
+  `scale=${dimensions.width}:${dimensions.height}:force_original_aspect_ratio=increase,crop=${dimensions.width}:${dimensions.height},fps=30,format=yuv420p`;
 
 const transitionDurationSeconds = (segment: SmartEditSegment): number => {
   if (segment.transition === "cut") {
@@ -139,8 +175,11 @@ const ffmpegXfadeTransition = (transition: SmartEditSegment["transition"]): stri
   return "fade";
 };
 
-const buildSegmentVideoFilter = (segment: SmartEditSegment): string => {
-  const filters = [buildScaleFilter()];
+const buildSegmentVideoFilter = (
+  segment: SmartEditSegment,
+  dimensions: OutputDimensions,
+): string => {
+  const filters = [buildScaleFilter(dimensions)];
   const duration = normalizeDuration(segment);
   const fadeDuration = transitionDurationSeconds(segment);
   if (segment.transition === "fade" && fadeDuration > 0 && duration > fadeDuration * 2) {
@@ -229,10 +268,12 @@ const createSegmentVideo = async ({
   run,
   segment,
   subtitlesEnabled,
+  dimensions,
   workdir,
 }: {
   assets: AssetMetadata[];
   command: string;
+  dimensions: OutputDimensions;
   fetchImpl: typeof fetch;
   run: CommandRunner;
   segment: SmartEditSegment;
@@ -280,7 +321,7 @@ const createSegmentVideo = async ({
       "-i",
       sourcePath,
       "-vf",
-      buildSegmentVideoFilter(segment),
+      buildSegmentVideoFilter(segment, dimensions),
       "-c:v",
       "libx264",
       "-preset",
@@ -298,7 +339,7 @@ const createSegmentVideo = async ({
     if (segment.source.startSecond !== undefined) {
       args.push("-ss", String(segment.source.startSecond));
     }
-    args.push("-i", sourcePath, "-t", String(duration), "-vf", buildSegmentVideoFilter(segment));
+    args.push("-i", sourcePath, "-t", String(duration), "-vf", buildSegmentVideoFilter(segment, dimensions));
     args.push(
       "-map",
       "0:v:0",
@@ -329,7 +370,16 @@ const createSegmentVideo = async ({
 
   const subtitleAssPath = join(workdir, `${segment.id}.ass`);
   const captionedOutputPath = join(workdir, `${segment.id}-captioned.mp4`);
-  await writeFile(subtitleAssPath, buildSubtitleAss(subtitleText), "utf8");
+  await writeFile(
+    subtitleAssPath,
+    buildSubtitleAss(subtitleText, {
+      fontSize: Math.max(24, Math.round(dimensions.height * (42 / 1280))),
+      height: dimensions.height,
+      marginV: Math.max(48, Math.round(dimensions.height * (96 / 1280))),
+      width: dimensions.width,
+    }),
+    "utf8",
+  );
   await run(command, [
     "-y",
     "-i",
@@ -646,6 +696,7 @@ export const composeSmartEditToStorage = async (
   const run = options.runCommand ?? runCommand;
   const ttsCommand = options.ttsCommand ?? ttsCommandFromEnv();
   const subtitlesEnabled = options.subtitlesEnabled ?? true;
+  const dimensions = smartEditOutputDimensions(options.videoSettings);
   const exportId = randomUUID();
   const workdir = join(smartEditExportDir(), projectId, "smart-edit", exportId);
   await mkdir(workdir, { recursive: true });
@@ -662,6 +713,7 @@ export const composeSmartEditToStorage = async (
     const outputPath = await createSegmentVideo({
       assets,
       command,
+      dimensions,
       fetchImpl,
       run,
       segment,
