@@ -81,7 +81,7 @@ export const StudioWorkspace = ({
       });
     };
 
-  const updateSelectedAudioReference = (
+  const updateSelectedCopy = (
     event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     if (!selectedScene) {
@@ -174,11 +174,11 @@ export const StudioWorkspace = ({
                 />
               </label>
               <label>
-                {copy.audioReference}
+                {copy.sceneCopy}
                 <textarea
                   rows={3}
                   value={selectedScene.voiceover || selectedScene.subtitle}
-                  onChange={updateSelectedAudioReference}
+                  onChange={updateSelectedCopy}
                 />
               </label>
               <label>

@@ -902,7 +902,7 @@ describe("P0 backend lifecycle", () => {
     expect(imageGenerated.body.script.scenes[0]?.visualPrompt).toContain(
       "产品外观必须与绑定素材一致",
     );
-    expect(imageGenerated.body.script.scenes[0]?.subtitle).toContain("痛点");
+    expect(imageGenerated.body.script.scenes[0]?.subtitle).toContain("还在");
     expect(imageGenerated.body.script.scenes[0]?.voiceover).toContain("还在");
 
     const firstImageBody = getArkRequestBodies()[0];
@@ -1222,7 +1222,7 @@ describe("P0 backend lifecycle", () => {
     expect(body.messages[1].content).toContain("已准备素材清单：assetId=");
     expect(body.messages[1].content).toContain("文件名=小猫水杯主图");
     expect(body.messages[1].content).toContain(
-      "参考素材列必须只填写一个已准备素材的文件名或 assetId",
+      "素材槽位列必须只填写一个已准备素材的文件名或 assetId",
     );
     expect(body.messages[1].content).toContain("关键词：便携、防漏");
     expect(body.messages[1].content).toContain("用户草稿：强调小包装得下和通勤防漏。");
@@ -1334,10 +1334,10 @@ describe("P0 backend lifecycle", () => {
           {
             message: {
               content: [
-                "| Time | Voiceover | Subtitle | Visual |",
+                "| 时长 | 文案 | 画面提示词 | 素材槽位 |",
                 "|---|---|---|---|",
-                "| 0-3s | Model generated hook | Model hook subtitle | Model generated product close-up with user asset consistency |",
-                "| 3-7s | Model generated proof | Model proof subtitle | Model generated usage scene with user asset consistency |",
+                "| 4s | 桌面支架一秒展开 | Model generated product close-up with user asset consistency | Fold Stand packshot |",
+                "| 4s | 稳稳托住拍摄角度 | Model generated usage scene with user asset consistency | Fold Stand packshot |",
               ].join("\n"),
             },
           },
@@ -1414,14 +1414,14 @@ describe("P0 backend lifecycle", () => {
       used: false,
       provider: "openai-compatible",
     });
-    expect(generated.body.script.narrative).toContain("Model generated hook");
+    expect(generated.body.script.narrative).toContain("桌面支架一秒展开");
     expect(generated.body.script.constraints.join(" ")).not.toMatch(/fallback|mock/i);
     expect(generated.body.script.constraints.join(" ")).toContain("真实文本模型");
     expect(generated.body.script.scenes).toHaveLength(2);
     expect(generated.body.script.scenes[0]).toMatchObject({
-      durationSeconds: 3,
-      subtitle: "Model hook subtitle",
-      voiceover: "Model generated hook",
+      durationSeconds: 4,
+      subtitle: "桌面支架一秒展开",
+      voiceover: "桌面支架一秒展开",
     });
     expect(generated.body.script.scenes[0]?.visualPrompt).toContain(
       "Model generated product close-up",
@@ -1684,13 +1684,13 @@ describe("P0 backend lifecycle", () => {
     expect(generated.body.script.scenes).toHaveLength(3);
     expect(generated.body.script.scenes[0]).toMatchObject({
       durationSeconds: 3,
-      subtitle: "小包塞不下？",
+      subtitle: "小包塞不下水杯？",
       voiceover: "小包塞不下水杯？",
     });
     expect(generated.body.script.scenes[0]?.visualPrompt).toContain("手拿小包和小猫水杯做尺寸对比");
     expect(generated.body.script.scenes[1]).toMatchObject({
       durationSeconds: 4,
-      subtitle: "轻松塞进口袋",
+      subtitle: "这只小猫水杯轻松放进口袋",
       voiceover: "这只小猫水杯轻松放进口袋",
     });
     expect(generated.body.script.scenes.map((scene) => scene.assetId)).toEqual([

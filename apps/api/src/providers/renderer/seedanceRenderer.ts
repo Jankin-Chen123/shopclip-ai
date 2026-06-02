@@ -189,8 +189,8 @@ const promptForProject = (project: ProjectSnapshot, scenes = project.scenes) => 
     .sort((left, right) => left.order - right.order)
     .map(
       (scene) => {
-        const audioReference = scene.voiceover.trim() || scene.subtitle.trim();
-        return `${scene.order}. 时长必须为 ${Math.round(scene.durationSeconds)} 秒 | 画面: ${scene.visualPrompt} | 音频参考: ${audioReference}`;
+        const copy = scene.voiceover.trim() || scene.subtitle.trim();
+        return `${scene.order}. 时长必须为 ${Math.round(scene.durationSeconds)} 秒 | 画面: ${scene.visualPrompt} | 文案: ${copy}`;
       },
     )
     .join("\n");

@@ -152,7 +152,7 @@ describe("Seedance renderer provider", () => {
     expect(requestBody.content[0].text).toContain("GlowGrip Phone Stand");
     expect(requestBody.content[0].text).toContain("Macro product shot");
     expect(requestBody.content[0].text).toContain("时长必须为 4 秒");
-    expect(requestBody.content[0].text).toContain("音频参考: Show how it folds flat.");
+    expect(requestBody.content[0].text).toContain("文案: Show how it folds flat.");
     expect(requestBody.content[1]).toEqual({
       type: "image_url",
       role: "first_frame",

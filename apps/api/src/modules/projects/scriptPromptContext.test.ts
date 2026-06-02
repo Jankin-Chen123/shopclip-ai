@@ -106,6 +106,21 @@ const makeTemplate = (template: Partial<ViralTemplate> = {}): ViralTemplate => (
 });
 
 describe("buildScriptAssetPromptLines", () => {
+  it("asks the real script model for storyboard editor fields", () => {
+    const request: ScriptGenerationRequest = {
+      assetIds: [],
+      keywords: [],
+      materials: [],
+      productionMode: "automatic",
+    };
+
+    const prompt = scriptGenerationPrompt(makeProject(), request, []);
+
+    expect(prompt).toContain("| 时长 | 文案 | 画面提示词 | 素材槽位 |");
+    expect(prompt).toContain("单个分镜时长必须在 4-12 秒之间");
+    expect(prompt).toContain("不要再拆成旁白和字幕两列");
+  });
+
   it("includes multi-granularity structured asset summaries for real script generation prompts", () => {
     const asset: AssetMetadata = {
       id: "asset-structured-cup",

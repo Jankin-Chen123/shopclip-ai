@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: Done
 - Created: 2026-05-21
-- Last updated: 2026-05-27
+- Last updated: 2026-06-02
 
 ## Source Of Truth
 
@@ -58,6 +58,7 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - Added trace events for scene regeneration and Agent suggestion application.
 - 2026-05-27 update: single-scene regeneration now refreshes that scene's generated `imageUrl` while preserving the rest of the storyboard.
 - 2026-05-28 update: single-scene regeneration now uses the current inspector fields directly for image generation. It no longer rewrites subtitle, voiceover, or visual prompt through the editing fallback provider; the frontend posts the current scene fields and API settings, and the backend refreshes only the image while persisting those current fields.
+- 2026-06-02 update: Step 03 now exposes a single user-facing scene `Copy` / `文案` field instead of `Audio reference` / `音频参考`; editing this field still writes both stored subtitle and voiceover for backward compatibility. Step 02 real-script prompts now ask the model for storyboard editor columns `时长 / 文案 / 画面提示词 / 素材槽位`, and the parser maps the generated copy into the scene fields used by Step 03 and Seedance rendering.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-07-scene-agent-regeneration.png`
   - `projects/shopclip-ai/evidence/part-007-verification.md`
@@ -74,6 +75,12 @@ Complete the P1 editor experience with robust scene editing, single-scene regene
 - `projects/shopclip-ai/evidence/2026-05-27-full-chain-scene-regeneration.md`
 - `projects/shopclip-ai/evidence/2026-05-27-storyboard-scene-image-preview.md`
 - `output/playwright/full-chain-studio-regenerated-scene.png`
+- 2026-06-02: `corepack pnpm --filter @shopclip/api exec vitest run src/p0-flow.test.ts src/modules/projects/scriptPromptContext.test.ts src/providers/renderer/seedanceRenderer.test.ts`
+- 2026-06-02: `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+- 2026-06-02: `corepack pnpm --filter @shopclip/api typecheck`
+- 2026-06-02: `corepack pnpm --filter @shopclip/web typecheck`
+- 2026-06-02: `corepack pnpm --filter @shopclip/api build`
+- 2026-06-02: `corepack pnpm --filter @shopclip/web build`
 
 ## Verification Plan
 

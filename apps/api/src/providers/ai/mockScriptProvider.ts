@@ -108,6 +108,8 @@ const cleanScriptCell = (value: string | undefined): string =>
 const isMarkdownSeparator = (value: string): boolean =>
   /^:?-{2,}:?$/u.test(value.replace(/\s+/g, ""));
 
+type DraftScriptTableMode = "storyboard-fields" | "legacy";
+
 const splitMarkdownRow = (line: string): string[] => {
   const trimmed = line.trim();
   if (!trimmed.includes("|")) {
@@ -180,6 +182,41 @@ const chooseChineseText = (primary: string, fallback: string): string => {
   return primary || fallback;
 };
 
+const detectDraftScriptTableMode = (cells: string[]): DraftScriptTableMode | undefined => {
+  const normalizedCells = cells.map((cell) => normalizeAssetMention(cell));
+  const normalizedHeader = normalizedCells.join("|");
+  const hasDurationHeader =
+    normalizedCells[0]?.includes("时间") === true ||
+    normalizedCells[0]?.includes("时长") === true ||
+    normalizedCells[0] === "time" ||
+    normalizedCells[0] === "duration";
+
+  if (!hasDurationHeader) {
+    return undefined;
+  }
+
+  const hasStoryboardFieldHeaders =
+    normalizedHeader.includes("文案") &&
+    (normalizedHeader.includes("画面提示词") || normalizedHeader.includes("visualprompt")) &&
+    (normalizedHeader.includes("素材槽位") ||
+      normalizedHeader.includes("materialslot") ||
+      normalizedHeader.includes("assetslot"));
+  if (hasStoryboardFieldHeaders) {
+    return "storyboard-fields";
+  }
+
+  const hasLegacyHeaders =
+    normalizedHeader.includes("旁白") ||
+    normalizedHeader.includes("字幕") ||
+    normalizedHeader.includes("voiceover") ||
+    normalizedHeader.includes("subtitle");
+  if (hasLegacyHeaders) {
+    return "legacy";
+  }
+
+  return undefined;
+};
+
 const parseDraftScriptScenes = (
   project: ProjectSnapshot,
   draftScript: string | undefined,
@@ -193,17 +230,19 @@ const parseDraftScriptScenes = (
   const scenes: StoryboardScene[] = [];
   let totalDurationSeconds = 0;
   const targetDurationSeconds = targetDurationForProject(project);
+  let tableMode: DraftScriptTableMode | undefined;
   for (const line of draftScript.split(/\r?\n/u)) {
     const cells = splitMarkdownRow(line);
     if (cells.length < 3) {
       continue;
     }
     const firstCell = cells[0] ?? "";
-    if (
-      firstCell.includes("时间") ||
-      firstCell.toLowerCase() === "time" ||
-      cells.every((cell) => isMarkdownSeparator(cell))
-    ) {
+    const detectedTableMode = detectDraftScriptTableMode(cells);
+    if (detectedTableMode) {
+      tableMode = detectedTableMode;
+      continue;
+    }
+    if (cells.every((cell) => isMarkdownSeparator(cell))) {
       continue;
     }
 
@@ -213,12 +252,19 @@ const parseDraftScriptScenes = (
     }
 
     const durationSeconds = Math.min(parsedDuration, targetDurationSeconds - totalDurationSeconds);
-    const rawVoiceover = cleanScriptCell(cells[1]);
-    const rawSubtitle = cleanScriptCell(cells[2]);
-    const rawVisual = cleanScriptCell(cells[3]) || rawVoiceover || rawSubtitle;
-    const rawAssetReference = cleanScriptCell(cells[4]);
-    const subtitle = chooseChineseText(rawSubtitle, rawVoiceover) || `${project.productName} 分镜`;
-    const voiceover = chooseChineseText(rawVoiceover, rawSubtitle) || subtitle;
+    const usesStoryboardFieldColumns =
+      tableMode === "storyboard-fields" ||
+      (tableMode === undefined && cells.length === 4 && cleanScriptCell(cells[3]).length > 0);
+    const rawCopy = usesStoryboardFieldColumns
+      ? cleanScriptCell(cells[1])
+      : chooseChineseText(cleanScriptCell(cells[1]), cleanScriptCell(cells[2]));
+    const rawVisual = usesStoryboardFieldColumns
+      ? cleanScriptCell(cells[2]) || rawCopy
+      : cleanScriptCell(cells[3]) || rawCopy;
+    const rawAssetReference = usesStoryboardFieldColumns
+      ? cleanScriptCell(cells[3])
+      : cleanScriptCell(cells[4]);
+    const copy = rawCopy || `${project.productName} 分镜`;
     const fallbackAsset = selectSceneFallbackAsset(assets, scenes.length, fallbackAssetId);
     const sceneAsset = resolveDraftSceneAsset(rawAssetReference, rawVisual, assets, fallbackAsset);
     const visualPrompt = ensureMaterialConsistency(
@@ -231,10 +277,10 @@ const parseDraftScriptScenes = (
       projectId: project.id,
       order: scenes.length + 1,
       durationSeconds,
-      subtitle,
-      voiceover,
+      subtitle: copy,
+      voiceover: copy,
       visualPrompt,
-      assetRecallQuery: `${subtitle} ${rawVisual} ${rawAssetReference}`.trim(),
+      assetRecallQuery: `${copy} ${rawVisual} ${rawAssetReference}`.trim(),
       assetId: sceneAsset?.id,
       status: "generated",
     });
@@ -407,7 +453,7 @@ export const structureModelScript = (
   const parsedScenes = parseDraftScriptScenes(project, draftScript, assets, primaryAsset?.id);
   if (!draftScript || parsedScenes.length === 0) {
     throw new Error(
-      "Real script generation returned text that could not be parsed into storyboard scenes. The model must return a Markdown table with time, voiceover, subtitle, visual, and material columns.",
+      "Real script generation returned text that could not be parsed into storyboard scenes. The model must return a Markdown table with duration, copy, visual prompt, and material slot columns.",
     );
   }
 
