@@ -151,6 +151,33 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api build`
   - `corepack pnpm --filter @shopclip/web build`
 
+## 2026-06-02 Smart Edit Model Plan Normalization
+
+- Live verification after async deployment:
+  - `POST /api/projects/cmpqigao80001whl4g32ii0bv/smart-edit` returned `202` with queued render task `f69daa20-e10e-4bbc-8d45-cddd58bdfb94`.
+  - The task completed and produced COS export, but trace showed `smart-edit-plan-fallback`.
+  - Root cause: the general model had been called, but returned near-valid JSON with natural-language transition/audio values and empty source URL strings, causing strict schema parsing to reject the whole model plan.
+- Fix:
+  - `normalizeModelPlan` now merges model output with the local executable baseline by `sceneId`.
+  - Invalid transition/audio enum values fall back to the requested/local settings.
+  - Empty source URL strings are ignored so valid local `assetId`/`imageUrl` source data survives.
+  - Serious missing structure still fails and falls back; this fix only normalizes recoverable model-output shape issues.
+- Regression coverage:
+  - Added a planner provider test where the model returns `transition: "quick push-in"`, `sceneClipUrl: ""`, `imageUrl: ""`, `bgmTrack: "upbeat pop music"`, and `voice: "female creator"`.
+  - Expected behavior is `fallback.used === false` with normalized `cut`, `creator-pop`, `clear-host`, and valid source asset information.
+- Live verification after deployment:
+  - `POST /api/projects/cmpqigao80001whl4g32ii0bv/smart-edit` returned `202` with queued render task `00b2943b-5d52-4b79-a924-5b3b9a565119`.
+  - Polling `/api/render-tasks/00b2943b-5d52-4b79-a924-5b3b9a565119` reached `completed`.
+  - Trace included `smart-edit-plan-model` and `smart-edit-ffmpeg-compose`.
+  - Final export URL: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmpqigao80001whl4g32ii0bv/smart-edits/6a2480a3-a7c6-415b-bb04-ef23f1bccbc2/export.mp4`.
+  - Extracted frame from the export showed readable Chinese burned subtitle: `这软萌小猫水杯颜值也太戳少女心了！`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts src/smart-edit-flow.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/api build`
+
 ## 2026-06-02 Subtitle Rendering Fix
 
 - Root cause investigation:
