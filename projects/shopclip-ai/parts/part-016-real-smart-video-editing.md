@@ -326,3 +326,9 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/api build`
+- Live verification after deploy:
+  - Deployed commit `d2fff9e` with `/www/wwwroot/shopclip-ai/deploy.sh`.
+  - `POST /api/projects/cmpqigao80001whl4g32ii0bv/smart-edit` with `videoSettings: { ratio: "16:9", resolution: "480p" }` completed as task `fcca8ed2-bda6-4cbd-852f-85e04a194cc9`.
+  - Trace included `smart-edit-plan-model` and `smart-edit-ffmpeg-compose`.
+  - Export URL: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmpqigao80001whl4g32ii0bv/smart-edits/d0d3711b-d620-46e2-96c0-a3a07edc821b/export.mp4`.
+  - Server `ffmpeg -i` reported the exported stream as `854x480`, proving the requested horizontal 480p geometry was applied.
