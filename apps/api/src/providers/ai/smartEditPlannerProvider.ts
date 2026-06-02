@@ -1,0 +1,416 @@
+import type {
+  AssetMetadata,
+  AssetSlice,
+  InspirationGenerateRequest,
+  ProjectBrief,
+  SmartEditPlan,
+  SmartEditRequest,
+  StoryboardScene,
+} from "@shopclip/shared";
+import { SmartEditPlanSchema } from "@shopclip/shared";
+import { randomUUID } from "node:crypto";
+
+const DEFAULT_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+const DEFAULT_GENERAL_MODEL = "doubao-seed-2-0-pro-260215";
+const PROVIDER_ID = "smart-edit-planner";
+const REAL_PROVIDER_MODES = ["ark", "doubao", "real", "volcengine-ark"];
+
+interface ProviderConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  provider: string;
+}
+
+export interface SmartEditPlannerInput {
+  apiConfig?: InspirationGenerateRequest["apiConfig"];
+  assets: AssetMetadata[];
+  assetSlices: AssetSlice[];
+  project: ProjectBrief & { id: string };
+  request: SmartEditRequest;
+  scenes: StoryboardScene[];
+}
+
+export interface SmartEditPlannerResult {
+  fallback: {
+    provider: string;
+    reason?: string;
+    used: boolean;
+  };
+  plan: SmartEditPlan;
+}
+
+const firstEnv = (...keys: string[]) => {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+const providerMode = () => (process.env.AI_PROVIDER_MODE ?? "ark").trim().toLowerCase();
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const getResponsesApiText = (body: unknown) => {
+  if (!isRecord(body)) {
+    return undefined;
+  }
+  const outputText = getString(body.output_text);
+  if (outputText) {
+    return outputText;
+  }
+  const output = Array.isArray(body.output) ? body.output : [];
+  for (const outputItem of output) {
+    if (!isRecord(outputItem)) {
+      continue;
+    }
+    const content = Array.isArray(outputItem.content) ? outputItem.content : [];
+    for (const contentItem of content) {
+      if (isRecord(contentItem)) {
+        const text = getString(contentItem.text);
+        if (text) {
+          return text;
+        }
+      }
+    }
+  }
+  return undefined;
+};
+
+const firstChatCompletionText = (body: unknown) => {
+  if (!isRecord(body) || !Array.isArray(body.choices)) {
+    return undefined;
+  }
+  const firstChoice = body.choices.find(isRecord);
+  const message = isRecord(firstChoice?.message) ? firstChoice.message : undefined;
+  return getString(message?.content) ?? getString(firstChoice?.text);
+};
+
+const extractJsonObject = (text: string): unknown => {
+  const trimmed = text.trim();
+  const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
+  const jsonText = fenced?.[1]?.trim() ?? trimmed;
+  try {
+    return JSON.parse(jsonText);
+  } catch {
+    const start = jsonText.indexOf("{");
+    const end = jsonText.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(jsonText.slice(start, end + 1));
+    }
+    throw new Error("Smart edit model response did not contain valid JSON.");
+  }
+};
+
+const isArkProvider = (provider?: string) => {
+  const providerId = provider?.trim().toLowerCase();
+  return providerId === "volcengine-ark" || providerId === "ark" || providerId === "doubao";
+};
+
+const hasUserGeneralConfigInput = (apiConfig?: InspirationGenerateRequest["apiConfig"]) => {
+  const general = apiConfig?.general;
+  return Boolean(
+    general?.credentialSource === "official" ||
+      general?.apiKey?.trim() ||
+      general?.model?.trim() ||
+      general?.apiBaseUrl?.trim() ||
+      general?.provider?.trim(),
+  );
+};
+
+const getRequiredConfig = (
+  apiConfig?: InspirationGenerateRequest["apiConfig"],
+): ProviderConfig | undefined => {
+  const mode = providerMode();
+  const hasUserConfig = hasUserGeneralConfigInput(apiConfig);
+  if (mode === "mock" && !hasUserConfig) {
+    return undefined;
+  }
+  if (!REAL_PROVIDER_MODES.includes(mode) && !hasUserConfig) {
+    throw new Error(
+      `Unsupported AI_PROVIDER_MODE=${mode}. Use ark/real for business runs, or explicitly set mock for tests.`,
+    );
+  }
+
+  const userConfig = apiConfig?.general;
+  if (userConfig?.credentialSource === "official") {
+    const apiKey = firstEnv("AI_GENERAL_API_KEY", "AI_TEXT_API_KEY", "ARK_API_KEY", "AI_API_KEY");
+    if (!apiKey) {
+      return undefined;
+    }
+    return {
+      apiKey,
+      baseUrl: (process.env.ARK_API_BASE_URL ?? DEFAULT_ARK_BASE_URL).replace(/\/$/, ""),
+      model:
+        firstEnv("AI_GENERAL_MODEL_ID", "AI_TEXT_MODEL_ID", "AI_TEXT_ENDPOINT_ID") ??
+        DEFAULT_GENERAL_MODEL,
+      provider: "volcengine-ark",
+    };
+  }
+
+  if (userConfig?.apiKey?.trim() && userConfig.model?.trim() && userConfig.apiBaseUrl?.trim()) {
+    return {
+      apiKey: userConfig.apiKey.trim(),
+      baseUrl: userConfig.apiBaseUrl.trim().replace(/\/$/, ""),
+      model: userConfig.model.trim(),
+      provider: userConfig.provider?.trim() || "user-configured-provider",
+    };
+  }
+
+  if (hasUserGeneralConfigInput(apiConfig)) {
+    return undefined;
+  }
+
+  const apiKey = firstEnv("AI_GENERAL_API_KEY", "AI_TEXT_API_KEY", "ARK_API_KEY", "AI_API_KEY");
+  if (!apiKey) {
+    return undefined;
+  }
+  return {
+    apiKey,
+    baseUrl: (process.env.ARK_API_BASE_URL ?? DEFAULT_ARK_BASE_URL).replace(/\/$/, ""),
+    model:
+      firstEnv("AI_GENERAL_MODEL_ID", "AI_TEXT_MODEL_ID", "AI_TEXT_ENDPOINT_ID") ??
+      DEFAULT_GENERAL_MODEL,
+    provider: "volcengine-ark",
+  };
+};
+
+const postJson = async (
+  path: string,
+  config: ProviderConfig,
+  body: Record<string, unknown>,
+): Promise<unknown> => {
+  const response = await fetch(`${config.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${config.apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const responseBody = await response.json().catch(() => undefined);
+  if (!response.ok) {
+    const responseSummary = isRecord(responseBody)
+      ? ` ${JSON.stringify(responseBody).slice(0, 240)}`
+      : "";
+    throw new Error(`${PROVIDER_ID} failed with HTTP ${response.status}.${responseSummary}`);
+  }
+  return responseBody;
+};
+
+const sourceForScene = (
+  scene: StoryboardScene,
+  assets: AssetMetadata[],
+  assetSlices: AssetSlice[],
+): SmartEditPlan["segments"][number]["source"] => {
+  const linkedAsset = assets.find((asset) => asset.id === scene.assetId) ?? assets[0];
+  if (!linkedAsset) {
+    return {
+      imageUrl:
+        scene.imageUrl ||
+        "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='720'%20height='1280'%3E%3Crect%20width='720'%20height='1280'%20fill='%23111111'/%3E%3C/svg%3E",
+      kind: "fallback-still",
+    };
+  }
+  const slices = assetSlices.filter((slice) => slice.assetId === linkedAsset.id);
+  const bestSlice =
+    slices.find((slice) => slice.metadata?.suitableSceneRoles.length) ?? slices[0];
+  if (linkedAsset.type === "video" && bestSlice) {
+    return {
+      assetId: linkedAsset.id,
+      endSecond: bestSlice.endSecond,
+      kind: "video-slice",
+      sliceId: bestSlice.id,
+      startSecond: bestSlice.startSecond,
+    };
+  }
+  return {
+    assetId: linkedAsset.id,
+    imageUrl: scene.imageUrl || linkedAsset.url,
+    kind: "image-asset",
+  };
+};
+
+const createLocalPlan = (
+  input: SmartEditPlannerInput,
+  reason: string,
+): SmartEditPlannerResult => {
+  const overrides = new Map(input.request.segments.map((segment) => [segment.sceneId, segment]));
+  const segments = input.scenes
+    .sort((left, right) => left.order - right.order)
+    .map((scene, index) => {
+      const override = overrides.get(scene.id);
+      const source = override?.source ?? sourceForScene(scene, input.assets, input.assetSlices);
+      const linkedAsset = source.assetId
+        ? input.assets.find((asset) => asset.id === source.assetId)
+        : undefined;
+      return {
+        id: `edit_segment_${scene.id}`,
+        assetTags: linkedAsset?.tags ?? [],
+        durationSeconds: override?.durationSeconds ?? scene.durationSeconds,
+        enabled: override?.enabled ?? true,
+        order: index + 1,
+        rationale:
+          linkedAsset || scene.imageUrl
+            ? "Selected the closest structured asset or generated scene visual for this storyboard scene."
+            : "No matching asset was available, so the segment keeps the storyboard still as a fallback.",
+        sceneId: scene.id,
+        source,
+        subtitle: override?.subtitle ?? scene.subtitle,
+        transition: override?.transition ?? (index === 0 ? "cut" : "fade"),
+        voiceover: override?.voiceover ?? scene.voiceover,
+      } satisfies SmartEditPlan["segments"][number];
+    });
+  const targetDurationSeconds = Math.min(
+    60,
+    Math.max(
+      1,
+      segments
+        .filter((segment) => segment.enabled)
+        .reduce((sum, segment) => sum + segment.durationSeconds, 0),
+    ),
+  );
+  return {
+    fallback: {
+      provider: "local-smart-edit-planner",
+      reason,
+      used: true,
+    },
+    plan: SmartEditPlanSchema.parse({
+      id: randomUUID(),
+      audio: {
+        bgmTrack: input.request.mediaSettings.bgmTrack,
+        targetLanguage: input.request.targetLanguage,
+        voice: input.request.mediaSettings.ttsVoice,
+      },
+      createdAt: new Date().toISOString(),
+      projectId: input.project.id,
+      segments,
+      strategy:
+        "Match each storyboard scene to the strongest structured asset slice, add compact fades, burn subtitles, and keep the total edit short.",
+      targetDurationSeconds,
+    }),
+  };
+};
+
+const SYSTEM_PROMPT = [
+  "You are a senior ecommerce video editor and growth creative director.",
+  "Create a real ffmpeg-ready edit plan for <=60s ecommerce product videos.",
+  "Use only the provided merchant-owned assets, generated scene clips, or structured slices.",
+  "Return only JSON. Do not wrap JSON in markdown.",
+  "Every segment must include: sceneId, order, durationSeconds, transition, subtitle, voiceover, source, rationale.",
+  "source.kind must be one of video-slice, image-asset, generated-scene-clip, fallback-still.",
+].join("\n");
+
+const buildPrompt = (input: SmartEditPlannerInput): string =>
+  [
+    `Project: ${input.project.title}`,
+    `Product: ${input.project.productName}`,
+    `Audience: ${input.project.audience}`,
+    `Selling points: ${input.project.sellingPoints.join(", ")}`,
+    `Style: ${input.project.style}`,
+    `Locale: ${input.request.locale}`,
+    input.request.targetLanguage ? `Target language: ${input.request.targetLanguage}` : undefined,
+    input.request.instructions ? `User edit instructions: ${input.request.instructions}` : undefined,
+    "",
+    "Storyboard scenes:",
+    JSON.stringify(input.scenes, null, 2),
+    "",
+    "Structured assets:",
+    JSON.stringify(
+      input.assets.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        type: asset.type,
+        url: asset.url,
+        tags: asset.tags,
+        structuredMetadata: asset.structuredMetadata ?? asset.metadata,
+      })),
+      null,
+      2,
+    ),
+    "",
+    "Structured slices:",
+    JSON.stringify(input.assetSlices, null, 2),
+    "",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, imageUrl, startSecond, endSecond, kind }, assetTags, rationale }] }",
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+
+const normalizeModelPlan = (rawPlan: unknown, input: SmartEditPlannerInput): SmartEditPlan => {
+  const raw = isRecord(rawPlan) ? rawPlan : {};
+  const local = createLocalPlan(input, "Local normalization baseline.").plan;
+  return SmartEditPlanSchema.parse({
+    ...local,
+    ...raw,
+    id: getString(raw.id) ?? randomUUID(),
+    projectId: input.project.id,
+    createdAt: getString(raw.createdAt) ?? new Date().toISOString(),
+    audio: {
+      ...local.audio,
+      ...(isRecord(raw.audio) ? raw.audio : {}),
+    },
+    segments: Array.isArray(raw.segments) && raw.segments.length > 0 ? raw.segments : local.segments,
+  });
+};
+
+export const createSmartEditPlan = async (
+  input: SmartEditPlannerInput,
+): Promise<SmartEditPlannerResult> => {
+  if (input.scenes.length === 0) {
+    throw new Error("Storyboard scenes are required before smart editing.");
+  }
+
+  const config = getRequiredConfig(input.apiConfig);
+  if (!config) {
+    return createLocalPlan(
+      input,
+      "General model configuration is missing; used deterministic local planning.",
+    );
+  }
+
+  try {
+    const prompt = buildPrompt(input);
+    const body = isArkProvider(config.provider)
+      ? await postJson("/responses", config, {
+          model: config.model,
+          input: [
+            { role: "system", content: [{ type: "input_text", text: SYSTEM_PROMPT }] },
+            { role: "user", content: [{ type: "input_text", text: prompt }] },
+          ],
+          temperature: 0.25,
+        })
+      : await postJson("/chat/completions", config, {
+          model: config.model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.25,
+        });
+    const text = getResponsesApiText(body) ?? firstChatCompletionText(body);
+    if (!text) {
+      throw new Error("Smart edit model did not return text.");
+    }
+    return {
+      fallback: {
+        provider: config.provider,
+        used: false,
+      },
+      plan: normalizeModelPlan(extractJsonObject(text), input),
+    };
+  } catch (error) {
+    return createLocalPlan(
+      input,
+      error instanceof Error ? error.message : "Smart edit model planning failed.",
+    );
+  }
+};

@@ -10,6 +10,8 @@ import type {
   AssetUploadIntent,
   ExternalAssetResult,
   ReferenceVideo,
+  SmartEditPlan,
+  SmartEditSegmentOutput,
   ScriptGenerationRequest,
   ScriptResult,
   SceneRenderClip,
@@ -23,6 +25,9 @@ import {
   ProjectPrepUpdateSchema,
   ExternalAssetResultSchema,
   RenderRequestSchema,
+  SmartEditRequestSchema,
+  SmartEditResultSchema,
+  SmartEditSegmentRefreshRequestSchema,
   SceneRegenerationRequestSchema,
   SceneUpdateSchema,
   ScriptGenerationRequestSchema,
@@ -59,6 +64,7 @@ import {
 } from "../../providers/assets/externalAssetProviders.js";
 import type { ReferenceDownloadProvider } from "../../providers/references/referenceDownloadProvider.js";
 import { generateEditingSuggestions } from "../../providers/ai/editingAgentProvider.js";
+import { createSmartEditPlan } from "../../providers/ai/smartEditPlannerProvider.js";
 import { generateInspiration } from "../../providers/ai/arkInspirationProvider.js";
 import { extractScriptTemplateWithGeneralModel } from "../../providers/ai/scriptTemplateExtractionProvider.js";
 import {
@@ -79,6 +85,10 @@ import {
   createCosRenderExportPublisher,
   type RenderExportPublisher,
 } from "../../providers/renderer/renderExportPublisher.js";
+import {
+  composeSmartEditToStorage,
+  smartEditSegmentOutputsForResponse,
+} from "../../providers/renderer/smartEditComposer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { MemoryProjectStore } from "./memoryStore.js";
@@ -1175,6 +1185,8 @@ export type SceneClipComposer = (
   projectId: string,
   clips: SceneRenderClip[],
 ) => Promise<string | undefined>;
+export type SmartEditPlanner = typeof createSmartEditPlan;
+export type SmartEditComposer = typeof composeSmartEditToStorage;
 
 const downloadExternalAsset: ExternalAssetDownloader = async (asset) => {
   const sourceUrl = asset.downloadUrl ?? asset.previewUrl;
@@ -1237,6 +1249,71 @@ const filterAssetLibrary = (
   };
 };
 
+const segmentOutputsByScene = (
+  outputs: SmartEditSegmentOutput[],
+): Map<string, SmartEditSegmentOutput> =>
+  new Map(outputs.map((output) => [output.sceneId, output]));
+
+const buildSmartEditRefreshPlan = ({
+  currentPlan,
+  projectId,
+  refreshedSegment,
+  segmentOutputs,
+  targetSceneId,
+}: {
+  currentPlan: SmartEditPlan;
+  projectId: string;
+  refreshedSegment: SmartEditPlan["segments"][number];
+  segmentOutputs: SmartEditSegmentOutput[];
+  targetSceneId: string;
+}): SmartEditPlan => {
+  const outputsByScene = segmentOutputsByScene(segmentOutputs);
+  const segments = currentPlan.segments.map((segment) => {
+    if (segment.sceneId === targetSceneId) {
+      return {
+        ...refreshedSegment,
+        id: `edit_segment_${targetSceneId}_${randomUUID()}`,
+        order: segment.order,
+      };
+    }
+    if (!segment.enabled) {
+      return segment;
+    }
+    const previousOutput = outputsByScene.get(segment.sceneId);
+    if (!previousOutput) {
+      throw new Error(
+        `Missing reusable smart edit segment output for scene ${segment.sceneId}. Run a full smart edit first.`,
+      );
+    }
+    return {
+      ...segment,
+      rationale: `${segment.rationale} Reused the previous uploaded segment during partial refresh.`,
+      source: {
+        kind: "generated-scene-clip" as const,
+        sceneClipUrl: previousOutput.videoUrl,
+      },
+    };
+  });
+  const targetDurationSeconds = Math.min(
+    60,
+    Math.max(
+      1,
+      segments
+        .filter((segment) => segment.enabled)
+        .reduce((sum, segment) => sum + segment.durationSeconds, 0),
+    ),
+  );
+  return {
+    ...currentPlan,
+    id: randomUUID(),
+    createdAt: new Date().toISOString(),
+    projectId,
+    segments,
+    strategy: `${currentPlan.strategy} Partial refresh reused existing segment outputs and recomposed the final video.`,
+    targetDurationSeconds,
+  };
+};
+
 export interface P0RouterOptions {
   cosAssetSearch?: (
     input: CosIntelligentSearchInput,
@@ -1247,6 +1324,8 @@ export interface P0RouterOptions {
   renderExportPublisher?: RenderExportPublisher;
   referenceDownloader?: ReferenceDownloadProvider;
   sceneClipComposer?: SceneClipComposer;
+  smartEditComposer?: SmartEditComposer;
+  smartEditPlanner?: SmartEditPlanner;
   videoFrameExtractor?: VideoFrameExtractor;
 }
 
@@ -1256,6 +1335,8 @@ export const createP0Router = ({
   referenceDownloader,
   renderExportPublisher,
   sceneClipComposer,
+  smartEditComposer = composeSmartEditToStorage,
+  smartEditPlanner = createSmartEditPlan,
   store = new MemoryProjectStore(),
   storageProvider = new CosStorageProvider(),
   videoFrameExtractor = extractVideoReferenceFrames,
@@ -3026,6 +3107,288 @@ export const createP0Router = ({
     }
 
     response.status(201).json(storedRender);
+  });
+
+  router.post("/projects/:projectId/smart-edit", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    if (project.scenes.length === 0) {
+      sendInvalidRequest(
+        response,
+        "STORYBOARD_REQUIRED",
+        "Generate a storyboard before smart editing.",
+      );
+      return;
+    }
+
+    const parsedSmartEditRequest = SmartEditRequestSchema.safeParse(request.body ?? {});
+    if (!parsedSmartEditRequest.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SMART_EDIT_REQUEST",
+        "Smart edit settings are invalid.",
+      );
+      return;
+    }
+
+    let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
+    try {
+      plannerResult = await smartEditPlanner({
+        apiConfig: parsedSmartEditRequest.data.apiConfig,
+        assets: project.assets,
+        assetSlices: project.assetSlices,
+        project,
+        request: parsedSmartEditRequest.data,
+        scenes: project.scenes,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "SMART_EDIT_PLAN_FAILED",
+          message: error instanceof Error ? error.message : "Smart edit planning failed.",
+        },
+      });
+      return;
+    }
+
+    let exportResult: Awaited<ReturnType<SmartEditComposer>>;
+    try {
+      exportResult = await smartEditComposer(project.id, plannerResult.plan, project.assets, {
+        storageProvider,
+        subtitlesEnabled: parsedSmartEditRequest.data.mediaSettings.subtitlesEnabled,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "SMART_EDIT_COMPOSE_FAILED",
+          message: error instanceof Error ? error.message : "Smart edit ffmpeg composition failed.",
+        },
+      });
+      return;
+    }
+
+    const segmentClips = plannerResult.plan.segments
+      .filter((segment) => segment.enabled)
+      .map((segment) => ({
+        sceneId: segment.sceneId,
+        order: segment.order,
+        progress: 100,
+        status: "completed" as const,
+        subtitle: segment.subtitle,
+        videoUrl: exportResult.publicUrl,
+      }));
+
+    const storedEditRender = await store.addRenderTask(
+      project.id,
+      {
+        exportUrl: exportResult.publicUrl,
+        mediaSettings: parsedSmartEditRequest.data.mediaSettings,
+        previewUrl: exportResult.publicUrl,
+        progress: 100,
+        provider: "smart-edit-ffmpeg",
+        providerTaskId: plannerResult.plan.id,
+        sceneClips: segmentClips,
+        status: "completed",
+        videoSettings: parsedSmartEditRequest.data.videoSettings,
+      },
+      [
+        {
+          status: plannerResult.fallback.used ? "retrying" : "completed",
+          step: plannerResult.fallback.used
+            ? "smart-edit-plan-fallback"
+            : "smart-edit-plan-model",
+          message: plannerResult.fallback.used
+            ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+            : `Smart edit planned by ${plannerResult.fallback.provider}.`,
+        },
+        {
+          status: "completed",
+          step: "smart-edit-ffmpeg-compose",
+          message: "Smart edit video composed with ffmpeg and uploaded to storage.",
+        },
+      ],
+    );
+
+    if (!storedEditRender) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const result = SmartEditResultSchema.parse({
+      exportUrl: exportResult.publicUrl,
+      plan: plannerResult.plan,
+      previewUrl: exportResult.publicUrl,
+      renderTaskId: storedEditRender.renderTask.id,
+      segmentOutputs: smartEditSegmentOutputsForResponse(exportResult.segmentOutputs),
+      traceEvents: storedEditRender.traceEvents,
+    });
+
+    response.status(201).json(result);
+  });
+
+  router.post("/projects/:projectId/smart-edit/segments/:sceneId/refresh", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const targetScene = project.scenes.find((scene) => scene.id === request.params.sceneId);
+    if (!targetScene) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Storyboard scene was not found.");
+      return;
+    }
+
+    const parsedRefreshRequest = SmartEditSegmentRefreshRequestSchema.safeParse(
+      request.body ?? {},
+    );
+    if (!parsedRefreshRequest.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SMART_EDIT_REFRESH_REQUEST",
+        "Smart edit segment refresh settings are invalid.",
+      );
+      return;
+    }
+
+    const refreshRequest = parsedRefreshRequest.data;
+    let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
+    try {
+      plannerResult = await smartEditPlanner({
+        apiConfig: refreshRequest.apiConfig,
+        assets: project.assets,
+        assetSlices: project.assetSlices,
+        project,
+        request: {
+          apiConfig: refreshRequest.apiConfig,
+          instructions: refreshRequest.instructions,
+          locale: refreshRequest.locale,
+          mediaSettings: refreshRequest.mediaSettings,
+          segments: refreshRequest.segment ? [refreshRequest.segment] : [],
+          targetLanguage: refreshRequest.targetLanguage,
+          videoSettings: refreshRequest.videoSettings,
+        },
+        scenes: [targetScene],
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "SMART_EDIT_SEGMENT_PLAN_FAILED",
+          message:
+            error instanceof Error ? error.message : "Smart edit segment planning failed.",
+        },
+      });
+      return;
+    }
+
+    const refreshedSegment = plannerResult.plan.segments[0];
+    if (!refreshedSegment) {
+      response.status(502).json({
+        error: {
+          code: "SMART_EDIT_SEGMENT_PLAN_EMPTY",
+          message: "Smart edit segment planning returned no segment.",
+        },
+      });
+      return;
+    }
+
+    let refreshPlan: SmartEditPlan;
+    try {
+      refreshPlan = buildSmartEditRefreshPlan({
+        currentPlan: refreshRequest.currentPlan,
+        projectId: project.id,
+        refreshedSegment,
+        segmentOutputs: refreshRequest.segmentOutputs,
+        targetSceneId: targetScene.id,
+      });
+    } catch (error) {
+      sendInvalidRequest(
+        response,
+        "SMART_EDIT_SEGMENT_OUTPUTS_REQUIRED",
+        error instanceof Error ? error.message : "Reusable segment outputs are required.",
+      );
+      return;
+    }
+
+    let exportResult: Awaited<ReturnType<SmartEditComposer>>;
+    try {
+      exportResult = await smartEditComposer(project.id, refreshPlan, project.assets, {
+        storageProvider,
+        subtitlesEnabled: refreshRequest.mediaSettings.subtitlesEnabled,
+      });
+    } catch (error) {
+      response.status(502).json({
+        error: {
+          code: "SMART_EDIT_SEGMENT_COMPOSE_FAILED",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Smart edit segment refresh ffmpeg composition failed.",
+        },
+      });
+      return;
+    }
+
+    const storedEditRender = await store.addRenderTask(
+      project.id,
+      {
+        exportUrl: exportResult.publicUrl,
+        mediaSettings: refreshRequest.mediaSettings,
+        previewUrl: exportResult.publicUrl,
+        progress: 100,
+        provider: "smart-edit-ffmpeg",
+        providerTaskId: refreshPlan.id,
+        sceneClips: refreshPlan.segments
+          .filter((segment) => segment.enabled)
+          .map((segment) => ({
+            sceneId: segment.sceneId,
+            order: segment.order,
+            progress: 100,
+            status: "completed" as const,
+            subtitle: segment.subtitle,
+            videoUrl: segment.sceneId === targetScene.id ? exportResult.publicUrl : undefined,
+          })),
+        status: "completed",
+        videoSettings: refreshRequest.videoSettings,
+      },
+      [
+        {
+          status: plannerResult.fallback.used ? "retrying" : "completed",
+          step: plannerResult.fallback.used
+            ? "smart-edit-segment-plan-fallback"
+            : "smart-edit-segment-plan-model",
+          message: plannerResult.fallback.used
+            ? `Segment refresh used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+            : `Segment refresh planned by ${plannerResult.fallback.provider}.`,
+        },
+        {
+          status: "completed",
+          step: "smart-edit-segment-refresh-compose",
+          message:
+            "Selected segment was refreshed; unchanged segments reused uploaded segment outputs before final ffmpeg composition.",
+        },
+      ],
+    );
+
+    if (!storedEditRender) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const result = SmartEditResultSchema.parse({
+      exportUrl: exportResult.publicUrl,
+      plan: refreshPlan,
+      previewUrl: exportResult.publicUrl,
+      renderTaskId: storedEditRender.renderTask.id,
+      segmentOutputs: smartEditSegmentOutputsForResponse(exportResult.segmentOutputs),
+      traceEvents: storedEditRender.traceEvents,
+    });
+
+    response.status(201).json(result);
   });
 
   router.get("/projects/:projectId/export", async (request, response) => {

@@ -52,6 +52,16 @@ import type {
   ScriptGenerationRequestSchema,
   ScriptResultSchema,
   ShotTypeSchema,
+  SmartEditAudioPlanSchema,
+  SmartEditPlanSchema,
+  SmartEditRequestSchema,
+  SmartEditResultSchema,
+  SmartEditSegmentOutputSchema,
+  SmartEditSegmentOverrideSchema,
+  SmartEditSegmentRefreshRequestSchema,
+  SmartEditSegmentSchema,
+  SmartEditSourceSchema,
+  SmartEditTransitionSchema,
   StoryboardSceneSchema,
   ReferenceVideoAnalysisSchema,
   StructuredAssetMetadataSchema,
@@ -120,6 +130,18 @@ export type EditingSuggestion = z.infer<typeof EditingSuggestionSchema>;
 export type MediaSettings = z.infer<typeof MediaSettingsSchema>;
 export type VideoGenerationSettings = z.infer<typeof VideoGenerationSettingsSchema>;
 export type RenderRequest = z.infer<typeof RenderRequestSchema>;
+export type SmartEditTransition = z.infer<typeof SmartEditTransitionSchema>;
+export type SmartEditSource = z.infer<typeof SmartEditSourceSchema>;
+export type SmartEditSegmentOverride = z.infer<typeof SmartEditSegmentOverrideSchema>;
+export type SmartEditSegmentOutput = z.infer<typeof SmartEditSegmentOutputSchema>;
+export type SmartEditSegmentRefreshRequest = z.infer<
+  typeof SmartEditSegmentRefreshRequestSchema
+>;
+export type SmartEditRequest = z.infer<typeof SmartEditRequestSchema>;
+export type SmartEditSegment = z.infer<typeof SmartEditSegmentSchema>;
+export type SmartEditAudioPlan = z.infer<typeof SmartEditAudioPlanSchema>;
+export type SmartEditPlan = z.infer<typeof SmartEditPlanSchema>;
+export type SmartEditResult = z.infer<typeof SmartEditResultSchema>;
 export type SceneRenderClip = z.infer<typeof SceneRenderClipSchema>;
 export type RenderTask = z.infer<typeof RenderTaskSchema>;
 export type TraceEvent = z.infer<typeof TraceEventSchema>;

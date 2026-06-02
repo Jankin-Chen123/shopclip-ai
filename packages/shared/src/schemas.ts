@@ -615,6 +615,141 @@ export const RenderRequestSchema = z.object({
   simulateFailure: z.boolean().default(false),
 });
 
+export const SmartEditTransitionSchema = z.enum(["cut", "fade", "crossfade", "wipe"]);
+
+export const SmartEditSourceSchema = z
+  .object({
+    assetId: z.string().trim().min(1).optional(),
+    sliceId: z.string().trim().min(1).optional(),
+    sceneClipUrl: z.string().trim().min(1).optional(),
+    imageUrl: z.string().trim().min(1).optional(),
+    startSecond: z.number().min(0).optional(),
+    endSecond: z.number().positive().optional(),
+    kind: z.enum(["video-slice", "image-asset", "generated-scene-clip", "fallback-still"]),
+  })
+  .superRefine((source, context) => {
+    if (!source.assetId && !source.sceneClipUrl && !source.imageUrl) {
+      context.addIssue({
+        code: "custom",
+        message: "Smart edit source requires assetId, sceneClipUrl, or imageUrl.",
+        path: ["assetId"],
+      });
+    }
+    if (
+      source.startSecond !== undefined &&
+      source.endSecond !== undefined &&
+      source.endSecond <= source.startSecond
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Smart edit source endSecond must be greater than startSecond.",
+        path: ["endSecond"],
+      });
+    }
+  });
+
+export const SmartEditSegmentOverrideSchema = z.object({
+  sceneId: z.string().trim().min(1),
+  enabled: z.boolean().default(true),
+  durationSeconds: z.number().positive().max(15).optional(),
+  transition: SmartEditTransitionSchema.default("cut"),
+  subtitle: z.string().trim().min(1).optional(),
+  voiceover: z.string().trim().min(1).optional(),
+  source: SmartEditSourceSchema.optional(),
+});
+
+export const SmartEditRequestSchema = z.object({
+  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
+  locale: z.string().trim().min(2).max(20).default("zh-CN"),
+  targetLanguage: z.string().trim().min(2).max(20).optional(),
+  mediaSettings: MediaSettingsSchema.default({
+    bgmTrack: "creator-pop",
+    subtitleStyle: "clean-lower-third",
+    subtitlesEnabled: true,
+    ttsVoice: "clear-host",
+  }),
+  videoSettings: VideoGenerationSettingsSchema.default({
+    ratio: "9:16",
+    resolution: "720p",
+    generateAudio: false,
+    watermark: false,
+  }),
+  segments: z.array(SmartEditSegmentOverrideSchema).max(40).default([]),
+  instructions: z.string().trim().max(2000).optional(),
+});
+
+export const SmartEditSegmentSchema = z.object({
+  id: z.string().trim().min(1),
+  sceneId: z.string().trim().min(1),
+  order: z.number().int().min(1),
+  enabled: z.boolean().default(true),
+  durationSeconds: z.number().positive().max(15),
+  transition: SmartEditTransitionSchema.default("cut"),
+  subtitle: z.string().trim().min(1),
+  voiceover: z.string().trim().min(1),
+  source: SmartEditSourceSchema,
+  assetTags: z.array(z.string().trim().min(1)).default([]),
+  rationale: z.string().trim().min(1),
+});
+
+export const SmartEditAudioPlanSchema = z.object({
+  bgmTrack: MediaSettingsSchema.shape.bgmTrack.default("creator-pop"),
+  targetLanguage: z.string().trim().min(2).max(20).optional(),
+  voice: MediaSettingsSchema.shape.ttsVoice.default("clear-host"),
+});
+
+export const SmartEditPlanSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    projectId: z.string().trim().min(1),
+    strategy: z.string().trim().min(1),
+    targetDurationSeconds: z.number().positive().max(60),
+    segments: z.array(SmartEditSegmentSchema).min(1).max(40),
+    audio: SmartEditAudioPlanSchema,
+    createdAt: IsoDateTimeSchema,
+  })
+  .superRefine((plan, context) => {
+    const enabledDuration = plan.segments
+      .filter((segment) => segment.enabled)
+      .reduce((sum, segment) => sum + segment.durationSeconds, 0);
+    if (enabledDuration > plan.targetDurationSeconds + 0.001) {
+      context.addIssue({
+        code: "custom",
+        message: "Enabled smart edit segments exceed targetDurationSeconds.",
+        path: ["segments"],
+      });
+    }
+  });
+
+export const SmartEditSegmentOutputSchema = z.object({
+  segmentId: z.string().trim().min(1),
+  sceneId: z.string().trim().min(1),
+  objectKey: z.string().trim().min(1),
+  videoUrl: z.string().trim().min(1),
+});
+
+export const SmartEditSegmentRefreshRequestSchema = z.object({
+  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
+  currentPlan: SmartEditPlanSchema,
+  segmentOutputs: z.array(SmartEditSegmentOutputSchema).min(1).max(40),
+  segment: SmartEditSegmentOverrideSchema.optional(),
+  locale: z.string().trim().min(2).max(20).default("zh-CN"),
+  targetLanguage: z.string().trim().min(2).max(20).optional(),
+  mediaSettings: MediaSettingsSchema.default({
+    bgmTrack: "creator-pop",
+    subtitleStyle: "clean-lower-third",
+    subtitlesEnabled: true,
+    ttsVoice: "clear-host",
+  }),
+  videoSettings: VideoGenerationSettingsSchema.default({
+    ratio: "9:16",
+    resolution: "720p",
+    generateAudio: false,
+    watermark: false,
+  }),
+  instructions: z.string().trim().max(2000).optional(),
+});
+
 export const SceneRenderClipSchema = z.object({
   sceneId: z.string().trim().min(1),
   order: z.number().int().min(1),
@@ -653,6 +788,15 @@ export const TraceEventSchema = z.object({
   message: z.string().trim().min(1),
   retryOfTraceEventId: z.string().trim().min(1).optional(),
   createdAt: IsoDateTimeSchema,
+});
+
+export const SmartEditResultSchema = z.object({
+  segmentOutputs: z.array(SmartEditSegmentOutputSchema).default([]),
+  plan: SmartEditPlanSchema,
+  renderTaskId: z.string().trim().min(1),
+  previewUrl: z.string().trim().min(1),
+  exportUrl: z.string().trim().min(1),
+  traceEvents: z.array(TraceEventSchema).default([]),
 });
 
 export const DashboardMetricSummarySchema = z.object({

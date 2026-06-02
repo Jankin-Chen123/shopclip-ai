@@ -14,6 +14,10 @@ import {
   RenderTaskSchema,
   ScriptGenerationRequestSchema,
   ScriptResultSchema,
+  SmartEditPlanSchema,
+  SmartEditRequestSchema,
+  SmartEditResultSchema,
+  SmartEditSegmentRefreshRequestSchema,
   StoryboardSceneSchema,
   TraceEventSchema,
 } from "./schemas";
@@ -114,6 +118,99 @@ describe("shared contract schemas", () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.sceneClips).toHaveLength(1);
+  });
+
+  it("validates real smart edit requests, plans, and results", () => {
+    const request = SmartEditRequestSchema.safeParse({
+      locale: "zh-CN",
+      targetLanguage: "zh-CN",
+      mediaSettings: {
+        bgmTrack: "creator-pop",
+        subtitleStyle: "clean-lower-third",
+        subtitlesEnabled: true,
+        ttsVoice: "clear-host",
+      },
+      videoSettings: {
+        ratio: "9:16",
+        resolution: "720p",
+        generateAudio: true,
+        watermark: false,
+      },
+      segments: [
+        {
+          sceneId: "scene_1",
+          enabled: true,
+          durationSeconds: 4,
+          transition: "fade",
+          subtitle: "谁能拒绝这个杯盖设计",
+          voiceover: "谁能拒绝这个杯盖设计",
+          source: {
+            assetId: "asset_video_1",
+            sliceId: "slice_1",
+            startSecond: 2,
+            endSecond: 6,
+            kind: "video-slice",
+          },
+        },
+      ],
+    });
+
+    expect(request.success).toBe(true);
+
+    const plan = SmartEditPlanSchema.safeParse({
+      id: "edit_plan_1",
+      projectId: "project_demo",
+      strategy: "Use slice-level product demos, short fades, Chinese captions, and BGM.",
+      targetDurationSeconds: 8,
+      segments: [
+        {
+          id: "segment_1",
+          sceneId: "scene_1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          transition: "fade",
+          subtitle: "谁能拒绝这个杯盖设计",
+          voiceover: "谁能拒绝这个杯盖设计",
+          source: {
+            assetId: "asset_video_1",
+            sliceId: "slice_1",
+            startSecond: 2,
+            endSecond: 6,
+            kind: "video-slice",
+          },
+          assetTags: ["demo", "closeup"],
+          rationale: "The selected slice shows the lid action clearly.",
+        },
+      ],
+      audio: {
+        bgmTrack: "creator-pop",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      createdAt: "2026-06-02T00:00:00.000Z",
+    });
+
+    expect(plan.success).toBe(true);
+
+    expect(
+      SmartEditResultSchema.safeParse({
+        plan: plan.success ? plan.data : undefined,
+        previewUrl: "https://cdn.example.test/edit-preview.mp4",
+        exportUrl: "https://cdn.example.test/edit-export.mp4",
+        renderTaskId: "render_1",
+        traceEvents: [
+          {
+            id: "trace_1",
+            renderTaskId: "render_1",
+            status: "completed",
+            step: "smart-edit-compose",
+            message: "Edited video composed with ffmpeg.",
+            createdAt: "2026-06-02T00:00:01.000Z",
+          },
+        ],
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects invalid scene duration and scripts longer than 15 seconds", () => {
@@ -513,5 +610,93 @@ describe("shared contract schemas", () => {
       expect(parsed.data.providers.at(0)?.apiKey).toBeUndefined();
       expect(parsed.data.providers.at(1)?.credentialSource).toBe("custom");
     }
+  });
+
+  it("validates smart edit results and segment refresh requests with reusable segment outputs", () => {
+    const plan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Reuse existing segment outputs and refresh one scene.",
+      targetDurationSeconds: 8,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "creator-pop",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          transition: "cut",
+          subtitle: "开头钩子",
+          voiceover: "开头钩子",
+          source: {
+            assetId: "asset-1",
+            imageUrl: "https://cdn.example.test/asset-1.png",
+            kind: "image-asset",
+          },
+          assetTags: ["hero"],
+          rationale: "Use the hero packshot.",
+        },
+        {
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          enabled: true,
+          durationSeconds: 4,
+          transition: "fade",
+          subtitle: "行动引导",
+          voiceover: "行动引导",
+          source: {
+            assetId: "asset-2",
+            imageUrl: "https://cdn.example.test/asset-2.png",
+            kind: "image-asset",
+          },
+          assetTags: ["cta"],
+          rationale: "Use the CTA packshot.",
+        },
+      ],
+    };
+    const segmentOutputs = [
+      {
+        objectKey: "projects/project-1/smart-edits/export-1/segments/segment-1.mp4",
+        sceneId: "scene-1",
+        segmentId: "segment-1",
+        videoUrl: "https://cdn.example.test/segment-1.mp4",
+      },
+      {
+        objectKey: "projects/project-1/smart-edits/export-1/segments/segment-2.mp4",
+        sceneId: "scene-2",
+        segmentId: "segment-2",
+        videoUrl: "https://cdn.example.test/segment-2.mp4",
+      },
+    ];
+
+    expect(
+      SmartEditResultSchema.safeParse({
+        plan,
+        segmentOutputs,
+        renderTaskId: "render-1",
+        previewUrl: "https://cdn.example.test/export.mp4",
+        exportUrl: "https://cdn.example.test/export.mp4",
+        traceEvents: [],
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SmartEditSegmentRefreshRequestSchema.safeParse({
+        currentPlan: plan,
+        segmentOutputs,
+        segment: {
+          sceneId: "scene-2",
+          subtitle: "刷新后的行动引导",
+          transition: "crossfade",
+        },
+      }).success,
+    ).toBe(true);
   });
 });

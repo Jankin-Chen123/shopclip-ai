@@ -29,6 +29,9 @@ import type {
   SceneUpdate,
   ScriptGenerationRequest,
   ScriptResult,
+  SmartEditRequest,
+  SmartEditResult,
+  SmartEditSegmentRefreshRequest,
   StoryboardScene,
   TraceEvent,
   ViralTemplate,
@@ -557,6 +560,25 @@ export const retryRenderTask = async (
     body: JSON.stringify(request),
   });
 
+export const startSmartEdit = async (
+  projectId: string,
+  request: SmartEditRequest,
+): Promise<SmartEditResult> =>
+  requestJson(`/projects/${projectId}/smart-edit`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+export const refreshSmartEditSegment = async (
+  projectId: string,
+  sceneId: string,
+  request: SmartEditSegmentRefreshRequest,
+): Promise<SmartEditResult> =>
+  requestJson(`/projects/${projectId}/smart-edit/segments/${sceneId}/refresh`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
 export const exportProject = async (projectId: string): Promise<ExportResult> => {
   const response = await requestJson<ExportResult>(`/projects/${projectId}/export`);
   return {
@@ -647,6 +669,9 @@ export type {
   MediaSettings,
   ReferenceVideo,
   RenderRequest,
+  SmartEditRequest,
+  SmartEditResult,
+  SmartEditSegmentRefreshRequest,
   ViralTemplate,
   VideoGenerationSettings,
 };

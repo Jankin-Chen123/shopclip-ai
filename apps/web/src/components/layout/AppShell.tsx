@@ -9,6 +9,7 @@ import {
   FolderKanban,
   Images,
   Lightbulb,
+  Scissors,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -23,6 +24,7 @@ export type WorkspacePageId =
   | "create"
   | "studio"
   | "delivery"
+  | "edit"
   | "dashboard";
 
 export type WorkspaceSectionId = "assets" | "inspiration" | "settings" | "create";
@@ -66,6 +68,11 @@ export const workspacePages: CreationWorkspacePage[] = [
     id: "delivery",
     accent: "green",
     icon: Download,
+  },
+  {
+    id: "edit",
+    accent: "violet",
+    icon: Scissors,
   },
   {
     id: "dashboard",

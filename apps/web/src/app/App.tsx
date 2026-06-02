@@ -11,6 +11,8 @@ import type {
   StoryboardScene,
   TraceEvent,
   ViralTemplate,
+  SmartEditPlan,
+  SmartEditResult,
 } from "@shopclip/shared";
 
 import {
@@ -28,6 +30,7 @@ import {
 import { AssetPrepPanel, type AssetPrepSnapshot } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
+import { SmartEditPanel } from "../features/edit/SmartEditPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
@@ -71,8 +74,10 @@ import {
   reorderScenes,
   retryRenderTask,
   rewriteScript,
+  refreshSmartEditSegment,
   searchAssets,
   searchExternalStockAssets,
+  startSmartEdit,
   startRender,
   updateProjectPrep,
   updateScene,
@@ -269,7 +274,14 @@ const defaultMediaSettings: MediaSettings = {
   ttsVoice: "clear-host",
 };
 
-const creationPageIds: CreationPageId[] = ["project", "create", "studio", "delivery", "dashboard"];
+const creationPageIds: CreationPageId[] = [
+  "project",
+  "create",
+  "studio",
+  "delivery",
+  "edit",
+  "dashboard",
+];
 
 const isCreationPage = (page: WorkspacePageId): page is CreationPageId =>
   creationPageIds.includes(page as CreationPageId);
@@ -282,6 +294,7 @@ type BusyState =
   | "script"
   | "scene"
   | "render"
+  | "smart-edit"
   | "export"
   | "dashboard"
   | "reference";
@@ -534,6 +547,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   const [selectedReferenceIdForScript, setSelectedReferenceIdForScript] = useState<string>();
   const [selectedTemplateIdForScript, setSelectedTemplateIdForScript] = useState<string>();
   const [selectedSceneId, setSelectedSceneId] = useState<string>();
+  const [selectedSmartEditSegmentId, setSelectedSmartEditSegmentId] = useState<string>();
+  const [smartEditInstructions, setSmartEditInstructions] = useState("");
+  const [smartEditResult, setSmartEditResult] = useState<SmartEditResult>();
+  const [smartEditTargetLanguage, setSmartEditTargetLanguage] = useState("zh-CN");
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
   const [viralTemplateLibrary, setViralTemplateLibrary] = useState<ViralTemplate[]>([]);
   const isReferencePollInFlight = useRef(false);
@@ -557,6 +574,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
     return [...assetsById.values()];
   }, [assetLibrary.assets, project?.assets]);
+  const smartEditAssetSlices = useMemo(
+    () => [...(project?.assetSlices ?? []), ...assetLibrary.assetSlices],
+    [assetLibrary.assetSlices, project?.assetSlices],
+  );
   const preparedProjectAssetsByBucket = useMemo(
     () => getPreparedAssetsByBucket(project?.assets ?? []),
     [project?.assets],
@@ -1887,6 +1908,110 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     });
   };
 
+  const createSmartEditRequest = () => ({
+    apiConfig,
+    instructions: smartEditInstructions || undefined,
+    locale: language === "zh" ? "zh-CN" : "en-US",
+    mediaSettings,
+    segments:
+      smartEditResult?.plan.segments.map((segment) => ({
+        sceneId: segment.sceneId,
+        durationSeconds: segment.durationSeconds,
+        enabled: segment.enabled,
+        source: segment.source,
+        subtitle: segment.subtitle,
+        transition: segment.transition,
+        voiceover: segment.voiceover,
+      })) ?? [],
+    targetLanguage: smartEditTargetLanguage.trim() || undefined,
+    videoSettings,
+  });
+
+  const applySmartEditResult = async (result: SmartEditResult) => {
+    setSmartEditResult(result);
+    setSelectedSmartEditSegmentId(result.plan.segments[0]?.id);
+    setExportResult(undefined);
+    const render = await loadRenderTask(result.renderTaskId);
+    setRenderTask(render.renderTask);
+    setTraceEvents(result.traceEvents.length > 0 ? result.traceEvents : render.traceEvents);
+    setProject((current) =>
+      current
+        ? {
+            ...current,
+            renderTasks: [
+              ...current.renderTasks.filter((task) => task.id !== render.renderTask.id),
+              render.renderTask,
+            ],
+            status: "completed",
+          }
+        : current,
+    );
+  };
+
+  const handleSmartEditPlanChange = (plan: SmartEditPlan) => {
+    setSmartEditResult((current) =>
+      current
+        ? {
+            ...current,
+            plan,
+          }
+        : current,
+    );
+  };
+
+  const handleStartSmartEdit = () => {
+    if (!project) {
+      setErrors((current) => ({ ...current, smartEdit: "Create or load a project first." }));
+      return;
+    }
+    if (scenes.length === 0) {
+      setErrors((current) => ({ ...current, smartEdit: "Generate a storyboard first." }));
+      return;
+    }
+
+    void runAction("smartEdit", "smart-edit", async () => {
+      await persistDirtyScenesForRender();
+      const result = await startSmartEdit(project.id, createSmartEditRequest());
+      await applySmartEditResult(result);
+    });
+  };
+
+  const handleRefreshSmartEditSegment = () => {
+    if (!project || !smartEditResult) {
+      setErrors((current) => ({ ...current, smartEdit: "Run smart edit before refreshing a segment." }));
+      return;
+    }
+    const selectedSegment =
+      smartEditResult.plan.segments.find((segment) => segment.id === selectedSmartEditSegmentId) ??
+      smartEditResult.plan.segments[0];
+    if (!selectedSegment) {
+      return;
+    }
+
+    void runAction("smartEdit", "smart-edit", async () => {
+      const result = await refreshSmartEditSegment(project.id, selectedSegment.sceneId, {
+        apiConfig,
+        currentPlan: smartEditResult.plan,
+        instructions: smartEditInstructions || undefined,
+        locale: language === "zh" ? "zh-CN" : "en-US",
+        mediaSettings,
+        segment: {
+          sceneId: selectedSegment.sceneId,
+          durationSeconds: selectedSegment.durationSeconds,
+          enabled: selectedSegment.enabled,
+          source: selectedSegment.source,
+          subtitle: selectedSegment.subtitle,
+          transition: selectedSegment.transition,
+          voiceover: selectedSegment.voiceover,
+        },
+        segmentOutputs: smartEditResult.segmentOutputs,
+        targetLanguage: smartEditTargetLanguage.trim() || undefined,
+        videoSettings,
+      });
+      await applySmartEditResult(result);
+    });
+  };
+
   const handleExport = () => {
     if (!project) {
       return;
@@ -2124,6 +2249,31 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                   onStartRender={handleStartRender}
                   renderTask={renderTask}
                   traceEvents={traceEvents}
+                />
+              ) : null}
+
+              {activePage === "edit" ? (
+                <SmartEditPanel
+                  assets={studioAssets}
+                  assetSlices={smartEditAssetSlices}
+                  copy={text.smartEdit}
+                  disabled={!project || scenes.length === 0 || busyState !== "idle"}
+                  error={errors.smartEdit}
+                  instructions={smartEditInstructions}
+                  isEditing={busyState === "smart-edit" && !smartEditResult}
+                  isRefreshing={busyState === "smart-edit" && Boolean(smartEditResult)}
+                  mediaSettings={mediaSettings}
+                  result={smartEditResult}
+                  selectedSegmentId={selectedSmartEditSegmentId}
+                  targetLanguage={smartEditTargetLanguage}
+                  traceEvents={traceEvents}
+                  onInstructionsChange={setSmartEditInstructions}
+                  onMediaSettingsChange={setMediaSettings}
+                  onPlanChange={handleSmartEditPlanChange}
+                  onRefreshSegment={handleRefreshSmartEditSegment}
+                  onSelectedSegmentChange={setSelectedSmartEditSegmentId}
+                  onStartSmartEdit={handleStartSmartEdit}
+                  onTargetLanguageChange={setSmartEditTargetLanguage}
                 />
               ) : null}
 
