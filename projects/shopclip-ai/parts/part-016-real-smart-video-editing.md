@@ -183,3 +183,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts`
   - `corepack pnpm --filter @shopclip/api typecheck`
+
+## 2026-06-02 Mojibake Subtitle Guard
+
+- User-visible issue:
+  - Some smart-edit outputs could show unreadable symbol-like subtitles when a scene subtitle contained mojibake text such as `鍊掕繃...`.
+- Root cause:
+  - `subtitleTextForSegment` rejected pure replacement-symbol captions like `????????`, but treated mojibake CJK-looking text as readable, so the bad subtitle could be burned into ASS instead of falling back to the readable voiceover/copy field.
+  - Server evidence showed the latest product ASS file itself was valid UTF-8 and a pulled frame from `export.mp4` rendered Chinese subtitles correctly, so the remaining risk was bad input text selection rather than ffmpeg/font rendering.
+- Fix:
+  - Added mojibake detection before ASS burn-in.
+  - If `subtitle` is unreadable, replacement symbols, or likely mojibake, the composer now falls back to readable `voiceover`.
+  - Added regression coverage for both replacement-symbol subtitles and mojibake subtitles.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/api build`
+  - Deployed commit `c052959` with `/www/wwwroot/shopclip-ai/deploy.sh`.
+  - Live checks: `http://152.136.252.134/health` returned ok, homepage returned 200.
+  - Server smoke: importing `apps/api/dist/providers/renderer/smartEditComposer.js` returned `倒过来摇也不漏` for a mojibake subtitle with readable voiceover.
