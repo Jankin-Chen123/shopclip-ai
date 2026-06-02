@@ -1526,6 +1526,10 @@ describe("App", () => {
     expect(markup).toContain('min="4"');
     expect(markup).toContain('max="12"');
     expect(markup).toContain("4s - cut");
+    expect(markup).toContain("Selected segment live preview");
+    expect(markup).toContain('src="https://cdn.example.test/cup.png"');
+    expect(markup).toContain('alt="Cup hero.png"');
+    expect(markup).toContain("Cute cup hook");
     expect(markup).not.toContain("路");
   });
 

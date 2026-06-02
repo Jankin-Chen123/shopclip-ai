@@ -326,6 +326,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/api build`
+
+## 2026-06-03 Selected Segment Live Preview
+
+- Issue found during completion audit:
+  - Step 05 preview showed the composed final video, but changing the selected segment source/copy did not give the user an immediate visual check before refreshing or rerendering.
+- Fix:
+  - Added a selected-segment live preview inside Step 05 that renders the current segment's image, video slice, or reused generated clip from the actual plan/source URL.
+  - The live preview overlays the current segment copy, so edits to the segment copy are immediately visible in the editor.
+  - Video previews use media fragments when slice start/end times are available.
+  - Chinese copy now labels the voice field as `配音文案` instead of the ambiguous `音频参考`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
 - Live verification after deploy:
   - Deployed commit `75ce438` with `/www/wwwroot/shopclip-ai/deploy.sh`.
   - `POST /api/projects/cmpqigao80001whl4g32ii0bv/smart-edit` with `bgmTrack: "tech-pulse"` completed as task `1e77494c-600e-4eee-a8f8-738113b525f6`.
@@ -340,6 +355,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Server `ffmpeg -i` reported the exported stream as `854x480`, proving the requested horizontal 480p geometry was applied.
   - Browser verification on `http://152.136.252.134/#edit` loaded project `cmpqigao80001whl4g32ii0bv`, opened Step 05, and confirmed the timeline/inspector rendered the completed smart-edit plan.
   - Playwright keyboard check: clicking timeline segment 1 then pressing `ArrowRight` selected segment 2 and updated the inspector copy/source/transition fields; pressing `Delete` disabled segment 2 and the timeline label changed to `4s - fade - Disabled`.
+
+## 2026-06-03 Subtitle Symbol Guard
+
+- User-visible issue:
+  - A generated smart-edit export could appear to have no readable subtitles and show symbol-like captions instead.
+- Root cause investigation:
+  - The latest server-side ASS subtitle files under `/www/wwwroot/shopclip-ai/render-exports/.../smart-edit/.../*.ass` contained normal UTF-8 Chinese Dialogue text, and a pulled frame from the latest deployed `export.mp4` rendered readable Chinese subtitles.
+  - Remaining risk was in the render guard: ASS style used default charset encoding, the subtitle filter could not explicitly receive a fonts directory, and unreadable captions were still burned in when both subtitle and voiceover were symbol/garbled strings.
+- Fix:
+  - ASS styles now use Unicode encoding and the subtitle filter supports `FFMPEG_SUBTITLE_FONTS_DIR` / `RENDER_SUBTITLE_FONTS_DIR` for explicit font loading.
+  - Smart-edit composition now skips subtitle burn-in for a segment when both subtitle and voiceover are unreadable symbol/garbled text, preventing garbage captions from appearing in exports.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/ffmpegComposer.test.ts src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/api build`
 
 ## 2026-06-03 Smart Edit BGM Track Differentiation
 

@@ -232,7 +232,7 @@ export const subtitleTextForSegment = (segment: SmartEditSegment): string => {
     return voiceover;
   }
 
-  return subtitle || voiceover;
+  return "";
 };
 
 const voiceForLanguage = (language: string | undefined): string => {

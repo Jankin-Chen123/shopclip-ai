@@ -65,8 +65,17 @@ const subtitleFontFamily = (): string =>
   process.env.RENDER_SUBTITLE_FONT_FAMILY?.trim() ||
   "Noto Sans CJK SC";
 
-export const buildSubtitleFilter = (subtitleAssPath: string): string =>
-  `ass=filename='${escapeFilterPath(subtitleAssPath)}'`;
+const subtitleFontsDir = (): string | undefined =>
+  process.env.FFMPEG_SUBTITLE_FONTS_DIR?.trim() || process.env.RENDER_SUBTITLE_FONTS_DIR?.trim() || undefined;
+
+export const buildSubtitleFilter = (subtitleAssPath: string): string => {
+  const fontsDir = subtitleFontsDir();
+  const options = [
+    `filename='${escapeFilterPath(subtitleAssPath)}'`,
+    ...(fontsDir ? [`fontsdir='${escapeFilterPath(fontsDir)}'`] : []),
+  ].join(":");
+  return `ass=${options}`;
+};
 
 export const buildSubtitleAss = (
   subtitle: string,
@@ -87,7 +96,7 @@ export const buildSubtitleAss = (
     "",
     "[V4+ Styles]",
     "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    `Style: Default,${subtitleFontFamily()},${fontSize},&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},1`,
+    `Style: Default,${subtitleFontFamily()},${fontSize},&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},0`,
     "",
     "[Events]",
     "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",

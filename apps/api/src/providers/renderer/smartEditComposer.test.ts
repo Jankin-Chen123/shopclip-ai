@@ -470,6 +470,37 @@ describe("smart edit composer", () => {
     await expect(readFile(subtitlePath!, "utf8")).resolves.not.toContain("鍊掕繃");
   });
 
+  it("does not burn unreadable symbol captions when no readable copy exists", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      subtitle: "????????????",
+      voiceover: "□□□□□□",
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    expect(commands.some((entry) => entry.args.some((arg) => arg.includes("segment-video.ass")))).toBe(
+      false,
+    );
+    expect(commands.some((entry) => entry.args.some((arg) => arg.includes("segment-image.ass")))).toBe(
+      true,
+    );
+  });
+
   it("skips ASS subtitle burn-in when subtitles are disabled", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

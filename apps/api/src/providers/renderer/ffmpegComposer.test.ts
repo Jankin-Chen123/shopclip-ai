@@ -18,7 +18,9 @@ describe("ffmpeg composer", () => {
     delete process.env.RENDER_EXPORT_DIR;
     delete process.env.FFMPEG_PATH;
     delete process.env.FFMPEG_SUBTITLE_FONT_FAMILY;
+    delete process.env.FFMPEG_SUBTITLE_FONTS_DIR;
     delete process.env.RENDER_SUBTITLE_FONT_FAMILY;
+    delete process.env.RENDER_SUBTITLE_FONTS_DIR;
     await Promise.all(
       workdirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
     );
@@ -67,6 +69,21 @@ describe("ffmpeg composer", () => {
 
     expect(filter).toContain("ass=");
     expect(filter).toContain("filename='/tmp/shopclip/subtitle\\:1.ass'");
+
+    process.env.FFMPEG_SUBTITLE_FONTS_DIR = "/usr/share/fonts/opentype/noto";
+    expect(buildSubtitleFilter("/tmp/shopclip/subtitle:1.ass")).toContain(
+      "fontsdir='/usr/share/fonts/opentype/noto'",
+    );
+  });
+
+  it("marks generated ASS subtitle styles as Unicode encoded", async () => {
+    const { buildSubtitleAss } = await import("./ffmpegComposer.js");
+
+    const ass = buildSubtitleAss("\u4e2d\u6587\u5b57\u5e55");
+
+    expect(ass).toContain("Style: Default,Noto Sans CJK SC,42");
+    expect(ass).toContain(",48,48,96,0");
+    expect(ass).toContain("Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,\u4e2d\u6587\u5b57\u5e55");
   });
 
   it("uses a CJK-capable subtitle font by default and allows environment override", async () => {

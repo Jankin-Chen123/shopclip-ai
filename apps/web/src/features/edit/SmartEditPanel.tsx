@@ -49,6 +49,63 @@ const sourceLabel = (segment: SmartEditSegment, assets: AssetMetadata[]) => {
   return segment.source.kind;
 };
 
+const mediaFragmentUrl = (url: string, segment: SmartEditSegment): string => {
+  if (segment.source.startSecond === undefined) {
+    return url;
+  }
+  const end = segment.source.endSecond ?? segment.source.startSecond + segment.durationSeconds;
+  return `${url}#t=${segment.source.startSecond},${end}`;
+};
+
+const previewMediaForSegment = (
+  segment: SmartEditSegment | undefined,
+  assets: AssetMetadata[],
+):
+  | {
+      kind: "image" | "video";
+      label: string;
+      url: string;
+    }
+  | undefined => {
+  if (!segment) {
+    return undefined;
+  }
+
+  const asset = segment.source.assetId
+    ? assets.find((candidate) => candidate.id === segment.source.assetId)
+    : undefined;
+  const url = segment.source.sceneClipUrl ?? segment.source.imageUrl ?? asset?.url;
+  if (!url) {
+    return undefined;
+  }
+
+  if (
+    segment.source.kind === "generated-scene-clip" ||
+    segment.source.kind === "video-slice" ||
+    asset?.type === "video"
+  ) {
+    return {
+      kind: "video",
+      label: asset?.name ?? segment.source.kind,
+      url: mediaFragmentUrl(url, segment),
+    };
+  }
+
+  if (
+    segment.source.kind === "image-asset" ||
+    segment.source.kind === "fallback-still" ||
+    asset?.type === "image"
+  ) {
+    return {
+      kind: "image",
+      label: asset?.name ?? segment.source.kind,
+      url,
+    };
+  }
+
+  return undefined;
+};
+
 const reorderSegments = (
   plan: SmartEditPlan,
   segmentId: string,
@@ -112,6 +169,7 @@ export const SmartEditPanel = ({
   );
   const selectedSegment =
     sortedSegments.find((segment) => segment.id === selectedSegmentId) ?? sortedSegments[0];
+  const selectedPreviewMedia = previewMediaForSegment(selectedSegment, assets);
   const selectedSlices = selectedSegment?.source.assetId
     ? assetSlices.filter((slice) => slice.assetId === selectedSegment.source.assetId)
     : [];
@@ -252,6 +310,31 @@ export const SmartEditPanel = ({
             </div>
           )}
           <small>{copy.reused}</small>
+          <div className="smart-edit-live-preview" aria-label={copy.segmentPreview}>
+            <h4>{copy.segmentPreview}</h4>
+            {selectedSegment && selectedPreviewMedia ? (
+              <div className="smart-edit-live-frame">
+                {selectedPreviewMedia.kind === "video" ? (
+                  <video
+                    aria-label={selectedPreviewMedia.label}
+                    controls
+                    muted
+                    playsInline
+                    preload="metadata"
+                    src={selectedPreviewMedia.url}
+                  />
+                ) : (
+                  <img alt={selectedPreviewMedia.label} src={selectedPreviewMedia.url} />
+                )}
+                <p>{selectedSegment.subtitle}</p>
+              </div>
+            ) : (
+              <div className="empty-state compact">
+                <strong>{copy.emptyTitle}</strong>
+                <span>{copy.noSegmentPreview}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="smart-edit-inspector">
