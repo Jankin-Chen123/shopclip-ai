@@ -585,6 +585,28 @@ const createVoiceoverTrack = async (
   return voiceTrackPath;
 };
 
+type SmartEditBgmTrack = SmartEditPlan["audio"]["bgmTrack"];
+
+const bgmProfiles: Record<Exclude<SmartEditBgmTrack, "none">, { lavfi: string; volume: number }> = {
+  "creator-pop": {
+    lavfi: "sine=frequency=523:sample_rate=44100",
+    volume: 0.05,
+  },
+  "soft-lift": {
+    lavfi: "sine=frequency=330:sample_rate=44100",
+    volume: 0.035,
+  },
+  "tech-pulse": {
+    lavfi: "sine=frequency=176:sample_rate=44100",
+    volume: 0.045,
+  },
+};
+
+export const smartEditBgmProfile = (
+  bgmTrack: SmartEditBgmTrack,
+): { lavfi: string; volume: number } | undefined =>
+  bgmTrack === "none" ? undefined : bgmProfiles[bgmTrack] ?? bgmProfiles["creator-pop"];
+
 const addSyntheticBgm = async (
   command: string,
   inputPath: string,
@@ -593,13 +615,13 @@ const addSyntheticBgm = async (
   run: CommandRunner,
   voiceoverTrackPath?: string,
 ) => {
-  const hasBgm = plan.audio.bgmTrack !== "none";
-  if (!hasBgm && !voiceoverTrackPath) {
-    await run(command, ["-y", "-i", inputPath, "-c", "copy", outputPath]);
-    return;
-  }
+  const bgmProfile = smartEditBgmProfile(plan.audio.bgmTrack);
+  if (!bgmProfile) {
+    if (!voiceoverTrackPath) {
+      await run(command, ["-y", "-i", inputPath, "-c", "copy", outputPath]);
+      return;
+    }
 
-  if (voiceoverTrackPath && !hasBgm) {
     await run(command, [
       "-y",
       "-i",
@@ -632,9 +654,9 @@ const addSyntheticBgm = async (
       "-f",
       "lavfi",
       "-i",
-      "sine=frequency=220:sample_rate=44100",
+      bgmProfile.lavfi,
       "-filter_complex",
-      "[1:a]volume=1.0[voice];[2:a]volume=0.045[bgm];[voice][bgm]amix=inputs=2:duration=first[aout]",
+      `[1:a]volume=1.0[voice];[2:a]volume=${bgmProfile.volume}[bgm];[voice][bgm]amix=inputs=2:duration=first[aout]`,
       "-map",
       "0:v:0",
       "-map",
@@ -658,9 +680,9 @@ const addSyntheticBgm = async (
     "-f",
     "lavfi",
     "-i",
-    "sine=frequency=220:sample_rate=44100",
+    bgmProfile.lavfi,
     "-filter_complex",
-    "[1:a]volume=0.045[aout]",
+    `[1:a]volume=${bgmProfile.volume}[aout]`,
     "-map",
     "0:v:0",
     "-map",

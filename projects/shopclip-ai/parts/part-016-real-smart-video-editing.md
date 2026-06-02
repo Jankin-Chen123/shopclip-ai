@@ -334,3 +334,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Server `ffmpeg -i` reported the exported stream as `854x480`, proving the requested horizontal 480p geometry was applied.
   - Browser verification on `http://152.136.252.134/#edit` loaded project `cmpqigao80001whl4g32ii0bv`, opened Step 05, and confirmed the timeline/inspector rendered the completed smart-edit plan.
   - Playwright keyboard check: clicking timeline segment 1 then pressing `ArrowRight` selected segment 2 and updated the inspector copy/source/transition fields; pressing `Delete` disabled segment 2 and the timeline label changed to `4s - fade - Disabled`.
+
+## 2026-06-03 Smart Edit BGM Track Differentiation
+
+- Issue found during completion audit:
+  - Step 05 exposed `Creator pop`, `Soft lift`, and `Tech pulse` BGM choices, but the ffmpeg composer used the same `sine=frequency=220` generated audio bed for every non-`none` choice.
+  - This meant the UI setting changed metadata but not the actual mixed audio track.
+- Fix:
+  - Added `smartEditBgmProfile` so each BGM choice maps to a distinct ffmpeg `lavfi` source and mix volume.
+  - `creator-pop` now uses `sine=frequency=523`, `soft-lift` uses `sine=frequency=330`, and `tech-pulse` uses `sine=frequency=176`.
+  - Voiceover + BGM and BGM-only paths now both use the selected BGM profile.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/smart-edit-flow.test.ts src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/api build`

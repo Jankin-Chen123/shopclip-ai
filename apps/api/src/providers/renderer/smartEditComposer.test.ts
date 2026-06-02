@@ -220,9 +220,27 @@ describe("smart edit composer", () => {
 
     const bgmCommand = commands.at(-1);
     expect(bgmCommand?.args).toEqual(expect.arrayContaining(["-f", "lavfi"]));
-    expect(bgmCommand?.args.join(" ")).toContain("sine=frequency=220");
-    expect(bgmCommand?.args.join(" ")).toContain("[2:a]volume=0.045[bgm]");
+    expect(bgmCommand?.args.join(" ")).toContain("sine=frequency=523");
+    expect(bgmCommand?.args.join(" ")).toContain("[2:a]volume=0.05[bgm]");
     expect(bgmCommand?.args.join(" ")).toContain("amix=inputs=2");
+  });
+
+  it("maps each BGM selection to a distinct generated ffmpeg music bed", async () => {
+    const { smartEditBgmProfile } = await import("./smartEditComposer.js");
+
+    expect(smartEditBgmProfile("creator-pop")).toEqual({
+      lavfi: "sine=frequency=523:sample_rate=44100",
+      volume: 0.05,
+    });
+    expect(smartEditBgmProfile("soft-lift")).toEqual({
+      lavfi: "sine=frequency=330:sample_rate=44100",
+      volume: 0.035,
+    });
+    expect(smartEditBgmProfile("tech-pulse")).toEqual({
+      lavfi: "sine=frequency=176:sample_rate=44100",
+      volume: 0.045,
+    });
+    expect(smartEditBgmProfile("none")).toBeUndefined();
   });
 
   it("uses requested video ratio and resolution for segment filters and ASS subtitles", async () => {
