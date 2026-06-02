@@ -135,11 +135,12 @@ describe("ark inspiration provider", () => {
     const systemText = body.input[0].content[0].text;
     expect(systemText).toContain("中文");
     expect(systemText).toContain("Markdown 表格");
-    expect(systemText).toContain("时间");
-    expect(systemText).toContain("旁白");
-    expect(systemText).toContain("字幕");
-    expect(systemText).toContain("画面");
-    expect(systemText).toContain("产品外观必须与用户素材一致");
+    expect(systemText).toContain("| 时长 | 文案 | 画面提示词 | 素材槽位 |");
+    expect(systemText).toContain("黄金 3 秒法则");
+    expect(systemText).toContain("卖点可视化法则");
+    expect(systemText).toContain("素材匹配法则");
+    expect(systemText).toContain("严禁编造价格、库存、赠品、销量或限时信息");
+    expect(systemText).toContain("产品外观必须与绑定素材一致");
   });
 
   it("uses the image API key override for Seedream image generation", async () => {
