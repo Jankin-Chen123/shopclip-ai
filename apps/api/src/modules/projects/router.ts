@@ -102,6 +102,9 @@ const sendInvalidRequest = (response: Response, code: string, message: string) =
   });
 };
 
+const isSeedanceSceneDurationError = (error: unknown): error is Error =>
+  error instanceof Error && error.message.includes("outside the configured Seedance range");
+
 const sendScriptGenerationFailure = (response: Response, error: unknown) => {
   response.status(502).json({
     error: {
@@ -2863,10 +2866,19 @@ export const createP0Router = ({
       return;
     }
 
-    const renderResult = createQueuedRenderWithConfiguredVideoProvider(
-      project,
-      parsedRenderRequest.data,
-    );
+    let renderResult: ReturnType<typeof createQueuedRenderWithConfiguredVideoProvider>;
+    try {
+      renderResult = createQueuedRenderWithConfiguredVideoProvider(
+        project,
+        parsedRenderRequest.data,
+      );
+    } catch (error) {
+      if (isSeedanceSceneDurationError(error)) {
+        sendInvalidRequest(response, "INVALID_SCENE_DURATION", error.message);
+        return;
+      }
+      throw error;
+    }
     const storedRender = await store.addRenderTask(
       project.id,
       renderResult.renderTask,
@@ -2994,11 +3006,20 @@ export const createP0Router = ({
       return;
     }
 
-    const renderResult = createQueuedRenderWithConfiguredVideoProvider(latestProject, {
-      ...parsedRenderRequest.data,
-      retryOfRenderTaskId: previousRender.renderTask.id,
-      retryOfTraceEventId: failedTrace?.id,
-    });
+    let renderResult: ReturnType<typeof createQueuedRenderWithConfiguredVideoProvider>;
+    try {
+      renderResult = createQueuedRenderWithConfiguredVideoProvider(latestProject, {
+        ...parsedRenderRequest.data,
+        retryOfRenderTaskId: previousRender.renderTask.id,
+        retryOfTraceEventId: failedTrace?.id,
+      });
+    } catch (error) {
+      if (isSeedanceSceneDurationError(error)) {
+        sendInvalidRequest(response, "INVALID_SCENE_DURATION", error.message);
+        return;
+      }
+      throw error;
+    }
     const storedRender = await store.addRenderTask(
       latestProject.id,
       renderResult.renderTask,
