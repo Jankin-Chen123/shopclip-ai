@@ -775,6 +775,8 @@ export const RenderTaskSchema = z.object({
   sceneClips: z.array(SceneRenderClipSchema).optional(),
   mediaSettings: MediaSettingsSchema.optional(),
   videoSettings: VideoGenerationSettingsSchema.optional(),
+  smartEditPlan: SmartEditPlanSchema.optional(),
+  smartEditSegmentOutputs: z.array(SmartEditSegmentOutputSchema).optional(),
   retryOfRenderTaskId: z.string().trim().min(1).optional(),
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,

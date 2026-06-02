@@ -563,7 +563,7 @@ export const retryRenderTask = async (
 export const startSmartEdit = async (
   projectId: string,
   request: SmartEditRequest,
-): Promise<SmartEditResult> =>
+): Promise<RenderSnapshot> =>
   requestJson(`/projects/${projectId}/smart-edit`, {
     method: "POST",
     body: JSON.stringify(request),
@@ -573,7 +573,7 @@ export const refreshSmartEditSegment = async (
   projectId: string,
   sceneId: string,
   request: SmartEditSegmentRefreshRequest,
-): Promise<SmartEditResult> =>
+): Promise<RenderSnapshot> =>
   requestJson(`/projects/${projectId}/smart-edit/segments/${sceneId}/refresh`, {
     method: "POST",
     body: JSON.stringify(request),

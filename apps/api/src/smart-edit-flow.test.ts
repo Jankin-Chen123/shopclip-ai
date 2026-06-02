@@ -3,9 +3,11 @@ import type { AddressInfo } from "node:net";
 
 import type {
   AssetMetadata,
+  RenderTask,
   SmartEditPlan,
-  SmartEditResult,
+  SmartEditSegmentOutput,
   StoryboardScene,
+  TraceEvent,
 } from "@shopclip/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -64,6 +66,26 @@ const planFromScenes = (
   targetDurationSeconds: scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
 });
 
+interface RenderSnapshot {
+  renderTask: RenderTask;
+  traceEvents: TraceEvent[];
+}
+
+const waitForRenderTask = async (
+  baseUrl: string,
+  renderTaskId: string,
+): Promise<RenderSnapshot> => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const polled = await request<RenderSnapshot>(baseUrl, `/api/render-tasks/${renderTaskId}`);
+    if (["completed", "failed"].includes(polled.body.renderTask.status)) {
+      return polled.body;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error(`Render task ${renderTaskId} did not finish.`);
+};
+
 describe("smart edit API flow", () => {
   let baseUrl = "";
   let server: Server | undefined;
@@ -80,19 +102,30 @@ describe("smart edit API flow", () => {
     }
   });
 
-  it("creates a full smart edit and refreshes one scene by reusing existing segment outputs", async () => {
+  it("creates a full smart edit asynchronously and refreshes one scene by reusing existing segment outputs", async () => {
     const plannerCalls: Array<{ scenes: StoryboardScene[] }> = [];
     const composerPlans: SmartEditPlan[] = [];
     const app = createApp({
-      smartEditPlanner: async ({ assets, project, scenes }) => {
+      smartEditPlanner: async ({ assets, project, request: smartEditRequest, scenes }) => {
         plannerCalls.push({ scenes });
         const assetId = assets[0]?.id ?? "asset-fallback";
+        const overrides = new Map(
+          smartEditRequest.segments.map((segment) => [segment.sceneId, segment]),
+        );
+        const plan = planFromScenes(project.id, scenes, assetId);
         return {
           fallback: {
             provider: "test-smart-edit-planner",
             used: false,
           },
-          plan: planFromScenes(project.id, scenes, assetId),
+          plan: {
+            ...plan,
+            segments: plan.segments.map((segment) => ({
+              ...segment,
+              ...overrides.get(segment.sceneId),
+              source: overrides.get(segment.sceneId)?.source ?? segment.source,
+            })),
+          },
         };
       },
       smartEditComposer: async (projectId, plan) => {
@@ -159,7 +192,7 @@ describe("smart edit API flow", () => {
         method: "POST",
         body: JSON.stringify({
           assetIds: [asset.body.asset.id],
-          keywords: ["可爱", "防漏"],
+          keywords: ["cute", "leak proof"],
           materials: [],
         }),
       },
@@ -167,7 +200,7 @@ describe("smart edit API flow", () => {
     expect(generated.status).toBe(201);
     expect(generated.body.script.scenes.length).toBeGreaterThan(1);
 
-    const fullEdit = await request<SmartEditResult>(
+    const fullEdit = await request<RenderSnapshot>(
       baseUrl,
       `/api/projects/${created.body.project.id}/smart-edit`,
       {
@@ -178,23 +211,34 @@ describe("smart edit API flow", () => {
         }),
       },
     );
-    expect(fullEdit.status).toBe(201);
-    expect(fullEdit.body.exportUrl).toContain("/export-1.mp4");
-    expect(fullEdit.body.segmentOutputs).toHaveLength(generated.body.script.scenes.length);
+    expect(fullEdit.status).toBe(202);
+    expect(fullEdit.body.renderTask.status).toBe("queued");
+
+    const completedFullEdit = await waitForRenderTask(baseUrl, fullEdit.body.renderTask.id);
+    expect(completedFullEdit.renderTask.status).toBe("completed");
+    expect(completedFullEdit.renderTask.exportUrl).toContain("/export-1.mp4");
+    expect(completedFullEdit.renderTask.smartEditPlan).toBeDefined();
+    expect(completedFullEdit.renderTask.smartEditSegmentOutputs).toHaveLength(
+      generated.body.script.scenes.length,
+    );
+    expect(
+      completedFullEdit.traceEvents.some((event) => event.step === "smart-edit-plan-model"),
+    ).toBe(true);
     expect(plannerCalls[0]?.scenes).toHaveLength(generated.body.script.scenes.length);
 
     const sceneToRefresh = generated.body.script.scenes[1]!;
-    const refreshed = await request<SmartEditResult>(
+    const refreshed = await request<RenderSnapshot>(
       baseUrl,
       `/api/projects/${created.body.project.id}/smart-edit/segments/${sceneToRefresh.id}/refresh`,
       {
         method: "POST",
         body: JSON.stringify({
-          currentPlan: fullEdit.body.plan,
-          segmentOutputs: fullEdit.body.segmentOutputs,
+          currentPlan: completedFullEdit.renderTask.smartEditPlan,
+          segmentOutputs: completedFullEdit.renderTask
+            .smartEditSegmentOutputs as SmartEditSegmentOutput[],
           segment: {
             sceneId: sceneToRefresh.id,
-            subtitle: "刷新后的单镜头文案",
+            subtitle: "Refreshed single-scene copy",
             transition: "crossfade",
           },
           locale: "zh-CN",
@@ -202,8 +246,14 @@ describe("smart edit API flow", () => {
         }),
       },
     );
-    expect(refreshed.status).toBe(201);
-    expect(refreshed.body.exportUrl).toContain("/export-2.mp4");
+    expect(refreshed.status).toBe(202);
+
+    const completedRefresh = await waitForRenderTask(baseUrl, refreshed.body.renderTask.id);
+    expect(completedRefresh.renderTask.status).toBe("completed");
+    expect(completedRefresh.renderTask.exportUrl).toContain("/export-2.mp4");
+    expect(completedRefresh.renderTask.smartEditPlan?.segments[1]?.subtitle).toBe(
+      "Refreshed single-scene copy",
+    );
     expect(plannerCalls[1]?.scenes).toHaveLength(1);
     expect(plannerCalls[1]?.scenes[0]?.id).toBe(sceneToRefresh.id);
 

@@ -27,8 +27,8 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 
 ## Architecture
 
-1. Shared contracts define `SmartEditRequest`, `SmartEditPlan`, `SmartEditSegment`, and `SmartEditResult`.
-2. Backend route `POST /projects/:projectId/smart-edit` loads the project, recalls slices for each scene, asks the general model for an edit plan when configured, validates the plan against local assets, and composes the final video with ffmpeg.
+1. Shared contracts define `SmartEditRequest`, `SmartEditPlan`, `SmartEditSegment`, `SmartEditResult`, and smart-edit metadata on `RenderTask`.
+2. Backend route `POST /projects/:projectId/smart-edit` loads the project, creates a queued render task immediately, and runs the general-model planning plus ffmpeg composition in the background.
 3. ffmpeg editing service materializes selected source clips from COS/local URLs, trims by slice time, normalizes aspect ratio, adds simple crossfade/fade transitions where supported, burns ASS subtitles, mixes optional generated voice/BGM audio, and publishes the edited MP4 through the existing storage provider.
 4. Frontend adds `edit` as creation Step 05. The page shows a real timeline, selected segment inspector, drag/reorder controls, keyboard shortcuts, preview player, AI plan button, segment refresh button, and export result.
 
@@ -83,8 +83,8 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Test: `apps/api/src/smart-edit-flow.test.ts`
 
 **Acceptance**
-- `POST /projects/:projectId/smart-edit` creates a traceable edit job synchronously for MVP, returning final output after ffmpeg completes.
-- `POST /projects/:projectId/smart-edit/segments/:sceneId/refresh` recomposes only the requested segment and then rebuilds the final output from cached segment outputs.
+- `POST /projects/:projectId/smart-edit` creates a traceable queued edit job and returns `202 + RenderSnapshot` quickly; `/render-tasks/:id` exposes progress and final output.
+- `POST /projects/:projectId/smart-edit/segments/:sceneId/refresh` creates a queued partial refresh job, recomposes only the requested segment, and then rebuilds the final output from cached segment outputs.
 - Errors are user-facing and include the ffmpeg stderr tail.
 
 ### Task 5: Frontend API and Step 05 Page
@@ -126,6 +126,30 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Current Step 05 dashboard must move to Step 06 or remain as the dashboard page after editing.
 - Existing `SceneRenderClip` composition is not enough because it only stitches already generated Seedance clips. Smart edit must also be able to use merchant video slices and image assets.
 - Existing structured slice metadata is sufficient for first implementation: role, timing, search text, tags, action, and product visibility.
+
+## 2026-06-02 Async Smart Edit Job Fix
+
+- User-visible issue:
+  - Smart edit could block the HTTP request while the server called the general model and ffmpeg, making Nginx/browser timeout likely on real renders.
+  - Frontend needed a clearer running state and polling path instead of assuming `/smart-edit` returned a finished video.
+- Fix:
+  - Added `smartEditPlan` and `smartEditSegmentOutputs` to `RenderTask` in the shared schema and Prisma model.
+  - Added migration `apps/api/prisma/migrations/20260602153000_add_smart_edit_render_metadata/migration.sql`.
+  - `POST /projects/:projectId/smart-edit` now returns `202` with a queued render task, then runs model planning and ffmpeg composition in a background job.
+  - `POST /projects/:projectId/smart-edit/segments/:sceneId/refresh` now also returns `202` and stores the refreshed plan/output on the render task.
+  - Frontend converts completed smart-edit render tasks back into the Step 05 preview/result model, polls queued/running tasks, and restores completed smart-edit history after project reload.
+- Subtitle/copy guard:
+  - The focused flow test now uses readable copy and verifies refreshed segment copy survives into `smartEditPlan`, preventing regressions where symbol-like text silently enters the final ASS burn-in path.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/smart-edit-flow.test.ts src/providers/renderer/ffmpegComposer.test.ts src/providers/renderer/smartEditComposer.test.ts src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
 
 ## 2026-06-02 Subtitle Rendering Fix
 

@@ -93,6 +93,7 @@ import {
   type MediaSettings,
   type ProjectSummary,
   type ProjectSnapshot,
+  type RenderSnapshot,
   type StockProviderConfig,
   type UserApiConfig,
   type VideoGenerationSettings,
@@ -421,6 +422,32 @@ export const isRenderTaskPollingActive = (
   renderTask?.status === "running" ||
   renderTask?.status === "retrying";
 
+const isSmartEditTask = (renderTask: Pick<RenderTask, "provider"> | undefined): boolean =>
+  renderTask?.provider === "smart-edit-ffmpeg";
+
+const smartEditResultFromRenderSnapshot = (
+  render: RenderSnapshot,
+): SmartEditResult | undefined => {
+  if (
+    render.renderTask.status !== "completed" ||
+    render.renderTask.provider !== "smart-edit-ffmpeg" ||
+    !render.renderTask.smartEditPlan ||
+    !render.renderTask.exportUrl ||
+    !render.renderTask.previewUrl
+  ) {
+    return undefined;
+  }
+
+  return {
+    exportUrl: render.renderTask.exportUrl,
+    plan: render.renderTask.smartEditPlan,
+    previewUrl: render.renderTask.previewUrl,
+    renderTaskId: render.renderTask.id,
+    segmentOutputs: render.renderTask.smartEditSegmentOutputs ?? [],
+    traceEvents: render.traceEvents,
+  };
+};
+
 type PreparedAssetBucketId = "hero" | "scene" | "demo" | "brand";
 
 export const getPreparedAssetsByBucket = (
@@ -578,6 +605,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     () => [...(project?.assetSlices ?? []), ...assetLibrary.assetSlices],
     [assetLibrary.assetSlices, project?.assetSlices],
   );
+  const isSmartEditTaskRunning = isSmartEditTask(renderTask) && isRenderTaskPollingActive(renderTask);
   const preparedProjectAssetsByBucket = useMemo(
     () => getPreparedAssetsByBucket(project?.assets ?? []),
     [project?.assets],
@@ -897,6 +925,21 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         }
         setRenderTask(render.renderTask);
         setTraceEvents(render.traceEvents);
+        const smartEdit = smartEditResultFromRenderSnapshot(render);
+        if (smartEdit) {
+          setSmartEditResult(smartEdit);
+          setSelectedSmartEditSegmentId(smartEdit.plan.segments[0]?.id);
+          setExportResult(undefined);
+        }
+        if (
+          render.renderTask.status === "failed" &&
+          render.renderTask.provider === "smart-edit-ffmpeg"
+        ) {
+          setErrors((current) => ({
+            ...current,
+            smartEdit: render.renderTask.errorMessage ?? "Smart edit failed.",
+          }));
+        }
         setProject((current) =>
           current
             ? {
@@ -944,6 +987,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setSelectedReferenceIdForScript(undefined);
       setSelectedTemplateIdForScript(undefined);
       setRenderTask(undefined);
+      setSmartEditResult(undefined);
+      setSelectedSmartEditSegmentId(undefined);
       setTraceEvents([]);
       setDashboard(undefined);
       setExportResult(undefined);
@@ -967,6 +1012,8 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setSelectedReferenceIdForScript(undefined);
     setSelectedTemplateIdForScript(undefined);
     setRenderTask(undefined);
+    setSmartEditResult(undefined);
+    setSelectedSmartEditSegmentId(undefined);
     setTraceEvents([]);
     setDashboard(undefined);
     setExportResult(undefined);
@@ -1001,6 +1048,26 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     setSelectedTemplateIdForScript(undefined);
     setRenderTask(latestRender);
     setTraceEvents([]);
+    if (
+      latestRender?.provider === "smart-edit-ffmpeg" &&
+      latestRender.status === "completed" &&
+      latestRender.smartEditPlan &&
+      latestRender.exportUrl &&
+      latestRender.previewUrl
+    ) {
+      setSmartEditResult({
+        exportUrl: latestRender.exportUrl,
+        plan: latestRender.smartEditPlan,
+        previewUrl: latestRender.previewUrl,
+        renderTaskId: latestRender.id,
+        segmentOutputs: latestRender.smartEditSegmentOutputs ?? [],
+        traceEvents: [],
+      });
+      setSelectedSmartEditSegmentId(latestRender.smartEditPlan.segments[0]?.id);
+    } else {
+      setSmartEditResult(undefined);
+      setSelectedSmartEditSegmentId(undefined);
+    }
     setDashboard(undefined);
     setExportResult(undefined);
     setHasAssetSearchRun(false);
@@ -1927,13 +1994,15 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     videoSettings,
   });
 
-  const applySmartEditResult = async (result: SmartEditResult) => {
-    setSmartEditResult(result);
-    setSelectedSmartEditSegmentId(result.plan.segments[0]?.id);
+  const applySmartEditRenderSnapshot = (render: RenderSnapshot) => {
     setExportResult(undefined);
-    const render = await loadRenderTask(result.renderTaskId);
     setRenderTask(render.renderTask);
-    setTraceEvents(result.traceEvents.length > 0 ? result.traceEvents : render.traceEvents);
+    setTraceEvents(render.traceEvents);
+    const completedSmartEdit = smartEditResultFromRenderSnapshot(render);
+    if (completedSmartEdit) {
+      setSmartEditResult(completedSmartEdit);
+      setSelectedSmartEditSegmentId(completedSmartEdit.plan.segments[0]?.id);
+    }
     setProject((current) =>
       current
         ? {
@@ -1942,7 +2011,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               ...current.renderTasks.filter((task) => task.id !== render.renderTask.id),
               render.renderTask,
             ],
-            status: "completed",
+            status: render.renderTask.status === "completed" ? "completed" : "rendering",
           }
         : current,
     );
@@ -1971,8 +2040,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
     void runAction("smartEdit", "smart-edit", async () => {
       await persistDirtyScenesForRender();
-      const result = await startSmartEdit(project.id, createSmartEditRequest());
-      await applySmartEditResult(result);
+      setSmartEditResult(undefined);
+      setSelectedSmartEditSegmentId(undefined);
+      const render = await startSmartEdit(project.id, createSmartEditRequest());
+      applySmartEditRenderSnapshot(render);
     });
   };
 
@@ -1989,7 +2060,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
 
     void runAction("smartEdit", "smart-edit", async () => {
-      const result = await refreshSmartEditSegment(project.id, selectedSegment.sceneId, {
+      const render = await refreshSmartEditSegment(project.id, selectedSegment.sceneId, {
         apiConfig,
         currentPlan: smartEditResult.plan,
         instructions: smartEditInstructions || undefined,
@@ -2008,7 +2079,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
         targetLanguage: smartEditTargetLanguage.trim() || undefined,
         videoSettings,
       });
-      await applySmartEditResult(result);
+      applySmartEditRenderSnapshot(render);
     });
   };
 
@@ -2232,7 +2303,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
               {activePage === "delivery" ? (
                 <RenderPanel
                   copy={text.render}
-                  disabled={!project || scenes.length === 0 || busyState !== "idle"}
+                  disabled={
+                    !project || scenes.length === 0 || busyState !== "idle" || isSmartEditTaskRunning
+                  }
                   error={errors.render ?? errors.export}
                   exportResult={exportResult}
                   forceRenderFailure={forceRenderFailure}
@@ -2260,8 +2333,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
                   disabled={!project || scenes.length === 0 || busyState !== "idle"}
                   error={errors.smartEdit}
                   instructions={smartEditInstructions}
-                  isEditing={busyState === "smart-edit" && !smartEditResult}
-                  isRefreshing={busyState === "smart-edit" && Boolean(smartEditResult)}
+                  isEditing={(busyState === "smart-edit" || isSmartEditTaskRunning) && !smartEditResult}
+                  isRefreshing={
+                    (busyState === "smart-edit" || isSmartEditTaskRunning) && Boolean(smartEditResult)
+                  }
                   mediaSettings={mediaSettings}
                   result={smartEditResult}
                   selectedSegmentId={selectedSmartEditSegmentId}

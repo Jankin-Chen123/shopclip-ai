@@ -290,6 +290,8 @@ model RenderTask {
   sceneClips   Json?
   mediaSettings Json?
   videoSettings Json?
+  smartEditPlan Json?
+  smartEditSegmentOutputs Json?
   retryOfRenderTaskId String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

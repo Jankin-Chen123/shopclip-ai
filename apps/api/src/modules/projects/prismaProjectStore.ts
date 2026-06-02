@@ -186,6 +186,14 @@ const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): Render
   videoSettings: VideoGenerationSettingsSchema.safeParse(task.videoSettings).success
     ? VideoGenerationSettingsSchema.parse(task.videoSettings)
     : undefined,
+  smartEditPlan: RenderTaskSchema.shape.smartEditPlan.safeParse(task.smartEditPlan).success
+    ? RenderTaskSchema.shape.smartEditPlan.parse(task.smartEditPlan)
+    : undefined,
+  smartEditSegmentOutputs: RenderTaskSchema.shape.smartEditSegmentOutputs.safeParse(
+    task.smartEditSegmentOutputs,
+  ).success
+    ? RenderTaskSchema.shape.smartEditSegmentOutputs.parse(task.smartEditSegmentOutputs)
+    : undefined,
   retryOfRenderTaskId: task.retryOfRenderTaskId ?? undefined,
   createdAt: toIso(task.createdAt),
   updatedAt: toIso(task.updatedAt),
@@ -929,6 +937,8 @@ export class PrismaProjectStore implements ProjectStore {
         sceneClips: renderTask.sceneClips,
         mediaSettings: renderTask.mediaSettings,
         videoSettings: renderTask.videoSettings,
+        smartEditPlan: renderTask.smartEditPlan,
+        smartEditSegmentOutputs: renderTask.smartEditSegmentOutputs,
         retryOfRenderTaskId: renderTask.retryOfRenderTaskId,
         traceEvents: {
           create: traceEvents.map((event) => ({
@@ -1105,6 +1115,8 @@ export class PrismaProjectStore implements ProjectStore {
         sceneClips: update.sceneClips,
         mediaSettings: update.mediaSettings,
         videoSettings: update.videoSettings,
+        smartEditPlan: update.smartEditPlan,
+        smartEditSegmentOutputs: update.smartEditSegmentOutputs,
         retryOfRenderTaskId: update.retryOfRenderTaskId,
         traceEvents: {
           create: traceEvents.map((event) => ({

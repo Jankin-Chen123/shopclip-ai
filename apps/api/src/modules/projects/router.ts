@@ -26,7 +26,6 @@ import {
   ExternalAssetResultSchema,
   RenderRequestSchema,
   SmartEditRequestSchema,
-  SmartEditResultSchema,
   SmartEditSegmentRefreshRequestSchema,
   SceneRegenerationRequestSchema,
   SceneUpdateSchema,
@@ -1312,6 +1311,352 @@ const buildSmartEditRefreshPlan = ({
     strategy: `${currentPlan.strategy} Partial refresh reused existing segment outputs and recomposed the final video.`,
     targetDurationSeconds,
   };
+};
+
+const smartEditSegmentClipsForPlan = (plan: SmartEditPlan, videoUrl?: string): SceneRenderClip[] =>
+  plan.segments
+    .filter((segment) => segment.enabled)
+    .map((segment) => ({
+      sceneId: segment.sceneId,
+      order: segment.order,
+      progress: videoUrl ? 100 : 45,
+      status: videoUrl ? ("completed" as const) : ("running" as const),
+      subtitle: segment.subtitle,
+      videoUrl,
+    }));
+
+const smartEditFailureMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback;
+
+const runSmartEditJob = async ({
+  project,
+  renderTaskId,
+  requestData,
+  smartEditComposer,
+  smartEditPlanner,
+  storageProvider,
+  store,
+}: {
+  project: ProjectSnapshot;
+  renderTaskId: string;
+  requestData: ReturnType<typeof SmartEditRequestSchema.parse>;
+  smartEditComposer: SmartEditComposer;
+  smartEditPlanner: SmartEditPlanner;
+  storageProvider: StorageProvider;
+  store: ProjectStore;
+}) => {
+  await store.updateRenderTask(
+    renderTaskId,
+    {
+      progress: 12,
+      status: "running",
+    },
+    [
+      {
+        status: "running",
+        step: "smart-edit-plan-started",
+        message: "Smart edit job started. Calling the configured general model for timeline planning.",
+      },
+    ],
+  );
+
+  let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
+  try {
+    plannerResult = await smartEditPlanner({
+      apiConfig: requestData.apiConfig,
+      assets: project.assets,
+      assetSlices: project.assetSlices,
+      project,
+      request: requestData,
+      scenes: project.scenes,
+    });
+  } catch (error) {
+    await store.updateRenderTask(
+      renderTaskId,
+      {
+        errorMessage: smartEditFailureMessage(error, "Smart edit planning failed."),
+        progress: 100,
+        status: "failed",
+      },
+      [
+        {
+          status: "failed",
+          step: "smart-edit-plan-failed",
+          message: smartEditFailureMessage(error, "Smart edit planning failed."),
+        },
+      ],
+    );
+    return;
+  }
+
+  await store.updateRenderTask(
+    renderTaskId,
+    {
+      progress: 42,
+      providerTaskId: plannerResult.plan.id,
+      sceneClips: smartEditSegmentClipsForPlan(plannerResult.plan),
+      smartEditPlan: plannerResult.plan,
+      status: "running",
+    },
+    [
+      {
+        status: plannerResult.fallback.used ? "retrying" : "completed",
+        step: plannerResult.fallback.used ? "smart-edit-plan-fallback" : "smart-edit-plan-model",
+        message: plannerResult.fallback.used
+          ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+          : `Smart edit planned by ${plannerResult.fallback.provider}.`,
+      },
+      {
+        status: "running",
+        step: "smart-edit-ffmpeg-compose-started",
+        message: "Planning is ready. ffmpeg is composing clips, transitions, subtitles, voiceover, and BGM.",
+      },
+    ],
+  );
+
+  let exportResult: Awaited<ReturnType<SmartEditComposer>>;
+  try {
+    exportResult = await smartEditComposer(project.id, plannerResult.plan, project.assets, {
+      storageProvider,
+      subtitlesEnabled: requestData.mediaSettings.subtitlesEnabled,
+    });
+  } catch (error) {
+    await store.updateRenderTask(
+      renderTaskId,
+      {
+        errorMessage: smartEditFailureMessage(error, "Smart edit ffmpeg composition failed."),
+        progress: 100,
+        status: "failed",
+      },
+      [
+        {
+          status: "failed",
+          step: "smart-edit-ffmpeg-compose-failed",
+          message: smartEditFailureMessage(error, "Smart edit ffmpeg composition failed."),
+        },
+      ],
+    );
+    return;
+  }
+
+  await store.updateRenderTask(
+    renderTaskId,
+    {
+      exportUrl: exportResult.publicUrl,
+      previewUrl: exportResult.publicUrl,
+      progress: 100,
+      sceneClips: smartEditSegmentClipsForPlan(plannerResult.plan, exportResult.publicUrl),
+      smartEditPlan: plannerResult.plan,
+      smartEditSegmentOutputs: smartEditSegmentOutputsForResponse(exportResult.segmentOutputs),
+      status: "completed",
+    },
+    [
+      {
+        status: "completed",
+        step: "smart-edit-ffmpeg-compose",
+        message: "Smart edit video composed with ffmpeg and uploaded to storage.",
+      },
+    ],
+  );
+};
+
+const runSmartEditSegmentRefreshJob = async ({
+  project,
+  renderTaskId,
+  requestData,
+  smartEditComposer,
+  smartEditPlanner,
+  storageProvider,
+  store,
+  targetScene,
+}: {
+  project: ProjectSnapshot;
+  renderTaskId: string;
+  requestData: ReturnType<typeof SmartEditSegmentRefreshRequestSchema.parse>;
+  smartEditComposer: SmartEditComposer;
+  smartEditPlanner: SmartEditPlanner;
+  storageProvider: StorageProvider;
+  store: ProjectStore;
+  targetScene: StoryboardScene;
+}) => {
+  await store.updateRenderTask(
+    renderTaskId,
+    {
+      progress: 12,
+      status: "running",
+    },
+    [
+      {
+        status: "running",
+        step: "smart-edit-segment-plan-started",
+        message: "Refreshing the selected segment with the configured general model.",
+      },
+    ],
+  );
+
+  let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
+  try {
+    plannerResult = await smartEditPlanner({
+      apiConfig: requestData.apiConfig,
+      assets: project.assets,
+      assetSlices: project.assetSlices,
+      project,
+      request: {
+        apiConfig: requestData.apiConfig,
+        instructions: requestData.instructions,
+        locale: requestData.locale,
+        mediaSettings: requestData.mediaSettings,
+        segments: requestData.segment ? [requestData.segment] : [],
+        targetLanguage: requestData.targetLanguage,
+        videoSettings: requestData.videoSettings,
+      },
+      scenes: [targetScene],
+    });
+  } catch (error) {
+    await store.updateRenderTask(
+      renderTaskId,
+      {
+        errorMessage: smartEditFailureMessage(error, "Smart edit segment planning failed."),
+        progress: 100,
+        status: "failed",
+      },
+      [
+        {
+          status: "failed",
+          step: "smart-edit-segment-plan-failed",
+          message: smartEditFailureMessage(error, "Smart edit segment planning failed."),
+        },
+      ],
+    );
+    return;
+  }
+
+  const refreshedSegment = plannerResult.plan.segments[0];
+  if (!refreshedSegment) {
+    await store.updateRenderTask(
+      renderTaskId,
+      {
+        errorMessage: "Smart edit segment planning returned no segment.",
+        progress: 100,
+        status: "failed",
+      },
+      [
+        {
+          status: "failed",
+          step: "smart-edit-segment-plan-empty",
+          message: "Smart edit segment planning returned no segment.",
+        },
+      ],
+    );
+    return;
+  }
+
+  let refreshPlan: SmartEditPlan;
+  try {
+    refreshPlan = buildSmartEditRefreshPlan({
+      currentPlan: requestData.currentPlan,
+      projectId: project.id,
+      refreshedSegment,
+      segmentOutputs: requestData.segmentOutputs,
+      targetSceneId: targetScene.id,
+    });
+  } catch (error) {
+    await store.updateRenderTask(
+      renderTaskId,
+      {
+        errorMessage: smartEditFailureMessage(error, "Reusable segment outputs are required."),
+        progress: 100,
+        status: "failed",
+      },
+      [
+        {
+          status: "failed",
+          step: "smart-edit-segment-outputs-missing",
+          message: smartEditFailureMessage(error, "Reusable segment outputs are required."),
+        },
+      ],
+    );
+    return;
+  }
+
+  await store.updateRenderTask(
+    renderTaskId,
+    {
+      progress: 42,
+      providerTaskId: refreshPlan.id,
+      sceneClips: smartEditSegmentClipsForPlan(refreshPlan),
+      smartEditPlan: refreshPlan,
+      status: "running",
+    },
+    [
+      {
+        status: plannerResult.fallback.used ? "retrying" : "completed",
+        step: plannerResult.fallback.used
+          ? "smart-edit-segment-plan-fallback"
+          : "smart-edit-segment-plan-model",
+        message: plannerResult.fallback.used
+          ? `Segment refresh used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+          : `Segment refresh planned by ${plannerResult.fallback.provider}.`,
+      },
+      {
+        status: "running",
+        step: "smart-edit-segment-refresh-compose-started",
+        message: "Reusing unchanged segment outputs and recomposing the final video with ffmpeg.",
+      },
+    ],
+  );
+
+  let exportResult: Awaited<ReturnType<SmartEditComposer>>;
+  try {
+    exportResult = await smartEditComposer(project.id, refreshPlan, project.assets, {
+      storageProvider,
+      subtitlesEnabled: requestData.mediaSettings.subtitlesEnabled,
+    });
+  } catch (error) {
+    await store.updateRenderTask(
+      renderTaskId,
+      {
+        errorMessage: smartEditFailureMessage(
+          error,
+          "Smart edit segment refresh ffmpeg composition failed.",
+        ),
+        progress: 100,
+        status: "failed",
+      },
+      [
+        {
+          status: "failed",
+          step: "smart-edit-segment-refresh-compose-failed",
+          message: smartEditFailureMessage(
+            error,
+            "Smart edit segment refresh ffmpeg composition failed.",
+          ),
+        },
+      ],
+    );
+    return;
+  }
+
+  await store.updateRenderTask(
+    renderTaskId,
+    {
+      exportUrl: exportResult.publicUrl,
+      previewUrl: exportResult.publicUrl,
+      progress: 100,
+      sceneClips: smartEditSegmentClipsForPlan(refreshPlan, exportResult.publicUrl),
+      smartEditPlan: refreshPlan,
+      smartEditSegmentOutputs: smartEditSegmentOutputsForResponse(exportResult.segmentOutputs),
+      status: "completed",
+    },
+    [
+      {
+        status: "completed",
+        step: "smart-edit-segment-refresh-compose",
+        message:
+          "Selected segment was refreshed; unchanged segments reused uploaded segment outputs before final ffmpeg composition.",
+      },
+    ],
+  );
 };
 
 export interface P0RouterOptions {
@@ -3135,99 +3480,43 @@ export const createP0Router = ({
       return;
     }
 
-    let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
-    try {
-      plannerResult = await smartEditPlanner({
-        apiConfig: parsedSmartEditRequest.data.apiConfig,
-        assets: project.assets,
-        assetSlices: project.assetSlices,
-        project,
-        request: parsedSmartEditRequest.data,
-        scenes: project.scenes,
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "SMART_EDIT_PLAN_FAILED",
-          message: error instanceof Error ? error.message : "Smart edit planning failed.",
-        },
-      });
-      return;
-    }
-
-    let exportResult: Awaited<ReturnType<SmartEditComposer>>;
-    try {
-      exportResult = await smartEditComposer(project.id, plannerResult.plan, project.assets, {
-        storageProvider,
-        subtitlesEnabled: parsedSmartEditRequest.data.mediaSettings.subtitlesEnabled,
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "SMART_EDIT_COMPOSE_FAILED",
-          message: error instanceof Error ? error.message : "Smart edit ffmpeg composition failed.",
-        },
-      });
-      return;
-    }
-
-    const segmentClips = plannerResult.plan.segments
-      .filter((segment) => segment.enabled)
-      .map((segment) => ({
-        sceneId: segment.sceneId,
-        order: segment.order,
-        progress: 100,
-        status: "completed" as const,
-        subtitle: segment.subtitle,
-        videoUrl: exportResult.publicUrl,
-      }));
-
-    const storedEditRender = await store.addRenderTask(
+    const queuedEditRender = await store.addRenderTask(
       project.id,
       {
-        exportUrl: exportResult.publicUrl,
         mediaSettings: parsedSmartEditRequest.data.mediaSettings,
-        previewUrl: exportResult.publicUrl,
-        progress: 100,
+        progress: 0,
         provider: "smart-edit-ffmpeg",
-        providerTaskId: plannerResult.plan.id,
-        sceneClips: segmentClips,
-        status: "completed",
+        status: "queued",
         videoSettings: parsedSmartEditRequest.data.videoSettings,
       },
       [
         {
-          status: plannerResult.fallback.used ? "retrying" : "completed",
-          step: plannerResult.fallback.used
-            ? "smart-edit-plan-fallback"
-            : "smart-edit-plan-model",
-          message: plannerResult.fallback.used
-            ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
-            : `Smart edit planned by ${plannerResult.fallback.provider}.`,
-        },
-        {
-          status: "completed",
-          step: "smart-edit-ffmpeg-compose",
-          message: "Smart edit video composed with ffmpeg and uploaded to storage.",
+          status: "queued",
+          step: "smart-edit-queued",
+          message:
+            "Smart edit job queued. The server will call the general model and ffmpeg in the background.",
         },
       ],
     );
 
-    if (!storedEditRender) {
+    if (!queuedEditRender) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
       return;
     }
 
-    const result = SmartEditResultSchema.parse({
-      exportUrl: exportResult.publicUrl,
-      plan: plannerResult.plan,
-      previewUrl: exportResult.publicUrl,
-      renderTaskId: storedEditRender.renderTask.id,
-      segmentOutputs: smartEditSegmentOutputsForResponse(exportResult.segmentOutputs),
-      traceEvents: storedEditRender.traceEvents,
+    void runSmartEditJob({
+      project,
+      renderTaskId: queuedEditRender.renderTask.id,
+      requestData: parsedSmartEditRequest.data,
+      smartEditComposer,
+      smartEditPlanner,
+      storageProvider,
+      store,
+    }).catch((error) => {
+      console.error("[smart-edit] background job failed unexpectedly.", error);
     });
 
-    response.status(201).json(result);
+    response.status(202).json(queuedEditRender);
   });
 
   router.post("/projects/:projectId/smart-edit/segments/:sceneId/refresh", async (request, response) => {
@@ -3256,139 +3545,46 @@ export const createP0Router = ({
     }
 
     const refreshRequest = parsedRefreshRequest.data;
-    let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
-    try {
-      plannerResult = await smartEditPlanner({
-        apiConfig: refreshRequest.apiConfig,
-        assets: project.assets,
-        assetSlices: project.assetSlices,
-        project,
-        request: {
-          apiConfig: refreshRequest.apiConfig,
-          instructions: refreshRequest.instructions,
-          locale: refreshRequest.locale,
-          mediaSettings: refreshRequest.mediaSettings,
-          segments: refreshRequest.segment ? [refreshRequest.segment] : [],
-          targetLanguage: refreshRequest.targetLanguage,
-          videoSettings: refreshRequest.videoSettings,
-        },
-        scenes: [targetScene],
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "SMART_EDIT_SEGMENT_PLAN_FAILED",
-          message:
-            error instanceof Error ? error.message : "Smart edit segment planning failed.",
-        },
-      });
-      return;
-    }
-
-    const refreshedSegment = plannerResult.plan.segments[0];
-    if (!refreshedSegment) {
-      response.status(502).json({
-        error: {
-          code: "SMART_EDIT_SEGMENT_PLAN_EMPTY",
-          message: "Smart edit segment planning returned no segment.",
-        },
-      });
-      return;
-    }
-
-    let refreshPlan: SmartEditPlan;
-    try {
-      refreshPlan = buildSmartEditRefreshPlan({
-        currentPlan: refreshRequest.currentPlan,
-        projectId: project.id,
-        refreshedSegment,
-        segmentOutputs: refreshRequest.segmentOutputs,
-        targetSceneId: targetScene.id,
-      });
-    } catch (error) {
-      sendInvalidRequest(
-        response,
-        "SMART_EDIT_SEGMENT_OUTPUTS_REQUIRED",
-        error instanceof Error ? error.message : "Reusable segment outputs are required.",
-      );
-      return;
-    }
-
-    let exportResult: Awaited<ReturnType<SmartEditComposer>>;
-    try {
-      exportResult = await smartEditComposer(project.id, refreshPlan, project.assets, {
-        storageProvider,
-        subtitlesEnabled: refreshRequest.mediaSettings.subtitlesEnabled,
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "SMART_EDIT_SEGMENT_COMPOSE_FAILED",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Smart edit segment refresh ffmpeg composition failed.",
-        },
-      });
-      return;
-    }
-
-    const storedEditRender = await store.addRenderTask(
+    const queuedEditRender = await store.addRenderTask(
       project.id,
       {
-        exportUrl: exportResult.publicUrl,
         mediaSettings: refreshRequest.mediaSettings,
-        previewUrl: exportResult.publicUrl,
-        progress: 100,
+        progress: 0,
         provider: "smart-edit-ffmpeg",
-        providerTaskId: refreshPlan.id,
-        sceneClips: refreshPlan.segments
-          .filter((segment) => segment.enabled)
-          .map((segment) => ({
-            sceneId: segment.sceneId,
-            order: segment.order,
-            progress: 100,
-            status: "completed" as const,
-            subtitle: segment.subtitle,
-            videoUrl: segment.sceneId === targetScene.id ? exportResult.publicUrl : undefined,
-          })),
-        status: "completed",
+        smartEditPlan: refreshRequest.currentPlan,
+        smartEditSegmentOutputs: refreshRequest.segmentOutputs,
+        status: "queued",
         videoSettings: refreshRequest.videoSettings,
       },
       [
         {
-          status: plannerResult.fallback.used ? "retrying" : "completed",
-          step: plannerResult.fallback.used
-            ? "smart-edit-segment-plan-fallback"
-            : "smart-edit-segment-plan-model",
-          message: plannerResult.fallback.used
-            ? `Segment refresh used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
-            : `Segment refresh planned by ${plannerResult.fallback.provider}.`,
-        },
-        {
-          status: "completed",
-          step: "smart-edit-segment-refresh-compose",
+          status: "queued",
+          step: "smart-edit-segment-refresh-queued",
           message:
-            "Selected segment was refreshed; unchanged segments reused uploaded segment outputs before final ffmpeg composition.",
+            "Smart edit segment refresh queued. The server will refresh the selected segment in the background.",
         },
       ],
     );
 
-    if (!storedEditRender) {
+    if (!queuedEditRender) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
       return;
     }
 
-    const result = SmartEditResultSchema.parse({
-      exportUrl: exportResult.publicUrl,
-      plan: refreshPlan,
-      previewUrl: exportResult.publicUrl,
-      renderTaskId: storedEditRender.renderTask.id,
-      segmentOutputs: smartEditSegmentOutputsForResponse(exportResult.segmentOutputs),
-      traceEvents: storedEditRender.traceEvents,
+    void runSmartEditSegmentRefreshJob({
+      project,
+      renderTaskId: queuedEditRender.renderTask.id,
+      requestData: refreshRequest,
+      smartEditComposer,
+      smartEditPlanner,
+      storageProvider,
+      store,
+      targetScene,
+    }).catch((error) => {
+      console.error("[smart-edit] background segment refresh failed unexpectedly.", error);
     });
 
-    response.status(201).json(result);
+    response.status(202).json(queuedEditRender);
   });
 
   router.get("/projects/:projectId/export", async (request, response) => {
