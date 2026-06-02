@@ -51,24 +51,37 @@ const isRemoteUrl = (url: string): boolean => /^https?:\/\//iu.test(url);
 
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
-const escapeDrawtextPath = (path: string): string =>
+const escapeFilterPath = (path: string): string =>
   path.replace(/\\/gu, "/").replace(/'/gu, "\\'").replace(/:/gu, "\\:");
 
-export const buildDrawtextFilter = (subtitleTextPath: string): string => {
-  const escapedSubtitleTextPath = escapeDrawtextPath(subtitleTextPath);
+const escapeAssText = (text: string): string =>
+  text
+    .replace(/\r?\n/gu, "\\N")
+    .replace(/[{}]/gu, "")
+    .trim();
+
+export const buildSubtitleFilter = (subtitleAssPath: string): string =>
+  `ass=filename='${escapeFilterPath(subtitleAssPath)}'`;
+
+export const buildSubtitleAss = (subtitle: string): string => {
+  const escapedSubtitle = escapeAssText(subtitle);
   return [
-    "drawtext=",
-    `textfile='${escapedSubtitleTextPath}'`,
-    "x=(w-text_w)/2",
-    "y=h-text_h-96",
-    "fontsize=42",
-    "fontcolor=white",
-    "borderw=3",
-    "bordercolor=black@0.85",
-    "box=1",
-    "boxcolor=black@0.35",
-    "boxborderw=18",
-  ].join(":");
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "PlayResX: 720",
+    "PlayResY: 1280",
+    "WrapStyle: 0",
+    "ScaledBorderAndShadow: yes",
+    "",
+    "[V4+ Styles]",
+    "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    "Style: Default,Arial,42,&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,96,1",
+    "",
+    "[Events]",
+    "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    `Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,${escapedSubtitle}`,
+    "",
+  ].join("\n");
 };
 
 export const materializeSceneClipInputs = async (
@@ -131,7 +144,7 @@ const runFfmpegSubtitleOverlay = async (
   command: string,
   inputPath: string,
   outputPath: string,
-  subtitleTextPath: string,
+  subtitleAssPath: string,
   commandRunner: CommandRunner = runCommand,
 ) => {
   await commandRunner(command, [
@@ -139,7 +152,7 @@ const runFfmpegSubtitleOverlay = async (
     "-i",
     inputPath,
     "-vf",
-    buildDrawtextFilter(subtitleTextPath),
+    buildSubtitleFilter(subtitleAssPath),
     "-map",
     "0:v:0",
     "-map",
@@ -192,13 +205,13 @@ export const composeSceneClipsToLocalFile = async (
   const captionedPaths: string[] = [];
   for (const [index, inputPath] of inputPaths.entries()) {
     const captionedPath = join(workdir, `captioned-${index + 1}.mp4`);
-    const subtitleTextPath = join(workdir, `subtitle-${index + 1}.txt`);
-    await writeFile(subtitleTextPath, sortedClips[index]?.subtitle?.trim() ?? "", "utf8");
+    const subtitleAssPath = join(workdir, `subtitle-${index + 1}.ass`);
+    await writeFile(subtitleAssPath, buildSubtitleAss(sortedClips[index]?.subtitle ?? ""), "utf8");
     await runFfmpegSubtitleOverlay(
       options.command ?? commandFromEnv(),
       inputPath,
       captionedPath,
-      subtitleTextPath,
+      subtitleAssPath,
       options.runCommand ?? runCommand,
     );
     captionedPaths.push(captionedPath);

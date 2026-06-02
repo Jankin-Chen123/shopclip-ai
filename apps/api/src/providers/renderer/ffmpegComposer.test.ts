@@ -58,15 +58,13 @@ describe("ffmpeg composer", () => {
     );
   });
 
-  it("builds a drawtext filter that reads storyboard copy from a text file", async () => {
-    const { buildDrawtextFilter } = await import("./ffmpegComposer.js");
+  it("builds an ASS subtitle filter that reads storyboard copy from a file", async () => {
+    const { buildSubtitleFilter } = await import("./ffmpegComposer.js");
 
-    const filter = buildDrawtextFilter("/tmp/shopclip/subtitle:1.txt");
+    const filter = buildSubtitleFilter("/tmp/shopclip/subtitle:1.ass");
 
-    expect(filter).toContain("drawtext=");
-    expect(filter).toContain("textfile='/tmp/shopclip/subtitle\\:1.txt'");
-    expect(filter).toContain("x=(w-text_w)/2");
-    expect(filter).toContain("y=h-text_h-96");
+    expect(filter).toContain("ass=");
+    expect(filter).toContain("filename='/tmp/shopclip/subtitle\\:1.ass'");
   });
 
   it("burns each scene subtitle before concatenating the captioned clips", async () => {
@@ -115,20 +113,24 @@ describe("ffmpeg composer", () => {
     expect(result?.localUrl).toMatch(/^\/api\/render-exports\/project-caption\/.+\/export\.mp4$/);
     expect(commands).toHaveLength(3);
     expect(commands[0]?.args).toContain("-vf");
-    expect(commands[0]?.args.join(" ")).toContain("textfile=");
+    expect(commands[0]?.args.join(" ")).toContain("ass=filename=");
     expect(commands[0]?.args.at(-1)).toContain("captioned-1.mp4");
-    expect(commands[1]?.args.join(" ")).toContain("textfile=");
+    expect(commands[1]?.args.join(" ")).toContain("ass=filename=");
     expect(commands[1]?.args.at(-1)).toContain("captioned-2.mp4");
     expect(commands[2]?.args).toEqual(expect.arrayContaining(["-f", "concat", "-safe", "0", "-i"]));
 
-    const firstTextfileArg = commands[0]?.args[commands[0].args.indexOf("-vf") + 1];
-    const secondTextfileArg = commands[1]?.args[commands[1].args.indexOf("-vf") + 1];
-    const firstSubtitlePath = firstTextfileArg?.match(/textfile='([^']+)'/)?.[1]?.replace(/\\:/gu, ":");
-    const secondSubtitlePath = secondTextfileArg?.match(/textfile='([^']+)'/)?.[1]?.replace(/\\:/gu, ":");
+    const firstSubtitleArg = commands[0]?.args[commands[0].args.indexOf("-vf") + 1];
+    const secondSubtitleArg = commands[1]?.args[commands[1].args.indexOf("-vf") + 1];
+    const firstSubtitlePath = firstSubtitleArg?.match(/filename='([^']+)'/)?.[1]?.replace(/\\:/gu, ":");
+    const secondSubtitlePath = secondSubtitleArg?.match(/filename='([^']+)'/)?.[1]?.replace(/\\:/gu, ":");
     expect(firstSubtitlePath).toBeTruthy();
     expect(secondSubtitlePath).toBeTruthy();
-    await expect(readFile(firstSubtitlePath!, "utf8")).resolves.toBe("Opening hook copy");
-    await expect(readFile(secondSubtitlePath!, "utf8")).resolves.toBe("Second scene copy");
+    await expect(readFile(firstSubtitlePath!, "utf8")).resolves.toContain(
+      "Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,Opening hook copy",
+    );
+    await expect(readFile(secondSubtitlePath!, "utf8")).resolves.toContain(
+      "Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,Second scene copy",
+    );
 
     const concatListPath = commands[2]?.args[commands[2].args.indexOf("-i") + 1];
     expect(concatListPath).toBeTruthy();
