@@ -125,6 +125,31 @@ const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").repl
 const normalizeDuration = (segment: SmartEditSegment): number =>
   Math.max(0.5, Math.min(15, segment.durationSeconds));
 
+const transitionDurationSeconds = (segment: SmartEditSegment): number => {
+  if (segment.transition === "cut") {
+    return 0;
+  }
+  return Math.min(0.45, Math.max(0.2, normalizeDuration(segment) / 5));
+};
+
+const ffmpegXfadeTransition = (transition: SmartEditSegment["transition"]): string => {
+  if (transition === "wipe") {
+    return "wipeleft";
+  }
+  return "fade";
+};
+
+const buildSegmentVideoFilter = (segment: SmartEditSegment): string => {
+  const filters = [buildScaleFilter()];
+  const duration = normalizeDuration(segment);
+  const fadeDuration = transitionDurationSeconds(segment);
+  if (segment.transition === "fade" && fadeDuration > 0 && duration > fadeDuration * 2) {
+    filters.push(`fade=t=in:st=0:d=${fadeDuration.toFixed(2)}`);
+    filters.push(`fade=t=out:st=${(duration - fadeDuration).toFixed(2)}:d=${fadeDuration.toFixed(2)}`);
+  }
+  return filters.join(",");
+};
+
 const containsReadableText = (text: string): boolean => /[\p{L}\p{N}]/u.test(text);
 
 const isMostlyReplacementSymbols = (text: string): boolean => {
@@ -132,7 +157,10 @@ const isMostlyReplacementSymbols = (text: string): boolean => {
   if (!compact) {
     return true;
   }
-  const symbolCount = [...compact].filter((character) => /[?�□■◇◆]+/u.test(character)).length;
+  const replacementSymbolCodePoints = new Set([0x003f, 0xfffd, 0x25a1, 0x25a0, 0x25c7, 0x25c6]);
+  const symbolCount = [...compact].filter((character) =>
+    replacementSymbolCodePoints.has(character.codePointAt(0) ?? 0),
+  ).length;
   return symbolCount / compact.length >= 0.6;
 };
 
@@ -234,7 +262,7 @@ const createSegmentVideo = async ({
       "-i",
       sourcePath,
       "-vf",
-      buildScaleFilter(),
+      buildSegmentVideoFilter(segment),
       "-c:v",
       "libx264",
       "-preset",
@@ -252,7 +280,7 @@ const createSegmentVideo = async ({
     if (segment.source.startSecond !== undefined) {
       args.push("-ss", String(segment.source.startSecond));
     }
-    args.push("-i", sourcePath, "-t", String(duration), "-vf", buildScaleFilter());
+    args.push("-i", sourcePath, "-t", String(duration), "-vf", buildSegmentVideoFilter(segment));
     args.push(
       "-map",
       "0:v:0",
@@ -343,6 +371,74 @@ const concatSegments = async (
     "yuv420p",
     "-c:a",
     "aac",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ]);
+};
+
+const stitchSegmentsWithTransitions = async (
+  command: string,
+  segments: Array<{ path: string; segment: SmartEditSegment }>,
+  workdir: string,
+  outputPath: string,
+  run: CommandRunner,
+) => {
+  const hasTimelineTransition = segments.some(({ segment }, index) => {
+    if (index === 0) {
+      return false;
+    }
+    return segment.transition === "crossfade" || segment.transition === "wipe";
+  });
+  if (!hasTimelineTransition || segments.length < 2) {
+    await concatSegments(
+      command,
+      segments.map((segment) => segment.path),
+      workdir,
+      outputPath,
+      run,
+    );
+    return;
+  }
+
+  const args = ["-y"];
+  for (const { path } of segments) {
+    args.push("-i", path);
+  }
+
+  const filterParts = segments.map((_, index) => `[${index}:v]setpts=PTS-STARTPTS[v${index}]`);
+  let previousLabel = "v0";
+  let cumulativeOffset = normalizeDuration(segments[0]!.segment);
+  for (let index = 1; index < segments.length; index += 1) {
+    const current = segments[index]!;
+    const transitionDuration = transitionDurationSeconds(current.segment);
+    const outputLabel = index === segments.length - 1 ? "vout" : `x${index}`;
+    const transitionFilter =
+      current.segment.transition === "crossfade" || current.segment.transition === "wipe"
+        ? `xfade=transition=${ffmpegXfadeTransition(current.segment.transition)}:duration=${transitionDuration.toFixed(
+            2,
+          )}:offset=${Math.max(0, cumulativeOffset - transitionDuration).toFixed(2)}`
+        : `concat=n=2:v=1:a=0`;
+    filterParts.push(`[${previousLabel}][v${index}]${transitionFilter}[${outputLabel}]`);
+    previousLabel = outputLabel;
+    cumulativeOffset += normalizeDuration(current.segment) - transitionDuration;
+  }
+
+  await run(command, [
+    ...args,
+    "-filter_complex",
+    filterParts.join(";"),
+    "-map",
+    "[vout]",
+    "-an",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "23",
+    "-pix_fmt",
+    "yuv420p",
     "-movflags",
     "+faststart",
     outputPath,
@@ -571,9 +667,12 @@ export const composeSmartEditToStorage = async (
 
   const stitchedPath = join(workdir, "stitched.mp4");
   const outputPath = join(workdir, "export.mp4");
-  await concatSegments(
+  await stitchSegmentsWithTransitions(
     command,
-    segmentOutputs.map((segment) => segment.outputPath),
+    segmentOutputs.map((segmentOutput) => ({
+      path: segmentOutput.outputPath,
+      segment: enabledSegments.find((segment) => segment.id === segmentOutput.segmentId)!,
+    })),
     workdir,
     stitchedPath,
     run,

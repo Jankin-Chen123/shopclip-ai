@@ -304,6 +304,8 @@ const SYSTEM_PROMPT = [
   "You are a senior ecommerce video editor and growth creative director.",
   "Create a real ffmpeg-ready edit plan for <=60s ecommerce product videos.",
   "Use only the provided merchant-owned assets, generated scene clips, or structured slices.",
+  "If a targetLanguage is provided, rewrite both subtitle and voiceover in that target language for dubbing.",
+  "Keep translated subtitle and voiceover concise, natural, and synchronized with each segment duration.",
   "Return only JSON. Do not wrap JSON in markdown.",
   "Every segment must include: sceneId, order, durationSeconds, transition, subtitle, voiceover, source, rationale.",
   "source.kind must be one of video-slice, image-asset, generated-scene-clip, fallback-still.",
@@ -318,6 +320,9 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     `Style: ${input.project.style}`,
     `Locale: ${input.request.locale}`,
     input.request.targetLanguage ? `Target language: ${input.request.targetLanguage}` : undefined,
+    input.request.targetLanguage
+      ? `Dubbing requirement: output every segment.subtitle and segment.voiceover in ${input.request.targetLanguage}; do not leave them in the source storyboard language unless the target language is the same.`
+      : undefined,
     input.request.instructions ? `User edit instructions: ${input.request.instructions}` : undefined,
     "",
     "Storyboard scenes:",

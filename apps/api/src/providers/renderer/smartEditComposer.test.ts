@@ -225,6 +225,73 @@ describe("smart edit composer", () => {
     expect(bgmCommand?.args.join(" ")).toContain("amix=inputs=2");
   });
 
+  it("uses real ffmpeg fade and xfade filters for requested visual transitions", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      transition: "fade",
+    };
+    plan.segments[1] = {
+      ...plan.segments[1]!,
+      transition: "crossfade",
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    expect(firstRawCommand?.args.join(" ")).toContain("fade=t=in");
+    expect(firstRawCommand?.args.join(" ")).toContain("fade=t=out");
+
+    const xfadeCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.includes("xfade=transition=fade")),
+    );
+    expect(xfadeCommand?.args).toEqual(expect.arrayContaining(["-filter_complex"]));
+    expect(xfadeCommand?.args.join(" ")).toContain("xfade=transition=fade");
+    expect(xfadeCommand?.args.join(" ")).not.toContain("smart-edit-clips.txt");
+  });
+
+  it("maps wipe timeline transitions to a real xfade wipe filter", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[1] = {
+      ...plan.segments[1]!,
+      transition: "wipe",
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    expect(commands.some((entry) => entry.args.some((arg) => arg.includes("xfade=transition=wipeleft")))).toBe(
+      true,
+    );
+  });
+
   it("reuses precomposed generated scene clips without rebuilding unchanged segment subtitles", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
