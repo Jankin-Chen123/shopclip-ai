@@ -166,8 +166,8 @@ export const StudioWorkspace = ({
               <label>
                 {copy.duration}
                 <input
-                  min={1}
-                  max={15}
+                  min={4}
+                  max={12}
                   type="number"
                   value={selectedScene.durationSeconds}
                   onChange={updateSelected("durationSeconds")}

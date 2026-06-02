@@ -1120,6 +1120,22 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     return nextScenes;
   };
 
+  const validateSeedanceSceneDurations = () => {
+    const invalidScene = scenes.find(
+      (scene) => scene.durationSeconds < 4 || scene.durationSeconds > 12,
+    );
+    if (!invalidScene) {
+      return true;
+    }
+    setErrors((current) => ({
+      ...current,
+      render: `分镜 ${invalidScene.order} 的时长为 ${invalidScene.durationSeconds}s。doubao-seedance-1.5-pro 仅支持单分镜 4-12s，请先在步骤三调整分镜时长。`,
+    }));
+    handlePageChange("studio");
+    setSelectedSceneId(invalidScene.id);
+    return false;
+  };
+
   const handleUploadAsset = () => {
     void runAction("asset", "asset", async () => {
       const asset = await addAsset(project?.id, assetDraft);
@@ -1801,6 +1817,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setErrors((current) => ({ ...current, render: "Create or load a project first." }));
       return;
     }
+    if (!validateSeedanceSceneDurations()) {
+      return;
+    }
 
     void runAction("render", "render", async () => {
       await persistDirtyScenesForRender();
@@ -1827,6 +1846,9 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
 
   const handleRetryRender = () => {
     if (!renderTask) {
+      return;
+    }
+    if (!validateSeedanceSceneDurations()) {
       return;
     }
 

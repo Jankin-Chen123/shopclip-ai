@@ -35,6 +35,21 @@ const wait = (milliseconds: number) =>
     setTimeout(resolve, milliseconds);
   });
 
+const makeScenesRenderable = async (
+  baseUrl: string,
+  scenes: Array<{ id: string }>,
+  durationSeconds = 4,
+) => {
+  await Promise.all(
+    scenes.map((scene) =>
+      request(baseUrl, `/api/scenes/${scene.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ durationSeconds }),
+      }),
+    ),
+  );
+};
+
 describe("Seedance render API flow", () => {
   let server: Server;
   let baseUrl: string;
@@ -125,13 +140,14 @@ describe("Seedance render API flow", () => {
         }),
       },
     );
-    const generated = await request(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
       method: "POST",
       body: JSON.stringify({
         assetIds: [asset.body.asset.id],
       }),
     });
     expect(generated.status).toBe(201);
+    await makeScenesRenderable(baseUrl, generated.body.script.scenes);
 
     const render = await request<{
       renderTask: {
@@ -309,10 +325,11 @@ describe("Seedance render API flow", () => {
         targetDurationSeconds: 12,
       }),
     });
-    await request(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
       method: "POST",
       body: JSON.stringify({}),
     });
+    await makeScenesRenderable(baseUrl, generated.body.script.scenes);
     const render = await request<{ renderTask: { id: string } }>(
       baseUrl,
       `/api/projects/${created.body.project.id}/render`,
@@ -394,12 +411,13 @@ describe("Seedance render API flow", () => {
         }),
       },
     );
-    await request(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
       method: "POST",
       body: JSON.stringify({
         assetIds: [asset.body.asset.id],
       }),
     });
+    await makeScenesRenderable(baseUrl, generated.body.script.scenes);
 
     const renderPromise = request<{
       renderTask: {
@@ -473,6 +491,7 @@ describe("Seedance render API flow", () => {
         draftScript: "第二版脚本，只渲染这一版。",
       }),
     });
+    await makeScenesRenderable(baseUrl, latestScript.body.script.scenes);
 
     const render = await request<{
       renderTask: {
