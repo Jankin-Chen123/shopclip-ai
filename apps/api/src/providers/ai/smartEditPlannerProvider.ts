@@ -370,9 +370,108 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     .filter((line): line is string => Boolean(line))
     .join("\n");
 
+type SmartEditTransition = SmartEditPlan["segments"][number]["transition"];
+type SmartEditBgmTrack = SmartEditPlan["audio"]["bgmTrack"];
+type SmartEditVoice = SmartEditPlan["audio"]["voice"];
+
+const SMART_EDIT_TRANSITIONS = new Set<SmartEditTransition>([
+  "cut",
+  "fade",
+  "crossfade",
+  "wipe",
+]);
+const SMART_EDIT_BGM_TRACKS = new Set<SmartEditBgmTrack>([
+  "none",
+  "creator-pop",
+  "soft-lift",
+  "tech-pulse",
+]);
+const SMART_EDIT_VOICES = new Set<SmartEditVoice>([
+  "clear-host",
+  "warm-creator",
+  "energetic-seller",
+]);
+
+const enumStringOr = <T extends string>(
+  value: unknown,
+  allowedValues: Set<T>,
+  fallback: T,
+): T => {
+  const normalized = getString(value)?.toLowerCase();
+  return normalized && allowedValues.has(normalized as T) ? (normalized as T) : fallback;
+};
+
+const cleanOptionalString = (value: unknown): string | undefined => getString(value);
+
+const normalizeModelSource = (
+  rawSource: unknown,
+  localSource: SmartEditPlan["segments"][number]["source"],
+): SmartEditPlan["segments"][number]["source"] => {
+  if (!isRecord(rawSource)) {
+    return localSource;
+  }
+
+  const kind = enumStringOr(
+    rawSource.kind,
+    new Set(["video-slice", "image-asset", "generated-scene-clip", "fallback-still"]),
+    localSource.kind,
+  );
+  const source = {
+    ...localSource,
+    kind,
+    assetId: cleanOptionalString(rawSource.assetId) ?? localSource.assetId,
+    sliceId: cleanOptionalString(rawSource.sliceId) ?? localSource.sliceId,
+    sceneClipUrl: cleanOptionalString(rawSource.sceneClipUrl) ?? localSource.sceneClipUrl,
+    imageUrl: cleanOptionalString(rawSource.imageUrl) ?? localSource.imageUrl,
+    startSecond:
+      typeof rawSource.startSecond === "number" ? rawSource.startSecond : localSource.startSecond,
+    endSecond: typeof rawSource.endSecond === "number" ? rawSource.endSecond : localSource.endSecond,
+  };
+
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined),
+  ) as SmartEditPlan["segments"][number]["source"];
+};
+
+const normalizeModelSegment = (
+  rawSegment: unknown,
+  localSegment: SmartEditPlan["segments"][number],
+): SmartEditPlan["segments"][number] => {
+  if (!isRecord(rawSegment)) {
+    return localSegment;
+  }
+
+  return {
+    ...localSegment,
+    ...rawSegment,
+    id: getString(rawSegment.id) ?? localSegment.id,
+    sceneId: localSegment.sceneId,
+    order: typeof rawSegment.order === "number" ? rawSegment.order : localSegment.order,
+    enabled: typeof rawSegment.enabled === "boolean" ? rawSegment.enabled : localSegment.enabled,
+    durationSeconds:
+      typeof rawSegment.durationSeconds === "number"
+        ? rawSegment.durationSeconds
+        : localSegment.durationSeconds,
+    transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
+    subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
+    voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,
+    source: normalizeModelSource(rawSegment.source, localSegment.source),
+    assetTags: Array.isArray(rawSegment.assetTags)
+      ? rawSegment.assetTags.map(getString).filter((tag): tag is string => Boolean(tag))
+      : localSegment.assetTags,
+    rationale: getString(rawSegment.rationale) ?? localSegment.rationale,
+  };
+};
+
 const normalizeModelPlan = (rawPlan: unknown, input: SmartEditPlannerInput): SmartEditPlan => {
   const raw = isRecord(rawPlan) ? rawPlan : {};
   const local = createLocalPlan(input, "Local normalization baseline.").plan;
+  const rawSegments = Array.isArray(raw.segments) ? raw.segments.filter(isRecord) : [];
+  const rawSegmentsByScene = new Map(
+    rawSegments
+      .map((segment) => [getString(segment.sceneId), segment] as const)
+      .filter((entry): entry is [string, Record<string, unknown>] => Boolean(entry[0])),
+  );
   return SmartEditPlanSchema.parse({
     ...local,
     ...raw,
@@ -382,8 +481,23 @@ const normalizeModelPlan = (rawPlan: unknown, input: SmartEditPlannerInput): Sma
     audio: {
       ...local.audio,
       ...(isRecord(raw.audio) ? raw.audio : {}),
+      bgmTrack: enumStringOr(
+        isRecord(raw.audio) ? raw.audio.bgmTrack : undefined,
+        SMART_EDIT_BGM_TRACKS,
+        local.audio.bgmTrack,
+      ),
+      voice: enumStringOr(
+        isRecord(raw.audio) ? raw.audio.voice : undefined,
+        SMART_EDIT_VOICES,
+        local.audio.voice,
+      ),
+      targetLanguage:
+        (isRecord(raw.audio) ? getString(raw.audio.targetLanguage) : undefined) ??
+        local.audio.targetLanguage,
     },
-    segments: Array.isArray(raw.segments) && raw.segments.length > 0 ? raw.segments : local.segments,
+    segments: local.segments.map((localSegment) =>
+      normalizeModelSegment(rawSegmentsByScene.get(localSegment.sceneId), localSegment),
+    ),
   });
 };
 

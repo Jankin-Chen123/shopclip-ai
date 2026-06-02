@@ -339,4 +339,97 @@ describe("smart edit planner provider", () => {
     );
     expect(result.fallback.used).toBe(false);
   });
+
+  it("normalizes near-valid model plans instead of falling back when enums or empty source URLs are malformed", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "ark-test-key";
+    process.env.AI_GENERAL_MODEL_ID = "general-test-model";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          output_text: JSON.stringify({
+            audio: {
+              bgmTrack: "upbeat pop music",
+              targetLanguage: "zh-CN",
+              voice: "female creator",
+            },
+            createdAt: "2026-06-02T00:00:00.000Z",
+            id: "plan-near-valid",
+            projectId: "wrong-project",
+            segments: [
+              {
+                assetTags: ["hero", "cup"],
+                durationSeconds: 4,
+                enabled: true,
+                id: "segment-near-valid-1",
+                order: 1,
+                rationale: "Use close-up product visual.",
+                sceneId: "scene-1",
+                source: {
+                  assetId: "asset-image",
+                  imageUrl: "",
+                  kind: "image-asset",
+                  sceneClipUrl: "",
+                },
+                subtitle: "这只小猫水杯也太可爱了！",
+                transition: "quick push-in",
+                voiceover: "这只小猫水杯也太可爱了！",
+              },
+            ],
+            strategy: "Normalize imperfect model output.",
+            targetDurationSeconds: 4,
+          }),
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createSmartEditPlan } = await import("./smartEditPlannerProvider.js");
+    const result = await createSmartEditPlan({
+      apiConfig: {
+        general: {
+          credentialSource: "official",
+        },
+      },
+      assets,
+      assetSlices,
+      project,
+      request: {
+        apiConfig: {
+          general: {
+            credentialSource: "official",
+          },
+        },
+        locale: "zh-CN",
+        mediaSettings: {
+          bgmTrack: "creator-pop",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        },
+        segments: [],
+        targetLanguage: "zh-CN",
+        videoSettings: {
+          generateAudio: false,
+          ratio: "9:16",
+          resolution: "720p",
+          watermark: false,
+        },
+      },
+      scenes,
+    });
+
+    expect(result.fallback.used).toBe(false);
+    expect(result.plan.projectId).toBe("project-smart-edit");
+    expect(result.plan.audio.bgmTrack).toBe("creator-pop");
+    expect(result.plan.audio.voice).toBe("clear-host");
+    expect(result.plan.segments[0]?.transition).toBe("cut");
+    expect(result.plan.segments[0]?.source).toEqual({
+      assetId: "asset-image",
+      imageUrl: "https://storage.example.test/cat-cup.png",
+      kind: "image-asset",
+    });
+    expect(result.plan.segments[0]?.subtitle).toBe("这只小猫水杯也太可爱了！");
+  });
 });
