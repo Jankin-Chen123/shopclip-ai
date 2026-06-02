@@ -208,7 +208,7 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - The browser path sends UTF-8 correctly, but accepting corrupted client-side plan text is still unsafe because it can flow into reused unchanged segments during partial refresh.
 - Fix:
   - `buildSmartEditRefreshPlan` now sanitizes both refreshed and reused segments against the project storyboard scenes.
-  - If segment `subtitle` or `voiceover` is unreadable replacement-symbol text, the backend falls back to readable text from the segment's other field or the authoritative storyboard scene.
+  - If segment `subtitle` or `voiceover` is unreadable replacement-symbol text, or mixed readable/symbol text with too high a symbol ratio such as `ins???????,?????????`, the backend falls back to readable text from the segment's other field or the authoritative storyboard scene.
   - Unchanged segments still reuse prior uploaded segment clips through `generated-scene-clip`; only their unsafe copy fields are repaired before the final compose metadata is stored.
 - Verification:
   - `corepack pnpm --filter @shopclip/api exec vitest run src/smart-edit-flow.test.ts`

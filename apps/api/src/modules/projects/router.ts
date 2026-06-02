@@ -1254,7 +1254,11 @@ const segmentOutputsByScene = (
   new Map(outputs.map((output) => [output.sceneId, output]));
 
 const containsReadableTimelineText = (text: string): boolean =>
-  /[\p{L}\p{N}]/u.test(text) && !/^[\s?？�□■◇◆]+$/u.test(text.trim());
+  /[\p{L}\p{N}]/u.test(text) &&
+  !/^[\s?？�□■◇◆]+$/u.test(text.trim()) &&
+  ([...text.replace(/\s/gu, "")].filter((character) => /[?？�□■◇◆]/u.test(character)).length /
+    Math.max(1, [...text.replace(/\s/gu, "")].length) <
+    0.35);
 
 const readableTimelineText = (...candidates: Array<string | undefined>): string | undefined =>
   candidates.find((candidate) => candidate && containsReadableTimelineText(candidate));

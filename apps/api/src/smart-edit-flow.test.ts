@@ -233,11 +233,11 @@ describe("smart edit API flow", () => {
     const currentPlanForRefresh = {
       ...completedFullEdit.renderTask.smartEditPlan!,
       segments: completedFullEdit.renderTask.smartEditPlan!.segments.map((segment, index) =>
-        index === 0
+        index === 0 || index === 2
           ? {
               ...segment,
-              subtitle: "????????",
-              voiceover: "????????",
+              subtitle: index === 0 ? "????????" : "ins???????,?????????",
+              voiceover: index === 0 ? "????????" : "ins???????,?????????",
             }
           : segment,
       ),
@@ -271,6 +271,9 @@ describe("smart edit API flow", () => {
     );
     expect(completedRefresh.renderTask.smartEditPlan?.segments[0]?.subtitle).toBe(
       generated.body.script.scenes[0]?.subtitle,
+    );
+    expect(completedRefresh.renderTask.smartEditPlan?.segments[2]?.subtitle).toBe(
+      generated.body.script.scenes[2]?.subtitle,
     );
     expect(plannerCalls[1]?.scenes).toHaveLength(1);
     expect(plannerCalls[1]?.scenes[0]?.id).toBe(sceneToRefresh.id);
