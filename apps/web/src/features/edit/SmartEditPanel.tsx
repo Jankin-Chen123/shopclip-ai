@@ -275,15 +275,15 @@ export const SmartEditPanel = ({
               <label>
                 {copy.duration}
                 <input
-                  max={15}
-                  min={0.5}
-                  step={0.5}
+                  max={12}
+                  min={4}
+                  step={1}
                   type="number"
                   value={selectedSegment.durationSeconds}
                   onChange={(event) =>
                     updateSelectedSegment((segment) => ({
                       ...segment,
-                      durationSeconds: Number(event.target.value),
+                      durationSeconds: Math.max(4, Math.min(12, Number(event.target.value))),
                     }))
                   }
                 />
@@ -467,8 +467,8 @@ export const SmartEditPanel = ({
                 <strong>{segment.order}</strong>
                 <span>{segment.subtitle}</span>
                 <small>
-                  {segment.durationSeconds}s · {segment.transition}
-                  {!segment.enabled ? ` · ${copy.disabled}` : ""}
+                  {segment.durationSeconds}s - {segment.transition}
+                  {!segment.enabled ? ` - ${copy.disabled}` : ""}
                 </small>
               </button>
             ))}

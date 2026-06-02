@@ -123,7 +123,7 @@ const buildScaleFilter = () =>
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
 const normalizeDuration = (segment: SmartEditSegment): number =>
-  Math.max(0.5, Math.min(15, segment.durationSeconds));
+  Math.max(4, Math.min(12, segment.durationSeconds));
 
 const transitionDurationSeconds = (segment: SmartEditSegment): number => {
   if (segment.transition === "cut") {

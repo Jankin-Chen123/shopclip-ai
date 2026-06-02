@@ -30,6 +30,7 @@ import {
   InspirationPanel,
   replaceInspirationSessionHistoryResult,
 } from "../features/inspiration/InspirationPanel";
+import { SmartEditPanel } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
@@ -1446,6 +1447,86 @@ describe("App", () => {
     expect(markup).toContain("hook → demo → trust → cta");
     expect(markup).not.toContain("Import assets");
     expect(markup).not.toContain("Search external stock assets");
+  });
+
+  it("renders smart edit timeline controls without mojibake separators and constrains duration inputs", () => {
+    const markup = renderToStaticMarkup(
+      <SmartEditPanel
+        assets={[
+          makeAsset({
+            id: "asset-image",
+            name: "Cup hero.png",
+            type: "image",
+            url: "https://cdn.example.test/cup.png",
+          }),
+        ]}
+        assetSlices={[]}
+        copy={copy.en.smartEdit}
+        disabled={false}
+        instructions=""
+        isEditing={false}
+        isRefreshing={false}
+        mediaSettings={{
+          bgmTrack: "creator-pop",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        result={{
+          exportUrl: "https://cdn.example.test/export.mp4",
+          previewUrl: "https://cdn.example.test/export.mp4",
+          renderTaskId: "render-smart-edit",
+          segmentOutputs: [],
+          traceEvents: [],
+          plan: {
+            id: "plan-1",
+            projectId: "project-1",
+            strategy: "Use a compact product edit.",
+            targetDurationSeconds: 8,
+            createdAt: "2026-06-02T00:00:00.000Z",
+            audio: {
+              bgmTrack: "creator-pop",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            segments: [
+              {
+                id: "segment-1",
+                sceneId: "scene-1",
+                order: 1,
+                enabled: true,
+                durationSeconds: 4,
+                transition: "cut",
+                subtitle: "Cute cup hook",
+                voiceover: "Cute cup hook",
+                source: {
+                  assetId: "asset-image",
+                  imageUrl: "https://cdn.example.test/cup.png",
+                  kind: "image-asset",
+                },
+                assetTags: ["hero"],
+                rationale: "Use the hero image.",
+              },
+            ],
+          },
+        }}
+        selectedSegmentId="segment-1"
+        targetLanguage="zh-CN"
+        traceEvents={[]}
+        onInstructionsChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onPlanChange={() => undefined}
+        onRefreshSegment={() => undefined}
+        onSelectedSegmentChange={() => undefined}
+        onStartSmartEdit={() => undefined}
+        onTargetLanguageChange={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('min="4"');
+    expect(markup).toContain('max="12"');
+    expect(markup).toContain("4s - cut");
+    expect(markup).not.toContain("路");
   });
 
   it("parses reference script assets into readable preview sections", () => {

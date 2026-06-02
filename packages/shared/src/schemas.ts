@@ -651,7 +651,7 @@ export const SmartEditSourceSchema = z
 export const SmartEditSegmentOverrideSchema = z.object({
   sceneId: z.string().trim().min(1),
   enabled: z.boolean().default(true),
-  durationSeconds: z.number().positive().max(15).optional(),
+  durationSeconds: z.number().min(4).max(12).optional(),
   transition: SmartEditTransitionSchema.default("cut"),
   subtitle: z.string().trim().min(1).optional(),
   voiceover: z.string().trim().min(1).optional(),
@@ -683,7 +683,7 @@ export const SmartEditSegmentSchema = z.object({
   sceneId: z.string().trim().min(1),
   order: z.number().int().min(1),
   enabled: z.boolean().default(true),
-  durationSeconds: z.number().positive().max(15),
+  durationSeconds: z.number().min(4).max(12),
   transition: SmartEditTransitionSchema.default("cut"),
   subtitle: z.string().trim().min(1),
   voiceover: z.string().trim().min(1),

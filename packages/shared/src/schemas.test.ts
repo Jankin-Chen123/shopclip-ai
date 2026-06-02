@@ -17,6 +17,7 @@ import {
   SmartEditPlanSchema,
   SmartEditRequestSchema,
   SmartEditResultSchema,
+  SmartEditSegmentSchema,
   SmartEditSegmentRefreshRequestSchema,
   StoryboardSceneSchema,
   TraceEventSchema,
@@ -420,6 +421,34 @@ describe("shared contract schemas", () => {
     expect(parsed.success ? parsed.data.apiConfig?.general?.model : undefined).toBe(
       "custom-text-model",
     );
+  });
+
+  it("limits smart edit segment durations to the Seedance 1.5 Pro supported 4-12 second range", () => {
+    const segment = {
+      id: "segment-1",
+      sceneId: "scene-1",
+      order: 1,
+      enabled: true,
+      durationSeconds: 4,
+      transition: "cut",
+      subtitle: "Readable caption",
+      voiceover: "Readable caption",
+      source: {
+        assetId: "asset-1",
+        imageUrl: "https://cdn.example.test/cup.png",
+        kind: "image-asset",
+      },
+      assetTags: ["hero"],
+      rationale: "Use the strongest product visual.",
+    };
+
+    expect(SmartEditSegmentSchema.safeParse(segment).success).toBe(true);
+    expect(
+      SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 3.5 }).success,
+    ).toBe(false);
+    expect(
+      SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 12.5 }).success,
+    ).toBe(false);
   });
 
   it("validates normalized external asset search results", () => {

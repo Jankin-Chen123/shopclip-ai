@@ -58,6 +58,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const getString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
+const normalizeSegmentDuration = (durationSeconds: number): number =>
+  Math.max(4, Math.min(12, durationSeconds));
+
 const getResponsesApiText = (body: unknown) => {
   if (!isRecord(body)) {
     return undefined;
@@ -274,7 +277,7 @@ const createLocalPlan = (
       return {
         id: `edit_segment_${scene.id}`,
         assetTags: linkedAsset?.tags ?? [],
-        durationSeconds: override?.durationSeconds ?? scene.durationSeconds,
+        durationSeconds: normalizeSegmentDuration(override?.durationSeconds ?? scene.durationSeconds),
         enabled: override?.enabled ?? true,
         order: index + 1,
         rationale:
@@ -450,7 +453,7 @@ const normalizeModelSegment = (
     enabled: typeof rawSegment.enabled === "boolean" ? rawSegment.enabled : localSegment.enabled,
     durationSeconds:
       typeof rawSegment.durationSeconds === "number"
-        ? rawSegment.durationSeconds
+        ? normalizeSegmentDuration(rawSegment.durationSeconds)
         : localSegment.durationSeconds,
     transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,

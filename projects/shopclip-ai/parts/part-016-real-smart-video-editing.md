@@ -178,6 +178,29 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/api build`
 
+## 2026-06-02 Smart Edit Duration And Timeline UI Hardening
+
+- User-facing issue:
+  - Step 05 segment duration input still allowed `0.5-15s`, while the current supported single-segment duration range is `[4,12]`.
+  - The timeline separator previously used a non-ASCII middle dot, which rendered correctly in browser but is fragile in logs/terminals and could be confused with mojibake-style symbols.
+- Fix:
+  - `SmartEditSegmentSchema` and `SmartEditSegmentOverrideSchema` now enforce `durationSeconds` in `[4,12]`.
+  - The smart-edit planner normalizes both local and model-returned durations into `[4,12]`.
+  - The ffmpeg smart-edit composer clamps segment duration to `[4,12]` before materializing still/video clips.
+  - Step 05 duration input now exposes `min=4`, `max=12`, `step=1`, and clamps user edits before updating the plan.
+  - Timeline segment labels now use ASCII ` - ` separators.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared exec vitest run src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts src/providers/renderer/smartEditComposer.test.ts src/smart-edit-flow.test.ts`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+
 ## 2026-06-02 Subtitle Rendering Fix
 
 - Root cause investigation:
