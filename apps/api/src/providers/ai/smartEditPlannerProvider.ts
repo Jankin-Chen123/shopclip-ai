@@ -61,6 +61,157 @@ const getString = (value: unknown): string | undefined =>
 const normalizeSegmentDuration = (durationSeconds: number): number =>
   Math.max(4, Math.min(12, durationSeconds));
 
+const textFromUnknown = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(textFromUnknown).join(" ");
+  }
+  if (isRecord(value)) {
+    return Object.values(value).map(textFromUnknown).join(" ");
+  }
+  return "";
+};
+
+const normalizeSearchText = (value: string): string => value.toLowerCase().replace(/\s+/gu, " ");
+
+const queryTokens = (value: string): string[] => {
+  const normalized = normalizeSearchText(value);
+  const latinTokens = normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+  const cjkTokens = normalized.match(/[\p{Script=Han}]{2,}/gu) ?? [];
+  return [...new Set([...latinTokens, ...cjkTokens])].slice(0, 40);
+};
+
+const sceneSearchText = (scene: StoryboardScene, project: ProjectBrief): string =>
+  [
+    scene.subtitle,
+    scene.voiceover,
+    scene.visualPrompt,
+    project.productName,
+    project.audience,
+    ...project.sellingPoints,
+    project.style,
+    project.tone,
+  ].join(" ");
+
+const inferredSceneRole = (scene: StoryboardScene, sceneCount: number): string => {
+  const text = normalizeSearchText(`${scene.subtitle} ${scene.voiceover} ${scene.visualPrompt}`);
+  if (scene.order === 1 || /hook|opening|开场|吸引|第一秒|3秒/u.test(text)) {
+    return "hook";
+  }
+  if (scene.order >= sceneCount || /cta|下单|购买|点击|商品卡|抢购|结尾/u.test(text)) {
+    return "cta";
+  }
+  if (/trust|proof|证明|材质|防漏|测试|信任/u.test(text)) {
+    return "trust";
+  }
+  return "demo";
+};
+
+const keywordScore = (query: string, candidateText: string): number => {
+  const candidate = normalizeSearchText(candidateText);
+  return queryTokens(query).reduce((score, token) => {
+    if (!candidate.includes(token)) {
+      return score;
+    }
+    return score + Math.min(4, Math.max(1, token.length / 2));
+  }, 0);
+};
+
+const assetSearchCorpus = (asset: AssetMetadata): string =>
+  [
+    asset.name,
+    asset.type,
+    asset.mimeType,
+    asset.embeddingText,
+    ...asset.tags,
+    textFromUnknown(asset.structuredMetadata),
+    textFromUnknown(asset.metadata),
+  ].join(" ");
+
+const sliceSearchCorpus = (slice: AssetSlice): string =>
+  [
+    slice.label,
+    slice.embeddingText,
+    slice.searchText,
+    ...slice.tags,
+    textFromUnknown(slice.metadata),
+  ].join(" ");
+
+const assetScoreForScene = (
+  asset: AssetMetadata,
+  scene: StoryboardScene,
+  project: ProjectBrief,
+): number => {
+  const query = sceneSearchText(scene, project);
+  let score = keywordScore(query, assetSearchCorpus(asset));
+  if (scene.assetId === asset.id) {
+    score += 8;
+  }
+  if (asset.status === "ready") {
+    score += 1;
+  }
+  if (asset.type === "image" && /close|hero|主图|特写|封面/u.test(scene.visualPrompt)) {
+    score += 2;
+  }
+  if (asset.type === "video" && /demo|action|手|使用|演示|测试/u.test(normalizeSearchText(query))) {
+    score += 2;
+  }
+  return score;
+};
+
+const sliceScoreForScene = (
+  slice: AssetSlice,
+  scene: StoryboardScene,
+  project: ProjectBrief,
+  sceneCount: number,
+): number => {
+  const query = sceneSearchText(scene, project);
+  let score = keywordScore(query, sliceSearchCorpus(slice));
+  const role = inferredSceneRole(scene, sceneCount);
+  if (slice.metadata?.suitableSceneRoles.some((candidate) => candidate === role)) {
+    score += 8;
+  }
+  if (slice.tags.includes(role)) {
+    score += 4;
+  }
+  if (slice.metadata?.shotType && normalizeSearchText(query).includes(slice.metadata.shotType)) {
+    score += 2;
+  }
+  if (slice.startSecond !== undefined && slice.endSecond !== undefined) {
+    score += 1;
+  }
+  return score;
+};
+
+const bestAssetForScene = (
+  scene: StoryboardScene,
+  assets: AssetMetadata[],
+  project: ProjectBrief,
+): AssetMetadata | undefined =>
+  [...assets]
+    .filter((asset) => asset.status === "ready")
+    .sort(
+      (left, right) =>
+        assetScoreForScene(right, scene, project) - assetScoreForScene(left, scene, project),
+    )[0] ?? assets[0];
+
+const bestSliceForScene = (
+  scene: StoryboardScene,
+  slices: AssetSlice[],
+  project: ProjectBrief,
+  sceneCount: number,
+): AssetSlice | undefined =>
+  [...slices].sort(
+    (left, right) =>
+      sliceScoreForScene(right, scene, project, sceneCount) -
+      sliceScoreForScene(left, scene, project, sceneCount),
+  )[0];
+
 const getResponsesApiText = (body: unknown) => {
   if (!isRecord(body)) {
     return undefined;
@@ -232,8 +383,12 @@ const sourceForScene = (
   scene: StoryboardScene,
   assets: AssetMetadata[],
   assetSlices: AssetSlice[],
+  project: ProjectBrief,
+  sceneCount: number,
 ): SmartEditPlan["segments"][number]["source"] => {
-  const linkedAsset = assets.find((asset) => asset.id === scene.assetId) ?? assets[0];
+  const linkedAsset =
+    (scene.assetId ? assets.find((asset) => asset.id === scene.assetId) : undefined) ??
+    bestAssetForScene(scene, assets, project);
   if (!linkedAsset) {
     return {
       imageUrl:
@@ -243,8 +398,7 @@ const sourceForScene = (
     };
   }
   const slices = assetSlices.filter((slice) => slice.assetId === linkedAsset.id);
-  const bestSlice =
-    slices.find((slice) => slice.metadata?.suitableSceneRoles.length) ?? slices[0];
+  const bestSlice = bestSliceForScene(scene, slices, project, sceneCount);
   if (linkedAsset.type === "video" && bestSlice) {
     return {
       assetId: linkedAsset.id,
@@ -270,7 +424,9 @@ const createLocalPlan = (
     .sort((left, right) => left.order - right.order)
     .map((scene, index) => {
       const override = overrides.get(scene.id);
-      const source = override?.source ?? sourceForScene(scene, input.assets, input.assetSlices);
+      const source =
+        override?.source ??
+        sourceForScene(scene, input.assets, input.assetSlices, input.project, input.scenes.length);
       const linkedAsset = source.assetId
         ? input.assets.find((asset) => asset.id === source.assetId)
         : undefined;

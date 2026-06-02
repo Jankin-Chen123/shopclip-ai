@@ -432,4 +432,132 @@ describe("smart edit planner provider", () => {
     });
     expect(result.plan.segments[0]?.subtitle).toBe("这只小猫水杯也太可爱了！");
   });
+
+  it("uses product, video, and slice-level tags to choose the best structured video slice baseline", async () => {
+    process.env.AI_PROVIDER_MODE = "mock";
+    const { createSmartEditPlan } = await import("./smartEditPlannerProvider.js");
+    const videoAsset: AssetMetadata = {
+      id: "asset-video-demo",
+      mimeType: "video/mp4",
+      name: "hands-on straw leakproof demo.mp4",
+      sizeBytes: 1024,
+      status: "ready",
+      tags: ["cup", "demo", "leakproof"],
+      type: "video",
+      url: "https://storage.example.test/cat-cup-demo.mp4",
+      embeddingText: "cat cup straw leakproof demo video",
+    };
+    const heroAsset: AssetMetadata = {
+      ...assets[0]!,
+      tags: ["hero", "packshot"],
+    };
+    const demoScene: StoryboardScene = {
+      durationSeconds: 4,
+      id: "scene-demo",
+      order: 2,
+      projectId: "project-smart-edit",
+      status: "ready",
+      subtitle: "Show the hidden straw and leakproof shake test.",
+      visualPrompt: "Hands demonstrate the straw lid, then shake the cup upside down.",
+      voiceover: "The hidden straw is convenient and the lid does not leak.",
+    };
+    const structuredSlices: AssetSlice[] = [
+      {
+        assetId: "asset-video-demo",
+        endSecond: 4,
+        id: "slice-packshot",
+        label: "packshot opening",
+        searchText: "static packshot hero close-up",
+        startSecond: 0,
+        tags: ["hook", "packshot"],
+        metadata: {
+          action: "static product reveal",
+          assetId: "asset-video-demo",
+          cameraMovement: "static",
+          composition: "center product",
+          embeddingText: "static packshot hero close-up",
+          endSecond: 4,
+          frameKeys: [],
+          keyElements: ["cat cup"],
+          mood: "cute",
+          ocrText: "",
+          productVisibility: "clear",
+          searchText: "static packshot hero close-up",
+          shotType: "close_up",
+          sliceId: "slice-packshot",
+          startSecond: 0,
+          suitableSceneRoles: ["hook"],
+          summary: "Static hero close-up of the cat cup.",
+          transcript: "",
+          transition: "cut",
+          visibleProductParts: ["print"],
+        },
+      },
+      {
+        assetId: "asset-video-demo",
+        endSecond: 8,
+        id: "slice-leakproof-demo",
+        label: "hidden straw leakproof shake demo",
+        searchText: "hands demonstrate hidden straw leakproof shake test",
+        startSecond: 4,
+        tags: ["demo", "straw", "leakproof", "hands"],
+        metadata: {
+          action: "hands open the hidden straw and shake the cup upside down",
+          assetId: "asset-video-demo",
+          cameraMovement: "push_in",
+          composition: "hands and cup detail",
+          embeddingText: "hidden straw leakproof hands demo",
+          endSecond: 8,
+          frameKeys: [],
+          keyElements: ["hidden straw", "leakproof lid", "hands"],
+          mood: "practical",
+          ocrText: "leakproof straw",
+          productVisibility: "clear",
+          searchText: "hands demonstrate hidden straw leakproof shake test",
+          shotType: "close_up",
+          sliceId: "slice-leakproof-demo",
+          startSecond: 4,
+          suitableSceneRoles: ["demo"],
+          summary: "Hands open the hidden straw and shake the cup to prove it does not leak.",
+          transcript: "Hidden straw, shake test, no leaks.",
+          transition: "cut",
+          visibleProductParts: ["lid", "straw"],
+        },
+      },
+    ];
+
+    const result = await createSmartEditPlan({
+      assets: [heroAsset, videoAsset],
+      assetSlices: structuredSlices,
+      project,
+      request: {
+        locale: "en-US",
+        mediaSettings: {
+          bgmTrack: "none",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        },
+        segments: [],
+        targetLanguage: "en-US",
+        videoSettings: {
+          generateAudio: false,
+          ratio: "9:16",
+          resolution: "720p",
+          watermark: false,
+        },
+      },
+      scenes: [demoScene],
+    });
+
+    expect(result.fallback.used).toBe(true);
+    expect(result.plan.segments[0]?.source).toEqual({
+      assetId: "asset-video-demo",
+      endSecond: 8,
+      kind: "video-slice",
+      sliceId: "slice-leakproof-demo",
+      startSecond: 4,
+    });
+    expect(result.plan.segments[0]?.assetTags).toEqual(["cup", "demo", "leakproof"]);
+  });
 });

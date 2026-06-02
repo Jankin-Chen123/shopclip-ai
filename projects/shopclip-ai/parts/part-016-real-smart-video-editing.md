@@ -372,6 +372,36 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/api build`
 
+## 2026-06-03 Live Step 05 Interaction Audit
+
+- Browser verification against `http://152.136.252.134/#edit`:
+  - Loaded the latest `水杯 / 小猫水杯` history project and opened Step 05.
+  - Confirmed the completed smart-edit result rendered `Edited preview`, `Selected segment live preview`, the current segment image URL, and the live caption `这软萌小猫水杯颜值也太戳少女心了！`.
+  - Confirmed the timeline rendered three draggable segment buttons with real captions and durations: `4s - cut`, `4s - fade`, `4s - fade`.
+  - Pressing `ArrowRight` selected segment 2; pressing `Delete` changed segment 2 to `4s - fade - Disabled`; dragging segment 1 onto segment 3 reordered the visible timeline to `2 -> 3 -> 1`.
+- Live backend trace evidence:
+  - Full smart edit task `1e77494c-600e-4eee-a8f8-738113b525f6` completed with `smart-edit-plan-model`, `smart-edit-ffmpeg-compose-started`, and `smart-edit-ffmpeg-compose`.
+  - The task produced three uploaded segment outputs and COS export `projects/cmpqigao80001whl4g32ii0bv/smart-edits/fc239888-1ba5-4b69-8f93-8f47dece8c87/export.mp4`.
+  - Segment refresh tasks including `fccce941-409c-4194-9773-339400dd9304` completed with `smart-edit-segment-plan-model` and `smart-edit-segment-refresh-compose`, proving the real local-refresh route reused existing segment outputs before final ffmpeg recomposition.
+- Current completion caveats:
+  - The current refresh implementation still recomposes the final export after reusing unchanged segment outputs; this satisfies the no-full-segment-regeneration goal but does not avoid final ffmpeg recomposition.
+  - BGM choices are real ffmpeg-generated beds, not merchant-selected commercial music assets.
+
+## 2026-06-03 Structured Slice Recall Baseline
+
+- Issue found during completion audit:
+  - The model prompt already included structured assets and slices, but the fallback/baseline plan still leaned too much on an existing `scene.assetId` or the first available asset.
+  - This was weak evidence for the requirement that smart editing should use the product/video/slice three-level tag system.
+- Fix:
+  - Added a planner-side recall baseline that scores each scene against asset-level tags, embedding/search text, structured asset metadata, and slice-level tags/metadata.
+  - The scorer infers a commerce scene role (`hook`, `demo`, `trust`, `cta`) from scene order and copy, then boosts matching `slice.metadata.suitableSceneRoles`.
+  - Video assets now resolve to the best matching slice when slice evidence is stronger; image assets still resolve to image sources.
+  - User-provided segment source overrides still win over automatic recall.
+- Verification:
+  - Added a regression test where an unbound demo scene chooses `slice-leakproof-demo` from a video asset based on product, video, and slice-level metadata instead of defaulting to the first hero image.
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+
 ## 2026-06-03 Smart Edit BGM Track Differentiation
 
 - Issue found during completion audit:
