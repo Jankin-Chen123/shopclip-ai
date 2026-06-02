@@ -327,6 +327,12 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/api build`
 - Live verification after deploy:
+  - Deployed commit `75ce438` with `/www/wwwroot/shopclip-ai/deploy.sh`.
+  - `POST /api/projects/cmpqigao80001whl4g32ii0bv/smart-edit` with `bgmTrack: "tech-pulse"` completed as task `1e77494c-600e-4eee-a8f8-738113b525f6`.
+  - Trace included `smart-edit-plan-model` and `smart-edit-ffmpeg-compose`, and the returned `smartEditPlan.audio.bgmTrack` stayed `tech-pulse`.
+  - Export URL: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmpqigao80001whl4g32ii0bv/smart-edits/fc239888-1ba5-4b69-8f93-8f47dece8c87/export.mp4`.
+  - Server `ffmpeg -i` reported both an H.264 video stream and an AAC audio stream, proving the deployed smart-edit ffmpeg path produced an audio-bearing export.
+- Live verification after deploy:
   - Deployed commit `d2fff9e` with `/www/wwwroot/shopclip-ai/deploy.sh`.
   - `POST /api/projects/cmpqigao80001whl4g32ii0bv/smart-edit` with `videoSettings: { ratio: "16:9", resolution: "480p" }` completed as task `fcca8ed2-bda6-4cbd-852f-85e04a194cc9`.
   - Trace included `smart-edit-plan-model` and `smart-edit-ffmpeg-compose`.
