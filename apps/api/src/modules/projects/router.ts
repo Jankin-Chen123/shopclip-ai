@@ -2805,11 +2805,7 @@ export const createP0Router = ({
       } as const;
       providerResult = textProviderResult.fallback.used
         ? generateFallbackScript(workingProject, scriptContext)
-        : structureModelScript(
-            workingProject,
-            scriptContext,
-            textProviderResult.fallback.provider,
-          );
+        : structureModelScript(workingProject, scriptContext, textProviderResult.fallback.provider);
     } catch (error) {
       sendScriptGenerationFailure(response, error);
       return;
@@ -2911,7 +2907,7 @@ export const createP0Router = ({
         if (
           providerResult.renderTask.status === "completed" &&
           providerResult.renderTask.sceneClips &&
-          providerResult.renderTask.sceneClips.length > 1
+          providerResult.renderTask.sceneClips.length > 0
         ) {
           try {
             const exportUrl = await publishRenderExport(
@@ -3048,7 +3044,7 @@ export const createP0Router = ({
       completedRender &&
       (!exportUrl || isLocalRenderExportUrl(exportUrl)) &&
       completedRender.sceneClips &&
-      completedRender.sceneClips.length > 1
+      completedRender.sceneClips.length > 0
     ) {
       try {
         exportUrl = await publishRenderExport(project.id, completedRender.sceneClips);

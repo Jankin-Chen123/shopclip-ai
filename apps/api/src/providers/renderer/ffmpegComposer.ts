@@ -6,9 +6,18 @@ import { randomUUID } from "node:crypto";
 
 import type { SceneRenderClip } from "@shopclip/shared";
 
-const commandFromEnv = () => process.env.FFMPEG_PATH?.trim() || process.env.FFMPEG_BINARY?.trim() || "ffmpeg";
+const commandFromEnv = () =>
+  process.env.FFMPEG_PATH?.trim() || process.env.FFMPEG_BINARY?.trim() || "ffmpeg";
 export const renderExportDir = () =>
   process.env.RENDER_EXPORT_DIR?.trim() || join(tmpdir(), "shopclip-ai-render-exports");
+
+type CommandRunner = (command: string, args: string[]) => Promise<void>;
+
+interface ComposeSceneClipsOptions {
+  command?: string;
+  fetchImpl?: typeof fetch;
+  runCommand?: CommandRunner;
+}
 
 export const formatFfmpegExitError = (
   code: number | null,
@@ -19,7 +28,7 @@ export const formatFfmpegExitError = (
   return new Error(`ffmpeg exited with ${exit}. ${stderr.slice(0, 1200)}`);
 };
 
-const runCommand = (command: string, args: string[]) =>
+const runCommand: CommandRunner = (command: string, args: string[]) =>
   new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { windowsHide: true });
     let stderr = "";
@@ -38,8 +47,32 @@ const runCommand = (command: string, args: string[]) =>
 
 const isRemoteUrl = (url: string): boolean => /^https?:\/\//iu.test(url);
 
-const escapeConcatPath = (path: string): string =>
-  path.replace(/\\/g, "/").replace(/'/g, "'\\''");
+const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
+
+const escapeDrawtextText = (text: string): string =>
+  text
+    .replace(/\r?\n/gu, " ")
+    .replace(/\\/gu, "\\\\")
+    .replace(/'/gu, "\\'")
+    .replace(/:/gu, "\\:")
+    .replace(/%/gu, "\\%");
+
+export const buildDrawtextFilter = (subtitle: string): string => {
+  const escapedSubtitle = escapeDrawtextText(subtitle.trim());
+  return [
+    "drawtext=",
+    `text='${escapedSubtitle}'`,
+    "x=(w-text_w)/2",
+    "y=h-text_h-96",
+    "fontsize=42",
+    "fontcolor=white",
+    "borderw=3",
+    "bordercolor=black@0.85",
+    "box=1",
+    "boxcolor=black@0.35",
+    "boxborderw=18",
+  ].join(":");
+};
 
 export const materializeSceneClipInputs = async (
   videoUrls: string[],
@@ -67,22 +100,15 @@ const runFfmpegConcat = async (
   command: string,
   concatListPath: string,
   outputPath: string,
+  commandRunner: CommandRunner = runCommand,
 ) => {
-  const baseArgs = [
-    "-y",
-    "-f",
-    "concat",
-    "-safe",
-    "0",
-    "-i",
-    concatListPath,
-  ];
+  const baseArgs = ["-y", "-f", "concat", "-safe", "0", "-i", concatListPath];
 
   try {
-    await runCommand(command, [...baseArgs, "-c", "copy", outputPath]);
+    await commandRunner(command, [...baseArgs, "-c", "copy", outputPath]);
     return;
   } catch (copyError) {
-    await runCommand(command, [
+    await commandRunner(command, [
       ...baseArgs,
       "-c:v",
       "mpeg4",
@@ -104,6 +130,35 @@ const runFfmpegConcat = async (
   }
 };
 
+const runFfmpegSubtitleOverlay = async (
+  command: string,
+  inputPath: string,
+  outputPath: string,
+  subtitle: string,
+  commandRunner: CommandRunner = runCommand,
+) => {
+  await commandRunner(command, [
+    "-y",
+    "-i",
+    inputPath,
+    "-vf",
+    buildDrawtextFilter(subtitle),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "23",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ]);
+};
+
 export interface LocalSceneClipExport {
   exportId: string;
   localUrl: string;
@@ -113,19 +168,13 @@ export interface LocalSceneClipExport {
 export const composeSceneClipsToLocalFile = async (
   projectId: string,
   clips: SceneRenderClip[],
+  options: ComposeSceneClipsOptions = {},
 ): Promise<LocalSceneClipExport | undefined> => {
-  const videoUrls = [...clips]
+  const sortedClips = [...clips]
     .sort((left, right) => left.order - right.order)
-    .map((clip) => clip.videoUrl)
-    .filter((url): url is string => Boolean(url));
-  if (videoUrls.length <= 1) {
-    return videoUrls[0]
-      ? {
-          exportId: "single-scene",
-          localUrl: videoUrls[0],
-          outputPath: videoUrls[0],
-        }
-      : undefined;
+    .filter((clip): clip is SceneRenderClip & { videoUrl: string } => Boolean(clip.videoUrl));
+  if (sortedClips.length === 0) {
+    return undefined;
   }
 
   const exportId = randomUUID();
@@ -133,14 +182,36 @@ export const composeSceneClipsToLocalFile = async (
   await mkdir(workdir, { recursive: true });
   const concatListPath = join(workdir, "clips.txt");
   const outputPath = join(workdir, "export.mp4");
-  const inputPaths = await materializeSceneClipInputs(videoUrls, workdir);
+  const inputPaths = await materializeSceneClipInputs(
+    sortedClips.map((clip) => clip.videoUrl),
+    workdir,
+    options.fetchImpl ?? fetch,
+  );
+  const captionedPaths = await Promise.all(
+    inputPaths.map(async (inputPath, index) => {
+      const captionedPath = join(workdir, `captioned-${index + 1}.mp4`);
+      await runFfmpegSubtitleOverlay(
+        options.command ?? commandFromEnv(),
+        inputPath,
+        captionedPath,
+        sortedClips[index]?.subtitle ?? "",
+        options.runCommand ?? runCommand,
+      );
+      return captionedPath;
+    }),
+  );
   await writeFile(
     concatListPath,
-    inputPaths.map((url) => `file '${escapeConcatPath(url)}'`).join("\n"),
+    captionedPaths.map((url) => `file '${escapeConcatPath(url)}'`).join("\n"),
     "utf8",
   );
 
-  await runFfmpegConcat(commandFromEnv(), concatListPath, outputPath);
+  await runFfmpegConcat(
+    options.command ?? commandFromEnv(),
+    concatListPath,
+    outputPath,
+    options.runCommand ?? runCommand,
+  );
   return {
     exportId,
     localUrl: `/api/render-exports/${encodeURIComponent(projectId)}/${encodeURIComponent(exportId)}/export.mp4`,

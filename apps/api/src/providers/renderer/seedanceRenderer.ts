@@ -122,9 +122,7 @@ const getDefaultVideoSettings = (): SeedanceVideoSettings => ({
   seed: parseNumberEnv("AI_VIDEO_SEED"),
 });
 
-const resolveVideoSettings = (
-  requestSettings?: VideoGenerationSettings,
-): SeedanceVideoSettings => {
+const resolveVideoSettings = (requestSettings?: VideoGenerationSettings): SeedanceVideoSettings => {
   const defaults = getDefaultVideoSettings();
   return {
     ratio: requestSettings?.ratio ?? defaults.ratio,
@@ -144,13 +142,18 @@ const isExplicitMockRenderMode = () =>
   firstEnv("VIDEO_RENDER_PROVIDER_MODE")?.toLowerCase() === "mock";
 
 const maxDurationForModel = (model: string) =>
-  /seedance[-_]2/i.test(model) ? DEFAULT_VIDEO_2_PRO_MAX_DURATION : DEFAULT_VIDEO_15_PRO_MAX_DURATION;
+  /seedance[-_]2/i.test(model)
+    ? DEFAULT_VIDEO_2_PRO_MAX_DURATION
+    : DEFAULT_VIDEO_15_PRO_MAX_DURATION;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const getString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const sceneCopyForRender = (scene: ProjectSnapshot["scenes"][number]) =>
+  scene.voiceover.trim() || scene.subtitle.trim();
 
 const parseJson = async (response: Response): Promise<unknown> => {
   try {
@@ -187,16 +190,16 @@ const requestArkJson = async (
 const promptForProject = (project: ProjectSnapshot, scenes = project.scenes) => {
   const sceneLines = scenes
     .sort((left, right) => left.order - right.order)
-    .map(
-      (scene) => {
-        const copy = scene.voiceover.trim() || scene.subtitle.trim();
-        return `${scene.order}. 时长必须为 ${Math.round(scene.durationSeconds)} 秒 | 画面: ${scene.visualPrompt} | 文案: ${copy}`;
-      },
-    )
+    .map((scene) => {
+      const copy = sceneCopyForRender(scene);
+      return `${scene.order}. 时长必须为 ${Math.round(scene.durationSeconds)} 秒 | 画面: ${scene.visualPrompt} | 后期字幕文案参考（不要出现在画面中）: ${copy}`;
+    })
     .join("\n");
 
   return [
     "生成一条电商带货短视频，严格保持参考素材中的产品外观，不要添加不存在的 Logo 或包装文字。",
+    "生成的视频画面中绝对不要出现任何字幕、文字、caption、贴纸文字、价格文字、按钮文字或水印文字；后期字幕会由 ffmpeg 统一叠加。",
+    "分镜文案只用于理解镜头语义、节奏和口播氛围，不要把这些文字渲染到画面里，也不要生成字幕条、大字字幕或按钮文字。",
     `产品: ${project.productName}`,
     `目标人群: ${project.audience}`,
     `卖点: ${project.sellingPoints.join("、")}`,
@@ -398,9 +401,7 @@ const errorMessageFromBody = (body: unknown) => {
 
 const currentStoryboardScenes = (project: ProjectSnapshot) => {
   const latestScriptScenes = project.scripts.at(-1)?.scenes;
-  const scenes = latestScriptScenes && latestScriptScenes.length > 0
-    ? latestScriptScenes
-    : project.scenes;
+  const scenes = project.scenes.length > 0 ? project.scenes : (latestScriptScenes ?? []);
   return [...scenes].sort((left, right) => left.order - right.order);
 };
 
@@ -410,14 +411,13 @@ const projectWithCurrentStoryboard = (project: ProjectSnapshot): ProjectSnapshot
 });
 
 const queuedSceneClips = (project: ProjectSnapshot): SceneRenderClip[] =>
-  currentStoryboardScenes(project)
-    .map((scene) => ({
-      sceneId: scene.id,
-      order: scene.order,
-      subtitle: scene.subtitle,
-      status: "queued",
-      progress: 0,
-    }));
+  currentStoryboardScenes(project).map((scene) => ({
+    sceneId: scene.id,
+    order: scene.order,
+    subtitle: sceneCopyForRender(scene),
+    status: "queued",
+    progress: 0,
+  }));
 
 const providerTaskIdFromClips = (sceneClips: SceneRenderClip[]) => {
   const providerTaskIds = sceneClips
@@ -461,12 +461,14 @@ export const createSeedanceRenderProvider = () => {
         const providerTaskId = taskIdFromBody(body);
         const videoUrl = collectVideoUrls(body)[0];
         if (!providerTaskId && !videoUrl) {
-          throw new Error(`Seedance did not return a task id or video URL for scene ${scene.order}.`);
+          throw new Error(
+            `Seedance did not return a task id or video URL for scene ${scene.order}.`,
+          );
         }
         sceneClips.push({
           sceneId: scene.id,
           order: scene.order,
-          subtitle: scene.subtitle,
+          subtitle: sceneCopyForRender(scene),
           status: videoUrl ? "completed" : "running",
           progress: videoUrl ? 100 : 15,
           providerTaskId,
@@ -671,7 +673,8 @@ export const createSeedanceRenderProvider = () => {
             renderTask: {
               status: "failed",
               progress: 0,
-              errorMessage: "Seedance render task does not contain scene clips or provider task id.",
+              errorMessage:
+                "Seedance render task does not contain scene clips or provider task id.",
             },
             traceEvents: [
               {
@@ -685,7 +688,9 @@ export const createSeedanceRenderProvider = () => {
         return this.loadTask(renderTask.providerTaskId);
       }
 
-      const updatedClips = [...renderTask.sceneClips].sort((left, right) => left.order - right.order);
+      const updatedClips = [...renderTask.sceneClips].sort(
+        (left, right) => left.order - right.order,
+      );
       const queuedClip = updatedClips.find(
         (clip) => clip.status === "queued" && !clip.providerTaskId,
       );
@@ -803,8 +808,7 @@ export const createSeedanceRenderProvider = () => {
                   {
                     status: "failed",
                     step: "seedance-scene-video-failed",
-                    message:
-                      failedClip.errorMessage ?? "Seedance scene video generation failed.",
+                    message: failedClip.errorMessage ?? "Seedance scene video generation failed.",
                   },
                 ],
         };

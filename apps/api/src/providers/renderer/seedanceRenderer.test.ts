@@ -152,7 +152,13 @@ describe("Seedance renderer provider", () => {
     expect(requestBody.content[0].text).toContain("GlowGrip Phone Stand");
     expect(requestBody.content[0].text).toContain("Macro product shot");
     expect(requestBody.content[0].text).toContain("时长必须为 4 秒");
-    expect(requestBody.content[0].text).toContain("文案: Show how it folds flat.");
+    expect(requestBody.content[0].text).toContain(
+      "后期字幕文案参考（不要出现在画面中）: Show how it folds flat.",
+    );
+    expect(requestBody.content[0].text).toContain(
+      "绝对不要出现任何字幕、文字、caption、贴纸文字、价格文字、按钮文字或水印文字",
+    );
+    expect(requestBody.content[0].text).not.toContain("文案: Show how it folds flat.");
     expect(requestBody.content[1]).toEqual({
       type: "image_url",
       role: "first_frame",
@@ -292,6 +298,65 @@ describe("Seedance renderer provider", () => {
       return body.duration;
     });
     expect(requestDurations).toEqual([7, 8]);
+  });
+
+  it("renders from the edited project storyboard instead of stale script scenes", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "seedance-task-edited-storyboard",
+        status: "queued",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderWithConfiguredVideoProvider(
+      {
+        ...project,
+        scripts: [
+          {
+            id: "script-1",
+            projectId: "project-1",
+            hook: "old hook",
+            narrative: "old narrative",
+            constraints: [],
+            scenes: [
+              {
+                ...project.scenes[0],
+                subtitle: "Old script copy",
+                voiceover: "Old script voiceover",
+                visualPrompt: "Old script visual",
+              },
+            ],
+          },
+        ],
+        scenes: [
+          {
+            ...project.scenes[0],
+            subtitle: "Edited storyboard copy",
+            voiceover: "Edited storyboard voiceover",
+            visualPrompt: "Edited storyboard visual",
+          },
+        ],
+      },
+      {
+        mediaSettings: {
+          ttsVoice: "clear-host",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          bgmTrack: "creator-pop",
+        },
+      },
+    );
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody.content[0].text).toContain("Edited storyboard visual");
+    expect(requestBody.content[0].text).toContain("Edited storyboard voiceover");
+    expect(requestBody.content[0].text).not.toContain("Old script");
   });
 
   it("rejects a storyboard duration outside the configured Seedance range", async () => {
@@ -441,7 +506,9 @@ describe("Seedance renderer provider", () => {
     process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
 
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
-      const taskId = String(url instanceof Request ? url.url : url).split("/").at(-1);
+      const taskId = String(url instanceof Request ? url.url : url)
+        .split("/")
+        .at(-1);
       return Response.json({
         status: "succeeded",
         content: {

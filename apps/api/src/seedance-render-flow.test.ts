@@ -140,12 +140,16 @@ describe("Seedance render API flow", () => {
         }),
       },
     );
-    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
-      method: "POST",
-      body: JSON.stringify({
-        assetIds: [asset.body.asset.id],
-      }),
-    });
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/generate-script`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          assetIds: [asset.body.asset.id],
+        }),
+      },
+    );
     expect(generated.status).toBe(201);
     await makeScenesRenderable(baseUrl, generated.body.script.scenes);
 
@@ -188,23 +192,25 @@ describe("Seedance render API flow", () => {
       "queued",
     ]);
 
-    let polled: {
-      status: number;
-      body: {
-        renderTask: {
-          status: string;
-          progress: number;
-          previewUrl: string;
-          exportUrl: string;
-          providerTaskId: string;
-          sceneClips: Array<{
-            status: string;
-            videoUrl: string;
-          }>;
-        };
-        traceEvents: Array<{ step: string; status: string }>;
-      };
-    } | undefined;
+    let polled:
+      | {
+          status: number;
+          body: {
+            renderTask: {
+              status: string;
+              progress: number;
+              previewUrl: string;
+              exportUrl: string;
+              providerTaskId: string;
+              sceneClips: Array<{
+                status: string;
+                videoUrl: string;
+              }>;
+            };
+            traceEvents: Array<{ step: string; status: string }>;
+          };
+        }
+      | undefined;
     for (let attempt = 0; attempt < 10; attempt += 1) {
       polled = await request<{
         renderTask: {
@@ -233,7 +239,9 @@ describe("Seedance render API flow", () => {
       String(url instanceof Request ? url.url : url).endsWith("/contents/generations/tasks"),
     );
     expect(seedanceCreateCalls).toHaveLength(4);
-    const seedanceCreateBody = JSON.parse(String((seedanceCreateCalls[0]?.[1] as RequestInit).body));
+    const seedanceCreateBody = JSON.parse(
+      String((seedanceCreateCalls[0]?.[1] as RequestInit).body),
+    );
     expect(seedanceCreateBody).toMatchObject({
       ratio: "1:1",
       resolution: "1080p",
@@ -255,7 +263,9 @@ describe("Seedance render API flow", () => {
       "https://cdn.example.test/seedance-scene-task-3.mp4",
       "https://cdn.example.test/seedance-scene-task-4.mp4",
     ]);
-    expect(polled?.body.traceEvents.map((event) => event.step)).toContain("seedance-scene-clips-ready");
+    expect(polled?.body.traceEvents.map((event) => event.step)).toContain(
+      "seedance-scene-clips-ready",
+    );
     expect(polled?.body.traceEvents.map((event) => event.step)).toContain(
       "render-export-publish-failed",
     );
@@ -278,7 +288,8 @@ describe("Seedance render API flow", () => {
         resolve();
       });
     });
-    const composedUrl = "https://cdn.example.test/projects/composed-project/exports/final/export.mp4";
+    const composedUrl =
+      "https://cdn.example.test/projects/composed-project/exports/final/export.mp4";
     const app = createApp({
       renderExportPublisher: async () => composedUrl,
     });
@@ -325,10 +336,14 @@ describe("Seedance render API flow", () => {
         targetDurationSeconds: 12,
       }),
     });
-    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/generate-script`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
     await makeScenesRenderable(baseUrl, generated.body.script.scenes);
     const render = await request<{ renderTask: { id: string } }>(
       baseUrl,
@@ -339,9 +354,11 @@ describe("Seedance render API flow", () => {
       },
     );
 
-    let polled: {
-      body: { renderTask: { status: string; exportUrl?: string } };
-    } | undefined;
+    let polled:
+      | {
+          body: { renderTask: { status: string; exportUrl?: string } };
+        }
+      | undefined;
     for (let attempt = 0; attempt < 10; attempt += 1) {
       polled = await request<{ renderTask: { status: string; exportUrl?: string } }>(
         baseUrl,
@@ -361,6 +378,119 @@ describe("Seedance render API flow", () => {
     expect(exported.status).toBe(200);
     expect(exported.body.exportUrl).toBe(composedUrl);
     expect(exported.body.downloadUrl).toBe(composedUrl);
+  });
+
+  it("publishes a captioned final export even when Seedance renders a single scene", async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+    const composedUrl = "https://cdn.example.test/projects/single-scene/exports/final/export.mp4";
+    const renderExportPublisher = vi.fn(async () => composedUrl);
+    const app = createApp({
+      renderExportPublisher,
+    });
+    server = app.listen(0);
+    await new Promise<void>((resolve) => {
+      server.once("listening", resolve);
+    });
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const originalFetch = globalThis.fetch;
+    let createTaskCount = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+      if (requestUrl.endsWith("/contents/generations/tasks")) {
+        createTaskCount += 1;
+        return Response.json({
+          id: `seedance-scene-task-${createTaskCount}`,
+          status: "queued",
+        });
+      }
+      const taskId = requestUrl.split("/").at(-1);
+      return Response.json({
+        status: "succeeded",
+        content: {
+          video_url: `https://cdn.example.test/${taskId}.mp4`,
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Single scene Seedance clip",
+        productName: "GlowGrip Phone Stand",
+        audience: "TikTok Shop buyers",
+        sellingPoints: ["folds flat", "keeps shots stable"],
+        tone: "confident",
+        style: "fast desk demo",
+        targetDurationSeconds: 4,
+      }),
+    });
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/generate-script`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+    await Promise.all(
+      generated.body.script.scenes.slice(1).map((scene) =>
+        request(baseUrl, `/api/scenes/${scene.id}`, {
+          method: "DELETE",
+        }),
+      ),
+    );
+    await makeScenesRenderable(baseUrl, generated.body.script.scenes.slice(0, 1));
+    const render = await request<{ renderTask: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/render`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+
+    let polled:
+      | {
+          body: {
+            renderTask: {
+              status: string;
+              exportUrl?: string;
+              sceneClips?: Array<{ subtitle: string }>;
+            };
+          };
+        }
+      | undefined;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      polled = await request<{
+        renderTask: {
+          status: string;
+          exportUrl?: string;
+          sceneClips?: Array<{ subtitle: string }>;
+        };
+      }>(baseUrl, `/api/render-tasks/${render.body.renderTask.id}`);
+      if (polled.body.renderTask.status === "completed") {
+        break;
+      }
+      await wait(10);
+    }
+
+    expect(renderExportPublisher).toHaveBeenCalledTimes(1);
+    expect(renderExportPublisher.mock.calls[0]?.[1]).toHaveLength(1);
+    expect(polled?.body.renderTask.exportUrl).toBe(composedUrl);
   });
 
   it("returns a queued render task before slow Seedance scene submission completes", async () => {
@@ -411,12 +541,16 @@ describe("Seedance render API flow", () => {
         }),
       },
     );
-    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(baseUrl, `/api/projects/${created.body.project.id}/generate-script`, {
-      method: "POST",
-      body: JSON.stringify({
-        assetIds: [asset.body.asset.id],
-      }),
-    });
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/generate-script`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          assetIds: [asset.body.asset.id],
+        }),
+      },
+    );
     await makeScenesRenderable(baseUrl, generated.body.script.scenes);
 
     const renderPromise = request<{
@@ -428,10 +562,7 @@ describe("Seedance render API flow", () => {
       method: "POST",
       body: JSON.stringify({}),
     });
-    const result = await Promise.race([
-      renderPromise,
-      wait(40).then(() => "timed-out" as const),
-    ]);
+    const result = await Promise.race([renderPromise, wait(40).then(() => "timed-out" as const)]);
     pendingSeedanceRequests.forEach((resolve) => resolve());
 
     expect(result).not.toBe("timed-out");

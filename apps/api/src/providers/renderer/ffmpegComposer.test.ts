@@ -17,18 +17,21 @@ describe("ffmpeg composer", () => {
     vi.unstubAllGlobals();
     delete process.env.RENDER_EXPORT_DIR;
     delete process.env.FFMPEG_PATH;
-    await Promise.all(workdirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+    await Promise.all(
+      workdirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+    );
   });
 
   it("downloads remote scene clips before ffmpeg receives concat inputs", async () => {
     const exportRoot = await makeWorkdir();
     const { materializeSceneClipInputs } = await import("./ffmpegComposer.js");
-    const fetchMock = vi.fn(async (url: string | URL | Request) =>
-      new Response(`clip:${String(url)}`, {
-        headers: {
-          "content-type": "video/mp4",
-        },
-      }),
+    const fetchMock = vi.fn(
+      async (url: string | URL | Request) =>
+        new Response(`clip:${String(url)}`, {
+          headers: {
+            "content-type": "video/mp4",
+          },
+        }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -42,10 +45,7 @@ describe("ffmpeg composer", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(inputs).toEqual([
-      join(exportRoot, "scene-1.mp4"),
-      join(exportRoot, "scene-2.mp4"),
-    ]);
+    expect(inputs).toEqual([join(exportRoot, "scene-1.mp4"), join(exportRoot, "scene-2.mp4")]);
     await expect(readFile(inputs[0]!, "utf8")).resolves.toContain("hook.mp4");
     await expect(readFile(inputs[1]!, "utf8")).resolves.toContain("detail.mp4");
   });
@@ -56,5 +56,74 @@ describe("ffmpeg composer", () => {
     expect(formatFfmpegExitError(null, "SIGTERM", "ffmpeg version 6.1-static").message).toContain(
       "signal SIGTERM",
     );
+  });
+
+  it("builds a drawtext filter that escapes storyboard copy for ffmpeg", async () => {
+    const { buildDrawtextFilter } = await import("./ffmpegComposer.js");
+
+    const filter = buildDrawtextFilter("Don't leak: 100% ready\nBuy now");
+
+    expect(filter).toContain("drawtext=");
+    expect(filter).toContain("Don\\'t leak\\: 100\\% ready Buy now");
+    expect(filter).toContain("x=(w-text_w)/2");
+    expect(filter).toContain("y=h-text_h-96");
+  });
+
+  it("burns each scene subtitle before concatenating the captioned clips", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSceneClipsToLocalFile } = await import("./ffmpegComposer.js");
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const fetchMock = vi.fn(
+      async (url: string | URL | Request) =>
+        new Response(`clip:${String(url)}`, {
+          headers: {
+            "content-type": "video/mp4",
+          },
+        }),
+    );
+
+    const result = await composeSceneClipsToLocalFile(
+      "project-caption",
+      [
+        {
+          sceneId: "scene-2",
+          order: 2,
+          subtitle: "Second scene copy",
+          status: "completed",
+          progress: 100,
+          videoUrl: "https://cdn.example.test/scene-2.mp4",
+        },
+        {
+          sceneId: "scene-1",
+          order: 1,
+          subtitle: "Opening hook copy",
+          status: "completed",
+          progress: 100,
+          videoUrl: "https://cdn.example.test/scene-1.mp4",
+        },
+      ],
+      {
+        command: "ffmpeg-test",
+        fetchImpl: fetchMock as unknown as typeof fetch,
+        runCommand: async (command, args) => {
+          commands.push({ command, args });
+        },
+      },
+    );
+
+    expect(result?.localUrl).toMatch(/^\/api\/render-exports\/project-caption\/.+\/export\.mp4$/);
+    expect(commands).toHaveLength(3);
+    expect(commands[0]?.args).toContain("-vf");
+    expect(commands[0]?.args.join(" ")).toContain("Opening hook copy");
+    expect(commands[0]?.args.at(-1)).toContain("captioned-1.mp4");
+    expect(commands[1]?.args.join(" ")).toContain("Second scene copy");
+    expect(commands[1]?.args.at(-1)).toContain("captioned-2.mp4");
+    expect(commands[2]?.args).toEqual(expect.arrayContaining(["-f", "concat", "-safe", "0", "-i"]));
+
+    const concatListPath = commands[2]?.args[commands[2].args.indexOf("-i") + 1];
+    expect(concatListPath).toBeTruthy();
+    await expect(readFile(concatListPath!, "utf8")).resolves.toContain("captioned-1.mp4");
+    await expect(readFile(concatListPath!, "utf8")).resolves.toContain("captioned-2.mp4");
   });
 });
