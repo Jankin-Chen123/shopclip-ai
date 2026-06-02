@@ -203,6 +203,51 @@ describe("Seedance renderer provider", () => {
     });
   });
 
+  it("uses the storyboard scene image as the video reference before the asset slot image", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        id: "seedance-task-scene-image",
+        status: "queued",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderWithConfiguredVideoProvider(
+      {
+        ...project,
+        scenes: [
+          {
+            ...project.scenes[0],
+            imageUrl: "https://cdn.example.test/storyboard-scene-image.png",
+            assetId: "asset-1",
+          },
+        ],
+      },
+      {
+        mediaSettings: {
+          ttsVoice: "clear-host",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          bgmTrack: "creator-pop",
+        },
+      },
+    );
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody.content[1]).toEqual({
+      type: "image_url",
+      role: "first_frame",
+      image_url: {
+        url: "https://cdn.example.test/storyboard-scene-image.png",
+      },
+    });
+  });
+
   it("can disable Seedance image input for text-only endpoints", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";

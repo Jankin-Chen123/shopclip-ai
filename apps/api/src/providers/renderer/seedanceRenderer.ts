@@ -34,6 +34,11 @@ type SeedanceTaskUpdate = {
   traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>;
 };
 
+type SeedanceImageReference = {
+  id: string;
+  url: string;
+};
+
 const firstEnv = (...keys: string[]) => {
   for (const key of keys) {
     const value = process.env[key]?.trim();
@@ -210,7 +215,7 @@ const promptForProject = (project: ProjectSnapshot, scenes = project.scenes) => 
   ].join("\n");
 };
 
-const isPublicHttpUrl = (url: string | undefined) =>
+const isPublicHttpUrl = (url: string | undefined): url is string =>
   Boolean(url && /^https?:\/\//i.test(url.trim()));
 
 const uniquePublicImageAssets = (project: ProjectSnapshot): AssetMetadata[] => {
@@ -229,6 +234,16 @@ const uniquePublicImageAssets = (project: ProjectSnapshot): AssetMetadata[] => {
     }
   }
   return [...selected.values()].slice(0, 4);
+};
+
+const uniqueImageReferences = (references: SeedanceImageReference[]) => {
+  const selected = new Map<string, SeedanceImageReference>();
+  for (const reference of references) {
+    if (isPublicHttpUrl(reference.url)) {
+      selected.set(reference.url, reference);
+    }
+  }
+  return [...selected.values()];
 };
 
 const resolveSeedanceDuration = (
@@ -263,23 +278,30 @@ const buildSeedanceRequestBody = (
     ? project.assets.find((candidate) => candidate.id === scene.assetId)
     : undefined;
   const projectImageAssets = uniquePublicImageAssets(project);
-  const imageAssets =
+  const imageReferences =
     imageInputMode === "none"
       ? []
-      : [
-          ...(sceneAsset?.type === "image" && isPublicHttpUrl(sceneAsset.url) ? [sceneAsset] : []),
-          ...projectImageAssets.filter((asset) => asset.id !== sceneAsset?.id),
-        ];
+      : uniqueImageReferences([
+          ...(isPublicHttpUrl(scene.imageUrl)
+            ? [{ id: `${scene.id}:storyboard-image`, url: scene.imageUrl }]
+            : []),
+          ...(sceneAsset?.type === "image" && isPublicHttpUrl(sceneAsset.url)
+            ? [{ id: sceneAsset.id, url: sceneAsset.url }]
+            : []),
+          ...projectImageAssets.flatMap((asset) =>
+            isPublicHttpUrl(asset.url) ? [{ id: asset.id, url: asset.url }] : [],
+          ),
+        ]);
   const imageContent =
     imageInputMode === "reference_image"
-      ? imageAssets.slice(0, 4).map((asset) => ({
+      ? imageReferences.slice(0, 4).map((asset) => ({
           type: "image_url",
           role: "reference_image",
           image_url: {
             url: asset.url,
           },
         }))
-      : imageAssets.slice(0, 1).map((asset) => ({
+      : imageReferences.slice(0, 1).map((asset) => ({
           type: "image_url",
           role: "first_frame",
           image_url: {
