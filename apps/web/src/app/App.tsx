@@ -1095,6 +1095,31 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     );
   };
 
+  const persistDirtyScenesForRender = async () => {
+    const dirtyScenes = scenes.filter((scene) => dirtySceneIds.has(scene.id));
+    if (dirtyScenes.length === 0) {
+      return scenes;
+    }
+
+    const savedScenes = await Promise.all(
+      dirtyScenes.map((scene) =>
+        updateScene(scene.id, {
+          durationSeconds: scene.durationSeconds,
+          subtitle: scene.subtitle,
+          voiceover: scene.voiceover,
+          visualPrompt: scene.visualPrompt,
+          assetId: scene.assetId ?? null,
+          status: "edited",
+        }),
+      ),
+    );
+    const savedById = new Map(savedScenes.map((scene) => [scene.id, scene]));
+    const nextScenes = scenes.map((scene) => savedById.get(scene.id) ?? scene);
+    replaceScenesInState(nextScenes);
+    setDirtySceneIds(new Set());
+    return nextScenes;
+  };
+
   const handleUploadAsset = () => {
     void runAction("asset", "asset", async () => {
       const asset = await addAsset(project?.id, assetDraft);
@@ -1778,6 +1803,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
 
     void runAction("render", "render", async () => {
+      await persistDirtyScenesForRender();
       const render = await startRender(project.id, {
         mediaSettings,
         videoSettings,
@@ -1805,6 +1831,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     }
 
     void runAction("render", "render", async () => {
+      await persistDirtyScenesForRender();
       const render = await retryRenderTask(renderTask.id, {
         mediaSettings,
         videoSettings,

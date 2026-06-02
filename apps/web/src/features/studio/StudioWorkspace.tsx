@@ -81,6 +81,21 @@ export const StudioWorkspace = ({
       });
     };
 
+  const updateSelectedAudioReference = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
+    if (!selectedScene) {
+      return;
+    }
+    const value = event.target.value;
+    onSceneChange({
+      ...selectedScene,
+      subtitle: value,
+      voiceover: value,
+      status: "edited",
+    });
+  };
+
   return (
     <section className="studio-panel" id="studio" aria-labelledby="studio-title">
       <div className="panel-heading">
@@ -159,19 +174,11 @@ export const StudioWorkspace = ({
                 />
               </label>
               <label>
-                {copy.subtitle}
+                {copy.audioReference}
                 <textarea
                   rows={3}
-                  value={selectedScene.subtitle}
-                  onChange={updateSelected("subtitle")}
-                />
-              </label>
-              <label>
-                {copy.voiceover}
-                <textarea
-                  rows={3}
-                  value={selectedScene.voiceover}
-                  onChange={updateSelected("voiceover")}
+                  value={selectedScene.voiceover || selectedScene.subtitle}
+                  onChange={updateSelectedAudioReference}
                 />
               </label>
               <label>

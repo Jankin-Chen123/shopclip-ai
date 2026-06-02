@@ -15,7 +15,9 @@ const DEFAULT_VIDEO_MODEL = "doubao-seedance-2-0-260128";
 const DEFAULT_VIDEO_PATH = "/contents/generations/tasks";
 const DEFAULT_VIDEO_RATIO = "9:16";
 const DEFAULT_VIDEO_RESOLUTION = "720p";
-const DEFAULT_VIDEO_DURATIONS = [5, 10];
+const DEFAULT_VIDEO_MIN_DURATION = 1;
+const DEFAULT_VIDEO_15_PRO_MAX_DURATION = 12;
+const DEFAULT_VIDEO_2_PRO_MAX_DURATION = 15;
 
 type SeedanceConfig = {
   apiKey: string;
@@ -77,20 +79,6 @@ const parseImageInputMode = (): SeedanceImageInputMode => {
   }
 
   return "first_frame";
-};
-
-const parseDurationListEnv = () => {
-  const value = firstEnv("AI_VIDEO_ALLOWED_DURATIONS");
-  if (!value) {
-    return DEFAULT_VIDEO_DURATIONS;
-  }
-
-  const durations = value
-    .split(",")
-    .map((item) => Number.parseInt(item.trim(), 10))
-    .filter((item) => Number.isFinite(item) && item > 0)
-    .sort((left, right) => left - right);
-  return durations.length > 0 ? durations : DEFAULT_VIDEO_DURATIONS;
 };
 
 const VIDEO_RATIOS = ["1:1", "4:3", "3:4", "16:9", "9:16", "21:9"] as const;
@@ -155,6 +143,9 @@ const isSeedanceRenderEnabled = () => {
 const isExplicitMockRenderMode = () =>
   firstEnv("VIDEO_RENDER_PROVIDER_MODE")?.toLowerCase() === "mock";
 
+const maxDurationForModel = (model: string) =>
+  /seedance[-_]2/i.test(model) ? DEFAULT_VIDEO_2_PRO_MAX_DURATION : DEFAULT_VIDEO_15_PRO_MAX_DURATION;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -197,8 +188,10 @@ const promptForProject = (project: ProjectSnapshot, scenes = project.scenes) => 
   const sceneLines = scenes
     .sort((left, right) => left.order - right.order)
     .map(
-      (scene) =>
-        `${scene.order}. ${scene.durationSeconds}s | 画面: ${scene.visualPrompt} | 字幕: ${scene.subtitle}`,
+      (scene) => {
+        const audioReference = scene.voiceover.trim() || scene.subtitle.trim();
+        return `${scene.order}. 时长必须为 ${Math.round(scene.durationSeconds)} 秒 | 画面: ${scene.visualPrompt} | 音频参考: ${audioReference}`;
+      },
     )
     .join("\n");
 
@@ -235,19 +228,25 @@ const uniquePublicImageAssets = (project: ProjectSnapshot): AssetMetadata[] => {
   return [...selected.values()].slice(0, 4);
 };
 
-const resolveSeedanceDuration = (scene: ProjectSnapshot["scenes"][number]) => {
-  const configuredDuration = parseNumberEnv("AI_VIDEO_DURATION");
-  if (configuredDuration && configuredDuration > 0) {
-    return configuredDuration;
-  }
-
+const resolveSeedanceDuration = (
+  scene: ProjectSnapshot["scenes"][number],
+  config: SeedanceConfig,
+) => {
   const storyboardDuration = Math.max(1, Math.round(scene.durationSeconds));
-  const allowedDurations = parseDurationListEnv();
-  return (
-    allowedDurations.find((duration) => duration >= storyboardDuration) ??
-    allowedDurations[allowedDurations.length - 1] ??
-    storyboardDuration
-  );
+  const minDuration = parseNumberEnv("AI_VIDEO_MIN_DURATION") ?? DEFAULT_VIDEO_MIN_DURATION;
+  const maxDuration = parseNumberEnv("AI_VIDEO_MAX_DURATION") ?? maxDurationForModel(config.model);
+  if (storyboardDuration < minDuration || storyboardDuration > maxDuration) {
+    throw new Error(
+      `Scene ${scene.order} duration ${storyboardDuration}s is outside the configured Seedance range ${minDuration}-${maxDuration}s. Update the storyboard duration before rendering.`,
+    );
+  }
+  return storyboardDuration;
+};
+
+const assertSeedanceSceneDurations = (project: ProjectSnapshot, config: SeedanceConfig) => {
+  for (const scene of project.scenes) {
+    resolveSeedanceDuration(scene, config);
+  }
 };
 
 const buildSeedanceRequestBody = (
@@ -297,7 +296,7 @@ const buildSeedanceRequestBody = (
     content,
     ratio: videoSettings.ratio,
     resolution: videoSettings.resolution,
-    duration: resolveSeedanceDuration(scene),
+    duration: resolveSeedanceDuration(scene, config),
     generate_audio: videoSettings.generateAudio,
     watermark: videoSettings.watermark,
     ...(videoSettings.seed === undefined ? {} : { seed: videoSettings.seed }),
@@ -843,6 +842,7 @@ export const createQueuedSeedanceRenderTask = (
   if (!config) {
     throw new Error("Seedance render provider requires AI_VIDEO_API_KEY or ARK_API_KEY.");
   }
+  assertSeedanceSceneDurations(projectWithCurrentStoryboard(project), config);
 
   return {
     renderTask: {

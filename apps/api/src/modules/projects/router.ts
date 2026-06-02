@@ -2988,13 +2988,19 @@ export const createP0Router = ({
     const failedTrace = [...previousRender.traceEvents]
       .reverse()
       .find((event) => event.status === "failed");
-    const renderResult = createQueuedRenderWithConfiguredVideoProvider(previousRender.project, {
+    const latestProject = await store.getProject(previousRender.project.id);
+    if (!latestProject) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const renderResult = createQueuedRenderWithConfiguredVideoProvider(latestProject, {
       ...parsedRenderRequest.data,
       retryOfRenderTaskId: previousRender.renderTask.id,
       retryOfTraceEventId: failedTrace?.id,
     });
     const storedRender = await store.addRenderTask(
-      previousRender.project.id,
+      latestProject.id,
       renderResult.renderTask,
       renderResult.traceEvents,
     );

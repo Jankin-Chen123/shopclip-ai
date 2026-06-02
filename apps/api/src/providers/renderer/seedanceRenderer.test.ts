@@ -17,6 +17,8 @@ const touchedKeys = [
   "AI_VIDEO_ALLOWED_DURATIONS",
   "AI_VIDEO_DURATION",
   "AI_VIDEO_IMAGE_INPUT_MODE",
+  "AI_VIDEO_MAX_DURATION",
+  "AI_VIDEO_MIN_DURATION",
   "AI_VIDEO_MODEL_ID",
   "AI_VIDEO_REFERENCE_IMAGES",
   "AI_VIDEO_REFERENCE_IMAGE_MODE",
@@ -142,13 +144,15 @@ describe("Seedance renderer provider", () => {
       model: "ep-seedance-render",
       ratio: "9:16",
       resolution: "720p",
-      duration: 5,
+      duration: 4,
       generate_audio: false,
       watermark: false,
     });
     expect(requestBody.content[0].type).toBe("text");
     expect(requestBody.content[0].text).toContain("GlowGrip Phone Stand");
     expect(requestBody.content[0].text).toContain("Macro product shot");
+    expect(requestBody.content[0].text).toContain("时长必须为 4 秒");
+    expect(requestBody.content[0].text).toContain("音频参考: Show how it folds flat.");
     expect(requestBody.content[1]).toEqual({
       type: "image_url",
       role: "first_frame",
@@ -222,12 +226,13 @@ describe("Seedance renderer provider", () => {
     expect(requestBody.content[0].type).toBe("text");
   });
 
-  it("uses the configured Seedance duration when provided by the environment", async () => {
+  it("does not override storyboard duration with legacy fixed duration environment", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
     process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
     process.env.AI_VIDEO_DURATION = "10";
+    process.env.AI_VIDEO_ALLOWED_DURATIONS = "5,10";
 
     const fetchMock = vi.fn(async () =>
       Response.json({
@@ -247,7 +252,7 @@ describe("Seedance renderer provider", () => {
     });
 
     const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
-    expect(requestBody.duration).toBe(10);
+    expect(requestBody.duration).toBe(4);
   });
 
   it("derives each Seedance duration from its storyboard scene duration", async () => {
@@ -286,7 +291,38 @@ describe("Seedance renderer provider", () => {
       const body = JSON.parse(String((call[1] as RequestInit).body));
       return body.duration;
     });
-    expect(requestDurations).toEqual([10, 10]);
+    expect(requestDurations).toEqual([7, 8]);
+  });
+
+  it("rejects a storyboard duration outside the configured Seedance range", async () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+    process.env.AI_VIDEO_MODEL_ID = "doubao-seedance-1-5-pro";
+    process.env.ARK_API_BASE_URL = "https://ark.example.test/api/v3";
+    process.env.AI_VIDEO_MIN_DURATION = "4";
+    process.env.AI_VIDEO_MAX_DURATION = "12";
+
+    await expect(
+      renderWithConfiguredVideoProvider(
+        {
+          ...project,
+          scenes: [
+            {
+              ...project.scenes[0],
+              durationSeconds: 3,
+            },
+          ],
+        },
+        {
+          mediaSettings: {
+            ttsVoice: "clear-host",
+            subtitleStyle: "clean-lower-third",
+            subtitlesEnabled: true,
+            bgmTrack: "creator-pop",
+          },
+        },
+      ),
+    ).rejects.toThrow("outside the configured Seedance range 4-12s");
   });
 
   it("prefers render request video settings over environment defaults", async () => {
