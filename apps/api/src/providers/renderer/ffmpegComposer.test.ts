@@ -17,6 +17,8 @@ describe("ffmpeg composer", () => {
     vi.unstubAllGlobals();
     delete process.env.RENDER_EXPORT_DIR;
     delete process.env.FFMPEG_PATH;
+    delete process.env.FFMPEG_SUBTITLE_FONT_FAMILY;
+    delete process.env.RENDER_SUBTITLE_FONT_FAMILY;
     await Promise.all(
       workdirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
     );
@@ -65,6 +67,15 @@ describe("ffmpeg composer", () => {
 
     expect(filter).toContain("ass=");
     expect(filter).toContain("filename='/tmp/shopclip/subtitle\\:1.ass'");
+  });
+
+  it("uses a CJK-capable subtitle font by default and allows environment override", async () => {
+    const { buildSubtitleAss } = await import("./ffmpegComposer.js");
+
+    expect(buildSubtitleAss("中文字幕")).toContain("Style: Default,Noto Sans CJK SC,42");
+
+    process.env.FFMPEG_SUBTITLE_FONT_FAMILY = "Source Han Sans SC";
+    expect(buildSubtitleAss("中文字幕")).toContain("Style: Default,Source Han Sans SC,42");
   });
 
   it("burns each scene subtitle before concatenating the captioned clips", async () => {

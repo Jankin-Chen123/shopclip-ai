@@ -67,6 +67,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - 2026-05-29 follow-up: Multi-scene Seedance exports now compose scene clips with ffmpeg, upload the final `export.mp4` to COS at `projects/<projectId>/exports/<exportId>/export.mp4`, and return the COS URL to the frontend. `COS_EXPORT_READ_MODE=signed` can be used for private COS buckets.
 - 2026-05-29 follow-up: Step 04 now exposes a simplified delivery view with automatic render-task polling, user-facing progress cards, folded advanced settings, folded technical trace, hidden provider URLs, and a concise final-video link.
 - 2026-06-02 follow-up: Fixed real export captioning so single-scene Seedance outputs also pass through ffmpeg composition and COS upload instead of returning the raw provider URL. ffmpeg subtitle overlay now reads storyboard copy from per-scene ASS subtitle files, preserves the useful stderr tail on failure, and Step 04 previews the final composed export video when available.
+- 2026-06-02 follow-up: Fixed Chinese caption glyph rendering by defaulting ASS subtitles to `Noto Sans CJK SC` with `FFMPEG_SUBTITLE_FONT_FAMILY` / `RENDER_SUBTITLE_FONT_FAMILY` overrides. Production servers need `fonts-noto-cjk` and `fontconfig` installed so libass can resolve the font.
 - Added browser evidence screenshots:
   - `projects/shopclip-ai/evidence/p1-08-failed-render-retry-state.png`
   - `projects/shopclip-ai/evidence/p1-08-media-render-success.png`
@@ -98,6 +99,7 @@ Add P1 media controls and make generation failures recoverable and observable.
 - 2026-06-02 follow-up: `corepack pnpm --filter @shopclip/web build`
 - 2026-06-02 follow-up: `corepack pnpm --filter @shopclip/api lint`
 - 2026-06-02 follow-up: `corepack pnpm --filter @shopclip/web lint`
+- 2026-06-02 follow-up: Server smoke test installed `fonts-noto-cjk` and `fontconfig`, then verified `ffmpeg -vf ass=...` selected `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc` instead of rendering Chinese glyphs as boxes.
 
 ## Verification Plan
 
