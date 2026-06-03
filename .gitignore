@@ -1,5 +1,8 @@
-.agents/memory/
-.claude/memory/
+.agents/
+.claude/
+plugins/
+AGENTS.md
+.gitignore.agent-workflow-pack
 
 node_modules/
 .pnpm-store/
