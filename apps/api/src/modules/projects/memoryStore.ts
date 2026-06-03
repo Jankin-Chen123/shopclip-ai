@@ -339,6 +339,35 @@ export class MemoryProjectStore implements ProjectStore {
     return true;
   }
 
+  deleteScript(scriptId: string): ScriptResult | undefined {
+    const timestamp = now();
+    for (const project of this.projects.values()) {
+      const script = project.scripts.find((candidate) => candidate.id === scriptId);
+      if (!script) {
+        continue;
+      }
+      project.scripts = project.scripts.filter((candidate) => candidate.id !== scriptId);
+      project.updatedAt = timestamp;
+      return script;
+    }
+    return undefined;
+  }
+
+  deleteRenderTask(renderTaskId: string): RenderTask | undefined {
+    const timestamp = now();
+    for (const project of this.projects.values()) {
+      const renderTask = project.renderTasks.find((candidate) => candidate.id === renderTaskId);
+      if (!renderTask) {
+        continue;
+      }
+      project.renderTasks = project.renderTasks.filter((candidate) => candidate.id !== renderTaskId);
+      this.traceEvents.delete(renderTaskId);
+      project.updatedAt = timestamp;
+      return renderTask;
+    }
+    return undefined;
+  }
+
   deleteReferenceVideo(referenceId: string): DeleteReferenceVideoResult | undefined {
     const timestamp = now();
     const globalReferenceIndex = this.globalReferenceVideos.findIndex(

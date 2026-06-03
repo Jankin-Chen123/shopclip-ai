@@ -55,8 +55,10 @@ import {
   createProject,
   createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
+  deleteRenderTask as deleteRenderTaskRequest,
   deleteReferenceVideo,
   deleteScene,
+  deleteScript as deleteScriptRequest,
   extractTemplateFromScriptAssets,
   exportProject,
   generateScript,
@@ -1510,6 +1512,61 @@ export const App = ({
     });
   };
 
+  const handleRemoveProjectMaterial = (asset: AssetMetadata) => {
+    if (!project || asset.projectId !== project.id) {
+      return;
+    }
+    handleDeleteAssets([asset.id]);
+  };
+
+  const handleDeleteProjectScript = (scriptId: string) => {
+    const shouldDelete =
+      typeof window === "undefined" ||
+      window.confirm(language === "zh" ? "确认删除这个剧本？" : "Delete this script?");
+    if (!shouldDelete) {
+      return;
+    }
+
+    void runAction("script", "script", async () => {
+      const { deletedScript } = await deleteScriptRequest(scriptId);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              scripts: current.scripts.filter((candidate) => candidate.id !== deletedScript.id),
+            }
+          : current,
+      );
+      setScript((current) => (current?.id === deletedScript.id ? undefined : current));
+      setScriptDraft((current) => (script?.id === deletedScript.id ? "" : current));
+    });
+  };
+
+  const handleDeleteProjectRenderTask = (renderTaskId: string) => {
+    const shouldDelete =
+      typeof window === "undefined" ||
+      window.confirm(language === "zh" ? "确认删除这个视频？" : "Delete this video?");
+    if (!shouldDelete) {
+      return;
+    }
+
+    void runAction("render", "render", async () => {
+      const { deletedRenderTask } = await deleteRenderTaskRequest(renderTaskId);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              renderTasks: current.renderTasks.filter(
+                (candidate) => candidate.id !== deletedRenderTask.id,
+              ),
+            }
+          : current,
+      );
+      setRenderTask((current) => (current?.id === deletedRenderTask.id ? undefined : current));
+      setTraceEvents((current) => (renderTask?.id === deletedRenderTask.id ? [] : current));
+    });
+  };
+
   const createScriptGenerationRequest = () =>
     ({
       ...createScriptGenerationRequestPayload(assetPrepSnapshot, scriptDraft, apiConfig),
@@ -2297,12 +2354,16 @@ export const App = ({
                       onGenerateStoryboard={handleContinueToScript}
                       onImportFiles={handleImportFiles}
                       onPreparationChange={handleAssetPrepChange}
+                      onRemovePreparedAsset={handleRemoveProjectMaterial}
                       preparedLibraryAssetsByBucket={preparedProjectAssetsByBucket}
                     />
                   }
                   onAddScript={handleAddProjectScript}
                   onBackToProjects={handleBackToProjectList}
+                  onCloseScriptComposer={() => setIsProjectScriptComposerOpen(false)}
                   onCreateProject={handleCreateProject}
+                  onDeleteRenderTask={handleDeleteProjectRenderTask}
+                  onDeleteScript={handleDeleteProjectScript}
                   onGenerateVideo={handleGenerateProjectVideo}
                   onLoadProject={handleLoadProjectFromHistory}
                   onTabChange={setProjectDetailTab}

@@ -83,6 +83,8 @@ export interface ProjectStore {
   deleteAssets(assetIds: string[]): MaybePromise<AssetMetadata[]>;
   deleteProject(projectId: string): MaybePromise<boolean>;
   deleteReferenceVideo(referenceId: string): MaybePromise<DeleteReferenceVideoResult | undefined>;
+  deleteRenderTask(renderTaskId: string): MaybePromise<RenderTask | undefined>;
+  deleteScript(scriptId: string): MaybePromise<ScriptResult | undefined>;
   deleteScene(sceneId: string): MaybePromise<StoryboardScene[] | undefined>;
   getAssetProcessingJob(jobId: string): MaybePromise<AssetProcessingJob | undefined>;
   getAsset(assetId: string): MaybePromise<AssetMetadata | undefined>;

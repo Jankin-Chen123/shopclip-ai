@@ -605,6 +605,43 @@ export class PrismaProjectStore implements ProjectStore {
     return true;
   }
 
+  async deleteScript(scriptId: string): Promise<ScriptResult | undefined> {
+    const script = await this.prisma.script.findUnique({
+      where: { id: scriptId },
+      include: { scenes: true },
+    });
+    if (!script) {
+      return undefined;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.storyboardScene.updateMany({
+        where: { scriptId },
+        data: { scriptId: null },
+      }),
+      this.prisma.script.delete({
+        where: { id: scriptId },
+      }),
+    ]);
+
+    return toScript(script);
+  }
+
+  async deleteRenderTask(renderTaskId: string): Promise<RenderTask | undefined> {
+    const renderTask = await this.prisma.renderTask.findUnique({
+      where: { id: renderTaskId },
+    });
+    if (!renderTask) {
+      return undefined;
+    }
+
+    await this.prisma.renderTask.delete({
+      where: { id: renderTaskId },
+    });
+
+    return toRenderTask(renderTask);
+  }
+
   async deleteReferenceVideo(referenceId: string): Promise<DeleteReferenceVideoResult | undefined> {
     const reference = await this.prisma.referenceVideo.findUnique({ where: { id: referenceId } });
     if (!reference) {

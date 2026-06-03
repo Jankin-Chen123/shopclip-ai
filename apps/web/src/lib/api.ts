@@ -495,6 +495,11 @@ export const generateScript = async (
     body: JSON.stringify(request),
   });
 
+export const deleteScript = async (scriptId: string): Promise<{ deletedScript: ScriptResult }> =>
+  requestJson(`/scripts/${encodeURIComponent(scriptId)}`, {
+    method: "DELETE",
+  });
+
 export const rewriteScript = async (
   projectId: string,
   request: ScriptGenerationRequest,
@@ -561,6 +566,13 @@ export const startRender = async (
 
 export const loadRenderTask = async (renderTaskId: string): Promise<RenderSnapshot> =>
   requestJson(`/render-tasks/${renderTaskId}`);
+
+export const deleteRenderTask = async (
+  renderTaskId: string,
+): Promise<{ deletedRenderTask: RenderTask }> =>
+  requestJson(`/render-tasks/${encodeURIComponent(renderTaskId)}`, {
+    method: "DELETE",
+  });
 
 export const retryRenderTask = async (
   renderTaskId: string,

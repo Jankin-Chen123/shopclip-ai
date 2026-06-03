@@ -12,6 +12,7 @@ import {
   Images,
   LayoutDashboard,
   Plus,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -33,6 +34,9 @@ interface ProjectWorkspaceProps {
   onAddScript: () => void;
   onBackToProjects: () => void;
   onCreateProject: () => void;
+  onCloseScriptComposer: () => void;
+  onDeleteRenderTask: (renderTaskId: string) => void;
+  onDeleteScript: (scriptId: string) => void;
   onGenerateVideo: () => void;
   onLoadProject: (projectId: string) => void;
   onTabChange: (tab: ProjectDetailTab) => void;
@@ -139,7 +143,10 @@ export const ProjectWorkspace = ({
   materialsPanel,
   onAddScript,
   onBackToProjects,
+  onCloseScriptComposer,
   onCreateProject,
+  onDeleteRenderTask,
+  onDeleteScript,
   onGenerateVideo,
   onLoadProject,
   onTabChange,
@@ -494,17 +501,12 @@ export const ProjectWorkspace = ({
                 <ScriptList
                   scripts={scripts}
                   selectedScriptId={selectedScriptId}
+                  onDeleteScript={onDeleteScript}
                   onSelectScript={setSelectedScriptId}
                   selectLabel={uiText.selectScript}
                   sceneLabel={uiText.scenes}
                 />
-                {selectedScript ? (
-                  <ScriptDetail script={selectedScript} title={uiText.scriptDetail} />
-                ) : null}
               </div>
-            ) : null}
-            {showScriptComposer ? (
-              <div className="project-script-composer">{scriptPanel}</div>
             ) : null}
           </section>
         ) : null}
@@ -520,21 +522,39 @@ export const ProjectWorkspace = ({
                 {text.generateVideo}
               </Button>
             </div>
-            <VideoList videos={videos} />
+            <VideoList videos={videos} onDeleteRenderTask={onDeleteRenderTask} />
           </section>
         ) : null}
       </div>
+
+      {selectedScript ? (
+        <ProjectModal title={uiText.scriptDetail} onClose={() => setSelectedScriptId(undefined)}>
+          <ScriptDetail
+            script={selectedScript}
+            title={uiText.scriptDetail}
+            onDeleteScript={onDeleteScript}
+          />
+        </ProjectModal>
+      ) : null}
+
+      {showScriptComposer ? (
+        <ProjectModal title={text.addScript} onClose={onCloseScriptComposer}>
+          <div className="project-script-composer">{scriptPanel}</div>
+        </ProjectModal>
+      ) : null}
     </section>
   );
 };
 
 const ScriptList = ({
+  onDeleteScript,
   onSelectScript,
   sceneLabel,
   scripts,
   selectedScriptId,
   selectLabel,
 }: {
+  onDeleteScript: (scriptId: string) => void;
   onSelectScript: (scriptId: string) => void;
   sceneLabel: string;
   scripts: ScriptResult[];
@@ -543,26 +563,57 @@ const ScriptList = ({
 }) => (
   <div className="project-script-grid">
     {scripts.map((script, index) => (
-      <button
+      <article
         aria-label={`${selectLabel}: ${script.hook}`}
         className={`project-library-card project-script-card ${
           selectedScriptId === script.id ? "active" : ""
         }`.trim()}
         key={script.id}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelectScript(script.id);
+          }
+        }}
         onClick={() => onSelectScript(script.id)}
-        type="button"
+        role="button"
+        tabIndex={0}
       >
+        <button
+          aria-label={`Delete ${script.hook}`}
+          className="project-card-delete"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDeleteScript(script.id);
+          }}
+          type="button"
+        >
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
         <span>{`${script.scenes.length} ${sceneLabel}`}</span>
         <h4>{`v${index + 1} ${script.hook}`}</h4>
         <p>{script.constraints.slice(0, 2).join(" / ") || script.narrative}</p>
-      </button>
+      </article>
     ))}
   </div>
 );
 
-const ScriptDetail = ({ script, title }: { script: ScriptResult; title: string }) => (
+const ScriptDetail = ({
+  onDeleteScript,
+  script,
+  title,
+}: {
+  onDeleteScript: (scriptId: string) => void;
+  script: ScriptResult;
+  title: string;
+}) => (
   <article className="project-script-detail">
-    <span>{title}</span>
+    <div className="project-detail-card-heading">
+      <span>{title}</span>
+      <Button icon={<Trash2 size={16} />} onClick={() => onDeleteScript(script.id)}>
+        Delete
+      </Button>
+    </div>
     <h4>{script.hook}</h4>
     <p>{script.narrative}</p>
     {script.constraints.length > 0 ? (
@@ -584,11 +635,25 @@ const ScriptDetail = ({ script, title }: { script: ScriptResult; title: string }
   </article>
 );
 
-const VideoList = ({ videos }: { videos: RenderTask[] }) =>
+const VideoList = ({
+  onDeleteRenderTask,
+  videos,
+}: {
+  onDeleteRenderTask: (renderTaskId: string) => void;
+  videos: RenderTask[];
+}) =>
   videos.length > 0 ? (
     <div className="project-video-grid">
       {videos.map((video, index) => (
         <article className="project-library-card" key={video.id}>
+          <button
+            aria-label={`Delete Video ${index + 1}`}
+            className="project-card-delete"
+            onClick={() => onDeleteRenderTask(video.id)}
+            type="button"
+          >
+            <Trash2 size={15} aria-hidden="true" />
+          </button>
           <span>{video.provider ?? "renderer"}</span>
           <h4>{`Video ${index + 1}`}</h4>
           <p>{formatUpdatedAt(video.updatedAt)}</p>
@@ -603,3 +668,22 @@ const VideoList = ({ videos }: { videos: RenderTask[] }) =>
       <strong>No video items</strong>
     </div>
   );
+
+const ProjectModal = ({
+  children,
+  onClose,
+  title,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  title: string;
+}) => (
+  <div className="project-modal-backdrop" role="presentation">
+    <section className="project-modal" role="dialog" aria-modal="true" aria-label={title}>
+      <button aria-label="Close" className="project-modal-close" onClick={onClose} type="button">
+        <X size={18} aria-hidden="true" />
+      </button>
+      {children}
+    </section>
+  </div>
+);

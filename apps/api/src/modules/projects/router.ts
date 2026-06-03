@@ -3320,6 +3320,16 @@ export const createP0Router = ({
     });
   });
 
+  router.delete("/scripts/:scriptId", async (request, response) => {
+    const deletedScript = await store.deleteScript(request.params.scriptId);
+    if (!deletedScript) {
+      sendNotFound(response, "SCRIPT_NOT_FOUND", "Script was not found.");
+      return;
+    }
+
+    response.json({ deletedScript });
+  });
+
   router.post("/projects/:projectId/render", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
@@ -3366,6 +3376,16 @@ export const createP0Router = ({
     }
 
     response.status(201).json(storedRender);
+  });
+
+  router.delete("/render-tasks/:renderTaskId", async (request, response) => {
+    const deletedRenderTask = await store.deleteRenderTask(request.params.renderTaskId);
+    if (!deletedRenderTask) {
+      sendNotFound(response, "RENDER_TASK_NOT_FOUND", "Render task was not found.");
+      return;
+    }
+
+    response.json({ deletedRenderTask });
   });
 
   router.get("/render-tasks/:renderTaskId", async (request, response) => {

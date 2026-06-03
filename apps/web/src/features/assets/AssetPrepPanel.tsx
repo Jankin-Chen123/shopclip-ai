@@ -38,6 +38,7 @@ interface AssetPrepPanelProps {
   onGenerateStoryboard: () => void;
   onImportFiles: (files: File[]) => void;
   onPreparationChange?: (snapshot: AssetPrepSnapshot) => void;
+  onRemovePreparedAsset?: (asset: AssetMetadata) => void;
 }
 
 interface PrepBucket {
@@ -344,6 +345,7 @@ export const AssetPrepPanel = ({
   onGenerateStoryboard,
   onImportFiles,
   onPreparationChange,
+  onRemovePreparedAsset,
   libraryAssets = [],
   preparedLibraryAssetsByBucket = {},
 }: AssetPrepPanelProps) => {
@@ -438,6 +440,16 @@ export const AssetPrepPanel = ({
 
   const removeKeyword = (index: number) => {
     setKeywords((current) => current.filter((_, keywordIndex) => keywordIndex !== index));
+  };
+
+  const removePreparedUpload = (bucketId: string, upload: ManualPrepUpload) => {
+    setManualUploads((current) => ({
+      ...current,
+      [bucketId]: (current[bucketId] ?? []).filter((candidate) => candidate.id !== upload.id),
+    }));
+    if (upload.asset) {
+      onRemovePreparedAsset?.(upload.asset);
+    }
   };
 
   const addKeyword = () => {
@@ -554,6 +566,15 @@ export const AssetPrepPanel = ({
                             <Eye size={14} aria-hidden="true" />
                           </button>
                         ) : null}
+                        <button
+                          aria-label={`Remove ${upload.name}`}
+                          className="asset-prep-thumb-remove"
+                          disabled={disabled || isImporting}
+                          onClick={() => removePreparedUpload(bucket.id, upload)}
+                          type="button"
+                        >
+                          <X size={14} aria-hidden="true" />
+                        </button>
                         <CheckCircle2 size={16} aria-hidden="true" />
                       </article>
                       );
