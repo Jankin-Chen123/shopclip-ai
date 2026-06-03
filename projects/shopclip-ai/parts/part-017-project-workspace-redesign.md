@@ -2,7 +2,7 @@
 
 ## 状态
 
-- 状态：In progress
+- 状态：Done
 - 日期：2026-06-03
 - 负责角色：implementation-engineer
 
@@ -31,6 +31,11 @@
 
 - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx`：95 tests passed。
 - `corepack pnpm --filter @shopclip/web typecheck`：通过。
+- `corepack pnpm --filter @shopclip/web build`：通过，生成生产构建。
+- GitHub 同步：`git rev-list --left-right --count origin/main...HEAD` 返回 `0 0`。
+- 云端部署：`ubuntu@152.136.252.134:/www/wwwroot/shopclip-ai ./deploy.sh` 完成，Web 资源更新为 `index-BAW6iRdj.css` / `index-B_yz-lAN.js`，API health 返回 `{"service":"api","status":"ok","version":"0.1.0"}`。
+- 线上浏览器验收：`https://shopclip.site` 项目列表不再显示旧 `Product setup`；完成“Project portfolio -> Create project -> Project overview -> Project materials -> Script library -> Video library -> Generate video -> Save video and return”点击路径。
+- 线上截图：`output/playwright/shopclip-site-project-workspace-after-deploy.png`。
 
 ## 风险与后续
 
