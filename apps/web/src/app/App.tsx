@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Download } from "lucide-react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -21,6 +22,7 @@ import {
   type WorkspaceSectionId,
   type WorkspacePageId,
 } from "../components/layout/AppShell";
+import { Button } from "../components/ui/Button";
 import {
   assetMatchesCategory,
   externalAssetMatchesCategory,
@@ -33,7 +35,7 @@ import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { SmartEditPanel } from "../features/edit/SmartEditPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
-import { ProjectSetup } from "../features/projects/ProjectSetup";
+import { ProjectWorkspace, type ProjectDetailTab } from "../features/projects/ProjectWorkspace";
 import {
   createDefaultStockProviderConfigs,
   createDefaultApiConfig,
@@ -519,9 +521,18 @@ export const pruneAssetPrepSnapshotDeletedAssets = (
 interface AppProps {
   initialLanguage?: Language;
   initialPage?: WorkspacePageId;
+  initialProject?: ProjectSnapshot;
+  initialProjectDetailTab?: ProjectDetailTab;
+  initialProjectHistory?: ProjectSummary[];
 }
 
-export const App = ({ initialLanguage, initialPage }: AppProps) => {
+export const App = ({
+  initialLanguage,
+  initialPage,
+  initialProject,
+  initialProjectDetailTab,
+  initialProjectHistory,
+}: AppProps) => {
   const [language, setLanguage] = useState<Language>(() => initialLanguage ?? getStoredLanguage());
   const [activePage, setActivePage] = useState<WorkspacePageId>(
     () => initialPage ?? pageFromHash(),
@@ -561,8 +572,13 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   }>({ assets: [], assetSlices: [] });
   const [mediaSettings, setMediaSettings] = useState<MediaSettings>(defaultMediaSettings);
   const [videoSettings, setVideoSettings] = useState<VideoGenerationSettings>(defaultVideoSettings);
-  const [project, setProject] = useState<ProjectSnapshot>();
-  const [projectHistory, setProjectHistory] = useState<ProjectSummary[]>([]);
+  const [project, setProject] = useState<ProjectSnapshot | undefined>(() => initialProject);
+  const [projectHistory, setProjectHistory] = useState<ProjectSummary[]>(
+    () => initialProjectHistory ?? [],
+  );
+  const [projectDetailTab, setProjectDetailTab] = useState<ProjectDetailTab>(
+    () => initialProjectDetailTab ?? "overview",
+  );
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
   const [projectIdToLoad, setProjectIdToLoad] = useState("");
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceVideo[]>([]);
@@ -668,6 +684,10 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
   };
 
   const handleSectionChange = (section: WorkspaceSectionId) => {
+    if (section === "create") {
+      setProject(undefined);
+      setProjectDetailTab("overview");
+    }
     handlePageChange(
       section === "assets"
         ? "assets"
@@ -981,6 +1001,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     runAction("project", "project", async () => {
       const createdProject = await createProject(brief);
       setProject(createdProject);
+      setProjectDetailTab("overview");
       setScript(undefined);
       setScriptDraft("");
       setScriptProductionMode("automatic");
@@ -1032,6 +1053,7 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
     const latestScript = loadedProject.scripts.at(-1);
     const latestRender = loadedProject.renderTasks.at(-1);
     setProject(loadedProject);
+    setProjectDetailTab("overview");
     setBrief({
       title: loadedProject.title,
       productName: loadedProject.productName,
@@ -1094,6 +1116,28 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
       setProjectIdToLoad(projectId);
       applyLoadedProject(loadedProject);
     });
+
+  const handleBackToProjectList = () => {
+    setProject(undefined);
+    setProjectDetailTab("overview");
+    refreshProjectHistory();
+  };
+
+  const handleAddProjectScript = () => {
+    setProjectDetailTab("scripts");
+    handlePageChange("create");
+  };
+
+  const handleGenerateProjectVideo = () => {
+    setProjectDetailTab("videos");
+    handlePageChange("studio");
+  };
+
+  const handleSaveVideoAndReturn = () => {
+    setProjectDetailTab("videos");
+    handlePageChange("project");
+    refreshProjectHistory();
+  };
 
   const handleDeleteProjectFromHistory = (projectId: string) => {
     const historyProject = projectHistory.find((candidate) => candidate.id === projectId);
@@ -2214,23 +2258,93 @@ export const App = ({ initialLanguage, initialPage }: AppProps) => {
           <section className={`creation-shell creation-shell-${activePage}`}>
             <div className="creation-main">
               {activePage === "project" ? (
-                <ProjectSetup
-                  brief={brief}
-                  copy={text.project}
+                <ProjectWorkspace
+                  activeTab={projectDetailTab}
+                  dashboardPanel={
+                    <DashboardPanel
+                      copy={text.dashboard}
+                      dashboard={dashboard}
+                      disabled={!project || busyState !== "idle"}
+                      error={errors.dashboard}
+                      isLoading={busyState === "dashboard"}
+                      onLoadDashboard={handleLoadDashboard}
+                    />
+                  }
                   disabled={busyState !== "idle"}
                   error={errors.project}
                   isHistoryLoading={isProjectHistoryLoading}
-                  isLoading={busyState === "project"}
-                  onBriefChange={setBrief}
+                  language={language}
+                  materialsPanel={
+                    <AssetPrepPanel
+                      disabled={busyState !== "idle"}
+                      error={errors.asset}
+                      isGenerating={busyState === "script"}
+                      isImporting={busyState === "asset"}
+                      initialSnapshot={assetPrepSnapshot}
+                      key={`${project?.id ?? "projectless"}-detail-asset-prep`}
+                      language={language}
+                      libraryAssets={creationUsableAssets}
+                      onBack={() => setProjectDetailTab("overview")}
+                      onGenerateStoryboard={handleContinueToScript}
+                      onImportFiles={handleImportFiles}
+                      onPreparationChange={handleAssetPrepChange}
+                      preparedLibraryAssetsByBucket={preparedProjectAssetsByBucket}
+                    />
+                  }
+                  onAddScript={handleAddProjectScript}
+                  onBackToProjects={handleBackToProjectList}
                   onCreateProject={handleCreateProject}
-                  onDeleteProjectFromHistory={handleDeleteProjectFromHistory}
-                  onLoadProject={handleLoadProject}
-                  onLoadProjectFromHistory={handleLoadProjectFromHistory}
-                  onProjectIdToLoadChange={setProjectIdToLoad}
+                  onGenerateVideo={handleGenerateProjectVideo}
+                  onLoadProject={handleLoadProjectFromHistory}
+                  onTabChange={setProjectDetailTab}
                   project={project}
                   projectHistory={projectHistory}
-                  projectIdToLoad={projectIdToLoad}
+                  scriptPanel={
+                    <ScriptPanel
+                      copy={text.script}
+                      disabled={busyState !== "idle"}
+                      error={errors.script}
+                      fallbackProvider={fallbackProvider}
+                      isLoading={busyState === "script"}
+                      isStoryboardGenerating={busyState === "script"}
+                      onGenerateScript={handleRewriteScript}
+                      onGenerateStoryboard={() => handleGenerateScript("studio")}
+                      onProductionModeChange={handleScriptProductionModeChange}
+                      onReferenceChange={setSelectedReferenceIdForScript}
+                      onScriptDraftChange={setScriptDraft}
+                      onTemplateChange={setSelectedTemplateIdForScript}
+                      productionMode={scriptProductionMode}
+                      referenceScriptAssets={scriptReferenceAssets}
+                      script={script}
+                      scriptDraft={scriptDraft}
+                      selectedReferenceId={selectedReferenceIdForScript}
+                      selectedTemplateId={selectedTemplateIdForScript}
+                      templates={scriptTemplateLibrary}
+                    />
+                  }
                 />
+              ) : null}
+
+              {(activePage === "studio" || activePage === "delivery" || activePage === "edit") &&
+              project ? (
+                <div className="studio-return-bar">
+                  <div>
+                    <strong>{language === "zh" ? "工作室" : "Studio"}</strong>
+                    <span>
+                      {language === "zh"
+                        ? "完成分镜、生成预览或智能剪辑后，保存并回到项目视频库。"
+                        : "Finish storyboard, preview, or smart edit work, then save back to the video library."}
+                    </span>
+                  </div>
+                  <Button
+                    disabled={busyState !== "idle" || isSmartEditTaskRunning}
+                    icon={<Download size={18} />}
+                    onClick={handleSaveVideoAndReturn}
+                    variant="primary"
+                  >
+                    {language === "zh" ? "保存视频并返回" : "Save video and return"}
+                  </Button>
+                </div>
               ) : null}
 
               {activePage === "create" ? (

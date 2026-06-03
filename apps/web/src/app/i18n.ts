@@ -23,9 +23,9 @@ export const copy = {
     pages: {
       project: {
         label: "Project",
-        title: "Project command center",
-        description: "Brief, project status, and demo readiness.",
-        metric: "Brief and status",
+        title: "Project portfolio",
+        description: "Project cards, details, materials, scripts, and videos.",
+        metric: "Projects and assets",
       },
       create: {
         label: "Create",

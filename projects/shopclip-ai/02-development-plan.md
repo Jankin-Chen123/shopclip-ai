@@ -100,6 +100,7 @@ projects/shopclip-ai/
 | 011  | 灵感分区多模态素材生成                 | `implementation-engineer`   | 010                | 否     | Done    |
 | 012  | 用户 API 设置与模型配置                | `implementation-engineer`   | 011                | 否     | Done    |
 | 015  | 多颗粒度素材结构化、爆款视频拆解与智能剪辑计划 | `solution-architect` / `implementation-engineer` | 006、007、008 | 否 | Done |
+| 017  | 项目工作台前端重组                     | `implementation-engineer`   | 014、016           | 否     | In progress |
 
 ## 依赖图
 
@@ -121,6 +122,7 @@ flowchart TD
   P006 --> P015["015 多颗粒度结构化 + 爆款拆解"]
   P007 --> P015
   P008 --> P015
+  P015 --> P017["017 项目工作台前端重组"]
 ```
 
 ## 集成计划

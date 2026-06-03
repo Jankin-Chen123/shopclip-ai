@@ -94,8 +94,8 @@ export const workspaceSections: WorkspaceSection[] = [
   },
   {
     id: "create",
-    accent: "amber",
-    icon: Sparkles,
+    accent: "rose",
+    icon: FolderKanban,
   },
 ];
 
@@ -118,7 +118,8 @@ export const AppShell = ({
   onPageChange,
   onSectionChange,
 }: AppShellProps) => {
-  const showTopbar = activeSection === "create" || activeSection === "settings";
+  const showTopbar =
+    (activeSection === "create" && activePage !== "project") || activeSection === "settings";
 
   const getSectionText = (section: WorkspaceSectionId) => {
     if (section === "assets") {
@@ -141,8 +142,8 @@ export const AppShell = ({
     }
 
     return {
-      label: copy.pages.create.label,
-      title: copy.pages.create.title,
+      label: copy.pages.project.label,
+      title: copy.pages.project.title,
     };
   };
 
@@ -234,7 +235,7 @@ export const AppShell = ({
             )}
           </header>
         ) : null}
-        {activeSection === "create" ? (
+        {activeSection === "create" && activePage !== "project" ? (
           <nav className="creation-stepper" aria-label="Creation progress">
             {workspacePages.map((page, index) => {
               const Icon = page.icon;

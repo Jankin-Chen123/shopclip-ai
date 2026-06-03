@@ -129,34 +129,94 @@ describe("App", () => {
   });
 
   it("renders the P1 workspace flow landmarks", () => {
-    const markup = renderToStaticMarkup(<App />);
+    const markup = renderToStaticMarkup(
+      <App
+        initialProjectHistory={[
+          makeProjectSummary({
+            id: "project-history-2",
+            title: "Lamp holiday clip",
+            productName: "Desk Halo Lamp",
+            assetCount: 3,
+            sceneCount: 4,
+          }),
+        ]}
+      />,
+    );
 
     expect(markup).toContain("Asset library");
     expect(markup).toContain("Inspiration");
-    expect(markup).toContain("Create");
     expect(markup).toContain("Project");
-    expect(markup).toContain("Studio");
-    expect(markup).toContain("Project command center");
+    expect(markup).toContain("Project portfolio");
+    expect(markup).toContain("Open project workspace");
     expect(markup).not.toContain("page-card");
     expect(markup).not.toContain("page-hero");
-    expect(markup).toContain("Product setup");
+    expect(markup).not.toContain("Product setup");
     expect(markup).not.toContain("Studio editor");
+  });
+
+  it("renders the loaded project detail with overview, materials, scripts, and video library tabs", () => {
+    const markup = renderToStaticMarkup(
+      <App
+        initialLanguage="en"
+        initialPage="project"
+        initialProjectDetailTab="videos"
+        initialProject={{
+          id: "project-detail-1",
+          title: "Headphone launch",
+          productName: "Havit H630BT",
+          audience: "commuters",
+          sellingPoints: ["active noise reduction", "long battery"],
+          tone: "confident",
+          style: "fast desk demo",
+          targetDurationSeconds: 15,
+          prepKeywords: ["noise cancelling"],
+          status: "ready",
+          createdAt: "2026-06-02T00:00:00.000Z",
+          updatedAt: "2026-06-02T00:00:00.000Z",
+          assets: [
+            makeAsset({
+              id: "asset-headphone-1",
+              name: "Headphone hero",
+              type: "image",
+              url: "/assets/headphone.png",
+            }),
+          ],
+          assetSlices: [],
+          assetProcessingEvents: [],
+          assetProcessingJobs: [],
+          referenceVideos: [],
+          viralTemplates: [],
+          scripts: [],
+          scenes: [],
+          renderTasks: [],
+        }}
+      />,
+    );
+
+    expect(markup).toContain("Project ID");
+    expect(markup).toContain("1 asset");
+    expect(markup).toContain("0 scripts");
+    expect(markup).toContain("0 videos");
+    expect(markup).toContain("Project overview");
+    expect(markup).toContain("Project materials");
+    expect(markup).toContain("Script library");
+    expect(markup).toContain("Video library");
+    expect(markup).toContain("Generate video");
   });
 
   it("renders concept-inspired creation workspace chrome", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="project" />);
 
-    expect(markup).toContain("creation-stepper");
     expect(markup).toContain("creation-shell");
-    expect(markup).toContain("concept-project-panel");
+    expect(markup).toContain("project-portfolio");
     expect(markup).not.toContain("concept-top-cta");
     expect(markup).not.toContain("language-switcher");
     expect(markup).not.toContain("AI co-pilot");
     expect(markup).not.toContain("Quality radar");
     expect(markup).not.toContain("concept-wave");
     expect(markup).not.toContain("creation-assistant");
-    expect(markup).toContain("Step 01");
-    expect(markup).toContain('creation-stepper-index">05');
+    expect(markup).toContain("Project portfolio");
+    expect(markup).toContain("Search product name or brand");
   });
 
   it("omits standalone section title bars from asset and inspiration workspaces", () => {
