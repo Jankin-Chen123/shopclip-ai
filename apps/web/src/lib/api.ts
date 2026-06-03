@@ -210,6 +210,17 @@ export const updateProjectPrep = async (
   return response.project;
 };
 
+export const updateProjectBrief = async (
+  projectId: string,
+  brief: ProjectBrief,
+): Promise<ProjectSnapshot> => {
+  const response = await requestJson<{ project: ProjectSnapshot }>(`/projects/${projectId}`, {
+    method: "PATCH",
+    body: JSON.stringify(brief),
+  });
+  return response.project;
+};
+
 export const listProjects = async (): Promise<ProjectSummary[]> => {
   const response = await requestJson<{ projects: ProjectSummary[] }>("/projects");
   return response.projects;

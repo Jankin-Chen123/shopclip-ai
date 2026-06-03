@@ -147,7 +147,7 @@ describe("App", () => {
     expect(markup).toContain("Inspiration");
     expect(markup).toContain("Project");
     expect(markup).toContain("Project portfolio");
-    expect(markup).toContain("Open project workspace");
+    expect(markup).not.toContain("Open project workspace");
     expect(markup).not.toContain("page-card");
     expect(markup).not.toContain("page-hero");
     expect(markup).not.toContain("Product setup");

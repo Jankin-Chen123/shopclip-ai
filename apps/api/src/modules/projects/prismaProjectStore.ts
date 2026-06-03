@@ -328,6 +328,19 @@ export class PrismaProjectStore implements ProjectStore {
             scenes: true,
           },
         },
+        assets: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            mimeType: true,
+            type: true,
+            url: true,
+          },
+          where: {
+            OR: [{ type: "image" }, { mimeType: { startsWith: "image/" } }],
+          },
+          take: 1,
+        },
       },
     });
 
@@ -339,6 +352,8 @@ export class PrismaProjectStore implements ProjectStore {
       createdAt: toIso(project.createdAt),
       updatedAt: toIso(project.updatedAt),
       assetCount: project._count.assets,
+      coverAssetId: project.assets[0]?.id,
+      coverAssetUrl: project.assets[0]?.url,
       sceneCount: project._count.scenes,
     }));
   }
@@ -349,6 +364,34 @@ export class PrismaProjectStore implements ProjectStore {
     createSlices: (asset: AssetMetadata) => Array<Omit<AssetSlice, "id" | "assetId">> = () => [],
   ): Promise<AssetMetadata | undefined> {
     return this.addAssetWithId(projectId, randomUUID(), asset, createSlices);
+  }
+
+  async updateProjectBrief(
+    projectId: string,
+    brief: ProjectBrief,
+  ): Promise<ProjectSnapshot | undefined> {
+    const existing = await this.prisma.project.findUnique({
+      select: { id: true },
+      where: { id: projectId },
+    });
+    if (!existing) {
+      return undefined;
+    }
+
+    const project = await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        audience: brief.audience,
+        productName: brief.productName,
+        sellingPoints: brief.sellingPoints,
+        style: brief.style,
+        targetDurationSeconds: brief.targetDurationSeconds,
+        title: brief.title,
+        tone: brief.tone,
+      },
+      include: projectInclude,
+    });
+    return toProjectSnapshot(project);
   }
 
   async addAssetWithId(

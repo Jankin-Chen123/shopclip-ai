@@ -60,16 +60,23 @@ export class MemoryProjectStore implements ProjectStore {
 
   listProjects(): ProjectSummary[] {
     return [...this.projects.values()]
-      .map((project) => ({
-        id: project.id,
-        title: project.title,
-        productName: project.productName,
-        status: project.status,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        assetCount: project.assets.length,
-        sceneCount: project.scenes.length,
-      }))
+      .map((project) => {
+        const coverAsset = project.assets.find(
+          (asset) => asset.type === "image" || asset.mimeType?.startsWith("image/"),
+        );
+        return {
+          id: project.id,
+          title: project.title,
+          productName: project.productName,
+          status: project.status,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          assetCount: project.assets.length,
+          coverAssetId: coverAsset?.id,
+          coverAssetUrl: coverAsset?.url,
+          sceneCount: project.scenes.length,
+        };
+      })
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
@@ -521,6 +528,23 @@ export class MemoryProjectStore implements ProjectStore {
     }
 
     project.prepKeywords = [...keywords];
+    project.updatedAt = now();
+    return project;
+  }
+
+  updateProjectBrief(projectId: string, brief: ProjectBrief): ProjectSnapshot | undefined {
+    const project = this.projects.get(projectId);
+    if (!project) {
+      return undefined;
+    }
+
+    project.title = brief.title;
+    project.productName = brief.productName;
+    project.audience = brief.audience;
+    project.sellingPoints = [...brief.sellingPoints];
+    project.tone = brief.tone;
+    project.style = brief.style;
+    project.targetDurationSeconds = brief.targetDurationSeconds;
     project.updatedAt = now();
     return project;
   }

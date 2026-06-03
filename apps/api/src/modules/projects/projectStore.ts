@@ -151,6 +151,10 @@ export interface ProjectStore {
     projectId: string,
     keywords: string[],
   ): MaybePromise<ProjectSnapshot | undefined>;
+  updateProjectBrief(
+    projectId: string,
+    brief: ProjectBrief,
+  ): MaybePromise<ProjectSnapshot | undefined>;
   updateRenderTask(
     renderTaskId: string,
     update: Partial<Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">>,

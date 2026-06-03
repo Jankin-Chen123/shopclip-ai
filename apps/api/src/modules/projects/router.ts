@@ -2005,6 +2005,26 @@ export const createP0Router = ({
     response.json({ project });
   });
 
+  router.patch("/projects/:projectId", async (request, response) => {
+    const parsedBrief = ProjectBriefSchema.safeParse(request.body ?? {});
+    if (!parsedBrief.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_PROJECT_BRIEF",
+        "Project brief update failed validation.",
+      );
+      return;
+    }
+
+    const project = await store.updateProjectBrief(request.params.projectId, parsedBrief.data);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    response.json({ project });
+  });
+
   router.delete("/projects/:projectId", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
@@ -2046,6 +2066,12 @@ export const createP0Router = ({
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
         assetCount: project.assets.length,
+        coverAssetId: project.assets.find(
+          (asset) => asset.type === "image" || asset.mimeType?.startsWith("image/"),
+        )?.id,
+        coverAssetUrl: project.assets.find(
+          (asset) => asset.type === "image" || asset.mimeType?.startsWith("image/"),
+        )?.url,
         sceneCount: project.scenes.length,
       },
       deletedAssets: project.assets,

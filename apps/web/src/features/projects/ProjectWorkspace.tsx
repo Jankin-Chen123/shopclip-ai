@@ -1,21 +1,24 @@
-import type { ReactNode } from "react";
-import type { ProjectSummary, RenderTask, ScriptResult } from "@shopclip/shared";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { ProjectBrief, ProjectSummary, RenderTask, ScriptResult } from "@shopclip/shared";
 import {
   ArrowLeft,
   ArrowUpRight,
   BarChart3,
   Box,
+  Check,
+  Edit3,
   FileText,
   Film,
   Images,
   LayoutDashboard,
   Plus,
+  X,
 } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { Language } from "../../app/i18n";
-import type { ProjectSnapshot } from "../../lib/api";
+import { getAssetContentUrl, type ProjectSnapshot } from "../../lib/api";
 
 export type ProjectDetailTab = "overview" | "materials" | "scripts" | "videos";
 
@@ -33,9 +36,11 @@ interface ProjectWorkspaceProps {
   onGenerateVideo: () => void;
   onLoadProject: (projectId: string) => void;
   onTabChange: (tab: ProjectDetailTab) => void;
+  onUpdateProjectBrief: (brief: ProjectBrief) => void;
   project?: ProjectSnapshot;
   projectHistory: ProjectSummary[];
   scriptPanel: ReactNode;
+  showScriptComposer: boolean;
 }
 
 const getText = (language: Language) =>
@@ -121,6 +126,9 @@ const plural = (count: number, label: string) =>
 
 const getProjectImageClass = (index: number) => `project-card-media project-card-media-${index % 5}`;
 
+const getProjectCoverUrl = (project: ProjectSummary): string | undefined =>
+  project.coverAssetId ? getAssetContentUrl(project.coverAssetId) : project.coverAssetUrl;
+
 export const ProjectWorkspace = ({
   activeTab,
   dashboardPanel,
@@ -135,11 +143,75 @@ export const ProjectWorkspace = ({
   onGenerateVideo,
   onLoadProject,
   onTabChange,
+  onUpdateProjectBrief,
   project,
   projectHistory,
   scriptPanel,
+  showScriptComposer,
 }: ProjectWorkspaceProps) => {
   const text = getText(language);
+  const uiText = useMemo(
+    () =>
+      language === "zh"
+        ? {
+            cancelEdit: "取消",
+            editOverview: "编辑概梗",
+            saveOverview: "保存概梗",
+            scenes: "分镜",
+            scriptDetail: "剧本详情",
+            selectScript: "查看剧本详情",
+          }
+        : {
+            cancelEdit: "Cancel",
+            editOverview: "Edit overview",
+            saveOverview: "Save overview",
+            scenes: "scenes",
+            scriptDetail: "Script detail",
+            selectScript: "View script detail",
+          },
+    [language],
+  );
+  const [isOverviewEditing, setIsOverviewEditing] = useState(false);
+  const [overviewDraft, setOverviewDraft] = useState<ProjectBrief>(() => ({
+    audience: project?.audience ?? "",
+    productName: project?.productName ?? "",
+    sellingPoints: project?.sellingPoints ?? [],
+    style: project?.style ?? "",
+    targetDurationSeconds: project?.targetDurationSeconds ?? 15,
+    title: project?.title ?? "",
+    tone: project?.tone ?? "",
+  }));
+  const [selectedScriptId, setSelectedScriptId] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!project) {
+      setIsOverviewEditing(false);
+      setSelectedScriptId(undefined);
+      return;
+    }
+    setOverviewDraft({
+      audience: project.audience,
+      productName: project.productName,
+      sellingPoints: project.sellingPoints,
+      style: project.style,
+      targetDurationSeconds: project.targetDurationSeconds,
+      title: project.title,
+      tone: project.tone,
+    });
+    setIsOverviewEditing(false);
+    setSelectedScriptId(project.scripts.at(-1)?.id);
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (!project || project.scripts.length === 0) {
+      return;
+    }
+    setSelectedScriptId((current) =>
+      current && project.scripts.some((script) => script.id === current)
+        ? current
+        : project.scripts.at(-1)?.id,
+    );
+  }, [project?.scripts.length]);
 
   if (!project) {
     return (
@@ -177,37 +249,41 @@ export const ProjectWorkspace = ({
         ) : null}
         {projectHistory.length > 0 ? (
           <div className="project-card-grid">
-            {projectHistory.map((historyProject, index) => (
-              <button
-                className="project-card"
-                disabled={disabled || isHistoryLoading}
-                key={historyProject.id}
-                onClick={() => onLoadProject(historyProject.id)}
-                type="button"
-              >
-                <span className={getProjectImageClass(index)} aria-hidden="true" />
-                <span className="project-card-body">
-                  <span className="project-card-title">
-                    <strong>{historyProject.title}</strong>
-                    <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
-                      {historyProject.status}
-                    </StatusPill>
+            {projectHistory.map((historyProject, index) => {
+              const coverUrl = getProjectCoverUrl(historyProject);
+              return (
+                <button
+                  aria-label={historyProject.title}
+                  className="project-card"
+                  disabled={disabled || isHistoryLoading}
+                  key={historyProject.id}
+                  onClick={() => onLoadProject(historyProject.id)}
+                  type="button"
+                >
+                  <span
+                    className={getProjectImageClass(index)}
+                    aria-hidden={coverUrl ? undefined : "true"}
+                  >
+                    {coverUrl ? <img alt="" src={coverUrl} /> : null}
                   </span>
-                  <span className="project-card-product">{historyProject.productName}</span>
-                  <span className="project-card-tag">{historyProject.status}</span>
-                  <span className="project-card-divider" />
-                  <span className="project-card-stats">
-                    <span>{plural(historyProject.assetCount, "assets")}</span>
-                    <span>{historyProject.sceneCount > 0 ? "1 script" : "0 scripts"}</span>
-                    <span>{historyProject.status === "completed" ? "1 video" : "0 videos"}</span>
+                  <span className="project-card-body">
+                    <span className="project-card-title">
+                      <strong>{historyProject.title}</strong>
+                      <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
+                        {historyProject.status}
+                      </StatusPill>
+                    </span>
+                    <span className="project-card-product">{historyProject.productName}</span>
+                    <span className="project-card-divider" />
+                    <span className="project-card-stats">
+                      <span>{plural(historyProject.assetCount, "assets")}</span>
+                      <span>{historyProject.sceneCount > 0 ? "1 script" : "0 scripts"}</span>
+                      <span>{historyProject.status === "completed" ? "1 video" : "0 videos"}</span>
+                    </span>
                   </span>
-                  <span className="project-card-open">
-                    {text.openProject}
-                    <ArrowUpRight size={16} aria-hidden="true" />
-                  </span>
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className="project-empty-state">
@@ -222,12 +298,27 @@ export const ProjectWorkspace = ({
   const scripts = project.scripts;
   const videos = project.renderTasks.filter((task) => task.status === "completed");
   const activeAsset = project.assets.find((asset) => asset.type === "image") ?? project.assets[0];
+  const selectedScript = scripts.find((candidate) => candidate.id === selectedScriptId);
   const tabs: Array<{ id: ProjectDetailTab; icon: typeof Box; label: string }> = [
     { id: "overview", icon: Box, label: text.overview },
     { id: "materials", icon: Images, label: text.materials },
     { id: "scripts", icon: FileText, label: text.scriptLibrary },
     { id: "videos", icon: Film, label: text.videoLibrary },
   ];
+  const updateOverviewDraft = <Key extends keyof ProjectBrief>(
+    key: Key,
+    value: ProjectBrief[Key],
+  ) => setOverviewDraft((current) => ({ ...current, [key]: value }));
+  const handleOverviewSave = () => {
+    onUpdateProjectBrief({
+      ...overviewDraft,
+      sellingPoints: overviewDraft.sellingPoints
+        .map((point) => point.trim())
+        .filter((point) => point.length > 0),
+      targetDurationSeconds: Number(overviewDraft.targetDurationSeconds) || 15,
+    });
+    setIsOverviewEditing(false);
+  };
 
   return (
     <section className="project-detail-workspace" aria-label={project.title}>
@@ -237,7 +328,7 @@ export const ProjectWorkspace = ({
         </Button>
         <div className="project-product-card">
           {activeAsset?.url ? (
-            <img alt={activeAsset.name} src={activeAsset.url} />
+            <img alt={activeAsset.name} src={getAssetContentUrl(activeAsset.id)} />
           ) : (
             <span className="project-product-placeholder" aria-hidden="true" />
           )}
@@ -288,29 +379,94 @@ export const ProjectWorkspace = ({
         {activeTab === "overview" ? (
           <div className="project-overview-grid">
             <section className="project-info-panel">
-              <h3>{text.overview}</h3>
-              <dl>
-                <div>
-                  <dt>{text.productName}</dt>
-                  <dd>{project.productName}</dd>
+              <div className="project-panel-titlebar">
+                <h3>{text.overview}</h3>
+                {isOverviewEditing ? (
+                  <span className="project-panel-actions">
+                    <Button icon={<X size={16} />} onClick={() => setIsOverviewEditing(false)}>
+                      {uiText.cancelEdit}
+                    </Button>
+                    <Button icon={<Check size={16} />} onClick={handleOverviewSave} variant="primary">
+                      {uiText.saveOverview}
+                    </Button>
+                  </span>
+                ) : (
+                  <Button icon={<Edit3 size={16} />} onClick={() => setIsOverviewEditing(true)}>
+                    {uiText.editOverview}
+                  </Button>
+                )}
+              </div>
+              {isOverviewEditing ? (
+                <div className="project-overview-form">
+                  <label>
+                    {text.productName}
+                    <input
+                      value={overviewDraft.productName}
+                      onChange={(event) => updateOverviewDraft("productName", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {text.productType}
+                    <input
+                      value={overviewDraft.style}
+                      onChange={(event) => updateOverviewDraft("style", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {text.audience}
+                    <input
+                      value={overviewDraft.audience}
+                      onChange={(event) => updateOverviewDraft("audience", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {text.tone}
+                    <input
+                      value={overviewDraft.tone}
+                      onChange={(event) => updateOverviewDraft("tone", event.target.value)}
+                    />
+                  </label>
+                  <label className="wide">
+                    {text.sellingPoints}
+                    <textarea
+                      rows={4}
+                      value={overviewDraft.sellingPoints.join("\n")}
+                      onChange={(event) =>
+                        updateOverviewDraft(
+                          "sellingPoints",
+                          event.target.value
+                            .split(/[\n,，/]+/u)
+                            .map((point) => point.trim())
+                            .filter(Boolean),
+                        )
+                      }
+                    />
+                  </label>
                 </div>
-                <div>
-                  <dt>{text.productType}</dt>
-                  <dd>{project.style}</dd>
-                </div>
-                <div>
-                  <dt>{text.audience}</dt>
-                  <dd>{project.audience}</dd>
-                </div>
-                <div>
-                  <dt>{text.tone}</dt>
-                  <dd>{project.tone}</dd>
-                </div>
-                <div className="wide">
-                  <dt>{text.sellingPoints}</dt>
-                  <dd>{project.sellingPoints.join(" / ")}</dd>
-                </div>
-              </dl>
+              ) : (
+                <dl>
+                  <div>
+                    <dt>{text.productName}</dt>
+                    <dd>{project.productName}</dd>
+                  </div>
+                  <div>
+                    <dt>{text.productType}</dt>
+                    <dd>{project.style}</dd>
+                  </div>
+                  <div>
+                    <dt>{text.audience}</dt>
+                    <dd>{project.audience}</dd>
+                  </div>
+                  <div>
+                    <dt>{text.tone}</dt>
+                    <dd>{project.tone}</dd>
+                  </div>
+                  <div className="wide">
+                    <dt>{text.sellingPoints}</dt>
+                    <dd>{project.sellingPoints.join(" / ")}</dd>
+                  </div>
+                </dl>
+              )}
             </section>
             <section className="project-info-panel">
               <h3>
@@ -335,7 +491,23 @@ export const ProjectWorkspace = ({
                 {text.addScript}
               </Button>
             </div>
-            {scripts.length > 0 ? <ScriptList scripts={scripts} /> : scriptPanel}
+            {scripts.length > 0 ? (
+              <div className="project-script-library-layout">
+                <ScriptList
+                  scripts={scripts}
+                  selectedScriptId={selectedScriptId}
+                  onSelectScript={setSelectedScriptId}
+                  selectLabel={uiText.selectScript}
+                  sceneLabel={uiText.scenes}
+                />
+                {selectedScript ? (
+                  <ScriptDetail script={selectedScript} title={uiText.scriptDetail} />
+                ) : null}
+              </div>
+            ) : null}
+            {showScriptComposer ? (
+              <div className="project-script-composer">{scriptPanel}</div>
+            ) : null}
           </section>
         ) : null}
 
@@ -358,16 +530,60 @@ export const ProjectWorkspace = ({
   );
 };
 
-const ScriptList = ({ scripts }: { scripts: ScriptResult[] }) => (
+const ScriptList = ({
+  onSelectScript,
+  sceneLabel,
+  scripts,
+  selectedScriptId,
+  selectLabel,
+}: {
+  onSelectScript: (scriptId: string) => void;
+  sceneLabel: string;
+  scripts: ScriptResult[];
+  selectedScriptId?: string;
+  selectLabel: string;
+}) => (
   <div className="project-script-grid">
     {scripts.map((script, index) => (
-      <article className="project-library-card" key={script.id}>
-        <span>{script.scenes.length} scenes</span>
+      <button
+        aria-label={`${selectLabel}: ${script.hook}`}
+        className={`project-library-card project-script-card ${
+          selectedScriptId === script.id ? "active" : ""
+        }`.trim()}
+        key={script.id}
+        onClick={() => onSelectScript(script.id)}
+        type="button"
+      >
+        <span>{`${script.scenes.length} ${sceneLabel}`}</span>
         <h4>{`v${index + 1} ${script.hook}`}</h4>
-        <p>{script.narrative}</p>
-      </article>
+        <p>{script.constraints.slice(0, 2).join(" / ") || script.narrative}</p>
+      </button>
     ))}
   </div>
+);
+
+const ScriptDetail = ({ script, title }: { script: ScriptResult; title: string }) => (
+  <article className="project-script-detail">
+    <span>{title}</span>
+    <h4>{script.hook}</h4>
+    <p>{script.narrative}</p>
+    {script.constraints.length > 0 ? (
+      <div className="project-script-constraints">
+        {script.constraints.map((constraint) => (
+          <span key={constraint}>{constraint}</span>
+        ))}
+      </div>
+    ) : null}
+    <ol>
+      {script.scenes.map((scene) => (
+        <li key={scene.id}>
+          <strong>{`${scene.order}. ${scene.durationSeconds}s`}</strong>
+          <p>{scene.subtitle}</p>
+          <small>{scene.visualPrompt}</small>
+        </li>
+      ))}
+    </ol>
+  </article>
 );
 
 const VideoList = ({ videos }: { videos: RenderTask[] }) =>

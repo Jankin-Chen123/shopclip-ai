@@ -55,7 +55,6 @@ import {
   createProject,
   createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
-  deleteProject as deleteProjectRequest,
   deleteReferenceVideo,
   deleteScene,
   extractTemplateFromScriptAssets,
@@ -82,6 +81,7 @@ import {
   startSmartEdit,
   startRender,
   updateProjectPrep,
+  updateProjectBrief,
   updateScene,
   uploadAssetFileToStorage,
   type AssetRecallCandidate,
@@ -109,6 +109,53 @@ const defaultBrief: ProjectBrief = {
   tone: "confident",
   style: "fast desk demo",
   targetDurationSeconds: 15,
+};
+
+const createProjectMockDashboard = (project: ProjectSnapshot): DashboardResponse => {
+  const assetBoost = Math.min(project.assets.length, 6) * 0.025;
+  const scriptBoost = Math.min(project.scripts.length, 4) * 0.035;
+  const focusScore = Math.min(0.92, 0.64 + assetBoost + scriptBoost);
+  const hookScore = Math.min(0.94, 0.68 + project.sellingPoints.length * 0.04);
+  const clarityScore = Math.min(0.9, 0.72 + project.scenes.length * 0.018);
+  const completionRate = Math.min(0.88, 0.46 + hookScore * 0.14 + focusScore * 0.16);
+  const impressions = 12000;
+  const watch3s = Math.round(impressions * completionRate);
+  const clicks = Math.round(watch3s * (0.18 + focusScore * 0.08));
+  const carts = Math.round(clicks * 0.38);
+  const purchases = Math.round(carts * 0.34);
+
+  return {
+    projectId: project.id,
+    summary: {
+      hookStrength: hookScore,
+      predictedCompletionRate: completionRate,
+      productFocus: focusScore,
+      subtitleClarity: clarityScore,
+    },
+    funnel: [
+      { stage: "Impression", value: impressions },
+      { stage: "Watch 3s", value: watch3s },
+      { stage: "Click", value: clicks },
+      { stage: "Add to cart", value: carts },
+      { stage: "Purchase", value: purchases },
+    ],
+    factors: [
+      {
+        id: "mock-factor-hook",
+        factor: "Hook clarity",
+        expectedImpact: "high",
+        evidence: `${project.sellingPoints.length} selling point(s) are available for hook testing.`,
+        recommendation: "Keep the first three seconds focused on the strongest visible product proof.",
+      },
+      {
+        id: "mock-factor-assets",
+        factor: "Product visibility",
+        expectedImpact: project.assets.length > 0 ? "high" : "medium",
+        evidence: `${project.assets.length} imported asset(s) can support product close-ups.`,
+        recommendation: "Use the hero image and one usage scene before the CTA.",
+      },
+    ],
+  };
 };
 
 const defaultAssetSizeBytes = 220_000;
@@ -579,8 +626,8 @@ export const App = ({
   const [projectDetailTab, setProjectDetailTab] = useState<ProjectDetailTab>(
     () => initialProjectDetailTab ?? "overview",
   );
+  const [isProjectScriptComposerOpen, setIsProjectScriptComposerOpen] = useState(false);
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
-  const [projectIdToLoad, setProjectIdToLoad] = useState("");
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceVideo[]>([]);
   const [renderTask, setRenderTask] = useState<RenderTask>();
   const [script, setScript] = useState<ScriptResult>();
@@ -1002,6 +1049,7 @@ export const App = ({
       const createdProject = await createProject(brief);
       setProject(createdProject);
       setProjectDetailTab("overview");
+      setIsProjectScriptComposerOpen(false);
       setScript(undefined);
       setScriptDraft("");
       setScriptProductionMode("automatic");
@@ -1024,36 +1072,12 @@ export const App = ({
       refreshProjectHistory();
     });
 
-  const clearCurrentWorkspace = () => {
-    setProject(undefined);
-    setBrief(defaultBrief);
-    setScript(undefined);
-    setScriptDraft("");
-    setScriptProductionMode("automatic");
-    setSelectedReferenceIdForScript(undefined);
-    setSelectedTemplateIdForScript(undefined);
-    setRenderTask(undefined);
-    setSmartEditResult(undefined);
-    setSelectedSmartEditSegmentId(undefined);
-    setTraceEvents([]);
-    setDashboard(undefined);
-    setExportResult(undefined);
-    setFallbackProvider(undefined);
-    setHasAssetSearchRun(false);
-    setAssetSearchResults([]);
-    setExternalAssetSearchResults([]);
-    setEditingSuggestions([]);
-    setAssetRecallCandidates([]);
-    setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
-    setSelectedSceneId(undefined);
-    setDirtySceneIds(new Set());
-  };
-
   const applyLoadedProject = (loadedProject: ProjectSnapshot) => {
     const latestScript = loadedProject.scripts.at(-1);
     const latestRender = loadedProject.renderTasks.at(-1);
     setProject(loadedProject);
     setProjectDetailTab("overview");
+    setIsProjectScriptComposerOpen(false);
     setBrief({
       title: loadedProject.title,
       productName: loadedProject.productName,
@@ -1104,28 +1128,43 @@ export const App = ({
     setDirtySceneIds(new Set());
   };
 
-  const handleLoadProject = () =>
-    runAction("project", "project", async () => {
-      const loadedProject = await loadProject(projectIdToLoad.trim());
-      applyLoadedProject(loadedProject);
-    });
-
   const handleLoadProjectFromHistory = (projectId: string) =>
     runAction("project", "project", async () => {
       const loadedProject = await loadProject(projectId);
-      setProjectIdToLoad(projectId);
       applyLoadedProject(loadedProject);
     });
 
   const handleBackToProjectList = () => {
     setProject(undefined);
     setProjectDetailTab("overview");
+    setIsProjectScriptComposerOpen(false);
     refreshProjectHistory();
   };
 
   const handleAddProjectScript = () => {
     setProjectDetailTab("scripts");
-    handlePageChange("create");
+    setIsProjectScriptComposerOpen(true);
+  };
+
+  const handleUpdateProjectBrief = (nextBrief: ProjectBrief) => {
+    if (!project) {
+      return;
+    }
+
+    void runAction("project", "project", async () => {
+      const updatedProject = await updateProjectBrief(project.id, nextBrief);
+      setProject(updatedProject);
+      setBrief({
+        title: updatedProject.title,
+        productName: updatedProject.productName,
+        audience: updatedProject.audience,
+        sellingPoints: updatedProject.sellingPoints,
+        tone: updatedProject.tone,
+        style: updatedProject.style,
+        targetDurationSeconds: updatedProject.targetDurationSeconds,
+      });
+      refreshProjectHistory();
+    });
   };
 
   const handleGenerateProjectVideo = () => {
@@ -1137,40 +1176,6 @@ export const App = ({
     setProjectDetailTab("videos");
     handlePageChange("project");
     refreshProjectHistory();
-  };
-
-  const handleDeleteProjectFromHistory = (projectId: string) => {
-    const historyProject = projectHistory.find((candidate) => candidate.id === projectId);
-    const projectTitle = historyProject?.title ?? projectId;
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(text.project.deleteHistoryProjectConfirm(projectTitle))
-    ) {
-      return;
-    }
-
-    void runAction("project", "project", async () => {
-      const response = await deleteProjectRequest(projectId);
-      const deletedAssetIds = new Set(response.deletedAssets.map((asset) => asset.id));
-
-      setProjectHistory((current) => current.filter((candidate) => candidate.id !== projectId));
-      setAssetLibrary((current) => ({
-        assets: current.assets.filter(
-          (asset) => asset.projectId !== projectId && !deletedAssetIds.has(asset.id),
-        ),
-        assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
-      }));
-      setAssetSearchResults((current) =>
-        current.filter((result) => !deletedAssetIds.has(result.asset.id)),
-      );
-      setProjectIdToLoad((current) => (current === projectId ? "" : current));
-
-      if (project?.id === projectId) {
-        clearCurrentWorkspace();
-      }
-
-      refreshProjectHistory();
-    });
   };
 
   const replaceSceneInState = (updatedScene: StoryboardScene) => {
@@ -1789,6 +1794,8 @@ export const App = ({
             }
           : current,
       );
+      setIsProjectScriptComposerOpen(false);
+      setProjectDetailTab((current) => (current === "scripts" ? "scripts" : current));
       if (nextPage) {
         handlePageChange(nextPage);
       }
@@ -2263,11 +2270,12 @@ export const App = ({
                   dashboardPanel={
                     <DashboardPanel
                       copy={text.dashboard}
-                      dashboard={dashboard}
+                      dashboard={dashboard ?? (project ? createProjectMockDashboard(project) : undefined)}
                       disabled={!project || busyState !== "idle"}
                       error={errors.dashboard}
                       isLoading={busyState === "dashboard"}
                       onLoadDashboard={handleLoadDashboard}
+                      showLoadButton={false}
                     />
                   }
                   disabled={busyState !== "idle"}
@@ -2277,6 +2285,7 @@ export const App = ({
                   materialsPanel={
                     <AssetPrepPanel
                       disabled={busyState !== "idle"}
+                      embedded
                       error={errors.asset}
                       isGenerating={busyState === "script"}
                       isImporting={busyState === "asset"}
@@ -2297,8 +2306,10 @@ export const App = ({
                   onGenerateVideo={handleGenerateProjectVideo}
                   onLoadProject={handleLoadProjectFromHistory}
                   onTabChange={setProjectDetailTab}
+                  onUpdateProjectBrief={handleUpdateProjectBrief}
                   project={project}
                   projectHistory={projectHistory}
+                  showScriptComposer={isProjectScriptComposerOpen}
                   scriptPanel={
                     <ScriptPanel
                       copy={text.script}
@@ -2307,7 +2318,7 @@ export const App = ({
                       fallbackProvider={fallbackProvider}
                       isLoading={busyState === "script"}
                       isStoryboardGenerating={busyState === "script"}
-                      onGenerateScript={handleRewriteScript}
+                      onGenerateScript={() => handleGenerateScript()}
                       onGenerateStoryboard={() => handleGenerateScript("studio")}
                       onProductionModeChange={handleScriptProductionModeChange}
                       onReferenceChange={setSelectedReferenceIdForScript}

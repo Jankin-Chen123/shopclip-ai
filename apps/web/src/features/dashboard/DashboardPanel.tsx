@@ -12,6 +12,7 @@ interface DashboardPanelProps {
   error?: string;
   isLoading: boolean;
   onLoadDashboard: () => void;
+  showLoadButton?: boolean;
 }
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
@@ -35,6 +36,7 @@ export const DashboardPanel = ({
   error,
   isLoading,
   onLoadDashboard,
+  showLoadButton = true,
 }: DashboardPanelProps) => {
   const funnelMax = Math.max(...(dashboard?.funnel.map((stage) => stage.value) ?? [1]));
   const summary = dashboard?.summary;
@@ -66,14 +68,16 @@ export const DashboardPanel = ({
           <p className="eyebrow">{copy.step}</p>
           <h2 id="dashboard-title">{copy.title}</h2>
         </div>
-        <Button
-          disabled={disabled || isLoading}
-          icon={isLoading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
-          onClick={onLoadDashboard}
-          variant="primary"
-        >
-          {copy.load}
-        </Button>
+        {showLoadButton ? (
+          <Button
+            disabled={disabled || isLoading}
+            icon={isLoading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
+            onClick={onLoadDashboard}
+            variant="primary"
+          >
+            {copy.load}
+          </Button>
+        ) : null}
       </div>
 
       {error ? (

@@ -63,6 +63,8 @@ export const ProjectSummarySchema = ProjectSchema.pick({
   updatedAt: true,
 }).extend({
   assetCount: z.number().int().nonnegative(),
+  coverAssetId: z.string().trim().min(1).optional(),
+  coverAssetUrl: z.string().trim().min(1).optional(),
   sceneCount: z.number().int().nonnegative(),
 });
 

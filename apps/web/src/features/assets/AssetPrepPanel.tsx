@@ -25,6 +25,7 @@ import { assetMatchesCategory, type AssetCategory } from "./AssetCategoryTabs";
 
 interface AssetPrepPanelProps {
   defaultOpenLibraryBucketId?: string;
+  embedded?: boolean;
   initialSnapshot?: AssetPrepSnapshot;
   libraryAssets?: AssetMetadata[];
   preparedLibraryAssetsByBucket?: Record<string, AssetMetadata[]>;
@@ -333,6 +334,7 @@ export const filterPrepLibraryAssets = (
 export const AssetPrepPanel = ({
   defaultOpenLibraryBucketId,
   disabled,
+  embedded = false,
   error,
   initialSnapshot,
   isGenerating,
@@ -471,17 +473,27 @@ export const AssetPrepPanel = ({
   }, [keywords, manualUploads, onPreparationChange]);
 
   return (
-    <section className="panel asset-prep-panel" id="asset-prep" aria-labelledby="asset-prep-title">
-      <div className="panel-heading asset-prep-heading">
-        <div>
-          <p className="eyebrow">{copy.step}</p>
-          <h2 id="asset-prep-title">{copy.title}</h2>
-          <p className="concept-panel-subtitle">{copy.body}</p>
+    <section
+      className={`panel asset-prep-panel ${embedded ? "is-embedded" : ""}`.trim()}
+      id="asset-prep"
+      aria-labelledby="asset-prep-title"
+    >
+      {embedded ? (
+        <h2 className="sr-only" id="asset-prep-title">
+          {copy.title}
+        </h2>
+      ) : (
+        <div className="panel-heading asset-prep-heading">
+          <div>
+            <p className="eyebrow">{copy.step}</p>
+            <h2 id="asset-prep-title">{copy.title}</h2>
+            <p className="concept-panel-subtitle">{copy.body}</p>
+          </div>
+          <StatusPill tone={manualUploadCount > 0 ? "success" : "neutral"}>
+            {manualUploadCount > 0 ? copy.complete : copy.uploaded(0, 4)}
+          </StatusPill>
         </div>
-        <StatusPill tone={manualUploadCount > 0 ? "success" : "neutral"}>
-          {manualUploadCount > 0 ? copy.complete : copy.uploaded(0, 4)}
-        </StatusPill>
-      </div>
+      )}
 
       {error ? (
         <p className="inline-error" role="alert">
@@ -620,21 +632,25 @@ export const AssetPrepPanel = ({
         </div>
       </section>
 
-      <div className="asset-prep-footer">
-        <Button icon={<ArrowLeft size={18} />} onClick={onBack}>
-          {copy.back}
-        </Button>
-        <p>{copy.estimate}</p>
-        <Button
-          disabled={disabled || isGenerating}
-          icon={isGenerating ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />}
-          onClick={onGenerateStoryboard}
-          variant="primary"
-        >
-          {copy.generate}
-          <ArrowRight size={18} aria-hidden="true" />
-        </Button>
-      </div>
+      {embedded ? null : (
+        <div className="asset-prep-footer">
+          <Button icon={<ArrowLeft size={18} />} onClick={onBack}>
+            {copy.back}
+          </Button>
+          <p>{copy.estimate}</p>
+          <Button
+            disabled={disabled || isGenerating}
+            icon={
+              isGenerating ? <Loader2 className="spin" size={18} /> : <UploadCloud size={18} />
+            }
+            onClick={onGenerateStoryboard}
+            variant="primary"
+          >
+            {copy.generate}
+            <ArrowRight size={18} aria-hidden="true" />
+          </Button>
+        </div>
+      )}
 
       {activeLibraryBucket ? (
         <div className="asset-prep-library-backdrop" role="presentation">
