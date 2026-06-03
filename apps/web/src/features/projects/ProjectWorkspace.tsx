@@ -199,19 +199,17 @@ export const ProjectWorkspace = ({
       tone: project.tone,
     });
     setIsOverviewEditing(false);
-    setSelectedScriptId(project.scripts.at(-1)?.id);
+    setSelectedScriptId(undefined);
   }, [project?.id]);
 
   useEffect(() => {
-    if (!project || project.scripts.length === 0) {
+    if (!project || project.scripts.length === 0 || !selectedScriptId) {
       return;
     }
-    setSelectedScriptId((current) =>
-      current && project.scripts.some((script) => script.id === current)
-        ? current
-        : project.scripts.at(-1)?.id,
-    );
-  }, [project?.scripts.length]);
+    if (!project.scripts.some((script) => script.id === selectedScriptId)) {
+      setSelectedScriptId(undefined);
+    }
+  }, [project?.scripts.length, selectedScriptId]);
 
   if (!project) {
     return (
