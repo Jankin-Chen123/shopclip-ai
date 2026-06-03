@@ -1533,6 +1533,210 @@ describe("App", () => {
     expect(markup).not.toContain("路");
   });
 
+  it("renders a track stack with target and source time ranges for smart edit review", () => {
+    const markup = renderToStaticMarkup(
+      <SmartEditPanel
+        assets={[
+          makeAsset({
+            id: "asset-video",
+            name: "Cup demo.mp4",
+            type: "video",
+            url: "https://cdn.example.test/cup-demo.mp4",
+          }),
+        ]}
+        assetSlices={[
+          {
+            id: "slice-demo",
+            assetId: "asset-video",
+            label: "Demo pour",
+            startSecond: 1.25,
+            endSecond: 3.25,
+            tags: ["demo"],
+            searchText: "cup pour demo",
+          },
+        ]}
+        copy={copy.en.smartEdit}
+        disabled={false}
+        instructions=""
+        isEditing={false}
+        isRefreshing={false}
+        mediaSettings={{
+          bgmTrack: "tech-pulse",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        result={{
+          exportUrl: "https://cdn.example.test/export.mp4",
+          previewUrl: "https://cdn.example.test/export.mp4",
+          renderTaskId: "render-smart-edit",
+          segmentOutputs: [],
+          traceEvents: [],
+          plan: {
+            id: "plan-1",
+            projectId: "project-1",
+            strategy: "Use a compact product edit.",
+            targetDurationSeconds: 8,
+            createdAt: "2026-06-02T00:00:00.000Z",
+            audio: {
+              bgmTrack: "tech-pulse",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            segments: [
+              {
+                id: "segment-1",
+                sceneId: "scene-1",
+                order: 1,
+                enabled: true,
+                durationSeconds: 4,
+                transition: "crossfade",
+                subtitle: "Pour test hook",
+                voiceover: "Pour test hook",
+                source: {
+                  assetId: "asset-video",
+                  kind: "video-slice",
+                  sliceId: "slice-demo",
+                  startSecond: 1.25,
+                  endSecond: 3.25,
+                },
+                assetTags: ["demo"],
+                rationale: "Use the product pour slice.",
+              },
+            ],
+          },
+        }}
+        selectedSegmentId="segment-1"
+        targetLanguage="zh-CN"
+        traceEvents={[]}
+        onInstructionsChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onPlanChange={() => undefined}
+        onRefreshSegment={() => undefined}
+        onSelectedSegmentChange={() => undefined}
+        onStartSmartEdit={() => undefined}
+        onTargetLanguageChange={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("Track stack");
+    expect(markup).toContain("Video track");
+    expect(markup).toContain("Caption track");
+    expect(markup).toContain("Voice track");
+    expect(markup).toContain("BGM track");
+    expect(markup).toContain("00:00.0-00:04.0");
+    expect(markup).toContain("source 00:01.3-00:03.3");
+    expect(markup).toContain("Cup demo.mp4");
+    expect(markup).toContain("tech-pulse");
+  });
+
+  it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {
+    const markup = renderToStaticMarkup(
+      <SmartEditPanel
+        assets={[
+          makeAsset({
+            id: "asset-video",
+            name: "Cup demo.mp4",
+            type: "video",
+            url: "https://cdn.example.test/cup-demo.mp4",
+          }),
+        ]}
+        assetSlices={[]}
+        copy={copy.en.smartEdit}
+        disabled={false}
+        instructions="Keep the hook fast and preserve the pour proof."
+        isEditing={false}
+        isRefreshing={false}
+        mediaSettings={{
+          bgmTrack: "tech-pulse",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        result={{
+          exportUrl: "https://cdn.example.test/export.mp4",
+          previewUrl: "https://cdn.example.test/export.mp4",
+          renderTaskId: "render-smart-edit",
+          segmentOutputs: [],
+          traceEvents: [],
+          plan: {
+            id: "plan-1",
+            projectId: "project-1",
+            strategy: "Use a compact product edit.",
+            targetDurationSeconds: 8,
+            createdAt: "2026-06-02T00:00:00.000Z",
+            audio: {
+              bgmTrack: "tech-pulse",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            segments: [
+              {
+                id: "segment-1",
+                sceneId: "scene-1",
+                order: 1,
+                enabled: true,
+                durationSeconds: 4,
+                transition: "cut",
+                subtitle: "Hook with the pour",
+                voiceover: "Hook with the pour",
+                source: {
+                  assetId: "asset-video",
+                  kind: "video-slice",
+                  startSecond: 1,
+                  endSecond: 5,
+                },
+                assetTags: ["demo"],
+                rationale: "Use the product pour slice.",
+              },
+              {
+                id: "segment-2",
+                sceneId: "scene-2",
+                order: 2,
+                enabled: false,
+                durationSeconds: 5,
+                transition: "fade",
+                subtitle: "Disabled outro",
+                voiceover: "Disabled outro",
+                source: {
+                  assetId: "asset-video",
+                  kind: "video-slice",
+                },
+                assetTags: ["outro"],
+                rationale: "Optional outro.",
+              },
+            ],
+          },
+        }}
+        selectedSegmentId="segment-1"
+        targetLanguage="zh-CN"
+        traceEvents={[]}
+        onInstructionsChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onPlanChange={() => undefined}
+        onRefreshSegment={() => undefined}
+        onSelectedSegmentChange={() => undefined}
+        onStartSmartEdit={() => undefined}
+        onTargetLanguageChange={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("smart-edit-status-strip");
+    expect(markup).toContain("Enabled cut");
+    expect(markup).toContain("4s");
+    expect(markup).toContain("Selected segment");
+    expect(markup).toContain("1 / 2");
+    expect(markup).toContain("Source");
+    expect(markup).toContain("Cup demo.mp4");
+    expect(markup).toContain("Audio");
+    expect(markup).toContain("tech-pulse");
+    expect(markup).toContain("Edit settings");
+    expect(markup).toContain("Timing and source");
+    expect(markup).toContain("Copy and voice");
+    expect(markup).toContain("Segment state");
+    expect(markup).toContain("Selected");
+  });
+
   it("parses reference script assets into readable preview sections", () => {
     const preview = parseReferenceScriptPreview(
       makeAsset({

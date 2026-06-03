@@ -417,3 +417,40 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/api build`
+
+## 2026-06-03 Reference Editor Track Stack Optimization
+
+- Reference repositories read:
+  - `OpenCut-app/OpenCut` current `README.md`, `.github/copilot-instructions.md`, `apps/web/src/routes/index.tsx`, and `apps/web/src/styles.css`.
+  - Finding: the current OpenCut repo is a rewrite scaffold rather than a complete editor implementation; useful transferable constraints are editor-first accessibility, strict typed React, stable UI primitives, and caption-aware media behavior.
+  - `Hommy-master/capcut-mate` `src/pyJianYingDraft/track.py`, `segment.py`, `video_segment.py`, `script_file.py`, plus service files for videos, captions, audio timelines, and async render tasks.
+  - Finding: capcut-mate models editing as typed tracks containing non-overlapping segments with `target_timerange`, optional `source_timerange`, render order, captions, voice/audio timelines, and async task status.
+- Fix:
+  - Step 05 now renders a multi-track review stack beneath the existing draggable timeline.
+  - The stack derives Video, Caption, Voice, and BGM tracks from the current `SmartEditPlan`, without changing the real backend smart-edit/ffmpeg path.
+  - Each visible track clip shows target timeline range, source media range where available, source asset name, subtitle/voice text, transition, voice, and BGM profile.
+  - English and Chinese UI copy were added for the track stack.
+- Verification:
+  - Added `App.test.tsx` coverage for video-slice source range `00:01.3-00:03.3`, target range `00:00.0-00:04.0`, and visible Video/Caption/Voice/BGM tracks.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+
+## 2026-06-03 Step 05 Interaction UX Repair
+
+- User-visible issue:
+  - Step 05 still felt like a backend configuration form: target language, BGM, and edit instructions were placed before the editor surface, while preview, selected segment context, and per-segment actions were visually disconnected.
+  - The selected segment inspector was a flat field list, making it hard to understand what belonged to timing/source, copy/voice, or enable/disable state.
+- Fix:
+  - Added an editor status strip above the workspace with enabled cut duration, selected segment index, selected source, and active audio/BGM.
+  - Moved global edit settings into a compact `Edit settings` disclosure so preview and timeline are the primary working surface.
+  - Grouped the segment inspector into `Timing and source`, `Copy and voice`, and `Segment state`.
+  - Strengthened selected timeline cards with a visible `Selected` label and active background while preserving drag, arrow-key selection, Delete-to-disable, and refresh controls.
+  - Added responsive CSS so the status strip/settings/editor grid collapse cleanly on narrow screens.
+- Verification:
+  - Added `App.test.tsx` coverage for the status strip, settings disclosure, grouped inspector, selected segment state, source label, and audio summary.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`

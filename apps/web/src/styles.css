@@ -4422,10 +4422,84 @@ textarea {
   gap: 8px;
 }
 
+.smart-edit-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.smart-edit-status-strip > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon value";
+  gap: 2px 8px;
+  align-items: center;
+  min-height: 58px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 10px 12px;
+}
+
+.smart-edit-status-strip svg {
+  grid-area: icon;
+  color: var(--primary-strong);
+}
+
+.smart-edit-status-strip span {
+  grid-area: label;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.smart-edit-status-strip strong {
+  grid-area: value;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.92rem;
+}
+
+.smart-edit-settings-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(8, 10, 16, 0.38);
+}
+
+.smart-edit-settings-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.smart-edit-settings-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.smart-edit-settings-panel summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.smart-edit-settings-panel summary small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .smart-edit-controls {
   display: grid;
   grid-template-columns: minmax(140px, 0.8fr) minmax(140px, 0.8fr) minmax(260px, 2fr);
   gap: 12px;
+  padding: 0 12px 12px;
 }
 
 .smart-edit-controls label,
@@ -4462,6 +4536,7 @@ textarea {
 .smart-edit-preview,
 .smart-edit-inspector,
 .smart-edit-timeline,
+.smart-edit-track-stack,
 .smart-edit-trace {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -4472,6 +4547,7 @@ textarea {
 .smart-edit-preview h3,
 .smart-edit-inspector h3,
 .smart-edit-timeline h3,
+.smart-edit-track-stack h3,
 .smart-edit-trace h3 {
   margin: 0 0 10px;
   font-size: 1rem;
@@ -4546,6 +4622,19 @@ textarea {
   overflow: auto;
 }
 
+.smart-edit-inspector-section {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.smart-edit-inspector-section h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
 .timeline-header {
   display: flex;
   justify-content: space-between;
@@ -4583,6 +4672,7 @@ textarea {
 
 .timeline-track button.active {
   border-color: var(--primary-strong);
+  background: rgba(244, 114, 182, 0.12);
   box-shadow: 0 0 0 2px rgba(244, 114, 182, 0.18);
 }
 
@@ -4593,6 +4683,7 @@ textarea {
 .timeline-track strong {
   color: var(--primary-strong);
   font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
 
 .timeline-track span {
@@ -4607,6 +4698,61 @@ textarea {
 .timeline-track small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.smart-edit-track-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.smart-edit-track-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.smart-edit-track-row > strong {
+  display: flex;
+  align-items: center;
+  min-height: 58px;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.smart-edit-track-clips {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.smart-edit-track-clip {
+  display: grid;
+  grid-template-rows: auto minmax(18px, 1fr) auto;
+  min-width: 154px;
+  max-width: 280px;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 8px 10px;
+}
+
+.smart-edit-track-clip span,
+.smart-edit-track-clip small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.smart-edit-track-clip b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 0.82rem;
 }
 
 .smart-edit-trace {
@@ -5024,6 +5170,7 @@ textarea {
 
   .asset-search-controls,
   .asset-prep-footer,
+  .smart-edit-status-strip,
   .smart-edit-controls,
   .smart-edit-grid,
   .media-controls,
