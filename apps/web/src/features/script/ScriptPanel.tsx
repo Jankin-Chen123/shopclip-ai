@@ -30,6 +30,8 @@ interface ScriptPanelProps {
   scriptDraft: string;
   selectedReferenceId?: string;
   selectedTemplateId?: string;
+  primaryActionLabel?: string;
+  showStoryboardAction?: boolean;
   templates: ViralTemplate[];
 }
 
@@ -52,6 +54,8 @@ export const ScriptPanel = ({
   scriptDraft,
   selectedReferenceId,
   selectedTemplateId,
+  primaryActionLabel,
+  showStoryboardAction = true,
   templates,
 }: ScriptPanelProps) => {
   const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -152,22 +156,24 @@ export const ScriptPanel = ({
           onClick={onGenerateScript}
           variant="primary"
         >
-          {copy.oneClickGenerate}
+          {primaryActionLabel ?? copy.oneClickGenerate}
         </Button>
-        <Button
-          disabled={disabled || isLoading || isStoryboardGenerating}
-          icon={
-            isStoryboardGenerating ? (
-              <Loader2 className="spin" size={18} />
-            ) : (
-              <WandSparkles size={18} />
-            )
-          }
-          onClick={onGenerateStoryboard}
-        >
-          {copy.generateStoryboard}
-          <ArrowRight size={18} aria-hidden="true" />
-        </Button>
+        {showStoryboardAction ? (
+          <Button
+            disabled={disabled || isLoading || isStoryboardGenerating}
+            icon={
+              isStoryboardGenerating ? (
+                <Loader2 className="spin" size={18} />
+              ) : (
+                <WandSparkles size={18} />
+              )
+            }
+            onClick={onGenerateStoryboard}
+          >
+            {copy.generateStoryboard}
+            <ArrowRight size={18} aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
 
       {error ? (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Film, FileText, ListVideo, Scissors } from "lucide-react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -352,6 +352,7 @@ type BusyState =
   | "reference";
 
 type ScriptProductionMode = NonNullable<ScriptGenerationRequest["productionMode"]>;
+type ProjectStudioFlow = "script" | "storyboard" | "render" | "edit";
 
 const getStoredLanguage = (): Language => {
   if (typeof window === "undefined") {
@@ -629,6 +630,8 @@ export const App = ({
     () => initialProjectDetailTab ?? "overview",
   );
   const [isProjectScriptComposerOpen, setIsProjectScriptComposerOpen] = useState(false);
+  const [isProjectStudioMode, setIsProjectStudioMode] = useState(false);
+  const [projectStudioFlow, setProjectStudioFlow] = useState<ProjectStudioFlow>("script");
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceVideo[]>([]);
   const [renderTask, setRenderTask] = useState<RenderTask>();
@@ -726,6 +729,9 @@ export const App = ({
   }, [language]);
 
   const handlePageChange = (page: WorkspacePageId) => {
+    if (page !== "studio" && page !== "delivery" && page !== "edit") {
+      setIsProjectStudioMode(false);
+    }
     setActivePage(page);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `#${page}`);
@@ -1052,6 +1058,8 @@ export const App = ({
       setProject(createdProject);
       setProjectDetailTab("overview");
       setIsProjectScriptComposerOpen(false);
+      setIsProjectStudioMode(false);
+      setProjectStudioFlow("script");
       setScript(undefined);
       setScriptDraft("");
       setScriptProductionMode("automatic");
@@ -1080,6 +1088,8 @@ export const App = ({
     setProject(loadedProject);
     setProjectDetailTab("overview");
     setIsProjectScriptComposerOpen(false);
+    setIsProjectStudioMode(false);
+    setProjectStudioFlow("script");
     setBrief({
       title: loadedProject.title,
       productName: loadedProject.productName,
@@ -1140,6 +1150,8 @@ export const App = ({
     setProject(undefined);
     setProjectDetailTab("overview");
     setIsProjectScriptComposerOpen(false);
+    setIsProjectStudioMode(false);
+    setProjectStudioFlow("script");
     refreshProjectHistory();
   };
 
@@ -1171,13 +1183,40 @@ export const App = ({
 
   const handleGenerateProjectVideo = () => {
     setProjectDetailTab("videos");
+    setIsProjectStudioMode(true);
+    setProjectStudioFlow("script");
     handlePageChange("studio");
   };
 
   const handleSaveVideoAndReturn = () => {
+    setIsProjectStudioMode(false);
     setProjectDetailTab("videos");
     handlePageChange("project");
     refreshProjectHistory();
+  };
+
+  const handleProjectStudioFlowChange = (flow: ProjectStudioFlow) => {
+    setIsProjectStudioMode(true);
+    setProjectStudioFlow(flow);
+    handlePageChange(flow === "render" ? "delivery" : flow === "edit" ? "edit" : "studio");
+  };
+
+  const handleSelectProjectScriptForStudio = (selectedScript: ScriptResult) => {
+    setScript(selectedScript);
+    setScriptDraft(selectedScript.narrative);
+    setSelectedSceneId(selectedScript.scenes[0]?.id);
+    setDirtySceneIds(new Set());
+    setEditingSuggestions([]);
+    setAssetRecallCandidates([]);
+    setProject((current) =>
+      current
+        ? {
+            ...current,
+            scenes: selectedScript.scenes,
+          }
+        : current,
+    );
+    handleProjectStudioFlowChange("storyboard");
   };
 
   const replaceSceneInState = (updatedScene: StoryboardScene) => {
@@ -2238,6 +2277,51 @@ export const App = ({
     });
   };
 
+  const projectStudioFlowItems: Array<{
+    id: ProjectStudioFlow;
+    label: string;
+    description: string;
+    icon: typeof FileText;
+  }> = [
+    {
+      id: "script",
+      label: language === "zh" ? "\u9009\u62e9\u5267\u672c\u751f\u6210\u5206\u955c" : "Select script for storyboard",
+      description:
+        language === "zh"
+          ? "\u4ece\u672c\u9879\u76ee\u5267\u672c\u5e93\u9009\u62e9\u4e00\u4e2a\u5267\u672c\uff0c\u8f7d\u5165\u5bf9\u5e94\u5206\u955c\u3002"
+          : "Choose a project script and load its storyboard scenes.",
+      icon: FileText,
+    },
+    {
+      id: "storyboard",
+      label: language === "zh" ? "\u5206\u955c\u91cd\u7f16\u8f91" : "Storyboard re-editing",
+      description:
+        language === "zh"
+          ? "\u8c03\u6574\u753b\u9762\u3001\u955c\u5934\u3001\u7d20\u6750\u5339\u914d\u548c\u5206\u955c\u987a\u5e8f\u3002"
+          : "Refine shots, asset matches, and scene order.",
+      icon: ListVideo,
+    },
+    {
+      id: "render",
+      label: language === "zh" ? "\u89c6\u9891\u751f\u6210\u9884\u89c8\u4e0e\u4e0b\u8f7d" : "Video preview and download",
+      description:
+        language === "zh"
+          ? "\u751f\u6210\u89c6\u9891\u9884\u89c8\uff0c\u68c0\u67e5\u7ed3\u679c\u540e\u5bfc\u51fa\u4e0b\u8f7d\u3002"
+          : "Render a preview, inspect the result, and export it.",
+      icon: Film,
+    },
+    {
+      id: "edit",
+      label: language === "zh" ? "\u667a\u80fd\u526a\u8f91" : "Smart edit",
+      description:
+        language === "zh"
+          ? "\u57fa\u4e8e\u5206\u955c\u548c\u7d20\u6750\u8fdb\u884c\u667a\u80fd\u526a\u8f91\u4f18\u5316\u3002"
+          : "Use storyboard and assets for smart editing.",
+      icon: Scissors,
+    },
+  ];
+  const projectScriptStudioFlow = projectStudioFlowItems[0]!;
+
   return (
     <AppShell
       activePage={activePage}
@@ -2246,6 +2330,7 @@ export const App = ({
       language={language}
       onPageChange={handlePageChange}
       onSectionChange={handleSectionChange}
+      projectStudioMode={isProjectStudioMode}
     >
       <div className={`workspace-grid workspace-page page-${activePage}`}>
         {activePage === "assets" ? (
@@ -2381,6 +2466,7 @@ export const App = ({
                       isStoryboardGenerating={busyState === "script"}
                       onGenerateScript={() => handleGenerateScript()}
                       onGenerateStoryboard={() => handleGenerateScript("studio")}
+                      primaryActionLabel={language === "zh" ? "\u786e\u8ba4\u6dfb\u52a0" : "Confirm add"}
                       onProductionModeChange={handleScriptProductionModeChange}
                       onReferenceChange={setSelectedReferenceIdForScript}
                       onScriptDraftChange={setScriptDraft}
@@ -2391,6 +2477,7 @@ export const App = ({
                       scriptDraft={scriptDraft}
                       selectedReferenceId={selectedReferenceIdForScript}
                       selectedTemplateId={selectedTemplateIdForScript}
+                      showStoryboardAction={false}
                       templates={scriptTemplateLibrary}
                     />
                   }
@@ -2399,22 +2486,49 @@ export const App = ({
 
               {(activePage === "studio" || activePage === "delivery" || activePage === "edit") &&
               project ? (
-                <div className="studio-return-bar">
-                  <div>
-                    <strong>{language === "zh" ? "工作室" : "Studio"}</strong>
+                <div className={`studio-return-bar ${isProjectStudioMode ? "is-project-studio" : ""}`}>
+                  <div className="studio-return-copy">
+                    <strong>{language === "zh" ? "\u5de5\u4f5c\u5ba4" : "Studio"}</strong>
                     <span>
                       {language === "zh"
-                        ? "完成分镜、生成预览或智能剪辑后，保存并回到项目视频库。"
-                        : "Finish storyboard, preview, or smart edit work, then save back to the video library."}
+                        ? "\u6309\u9879\u76ee\u77ed\u89c6\u9891\u6d41\u7a0b\u5b8c\u6210\u5206\u955c\u3001\u9884\u89c8\u751f\u6210\u548c\u667a\u80fd\u526a\u8f91\uff0c\u4fdd\u5b58\u540e\u8fd4\u56de\u89c6\u9891\u5e93\u3002"
+                        : "Move through the project video flow, then save back to the video library."}
                     </span>
                   </div>
+                  {isProjectStudioMode ? (
+                    <nav
+                      className="project-studio-flow"
+                      aria-label={language === "zh" ? "\u9879\u76ee\u89c6\u9891\u6d41\u7a0b" : "Project video flow"}
+                    >
+                      {projectStudioFlowItems.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = projectStudioFlow === item.id;
+                        return (
+                          <button
+                            className={`project-studio-flow-item ${isActive ? "active" : ""}`}
+                            key={item.id}
+                            onClick={() => handleProjectStudioFlowChange(item.id)}
+                            type="button"
+                          >
+                            <span className="project-studio-flow-icon">
+                              <Icon size={18} aria-hidden="true" />
+                            </span>
+                            <span>
+                              <strong>{item.label}</strong>
+                              <small>{item.description}</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </nav>
+                  ) : null}
                   <Button
                     disabled={busyState !== "idle" || isSmartEditTaskRunning}
                     icon={<Download size={18} />}
                     onClick={handleSaveVideoAndReturn}
                     variant="primary"
                   >
-                    {language === "zh" ? "保存视频并返回" : "Save video and return"}
+                    {language === "zh" ? "\u4fdd\u5b58\u89c6\u9891\u5e76\u8fd4\u56de" : "Save video and return"}
                   </Button>
                 </div>
               ) : null}
@@ -2461,29 +2575,88 @@ export const App = ({
               ) : null}
 
               {activePage === "studio" ? (
-                <section className="script-storyboard-workspace">
-                  <StudioWorkspace
-                    assetCandidates={assetRecallCandidates}
-                    assets={studioAssets}
-                    copy={text.studio}
-                    dirtySceneIds={dirtySceneIds}
-                    isBusy={busyState === "scene"}
-                    onApplyAssetCandidate={handleApplyAssetCandidate}
-                    onApplySuggestion={handleApplySuggestion}
-                    onDeleteScene={handleDeleteScene}
-                    onDismissSuggestion={handleDismissSuggestion}
-                    onLoadAssetCandidates={handleLoadAssetCandidates}
-                    onLoadSuggestions={handleLoadSuggestions}
-                    onRegenerateScene={handleRegenerateScene}
-                    onSceneChange={handleSceneChange}
-                    onSceneMove={handleSceneMove}
-                    onSceneSave={handleSceneSave}
-                    onSelectedSceneChange={handleSelectedSceneChange}
-                    scenes={scenes}
-                    selectedSceneId={selectedSceneId}
-                    suggestions={editingSuggestions}
-                  />
-                </section>
+                isProjectStudioMode && projectStudioFlow === "script" && project ? (
+                  <section className="project-script-selector-panel" aria-label={projectScriptStudioFlow.label}>
+                    <div className="project-script-selector-heading">
+                      <div>
+                        <span>{language === "zh" ? "\u7b2c\u4e00\u6b65" : "Step 1"}</span>
+                        <h3>{projectScriptStudioFlow.label}</h3>
+                        <p>
+                          {language === "zh"
+                            ? "\u9009\u62e9\u4e00\u4e2a\u5df2\u4fdd\u5b58\u7684\u9879\u76ee\u5267\u672c\uff0c\u5de5\u4f5c\u5ba4\u4f1a\u8f7d\u5165\u5b83\u7684\u5206\u955c\u5e76\u8fdb\u5165\u91cd\u7f16\u8f91\u6d41\u7a0b\u3002"
+                            : "Choose a saved project script. The studio will load its scenes and continue to storyboard editing."}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setProjectDetailTab("scripts");
+                          handlePageChange("project");
+                        }}
+                        variant="secondary"
+                      >
+                        {language === "zh" ? "\u8fd4\u56de\u5267\u672c\u5e93" : "Back to script library"}
+                      </Button>
+                    </div>
+                    {project.scripts.length > 0 ? (
+                      <div className="project-studio-script-grid">
+                        {project.scripts.map((projectScript, index) => (
+                          <article className="project-studio-script-card" key={projectScript.id}>
+                            <div>
+                              <span>
+                                {language === "zh"
+                                  ? `\u5267\u672c ${index + 1}`
+                                  : `Script ${index + 1}`}
+                              </span>
+                              <h4>{projectScript.hook}</h4>
+                              <p>{projectScript.scenes.length} {language === "zh" ? "\u4e2a\u5206\u955c" : "scenes"}</p>
+                            </div>
+                            <Button
+                              disabled={projectScript.scenes.length === 0}
+                              icon={<ListVideo size={18} />}
+                              onClick={() => handleSelectProjectScriptForStudio(projectScript)}
+                              variant="primary"
+                            >
+                              {language === "zh" ? "\u751f\u6210\u5206\u955c" : "Generate storyboard"}
+                            </Button>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="project-studio-empty">
+                        <strong>{language === "zh" ? "\u6682\u65e0\u53ef\u7528\u5267\u672c" : "No scripts yet"}</strong>
+                        <p>
+                          {language === "zh"
+                            ? "\u8bf7\u5148\u56de\u5230\u9879\u76ee\u5267\u672c\u5e93\u6dfb\u52a0\u5267\u672c\uff0c\u518d\u8fdb\u5165\u5de5\u4f5c\u5ba4\u751f\u6210\u89c6\u9891\u3002"
+                            : "Add a script in the project script library before generating a video."}
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                ) : (
+                  <section className="script-storyboard-workspace">
+                    <StudioWorkspace
+                      assetCandidates={assetRecallCandidates}
+                      assets={studioAssets}
+                      copy={text.studio}
+                      dirtySceneIds={dirtySceneIds}
+                      isBusy={busyState === "scene"}
+                      onApplyAssetCandidate={handleApplyAssetCandidate}
+                      onApplySuggestion={handleApplySuggestion}
+                      onDeleteScene={handleDeleteScene}
+                      onDismissSuggestion={handleDismissSuggestion}
+                      onLoadAssetCandidates={handleLoadAssetCandidates}
+                      onLoadSuggestions={handleLoadSuggestions}
+                      onRegenerateScene={handleRegenerateScene}
+                      onSceneChange={handleSceneChange}
+                      onSceneMove={handleSceneMove}
+                      onSceneSave={handleSceneSave}
+                      onSelectedSceneChange={handleSelectedSceneChange}
+                      scenes={scenes}
+                      selectedSceneId={selectedSceneId}
+                      suggestions={editingSuggestions}
+                    />
+                  </section>
+                )
               ) : null}
 
               {activePage === "delivery" ? (

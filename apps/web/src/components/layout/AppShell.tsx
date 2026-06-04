@@ -107,6 +107,7 @@ interface AppShellProps {
   language: Language;
   onPageChange: (page: WorkspacePageId) => void;
   onSectionChange: (section: WorkspaceSectionId) => void;
+  projectStudioMode?: boolean;
 }
 
 export const AppShell = ({
@@ -117,9 +118,11 @@ export const AppShell = ({
   language,
   onPageChange,
   onSectionChange,
+  projectStudioMode = false,
 }: AppShellProps) => {
   const showTopbar =
-    (activeSection === "create" && activePage !== "project") || activeSection === "settings";
+    ((activeSection === "create" && activePage !== "project") || activeSection === "settings") &&
+    !projectStudioMode;
 
   const getSectionText = (section: WorkspaceSectionId) => {
     if (section === "assets") {
@@ -235,7 +238,7 @@ export const AppShell = ({
             )}
           </header>
         ) : null}
-        {activeSection === "create" && activePage !== "project" ? (
+        {activeSection === "create" && activePage !== "project" && !projectStudioMode ? (
           <nav className="creation-stepper" aria-label="Creation progress">
             {workspacePages.map((page, index) => {
               const Icon = page.icon;
