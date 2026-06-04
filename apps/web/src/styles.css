@@ -5870,6 +5870,10 @@ textarea {
   color: var(--muted);
 }
 
+.project-script-card h4 {
+  padding-right: 38px;
+}
+
 .project-script-detail,
 .project-script-composer {
   padding: 22px;
@@ -5903,6 +5907,51 @@ textarea {
 .project-script-detail p,
 .project-script-detail small {
   color: var(--muted);
+}
+
+.project-markdown-content {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.project-markdown-content p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.project-markdown-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.project-markdown-content table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+}
+
+.project-markdown-content th,
+.project-markdown-content td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.65;
+}
+
+.project-markdown-content th {
+  color: #cffafe;
+  font-weight: 900;
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.project-markdown-content tr:last-child td {
+  border-bottom: 0;
 }
 
 .project-script-constraints {

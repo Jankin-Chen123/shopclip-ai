@@ -133,6 +133,89 @@ const getProjectImageClass = (index: number) => `project-card-media project-card
 const getProjectCoverUrl = (project: ProjectSummary): string | undefined =>
   project.coverAssetId ? getAssetContentUrl(project.coverAssetId) : project.coverAssetUrl;
 
+interface MarkdownTableBlock {
+  type: "table";
+  headers: string[];
+  rows: string[][];
+}
+
+interface MarkdownParagraphBlock {
+  type: "paragraph";
+  text: string;
+}
+
+type MarkdownBlock = MarkdownTableBlock | MarkdownParagraphBlock;
+
+const isMarkdownDividerCell = (value: string): boolean => /^:?-{3,}:?$/u.test(value.trim());
+
+const splitMarkdownTableCells = (line: string): string[] =>
+  line
+    .trim()
+    .replace(/^\|/u, "")
+    .replace(/\|$/u, "")
+    .split("|")
+    .map((cell) => cell.trim());
+
+const parseInlineMarkdownTable = (text: string): MarkdownTableBlock | undefined => {
+  const cells = splitMarkdownTableCells(text);
+  const dividerIndex = cells.findIndex(isMarkdownDividerCell);
+  if (dividerIndex <= 0) {
+    return undefined;
+  }
+
+  const headers = cells.slice(0, dividerIndex);
+  const rowWidth = headers.length;
+  if (rowWidth === 0 || dividerIndex + rowWidth >= cells.length) {
+    return undefined;
+  }
+
+  const rows: string[][] = [];
+  for (let index = dividerIndex + rowWidth; index < cells.length; index += rowWidth) {
+    const row = cells.slice(index, index + rowWidth);
+    if (row.length === rowWidth && row.some((cell) => cell.length > 0)) {
+      rows.push(row);
+    }
+  }
+
+  return rows.length > 0 ? { type: "table", headers, rows } : undefined;
+};
+
+const parseMarkdownBlocks = (value: string): MarkdownBlock[] => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const inlineTable = parseInlineMarkdownTable(normalized);
+  if (inlineTable) {
+    return [inlineTable];
+  }
+
+  const lines = normalized
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const blocks: MarkdownBlock[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = lines[index] ?? "";
+    const next = lines[index + 1] ?? "";
+    if (current.includes("|") && next.split("|").some(isMarkdownDividerCell)) {
+      const headers = splitMarkdownTableCells(current);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && (lines[index] ?? "").includes("|")) {
+        rows.push(splitMarkdownTableCells(lines[index] ?? ""));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push({ type: "table", headers, rows });
+    } else {
+      blocks.push({ type: "paragraph", text: current });
+    }
+  }
+  return blocks;
+};
+
 export const ProjectWorkspace = ({
   activeTab,
   dashboardPanel,
@@ -562,7 +645,7 @@ const ScriptList = ({
   selectLabel: string;
 }) => (
   <div className="project-script-grid">
-    {scripts.map((script, index) => (
+    {scripts.map((script) => (
       <article
         aria-label={`${selectLabel}: ${script.hook}`}
         className={`project-library-card project-script-card ${
@@ -591,8 +674,7 @@ const ScriptList = ({
           <Trash2 size={15} aria-hidden="true" />
         </button>
         <span>{`${script.scenes.length} ${sceneLabel}`}</span>
-        <h4>{`v${index + 1} ${script.hook}`}</h4>
-        <p>{script.constraints.slice(0, 2).join(" / ") || script.narrative}</p>
+        <h4>{script.hook}</h4>
       </article>
     ))}
   </div>
@@ -615,7 +697,7 @@ const ScriptDetail = ({
       </Button>
     </div>
     <h4>{script.hook}</h4>
-    <p>{script.narrative}</p>
+    <MarkdownContent value={script.narrative} />
     {script.constraints.length > 0 ? (
       <div className="project-script-constraints">
         {script.constraints.map((constraint) => (
@@ -634,6 +716,40 @@ const ScriptDetail = ({
     </ol>
   </article>
 );
+
+const MarkdownContent = ({ value }: { value: string }) => {
+  const blocks = parseMarkdownBlocks(value);
+  return (
+    <div className="project-markdown-content">
+      {blocks.map((block, blockIndex) =>
+        block.type === "table" ? (
+          <div className="project-markdown-table-wrap" key={`table-${blockIndex}`}>
+            <table>
+              <thead>
+                <tr>
+                  {block.headers.map((header, headerIndex) => (
+                    <th key={`${header}-${headerIndex}`}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {block.rows.map((row, rowIndex) => (
+                  <tr key={`row-${rowIndex}`}>
+                    {block.headers.map((header, cellIndex) => (
+                      <td key={`${header}-${cellIndex}`}>{row[cellIndex] ?? ""}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p key={`paragraph-${blockIndex}`}>{block.text}</p>
+        ),
+      )}
+    </div>
+  );
+};
 
 const VideoList = ({
   onDeleteRenderTask,
