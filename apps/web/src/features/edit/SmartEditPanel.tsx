@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -16,10 +16,14 @@ import {
   Loader2,
   Music2,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Scissors,
   SkipBack,
   SkipForward,
   Trash2,
+  Volume2,
+  VolumeX,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -55,6 +59,7 @@ const MIN_SMART_EDIT_CLIP_SECONDS = 0.25;
 const MAX_SMART_EDIT_CLIP_SECONDS = 120;
 const TIMELINE_BASE_PX_PER_SECOND = 34;
 const TRIM_NUDGE_SECONDS = 0.1;
+const MAX_PLAN_HISTORY_LENGTH = 40;
 
 const clampSmartEditDuration = (durationSeconds: number): number =>
   Number.isFinite(durationSeconds)
@@ -374,7 +379,7 @@ const withRebuiltTimeline = (plan: SmartEditPlan): SmartEditPlan => ({
   timeline: buildSmartEditTimeline(plan),
 });
 
-type SmartEditTrackId = "video" | "caption" | "voice" | "bgm";
+type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
 
 type SmartEditTrackSegment = {
   id: string;
@@ -399,7 +404,13 @@ const timelineTrackSegments = (
 ): SmartEditTrack[] => {
   if (plan?.timeline?.elements?.length) {
     return plan.timeline.tracks.map((track) => ({
-      id: (track.kind === "audio" ? "voice" : track.kind === "text" ? "caption" : track.kind) as SmartEditTrackId,
+      id: (track.id === "audio-source"
+        ? "sourceAudio"
+        : track.kind === "audio"
+          ? "voice"
+          : track.kind === "text"
+            ? "caption"
+            : track.kind) as SmartEditTrackId,
       segments: plan.timeline!.elements
         .filter((element) => element.trackId === track.id)
         .map((element) => ({
@@ -446,7 +457,7 @@ const timelineTrackSegments = (
         })),
       },
       {
-        id: "voice",
+        id: "sourceAudio",
         segments: timedClips
           .filter(({ clip }) => clip.material?.audioUrl)
           .map(({ clip, duration, startSecond }) => ({
@@ -562,9 +573,21 @@ export const SmartEditPanel = ({
 }: SmartEditPanelProps) => {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const [draggedSegmentId, setDraggedSegmentId] = useState<string | undefined>();
+  const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
+  const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
+  const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [timelineZoom, setTimelineZoom] = useState(1);
   const plan = result?.plan;
+
+  useEffect(() => {
+    if (plan?.id !== historyPlanId) {
+      setHistoryPlanId(plan?.id);
+      setRedoStack([]);
+      setUndoStack([]);
+      setPlayheadSeconds(0);
+    }
+  }, [historyPlanId, plan?.id]);
   const sortedSegments = useMemo(
     () => [...(plan?.segments ?? [])].sort((left, right) => left.order - right.order),
     [plan],
@@ -613,15 +636,59 @@ export const SmartEditPanel = ({
   const trackLabels = {
     bgm: copy.bgmTrack,
     caption: copy.captionTrack,
+    sourceAudio: copy.sourceAudioTrack,
     video: copy.videoTrack,
     voice: copy.voiceTrack,
   } as const;
+
+  const commitPlanChange = (nextPlan: SmartEditPlan, options: { recordHistory?: boolean } = {}) => {
+    if (options.recordHistory !== false && plan && nextPlan !== plan) {
+      setUndoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
+      setRedoStack([]);
+    }
+    onPlanChange(nextPlan);
+  };
+
+  const undoPlanChange = () => {
+    if (!plan || undoStack.length === 0) {
+      return;
+    }
+    const previousPlan = undoStack.at(-1)!;
+    setUndoStack((current) => current.slice(0, -1));
+    setRedoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
+    onPlanChange(previousPlan);
+    onSelectedSegmentChange(previousPlan.segments[0]?.id);
+  };
+
+  const redoPlanChange = () => {
+    if (!plan || redoStack.length === 0) {
+      return;
+    }
+    const nextPlan = redoStack.at(-1)!;
+    setRedoStack((current) => current.slice(0, -1));
+    setUndoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
+    onPlanChange(nextPlan);
+    onSelectedSegmentChange(nextPlan.segments[0]?.id);
+  };
+
+  const setSourceAudioTrackMuted = (muted: boolean) => {
+    if (!plan) {
+      return;
+    }
+    commitPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: plan.segments.map((segment) => ({
+        ...segment,
+        sourceAudioMuted: muted,
+      })),
+    }));
+  };
 
   const updateSelectedSegment = (update: (segment: SmartEditSegment) => SmartEditSegment) => {
     if (!plan || !selectedSegment) {
       return;
     }
-    onPlanChange(replaceSegment(plan, selectedSegment.id, update));
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, update));
   };
 
   const splitSelectedSegment = () => {
@@ -664,7 +731,7 @@ export const SmartEditPanel = ({
       subtitle: `${selectedSegment.subtitle} (split)`,
     };
     sorted.splice(index, 1, firstSegment, secondSegment);
-    onPlanChange(withRebuiltTimeline({
+    commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: sorted.map((segment, segmentIndex) => ({
         ...segment,
@@ -722,7 +789,7 @@ export const SmartEditPanel = ({
         subtitle: `${targetSegment.subtitle} (split)`,
       },
     );
-    onPlanChange(withRebuiltTimeline({
+    commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: sorted.map((segment, segmentIndex) => ({
         ...segment,
@@ -762,7 +829,7 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    onPlanChange(replaceSegment(plan, segmentId, (segment) => {
+    commitPlanChange(replaceSegment(plan, segmentId, (segment) => {
       const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
       const sourceStart = segment.source.startSecond ?? 0;
       const sourceEnd =
@@ -818,7 +885,7 @@ export const SmartEditPanel = ({
         ...segment,
         order: index + 1,
       }));
-    onPlanChange(withRebuiltTimeline({
+    commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: nextSegments,
     }));
@@ -842,6 +909,21 @@ export const SmartEditPanel = ({
       className="panel smart-edit-panel"
       aria-labelledby="smart-edit-title"
       onKeyDown={(event) => {
+        const isCommandKey = event.ctrlKey || event.metaKey;
+        if (isCommandKey && event.key.toLowerCase() === "z") {
+          event.preventDefault();
+          if (event.shiftKey) {
+            redoPlanChange();
+          } else {
+            undoPlanChange();
+          }
+          return;
+        }
+        if (isCommandKey && event.key.toLowerCase() === "y") {
+          event.preventDefault();
+          redoPlanChange();
+          return;
+        }
         if (event.key === "ArrowLeft") {
           event.preventDefault();
           selectByOffset(-1);
@@ -1021,13 +1103,17 @@ export const SmartEditPanel = ({
               <div className="segment-inspector-actions">
                 <Button
                   icon={<SkipBack size={16} />}
-                  onClick={() => onPlanChange(reorderSegments(plan, selectedSegment.id, "earlier"))}
+                  onClick={() =>
+                    commitPlanChange(reorderSegments(plan, selectedSegment.id, "earlier"))
+                  }
                 >
                   {copy.moveEarlier}
                 </Button>
                 <Button
                   icon={<SkipForward size={16} />}
-                  onClick={() => onPlanChange(reorderSegments(plan, selectedSegment.id, "later"))}
+                  onClick={() =>
+                    commitPlanChange(reorderSegments(plan, selectedSegment.id, "later"))
+                  }
                 >
                   {copy.moveLater}
                 </Button>
@@ -1321,6 +1407,20 @@ export const SmartEditPanel = ({
         </div>
         <div className="timeline-toolbar" aria-label={copy.timelineControls}>
           <Button
+            disabled={undoStack.length === 0}
+            icon={<RotateCcw size={16} />}
+            onClick={undoPlanChange}
+          >
+            {copy.undo}
+          </Button>
+          <Button
+            disabled={redoStack.length === 0}
+            icon={<RotateCw size={16} />}
+            onClick={redoPlanChange}
+          >
+            {copy.redo}
+          </Button>
+          <Button
             icon={<ZoomOut size={16} />}
             onClick={() => setTimelineZoom((current) => Math.max(0.5, Number((current - 0.25).toFixed(2))))}
           >
@@ -1399,7 +1499,7 @@ export const SmartEditPanel = ({
                     }
                     const [moved] = sorted.splice(from, 1);
                     sorted.splice(to, 0, moved!);
-                    onPlanChange(withRebuiltTimeline({
+                    commitPlanChange(withRebuiltTimeline({
                       ...plan,
                       segments: sorted.map((candidate, index) => ({
                         ...candidate,
@@ -1462,7 +1562,28 @@ export const SmartEditPanel = ({
           </div>
           {trackSegments.map((track) => (
             <section className="smart-edit-track-row" key={track.id} aria-label={trackLabels[track.id]}>
-              <strong>{trackLabels[track.id]}</strong>
+              <div className="smart-edit-track-label">
+                <strong>{trackLabels[track.id]}</strong>
+                {track.id === "sourceAudio" && track.segments.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSourceAudioTrackMuted(!track.segments.every((segment) => segment.muted))
+                    }
+                  >
+                    {track.segments.every((segment) => segment.muted) ? (
+                      <Volume2 size={14} />
+                    ) : (
+                      <VolumeX size={14} />
+                    )}
+                    <span>
+                      {track.segments.every((segment) => segment.muted)
+                        ? copy.unmuteTrack
+                        : copy.muteTrack}
+                    </span>
+                  </button>
+                ) : null}
+              </div>
               <div className="smart-edit-track-clips">
                 {track.segments.map((segment) => (
                   <article

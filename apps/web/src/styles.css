@@ -4870,13 +4870,41 @@ textarea {
   align-items: stretch;
 }
 
-.smart-edit-track-row > strong {
-  display: flex;
-  align-items: center;
+.smart-edit-track-label {
+  display: grid;
+  align-content: center;
+  gap: 8px;
   min-height: 58px;
   border-right: 1px solid var(--border);
   color: var(--muted);
   font-size: 0.8rem;
+  padding-right: 10px;
+}
+
+.smart-edit-track-label strong {
+  color: var(--muted);
+}
+
+.smart-edit-track-label button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: fit-content;
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 5px 8px;
+}
+
+.smart-edit-track-label button:hover,
+.smart-edit-track-label button:focus-visible {
+  border-color: var(--primary-strong);
+  outline: none;
 }
 
 .smart-edit-track-clips {
