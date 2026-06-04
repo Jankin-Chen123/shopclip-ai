@@ -4069,6 +4069,10 @@ textarea {
   align-items: center;
 }
 
+.script-confirm-action {
+  margin-left: auto;
+}
+
 .script-result p {
   margin: 6px 0 0;
   color: var(--text);

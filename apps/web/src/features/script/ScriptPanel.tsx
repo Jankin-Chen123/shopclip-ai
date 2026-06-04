@@ -18,7 +18,10 @@ interface ScriptPanelProps {
   fallbackProvider?: string;
   isLoading: boolean;
   isStoryboardGenerating: boolean;
+  confirmActionLabel?: string;
+  isConfirming?: boolean;
   onGenerateScript: () => void;
+  onConfirmScript?: () => void;
   onGenerateStoryboard: () => void;
   onProductionModeChange: (mode: NonNullable<ScriptGenerationRequest["productionMode"]>) => void;
   onReferenceChange: (referenceId: string | undefined) => void;
@@ -42,7 +45,10 @@ export const ScriptPanel = ({
   fallbackProvider,
   isLoading,
   isStoryboardGenerating,
+  confirmActionLabel,
+  isConfirming = false,
   onGenerateScript,
+  onConfirmScript,
   onGenerateStoryboard,
   onProductionModeChange,
   onReferenceChange,
@@ -172,6 +178,19 @@ export const ScriptPanel = ({
           >
             {copy.generateStoryboard}
             <ArrowRight size={18} aria-hidden="true" />
+          </Button>
+        ) : null}
+        {onConfirmScript ? (
+          <Button
+            className="script-confirm-action"
+            disabled={disabled || isLoading || isConfirming || !scriptDraft.trim()}
+            icon={
+              isConfirming ? <Loader2 className="spin" size={18} /> : <WandSparkles size={18} />
+            }
+            onClick={onConfirmScript}
+            variant="primary"
+          >
+            {confirmActionLabel ?? "Confirm"}
           </Button>
         ) : null}
       </div>

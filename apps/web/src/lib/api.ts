@@ -495,6 +495,15 @@ export const generateScript = async (
     body: JSON.stringify(request),
   });
 
+export const saveScript = async (
+  projectId: string,
+  request: ScriptGenerationRequest,
+): Promise<{ script: ScriptResult }> =>
+  requestJson(`/projects/${projectId}/scripts`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
 export const deleteScript = async (scriptId: string): Promise<{ deletedScript: ScriptResult }> =>
   requestJson(`/scripts/${encodeURIComponent(scriptId)}`, {
     method: "DELETE",

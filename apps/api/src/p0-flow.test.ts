@@ -567,6 +567,63 @@ describe("P0 backend lifecycle", () => {
     expect(loadedProject.body.project.renderTasks).toHaveLength(1);
   });
 
+  it("saves the current script draft without calling a text model", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+
+      throw new Error(`Unexpected external model request: ${requestUrl}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Draft-only script",
+        productName: "Desk Lamp",
+        audience: "students",
+        sellingPoints: ["foldable", "soft light"],
+        tone: "clear",
+        style: "desk demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+    const projectId = created.body.project.id;
+
+    const saved = await request<{
+      script: { narrative: string; scenes: Array<{ durationSeconds: number; subtitle: string }> };
+    }>(baseUrl, `/api/projects/${projectId}/scripts`, {
+      method: "POST",
+      body: JSON.stringify({
+        draftScript: [
+          "| Time | Copy | Visual prompt | Material slot |",
+          "|---|---|---|---|",
+          "| 0-4s | Need softer light? | Show the lamp opening on a desk | hero |",
+          "| 4-8s | Fold it and carry it. | Show the foldable hinge close-up | detail |",
+          "| 8-12s | Study with less glare. | Show the lamp lighting a notebook | scene |",
+        ].join("\n"),
+        keywords: ["study", "portable"],
+      }),
+    });
+
+    expect(saved.status).toBe(201);
+    expect(saved.body.script.narrative).toContain("Need softer light?");
+    expect(saved.body.script.scenes).toHaveLength(3);
+    expect(
+      saved.body.script.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0),
+    ).toBe(12);
+
+    const loadedProject = await request<{
+      project: { scripts: unknown[]; scenes: unknown[] };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    expect(loadedProject.body.project.scripts).toHaveLength(1);
+    expect(loadedProject.body.project.scenes).toHaveLength(3);
+    expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith(baseUrl))).toBe(true);
+  });
+
   it("replaces current storyboard scenes when generating a new script for the same project", async () => {
     const created = await request<{
       project: { id: string };

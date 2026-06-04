@@ -77,6 +77,7 @@ import {
   reorderScenes,
   retryRenderTask,
   rewriteScript,
+  saveScript,
   refreshSmartEditSegment,
   searchAssets,
   searchExternalStockAssets,
@@ -1865,6 +1866,47 @@ export const App = ({
     });
   };
 
+  const handleSaveProjectScript = () => {
+    if (!project) {
+      setErrors((current) => ({ ...current, script: "Create or load a project first." }));
+      return;
+    }
+    if (!scriptDraft.trim()) {
+      setErrors((current) => ({
+        ...current,
+        script:
+          language === "zh"
+            ? "\u8bf7\u5148\u8f93\u5165\u6216\u751f\u6210\u811a\u672c\u5185\u5bb9\u3002"
+            : "Enter or generate script content first.",
+      }));
+      return;
+    }
+
+    void runAction("script", "script", async () => {
+      const saved = await saveScript(project.id, createScriptGenerationRequest());
+      setFallbackProvider(undefined);
+      setDashboard(undefined);
+      setScript(saved.script);
+      setScriptDraft(saved.script.narrative);
+      setSelectedSceneId(saved.script.scenes[0]?.id);
+      setDirtySceneIds(new Set());
+      setAssetRecallCandidates([]);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              scenes: saved.script.scenes,
+              scripts: [...current.scripts, saved.script],
+              status: "ready",
+            }
+          : current,
+      );
+      setIsProjectScriptComposerOpen(false);
+      setProjectDetailTab("scripts");
+      refreshProjectHistory();
+    });
+  };
+
   const handleGenerateScript = (nextPage?: WorkspacePageId) => {
     if (!project) {
       setErrors((current) => ({ ...current, script: "Create or load a project first." }));
@@ -2462,11 +2504,12 @@ export const App = ({
                       disabled={busyState !== "idle"}
                       error={errors.script}
                       fallbackProvider={fallbackProvider}
+                      confirmActionLabel={language === "zh" ? "\u786e\u8ba4\u6dfb\u52a0" : "Confirm add"}
                       isLoading={busyState === "script"}
                       isStoryboardGenerating={busyState === "script"}
-                      onGenerateScript={() => handleGenerateScript()}
+                      onConfirmScript={handleSaveProjectScript}
+                      onGenerateScript={handleRewriteScript}
                       onGenerateStoryboard={() => handleGenerateScript("studio")}
-                      primaryActionLabel={language === "zh" ? "\u786e\u8ba4\u6dfb\u52a0" : "Confirm add"}
                       onProductionModeChange={handleScriptProductionModeChange}
                       onReferenceChange={setSelectedReferenceIdForScript}
                       onScriptDraftChange={setScriptDraft}

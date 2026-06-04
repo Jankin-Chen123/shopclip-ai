@@ -3218,6 +3218,82 @@ export const createP0Router = ({
     response.status(201).json(providerResult);
   });
 
+  router.post("/projects/:projectId/scripts", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRequest.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_REQUEST",
+        "Script generation request is invalid.",
+      );
+      return;
+    }
+
+    if (!parsedRequest.data.draftScript?.trim()) {
+      sendInvalidRequest(response, "EMPTY_SCRIPT_DRAFT", "Script draft cannot be empty.");
+      return;
+    }
+
+    const promptContextResult = await resolveScriptPromptContext(store, parsedRequest.data);
+    if (promptContextResult.error) {
+      const { code, message, status } = promptContextResult.error;
+      if (status === 404) {
+        sendNotFound(response, code, message);
+      } else {
+        sendInvalidRequest(response, code, message);
+      }
+      return;
+    }
+
+    const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
+      request.body ?? {},
+      "keywords",
+    );
+    const workingProject = shouldPersistKeywords
+      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ??
+        project)
+      : project;
+
+    const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
+    if (preparedAssetResult.invalidAssetIds.length > 0) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_ASSETS",
+        "One or more requested assets do not exist or cannot be used in this project.",
+      );
+      return;
+    }
+
+    const providerResult = generateFallbackScript(workingProject, {
+      assets: preparedAssetResult.assets,
+      request: parsedRequest.data,
+      scriptSource: "fallback",
+    });
+    const storedScript = await store.addScript(project.id, providerResult.script);
+    if (!storedScript) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const parsedScript = ScriptResultSchema.safeParse(storedScript);
+    if (!parsedScript.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SAVED_SCRIPT",
+        "Saved script failed contract validation.",
+      );
+      return;
+    }
+
+    response.status(201).json({ script: parsedScript.data });
+  });
+
   router.post("/projects/:projectId/generate-script", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
