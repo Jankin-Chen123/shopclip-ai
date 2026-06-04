@@ -536,3 +536,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/shared build`
 - Remaining:
   - Collision/ripple editing, multi-track clip movement, copy/paste/duplicate commands, and richer clip transform/effect panels are still needed before claiming OpenCut-level editing depth.
+
+## 2026-06-05 Duplicate Timeline Clip Command
+
+- Reference model:
+  - Read `Jankin-Chen123/opencut-classic` `apps/web/src/commands/timeline/element/duplicate-elements.ts`.
+  - OpenCut duplicates selected timeline elements as command-driven editable clips while preserving the original media source and editable attributes.
+- Fix:
+  - Added `duplicateSmartEditSegmentOnTimeline(plan, segmentId, duplicateToken)`.
+  - Duplicated smart-edit clips preserve source media, scene linkage, speed, original-audio mute state, caption/voice offsets, transition, asset tags, and duration.
+  - The duplicate receives a new segment id, is inserted after the source clip in order, starts at the source clip's timeline end, and rebuilds timeline duration/export metadata.
+  - Added a `Duplicate` / `复制` action in the Smart Edit inspector beside Split and Remove.
+- Verification:
+  - Added `App.test.tsx` coverage for duplicating a clip at `1s-5s` into a second editable clip at `5s-9s`.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "duplicates a smart edit segment"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Clipboard copy/paste across timeline positions, multi-select duplication, separate audio/text clip duplication, and command-level undo labels are still open.

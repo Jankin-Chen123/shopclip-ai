@@ -14,6 +14,7 @@ import type {
 } from "@shopclip/shared";
 import {
   Clock3,
+  Copy,
   Film,
   Loader2,
   Music2,
@@ -525,6 +526,43 @@ export const moveSmartEditSegmentOnTimeline = (
       timelineStartSecond:
         segment.id === segmentId
           ? nextStart
+          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+    })),
+  });
+};
+
+export const duplicateSmartEditSegmentOnTimeline = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  duplicateToken = String(Date.now()),
+): SmartEditPlan => {
+  const sortedSegments = [...plan.segments].sort((left, right) => left.order - right.order);
+  const sourceIndex = sortedSegments.findIndex((segment) => segment.id === segmentId);
+  const sourceSegment = sortedSegments[sourceIndex];
+  if (!sourceSegment) {
+    return plan;
+  }
+
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const sourceStart = currentStarts.get(sourceSegment.id) ?? 0;
+  const duplicateId = `${sourceSegment.id}-${duplicateToken}`;
+  const duplicateSegment: SmartEditSegment = {
+    ...sourceSegment,
+    id: duplicateId,
+    order: sourceSegment.order + 1,
+    subtitle: `${sourceSegment.subtitle} (copy)`,
+    timelineStartSecond: clampTimelineStart(sourceStart + sourceSegment.durationSeconds),
+  };
+  sortedSegments.splice(sourceIndex + 1, 0, duplicateSegment);
+
+  return withRebuiltTimeline({
+    ...plan,
+    segments: sortedSegments.map((segment, index) => ({
+      ...segment,
+      order: index + 1,
+      timelineStartSecond:
+        segment.id === duplicateId
+          ? duplicateSegment.timelineStartSecond
           : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
@@ -1250,6 +1288,26 @@ export const SmartEditPanel = ({
     removeSegments(selectedBatchSegments.length > 1 ? selectedSegmentIds : [selectedSegment.id]);
   };
 
+  const duplicateSelectedSegment = () => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    const duplicateToken = `copy-${Date.now()}`;
+    const nextPlan = duplicateSmartEditSegmentOnTimeline(
+      plan,
+      selectedSegment.id,
+      duplicateToken,
+    );
+    commitPlanChange(nextPlan);
+    const duplicateSegment = nextPlan.segments.find(
+      (segment) => segment.id === `${selectedSegment.id}-${duplicateToken}`,
+    );
+    if (duplicateSegment) {
+      onSelectedSegmentChange(duplicateSegment.id);
+      setSelectedSegmentIds([duplicateSegment.id]);
+    }
+  };
+
   const selectByOffset = (offset: number) => {
     if (sortedSegments.length === 0) {
       return;
@@ -1495,6 +1553,12 @@ export const SmartEditPanel = ({
                   onClick={splitSelectedSegment}
                 >
                   Split
+                </Button>
+                <Button
+                  icon={<Copy size={16} />}
+                  onClick={duplicateSelectedSegment}
+                >
+                  {copy.duplicateSegment}
                 </Button>
                 <Button
                   disabled={sortedSegments.length <= 1}
