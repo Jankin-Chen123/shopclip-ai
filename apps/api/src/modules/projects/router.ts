@@ -1389,6 +1389,14 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
       locked: false,
       muted: false,
     },
+    {
+      hidden: false,
+      id: "voiceover",
+      kind: "audio" as const,
+      label: "Voice",
+      locked: false,
+      muted: false,
+    },
     ...(plan.audio.bgmTrack !== "none"
       ? [
           {
@@ -1460,11 +1468,31 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
         playbackRate: 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
-        startSecond,
+        startSecond: startSecond + (segment.captionStartOffsetSeconds ?? 0),
         text: segment.subtitle,
         trackId: "text-copy",
         trimStartSecond: 0,
       },
+      ...(segment.voiceover.trim()
+        ? [
+            {
+              detachedAudio: false,
+              durationSeconds: Math.max(0.1, durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+              hidden: false,
+              id: `${segment.id}-voice`,
+              kind: "audio" as const,
+              label: segment.voiceover,
+              muted: false,
+              playbackRate: 1,
+              sceneId: segment.sceneId,
+              segmentId: segment.id,
+              startSecond: startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
+              text: segment.voiceover,
+              trackId: "voiceover",
+              trimStartSecond: 0,
+            },
+          ]
+        : []),
     ];
   });
 

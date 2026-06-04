@@ -439,6 +439,8 @@ const createLocalPlan = (
         playbackRate: override?.playbackRate ?? 1,
         sourceAudioMuted: override?.sourceAudioMuted ?? false,
         captionHidden: override?.captionHidden ?? false,
+        captionStartOffsetSeconds: override?.captionStartOffsetSeconds ?? 0,
+        voiceoverStartOffsetSeconds: override?.voiceoverStartOffsetSeconds ?? 0,
         rationale:
           linkedAsset || scene.imageUrl
             ? "Selected the closest structured asset or generated scene visual for this storyboard scene."
@@ -489,7 +491,7 @@ const SYSTEM_PROMPT = [
   "If a targetLanguage is provided, rewrite both subtitle and voiceover in that target language for dubbing.",
   "Keep translated subtitle and voiceover concise, natural, and synchronized with each segment duration.",
   "Return only JSON. Do not wrap JSON in markdown.",
-  "Every segment must include: sceneId, order, enabled, durationSeconds, playbackRate, sourceAudioMuted, captionHidden, transition, subtitle, voiceover, source, rationale.",
+  "Every segment must include: sceneId, order, enabled, durationSeconds, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source, rationale.",
   "source.kind must be one of video-slice, image-asset, generated-scene-clip, fallback-still.",
 ].join("\n");
 
@@ -527,7 +529,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, playbackRate, sourceAudioMuted, captionHidden, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -630,6 +632,14 @@ const normalizeModelSegment = (
       typeof rawSegment.captionHidden === "boolean"
         ? rawSegment.captionHidden
         : localSegment.captionHidden,
+    captionStartOffsetSeconds:
+      typeof rawSegment.captionStartOffsetSeconds === "number"
+        ? Math.max(0, Math.min(localSegment.durationSeconds, rawSegment.captionStartOffsetSeconds))
+        : localSegment.captionStartOffsetSeconds,
+    voiceoverStartOffsetSeconds:
+      typeof rawSegment.voiceoverStartOffsetSeconds === "number"
+        ? Math.max(0, Math.min(localSegment.durationSeconds, rawSegment.voiceoverStartOffsetSeconds))
+        : localSegment.voiceoverStartOffsetSeconds,
     transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
     voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,

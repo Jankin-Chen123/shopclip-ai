@@ -223,6 +223,24 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api build`
   - `corepack pnpm --filter @shopclip/web build`
 
+## 2026-06-05 Caption And Voice Clip Offsets
+
+- User-facing improvement:
+  - Smart edit segments now persist separate in-segment offsets for caption text and generated voiceover.
+  - The inspector exposes caption start and voice start fields, so text and narration material can be moved inside a clip instead of always starting at the video cut point.
+  - Timeline metadata places caption and voice clips at their offset positions, making the track stack closer to a multi-track editor model.
+- Backend behavior:
+  - `SmartEditSegment` and `SmartEditSegmentOverride` carry `captionStartOffsetSeconds` and `voiceoverStartOffsetSeconds`.
+  - ASS subtitle burn-in writes a real Dialogue start/end range for caption offset.
+  - Voiceover generation applies ffmpeg `adelay` before padding/trimming the segment-length voice asset.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web build`
+
 ## 2026-06-02 Partial Refresh Text Safety
 
 - Issue found during live API verification:

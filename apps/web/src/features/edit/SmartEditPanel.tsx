@@ -74,6 +74,11 @@ const clampSmartEditDuration = (durationSeconds: number): number =>
 const clampPlaybackRate = (playbackRate: number): number =>
   Math.max(0.25, Math.min(4, playbackRate || 1));
 
+const clampInSegmentOffset = (offsetSeconds: number, durationSeconds: number): number =>
+  Number.isFinite(offsetSeconds)
+    ? Math.max(0, Math.min(Math.max(0, durationSeconds - 0.1), offsetSeconds))
+    : 0;
+
 const durationFromSourceRange = (
   startSecond: number | undefined,
   endSecond: number | undefined,
@@ -327,6 +332,14 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
       locked: false,
       muted: false,
     },
+    {
+      hidden: false,
+      id: "voiceover",
+      kind: "audio",
+      label: "Voice",
+      locked: false,
+      muted: false,
+    },
     ...(plan.audio.bgmTrack !== "none"
       ? [
           {
@@ -398,11 +411,29 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
       playbackRate: 1,
       sceneId: segment.sceneId,
       segmentId: segment.id,
-      startSecond,
+      startSecond: startSecond + (segment.captionStartOffsetSeconds ?? 0),
       text: segment.subtitle,
       trackId: "text-copy",
       trimStartSecond: 0,
     });
+    if (segment.voiceover.trim()) {
+      elements.push({
+        detachedAudio: false,
+        durationSeconds: Math.max(0.1, durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+        hidden: false,
+        id: `${segment.id}-voice`,
+        kind: "audio",
+        label: segment.voiceover,
+        muted: false,
+        playbackRate: 1,
+        sceneId: segment.sceneId,
+        segmentId: segment.id,
+        startSecond: startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
+        text: segment.voiceover,
+        trackId: "voiceover",
+        trimStartSecond: 0,
+      });
+    }
   }
 
   if (plan.audio.bgmTrack !== "none" && cursor > 0) {
@@ -573,9 +604,12 @@ const timelineTrackSegments = (
       id: `${segment.id}-caption`,
       segmentId: segment.id,
       title: segment.subtitle,
-      range: timelineRangeLabel(startSecond, segment.durationSeconds),
+      range: timelineRangeLabel(
+        startSecond + (segment.captionStartOffsetSeconds ?? 0),
+        Math.max(0.1, segment.durationSeconds - (segment.captionStartOffsetSeconds ?? 0)),
+      ),
       meta: segment.transition,
-      durationSeconds: segment.durationSeconds,
+      durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.captionStartOffsetSeconds ?? 0)),
       hidden: segment.captionHidden ?? false,
     }));
   const voiceSegments = timedSegments
@@ -584,9 +618,12 @@ const timelineTrackSegments = (
       id: `${segment.id}-voice`,
       segmentId: segment.id,
       title: segment.voiceover,
-      range: timelineRangeLabel(startSecond, segment.durationSeconds),
+      range: timelineRangeLabel(
+        startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
+        Math.max(0.1, segment.durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+      ),
       meta: plan.audio.voice,
-      durationSeconds: segment.durationSeconds,
+      durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
     }));
   const tracks: SmartEditTrack[] = [
     { id: "video", segments: videoSegments },
@@ -1559,6 +1596,46 @@ export const SmartEditPanel = ({
                     }
                   />
                 </label>
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    {copy.captionStart}
+                    <input
+                      min={0}
+                      max={Math.max(0, selectedSegment.durationSeconds - 0.1)}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.captionStartOffsetSeconds ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          captionStartOffsetSeconds: clampInSegmentOffset(
+                            Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    {copy.voiceoverStart}
+                    <input
+                      min={0}
+                      max={Math.max(0, selectedSegment.durationSeconds - 0.1)}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.voiceoverStartOffsetSeconds ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          voiceoverStartOffsetSeconds: clampInSegmentOffset(
+                            Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
               </section>
               <section className="smart-edit-inspector-section">
                 <h4>{copy.segmentState}</h4>

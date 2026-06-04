@@ -79,13 +79,29 @@ export const buildSubtitleFilter = (subtitleAssPath: string): string => {
 
 export const buildSubtitleAss = (
   subtitle: string,
-  options: { fontSize?: number; height?: number; marginV?: number; width?: number } = {},
+  options: {
+    endSecond?: number;
+    fontSize?: number;
+    height?: number;
+    marginV?: number;
+    startSecond?: number;
+    width?: number;
+  } = {},
 ): string => {
   const escapedSubtitle = escapeAssText(subtitle);
   const width = options.width ?? 720;
   const height = options.height ?? 1280;
   const fontSize = options.fontSize ?? 42;
   const marginV = options.marginV ?? 96;
+  const startSecond = Math.max(0, options.startSecond ?? 0);
+  const endSecond = Math.max(startSecond + 0.01, options.endSecond ?? 35999.99);
+  const formatAssTime = (seconds: number): string => {
+    const bounded = Math.max(0, seconds);
+    const hours = Math.floor(bounded / 3600);
+    const minutes = Math.floor((bounded - hours * 3600) / 60);
+    const remainingSeconds = bounded - hours * 3600 - minutes * 60;
+    return `${hours}:${String(minutes).padStart(2, "0")}:${remainingSeconds.toFixed(2).padStart(5, "0")}`;
+  };
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -100,7 +116,7 @@ export const buildSubtitleAss = (
     "",
     "[Events]",
     "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,${escapedSubtitle}`,
+    `Dialogue: 0,${formatAssTime(startSecond)},${formatAssTime(endSecond)},Default,,0,0,0,,${escapedSubtitle}`,
     "",
   ].join("\n");
 };

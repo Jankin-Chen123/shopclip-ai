@@ -132,6 +132,9 @@ const normalizeDuration = (segment: SmartEditSegment): number =>
 const normalizePlaybackRate = (segment: SmartEditSegment): number =>
   Math.max(0.25, Math.min(4, segment.playbackRate ?? 1));
 
+const normalizeInSegmentOffset = (offsetSeconds: number | undefined, segment: SmartEditSegment): number =>
+  Math.max(0, Math.min(normalizeDuration(segment) - 0.01, offsetSeconds ?? 0));
+
 type OutputDimensions = {
   height: number;
   width: number;
@@ -399,9 +402,11 @@ const createSegmentVideo = async ({
   await writeFile(
     subtitleAssPath,
     buildSubtitleAss(subtitleText, {
+      endSecond: normalizeDuration(segment),
       fontSize: Math.max(24, Math.round(dimensions.height * (42 / 1280))),
       height: dimensions.height,
       marginV: Math.max(48, Math.round(dimensions.height * (96 / 1280))),
+      startSecond: normalizeInSegmentOffset(segment.captionStartOffsetSeconds, segment),
       width: dimensions.width,
     }),
     "utf8",
@@ -670,6 +675,12 @@ const createVoiceoverTrack = async (
     }
     const rawVoicePath = join(workdir, `voice-${index + 1}.wav`);
     const paddedVoicePath = join(workdir, `voice-${index + 1}-padded.wav`);
+    const voiceOffsetSeconds = normalizeInSegmentOffset(segment.voiceoverStartOffsetSeconds, segment);
+    const voiceOffsetMilliseconds = Math.round(voiceOffsetSeconds * 1000);
+    const voiceFilter =
+      voiceOffsetMilliseconds > 0
+        ? `adelay=${voiceOffsetMilliseconds}:all=1,apad,atrim=0:${normalizeDuration(segment)}`
+        : `apad,atrim=0:${normalizeDuration(segment)}`;
     await run(ttsCommand, [
       "-v",
       voiceForLanguage(plan.audio.targetLanguage),
@@ -682,7 +693,7 @@ const createVoiceoverTrack = async (
       "-i",
       rawVoicePath,
       "-af",
-      `apad,atrim=0:${normalizeDuration(segment)}`,
+      voiceFilter,
       "-c:a",
       "pcm_s16le",
       paddedVoicePath,
