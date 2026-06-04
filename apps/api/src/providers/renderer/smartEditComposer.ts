@@ -127,7 +127,7 @@ const sourceUrlForSegment = (segment: SmartEditSegment, assets: AssetMetadata[])
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
 const normalizeDuration = (segment: SmartEditSegment): number =>
-  Math.max(4, Math.min(12, segment.durationSeconds));
+  Math.max(0.1, Math.min(120, segment.durationSeconds));
 
 const normalizePlaybackRate = (segment: SmartEditSegment): number =>
   Math.max(0.25, Math.min(4, segment.playbackRate ?? 1));
@@ -459,7 +459,11 @@ const createSourceAudioTrack = async (
   const enabledSegments = [...plan.segments]
     .filter((segment) => segment.enabled)
     .sort((left, right) => left.order - right.order);
-  if (!enabledSegments.some((segment) => segment.source.sceneClipAudioUrl)) {
+  if (
+    !enabledSegments.some(
+      (segment) => segment.source.sceneClipAudioUrl && !segment.sourceAudioMuted,
+    )
+  ) {
     return undefined;
   }
 
@@ -467,7 +471,7 @@ const createSourceAudioTrack = async (
   for (const [index, segment] of enabledSegments.entries()) {
     const targetPath = join(workdir, `source-audio-${index + 1}.m4a`);
     const paddedPath = join(workdir, `source-audio-${index + 1}-padded.wav`);
-    const sourceAudioUrl = segment.source.sceneClipAudioUrl;
+    const sourceAudioUrl = segment.sourceAudioMuted ? undefined : segment.source.sceneClipAudioUrl;
     if (!sourceAudioUrl) {
       await run(command, [
         "-y",

@@ -61,6 +61,7 @@ const createPlan = (): SmartEditPlan => ({
       order: 1,
       rationale: "Use the structured product demo slice.",
       sceneId: "scene-1",
+      sourceAudioMuted: false,
       source: {
         assetId: "asset-video",
         endSecond: 5,
@@ -80,6 +81,7 @@ const createPlan = (): SmartEditPlan => ({
       order: 2,
       rationale: "Use the product hero image for the CTA.",
       sceneId: "scene-2",
+      sourceAudioMuted: false,
       source: {
         assetId: "asset-image",
         imageUrl: dataImage,
@@ -270,6 +272,55 @@ describe("smart edit composer", () => {
     expect(finalMixCommand?.args.join(" ")).toContain("[1:a]volume=0.900[src]");
     expect(finalMixCommand?.args.join(" ")).toContain("[2:a]volume=1.000[voice]");
     expect(finalMixCommand?.args.join(" ")).toContain("[src][voice]amix=inputs=2");
+  });
+
+  it("mutes selected separated scene audio while preserving the source audio timeline", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = plan.segments.map((segment, index) => ({
+      ...segment,
+      durationSeconds: index === 0 ? 2.5 : 1.5,
+      source: {
+        kind: "generated-scene-clip",
+        sceneClipAudioUrl: dataAudio,
+        sceneClipUrl: dataVideo,
+        sceneClipVideoOnlyUrl: dataVideo,
+        startSecond: 0,
+        endSecond: index === 0 ? 2.5 : 1.5,
+      },
+      sourceAudioMuted: index === 0,
+      voiceover: "",
+    }));
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const mutedAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+    );
+    expect(mutedAudioCommand?.args).toEqual(expect.arrayContaining(["-f", "lavfi"]));
+    expect(mutedAudioCommand?.args.join(" ")).toContain("anullsrc=channel_layout=stereo");
+    expect(mutedAudioCommand?.args).toEqual(expect.arrayContaining(["-t", "2.5"]));
+
+    const liveAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-2-padded.wav")),
+    );
+    expect(liveAudioCommand?.args.join(" ")).toContain("atrim=0:1.5");
+
+    const finalMixCommand = commands.at(-1);
+    expect(finalMixCommand?.args.some((arg) => arg.endsWith("source-audio.wav"))).toBe(true);
+    expect(finalMixCommand?.args).toEqual(expect.arrayContaining(["-map", "1:a:0"]));
   });
 
   it("maps each BGM selection to a distinct generated ffmpeg music bed", async () => {

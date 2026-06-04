@@ -1328,7 +1328,7 @@ const buildSmartEditRefreshPlan = ({
     };
   });
   const targetDurationSeconds = Math.min(
-    60,
+    600,
     Math.max(
       1,
       segments
@@ -1437,7 +1437,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
               id: `${segment.id}-audio`,
               kind: "audio" as const,
               label: `Scene ${segment.order} audio`,
-              muted: false,
+              muted: segment.sourceAudioMuted ?? false,
               playbackRate: segment.playbackRate ?? 1,
               sceneId: segment.sceneId,
               segmentId: segment.id,

@@ -59,7 +59,7 @@ const getString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
 const normalizeSegmentDuration = (durationSeconds: number): number =>
-  Math.max(4, Math.min(12, durationSeconds));
+  Math.max(0.1, Math.min(120, durationSeconds));
 
 const textFromUnknown = (value: unknown): string => {
   if (typeof value === "string") {
@@ -437,6 +437,7 @@ const createLocalPlan = (
         enabled: override?.enabled ?? true,
         order: index + 1,
         playbackRate: override?.playbackRate ?? 1,
+        sourceAudioMuted: override?.sourceAudioMuted ?? false,
         rationale:
           linkedAsset || scene.imageUrl
             ? "Selected the closest structured asset or generated scene visual for this storyboard scene."
@@ -449,7 +450,7 @@ const createLocalPlan = (
       } satisfies SmartEditPlan["segments"][number];
     });
   const targetDurationSeconds = Math.min(
-    60,
+    600,
     Math.max(
       1,
       segments
@@ -482,12 +483,12 @@ const createLocalPlan = (
 
 const SYSTEM_PROMPT = [
   "You are a senior ecommerce video editor and growth creative director.",
-  "Create a real ffmpeg-ready edit plan for <=60s ecommerce product videos.",
+  "Create a real ffmpeg-ready edit plan for ecommerce product videos up to 600 seconds after timeline editing.",
   "Use only the provided merchant-owned assets, generated scene clips, or structured slices.",
   "If a targetLanguage is provided, rewrite both subtitle and voiceover in that target language for dubbing.",
   "Keep translated subtitle and voiceover concise, natural, and synchronized with each segment duration.",
   "Return only JSON. Do not wrap JSON in markdown.",
-  "Every segment must include: sceneId, order, durationSeconds, transition, subtitle, voiceover, source, rationale.",
+  "Every segment must include: sceneId, order, enabled, durationSeconds, playbackRate, sourceAudioMuted, transition, subtitle, voiceover, source, rationale.",
   "source.kind must be one of video-slice, image-asset, generated-scene-clip, fallback-still.",
 ].join("\n");
 
@@ -525,7 +526,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, imageUrl, startSecond, endSecond, kind }, assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, playbackRate, sourceAudioMuted, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -620,6 +621,10 @@ const normalizeModelSegment = (
       typeof rawSegment.playbackRate === "number"
         ? Math.max(0.25, Math.min(4, rawSegment.playbackRate))
         : localSegment.playbackRate,
+    sourceAudioMuted:
+      typeof rawSegment.sourceAudioMuted === "boolean"
+        ? rawSegment.sourceAudioMuted
+        : localSegment.sourceAudioMuted,
     transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
     voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,

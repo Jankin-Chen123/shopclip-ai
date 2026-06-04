@@ -19,6 +19,7 @@ import {
   Scissors,
   SkipBack,
   SkipForward,
+  Trash2,
 } from "lucide-react";
 
 import type { AppCopy } from "../../app/i18n";
@@ -47,6 +48,29 @@ interface SmartEditPanelProps {
   traceEvents: TraceEvent[];
   onTargetLanguageChange: (value: string) => void;
 }
+
+const MIN_SMART_EDIT_CLIP_SECONDS = 0.25;
+const MAX_SMART_EDIT_CLIP_SECONDS = 120;
+
+const clampSmartEditDuration = (durationSeconds: number): number =>
+  Number.isFinite(durationSeconds)
+    ? Math.max(MIN_SMART_EDIT_CLIP_SECONDS, Math.min(MAX_SMART_EDIT_CLIP_SECONDS, durationSeconds))
+    : MIN_SMART_EDIT_CLIP_SECONDS;
+
+const clampPlaybackRate = (playbackRate: number): number =>
+  Math.max(0.25, Math.min(4, playbackRate || 1));
+
+const durationFromSourceRange = (
+  startSecond: number | undefined,
+  endSecond: number | undefined,
+  playbackRate: number | undefined,
+  fallbackDuration: number,
+): number => {
+  if (startSecond === undefined || endSecond === undefined || endSecond <= startSecond) {
+    return clampSmartEditDuration(fallbackDuration);
+  }
+  return clampSmartEditDuration((endSecond - startSecond) / clampPlaybackRate(playbackRate ?? 1));
+};
 
 const sourceLabel = (segment: SmartEditSegment, assets: AssetMetadata[]) => {
   const asset = segment.source.assetId
@@ -175,7 +199,7 @@ const timelineRangeLabel = (startSecond: number, durationSeconds: number): strin
 
 const planDurationSeconds = (segments: SmartEditSegment[]): number =>
   Math.min(
-    60,
+    600,
     Math.max(
       1,
       segments
@@ -262,7 +286,7 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         id: `${segment.id}-audio`,
         kind: "audio",
         label: `Scene ${segment.order} audio`,
-        muted: false,
+        muted: segment.sourceAudioMuted ?? false,
         playbackRate: segment.playbackRate ?? 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
@@ -549,7 +573,11 @@ export const SmartEditPanel = ({
   };
 
   const splitSelectedSegment = () => {
-    if (!plan || !selectedSegment || selectedSegment.durationSeconds < 8) {
+    if (
+      !plan ||
+      !selectedSegment ||
+      selectedSegment.durationSeconds < MIN_SMART_EDIT_CLIP_SECONDS * 2
+    ) {
       return;
     }
     const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
@@ -557,8 +585,8 @@ export const SmartEditPanel = ({
     if (index < 0) {
       return;
     }
-    const firstDuration = Math.max(4, selectedSegment.durationSeconds / 2);
-    const secondDuration = Math.max(4, selectedSegment.durationSeconds - firstDuration);
+    const firstDuration = clampSmartEditDuration(selectedSegment.durationSeconds / 2);
+    const secondDuration = clampSmartEditDuration(selectedSegment.durationSeconds - firstDuration);
     const sourceStart = selectedSegment.source.startSecond;
     const sourceEnd = selectedSegment.source.endSecond;
     const sourceMid =
@@ -594,6 +622,23 @@ export const SmartEditPanel = ({
     onSelectedSegmentChange(secondSegment.id);
   };
 
+  const removeSelectedSegment = () => {
+    if (!plan || !selectedSegment || sortedSegments.length <= 1) {
+      return;
+    }
+    const nextSegments = sortedSegments
+      .filter((segment) => segment.id !== selectedSegment.id)
+      .map((segment, index) => ({
+        ...segment,
+        order: index + 1,
+      }));
+    onPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: nextSegments,
+    }));
+    onSelectedSegmentChange(nextSegments[Math.min(selectedSegmentIndex - 1, nextSegments.length - 1)]?.id);
+  };
+
   const selectByOffset = (offset: number) => {
     if (sortedSegments.length === 0) {
       return;
@@ -621,7 +666,7 @@ export const SmartEditPanel = ({
         }
         if (event.key === "Delete" && selectedSegment) {
           event.preventDefault();
-          updateSelectedSegment((segment) => ({ ...segment, enabled: false }));
+          removeSelectedSegment();
         }
       }}
     >
@@ -801,11 +846,18 @@ export const SmartEditPanel = ({
                   {copy.moveLater}
                 </Button>
                 <Button
-                  disabled={selectedSegment.durationSeconds < 8}
+                  disabled={selectedSegment.durationSeconds < MIN_SMART_EDIT_CLIP_SECONDS * 2}
                   icon={<Scissors size={16} />}
                   onClick={splitSelectedSegment}
                 >
                   Split
+                </Button>
+                <Button
+                  disabled={sortedSegments.length <= 1}
+                  icon={<Trash2 size={16} />}
+                  onClick={removeSelectedSegment}
+                >
+                  Remove
                 </Button>
               </div>
               <section className="smart-edit-inspector-section">
@@ -813,15 +865,15 @@ export const SmartEditPanel = ({
                 <label>
                   {copy.duration}
                   <input
-                    max={12}
-                    min={4}
-                    step={1}
+                    max={MAX_SMART_EDIT_CLIP_SECONDS}
+                    min={MIN_SMART_EDIT_CLIP_SECONDS}
+                    step={0.1}
                     type="number"
                     value={selectedSegment.durationSeconds}
                     onChange={(event) =>
                       updateSelectedSegment((segment) => ({
                         ...segment,
-                        durationSeconds: Math.max(4, Math.min(12, Number(event.target.value))),
+                        durationSeconds: clampSmartEditDuration(Number(event.target.value)),
                       }))
                     }
                   />
@@ -834,13 +886,33 @@ export const SmartEditPanel = ({
                     step={0.25}
                     type="number"
                     value={selectedSegment.playbackRate ?? 1}
+                    onChange={(event) => {
+                      const nextPlaybackRate = clampPlaybackRate(Number(event.target.value));
+                      updateSelectedSegment((segment) => ({
+                        ...segment,
+                        durationSeconds: durationFromSourceRange(
+                          segment.source.startSecond ?? 0,
+                          segment.source.endSecond,
+                          nextPlaybackRate,
+                          segment.durationSeconds,
+                        ),
+                        playbackRate: nextPlaybackRate,
+                      }));
+                    }}
+                  />
+                </label>
+                <label className="smart-edit-checkbox-label">
+                  <input
+                    checked={selectedSegment.sourceAudioMuted ?? false}
+                    type="checkbox"
                     onChange={(event) =>
                       updateSelectedSegment((segment) => ({
                         ...segment,
-                        playbackRate: Math.max(0.25, Math.min(4, Number(event.target.value) || 1)),
+                        sourceAudioMuted: event.target.checked,
                       }))
                     }
                   />
+                  Mute original audio
                 </label>
                 <div className="smart-edit-trim-grid">
                   <label>
@@ -852,13 +924,30 @@ export const SmartEditPanel = ({
                       value={selectedSegment.source.startSecond ?? 0}
                       onChange={(event) => {
                         const nextStart = Math.max(0, Number(event.target.value) || 0);
-                        updateSelectedSegment((segment) => ({
-                          ...segment,
-                          source: {
-                            ...segment.source,
-                            startSecond: nextStart,
-                          },
-                        }));
+                        updateSelectedSegment((segment) => {
+                          const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+                          const currentEnd =
+                            segment.source.endSecond ??
+                            nextStart + segment.durationSeconds * playbackRate;
+                          const nextEnd =
+                            currentEnd > nextStart
+                              ? currentEnd
+                              : nextStart + MIN_SMART_EDIT_CLIP_SECONDS * playbackRate;
+                          return {
+                            ...segment,
+                            durationSeconds: durationFromSourceRange(
+                              nextStart,
+                              nextEnd,
+                              playbackRate,
+                              segment.durationSeconds,
+                            ),
+                            source: {
+                              ...segment.source,
+                              endSecond: nextEnd,
+                              startSecond: nextStart,
+                            },
+                          };
+                        });
                       }}
                     />
                   </label>
@@ -870,12 +959,25 @@ export const SmartEditPanel = ({
                       type="number"
                       value={
                         selectedSegment.source.endSecond ??
-                        (selectedSegment.source.startSecond ?? 0) + selectedSegment.durationSeconds
+                        (selectedSegment.source.startSecond ?? 0) +
+                          selectedSegment.durationSeconds *
+                            clampPlaybackRate(selectedSegment.playbackRate ?? 1)
                       }
                       onChange={(event) => {
-                        const nextEnd = Math.max(0.1, Number(event.target.value) || 0.1);
+                        const sourceStart = selectedSegment.source.startSecond ?? 0;
+                        const minEnd =
+                          sourceStart +
+                          MIN_SMART_EDIT_CLIP_SECONDS *
+                            clampPlaybackRate(selectedSegment.playbackRate ?? 1);
+                        const nextEnd = Math.max(minEnd, Number(event.target.value) || minEnd);
                         updateSelectedSegment((segment) => ({
                           ...segment,
+                          durationSeconds: durationFromSourceRange(
+                            segment.source.startSecond ?? 0,
+                            nextEnd,
+                            segment.playbackRate,
+                            segment.durationSeconds,
+                          ),
                           source: {
                             ...segment.source,
                             endSecond: nextEnd,
