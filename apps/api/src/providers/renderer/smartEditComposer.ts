@@ -390,7 +390,7 @@ const createSegmentVideo = async ({
   }
 
   const subtitleText = subtitleTextForSegment(segment);
-  if (!subtitlesEnabled || !subtitleText) {
+  if (!subtitlesEnabled || segment.captionHidden || !subtitleText) {
     return rawOutputPath;
   }
 

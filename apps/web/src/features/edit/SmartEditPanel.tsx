@@ -17,6 +17,8 @@ import {
   Film,
   Loader2,
   Music2,
+  Eye,
+  EyeOff,
   RefreshCw,
   RotateCcw,
   RotateCw,
@@ -388,7 +390,7 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
     elements.push({
       detachedAudio: false,
       durationSeconds,
-      hidden: false,
+      hidden: segment.captionHidden ?? false,
       id: `${segment.id}-text`,
       kind: "text",
       label: segment.subtitle,
@@ -574,6 +576,7 @@ const timelineTrackSegments = (
       range: timelineRangeLabel(startSecond, segment.durationSeconds),
       meta: segment.transition,
       durationSeconds: segment.durationSeconds,
+      hidden: segment.captionHidden ?? false,
     }));
   const voiceSegments = timedSegments
     .filter(({ segment }) => segment.voiceover.trim().length > 0)
@@ -846,6 +849,19 @@ export const SmartEditPanel = ({
       segments: plan.segments.map((segment) => ({
         ...segment,
         sourceAudioMuted: muted,
+      })),
+    }));
+  };
+
+  const setCaptionTrackHidden = (hidden: boolean) => {
+    if (!plan) {
+      return;
+    }
+    commitPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: plan.segments.map((segment) => ({
+        ...segment,
+        captionHidden: hidden,
       })),
     }));
   };
@@ -1559,6 +1575,19 @@ export const SmartEditPanel = ({
                   />
                   {selectedSegment.enabled ? copy.disable : copy.enable}
                 </label>
+                <label className="toggle-row">
+                  <input
+                    checked={!selectedSegment.captionHidden}
+                    type="checkbox"
+                    onChange={(event) =>
+                      updateSelectedSegment((segment) => ({
+                        ...segment,
+                        captionHidden: !event.target.checked,
+                      }))
+                    }
+                  />
+                  {selectedSegment.captionHidden ? copy.showCaption : copy.hideCaption}
+                </label>
               </section>
             </>
           ) : (
@@ -1636,6 +1665,12 @@ export const SmartEditPanel = ({
             </Button>
             <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, sourceAudioMuted: false }))}>
               {copy.unmuteSelected}
+            </Button>
+            <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, captionHidden: true }))}>
+              {copy.hideCaptionsSelected}
+            </Button>
+            <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, captionHidden: false }))}>
+              {copy.showCaptionsSelected}
             </Button>
             <Button
               disabled={selectedBatchSegments.length >= sortedSegments.length}
@@ -1802,6 +1837,25 @@ export const SmartEditPanel = ({
                       {track.segments.every((segment) => segment.muted)
                         ? copy.unmuteTrack
                         : copy.muteTrack}
+                    </span>
+                  </button>
+                ) : null}
+                {track.id === "caption" && track.segments.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCaptionTrackHidden(!track.segments.every((segment) => segment.hidden))
+                    }
+                  >
+                    {track.segments.every((segment) => segment.hidden) ? (
+                      <Eye size={14} />
+                    ) : (
+                      <EyeOff size={14} />
+                    )}
+                    <span>
+                      {track.segments.every((segment) => segment.hidden)
+                        ? copy.showCaptionTrack
+                        : copy.hideCaptionTrack}
                     </span>
                   </button>
                 ) : null}

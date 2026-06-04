@@ -1452,7 +1452,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
       {
         detachedAudio: false,
         durationSeconds,
-        hidden: false,
+        hidden: segment.captionHidden ?? false,
         id: `${segment.id}-text`,
         kind: "text" as const,
         label: segment.subtitle,

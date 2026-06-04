@@ -201,6 +201,28 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api build`
   - `corepack pnpm --filter @shopclip/web build`
 
+## 2026-06-05 Caption Track Export Control
+
+- User-facing improvement:
+  - Smart edit now treats storyboard text as an editable caption material track instead of a display-only timeline row.
+  - Each segment has `captionHidden`, so users can hide/show captions per segment, in batches, or for the whole caption track.
+- Backend behavior:
+  - `SmartEditSegment` and `SmartEditSegmentOverride` carry `captionHidden`.
+  - The ffmpeg composer skips ASS subtitle burn-in only for caption-hidden segments while preserving the video segment, source audio, voiceover, and other captions.
+  - Backend timeline metadata marks text elements as hidden when `captionHidden` is set.
+- Frontend behavior:
+  - The smart edit inspector exposes a per-segment caption export toggle.
+  - Multi-select actions can hide/show selected captions.
+  - The caption track header can hide/show the entire caption track.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+
 ## 2026-06-02 Partial Refresh Text Safety
 
 - Issue found during live API verification:

@@ -2259,6 +2259,7 @@ export const App = ({
                 enabled: true,
                 playbackRate: 1,
                 sourceAudioMuted: false,
+                captionHidden: false,
                 source: {
                   kind: "generated-scene-clip" as const,
                   sceneClipAudioUrl: clip.material?.audioUrl,
@@ -2282,6 +2283,7 @@ export const App = ({
           durationSeconds: segment.durationSeconds,
           enabled: segment.enabled,
           playbackRate: segment.playbackRate,
+          captionHidden: segment.captionHidden,
           source: segment.source,
           sourceAudioMuted: segment.sourceAudioMuted,
           subtitle: segment.subtitle,
@@ -2370,6 +2372,7 @@ export const App = ({
           durationSeconds: selectedSegment.durationSeconds,
           enabled: selectedSegment.enabled,
           playbackRate: selectedSegment.playbackRate,
+          captionHidden: selectedSegment.captionHidden,
           source: selectedSegment.source,
           sourceAudioMuted: selectedSegment.sourceAudioMuted,
           subtitle: selectedSegment.subtitle,

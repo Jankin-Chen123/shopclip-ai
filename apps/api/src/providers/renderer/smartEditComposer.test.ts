@@ -62,6 +62,7 @@ const createPlan = (): SmartEditPlan => ({
       rationale: "Use the structured product demo slice.",
       sceneId: "scene-1",
       sourceAudioMuted: false,
+      captionHidden: false,
       source: {
         assetId: "asset-video",
         endSecond: 5,
@@ -82,6 +83,7 @@ const createPlan = (): SmartEditPlan => ({
       rationale: "Use the product hero image for the CTA.",
       sceneId: "scene-2",
       sourceAudioMuted: false,
+      captionHidden: false,
       source: {
         assetId: "asset-image",
         imageUrl: dataImage,
@@ -621,5 +623,35 @@ describe("smart edit composer", () => {
     expect(commands.some((entry) => entry.args.some((arg) => arg.includes("ass=filename=")))).toBe(
       false,
     );
+  });
+
+  it("skips ASS subtitle burn-in only for caption-hidden segments", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      captionHidden: true,
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const subtitleFilterArgs = commands
+      .flatMap((entry) => entry.args)
+      .filter((arg) => arg.includes("ass=filename="));
+    expect(subtitleFilterArgs).toHaveLength(1);
+    expect(subtitleFilterArgs[0]).toContain("segment-image.ass");
+    expect(subtitleFilterArgs[0]).not.toContain("segment-video.ass");
   });
 });

@@ -1583,9 +1583,10 @@ describe("App", () => {
       />,
     );
 
-    expect(markup).toContain('min="4"');
-    expect(markup).toContain('max="12"');
-    expect(markup).toContain("4s - cut");
+    expect(markup).toContain('min="0.25"');
+    expect(markup).toContain('max="120"');
+    expect(markup).toContain("Hide caption in export");
+    expect(markup).toContain("Hide track");
     expect(markup).toContain("Selected segment live preview");
     expect(markup).toContain('src="https://cdn.example.test/cup.png"');
     expect(markup).toContain('alt="Cup hero.png"');
