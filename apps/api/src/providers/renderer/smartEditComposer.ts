@@ -300,6 +300,8 @@ const createSegmentVideo = async ({
   if (
     segment.source.kind === "generated-scene-clip" &&
     segment.source.sceneClipUrl &&
+    !segment.source.sceneClipVideoOnlyUrl &&
+    !subtitlesEnabled &&
     segment.source.startSecond === undefined &&
     segment.source.endSecond === undefined &&
     normalizePlaybackRate(segment) === 1
@@ -430,6 +432,107 @@ const createSegmentVideo = async ({
     captionedOutputPath,
   ]);
   return captionedOutputPath;
+};
+
+const atempoFilter = (playbackRate: number): string => {
+  const factors: number[] = [];
+  let remaining = playbackRate;
+  while (remaining > 2) {
+    factors.push(2);
+    remaining /= 2;
+  }
+  while (remaining < 0.5) {
+    factors.push(0.5);
+    remaining /= 0.5;
+  }
+  factors.push(remaining);
+  return factors.map((factor) => `atempo=${factor.toFixed(4)}`).join(",");
+};
+
+const createSourceAudioTrack = async (
+  command: string,
+  plan: SmartEditPlan,
+  workdir: string,
+  fetchImpl: typeof fetch,
+  run: CommandRunner,
+): Promise<string | undefined> => {
+  const enabledSegments = [...plan.segments]
+    .filter((segment) => segment.enabled)
+    .sort((left, right) => left.order - right.order);
+  if (!enabledSegments.some((segment) => segment.source.sceneClipAudioUrl)) {
+    return undefined;
+  }
+
+  const paddedPaths: string[] = [];
+  for (const [index, segment] of enabledSegments.entries()) {
+    const targetPath = join(workdir, `source-audio-${index + 1}.m4a`);
+    const paddedPath = join(workdir, `source-audio-${index + 1}-padded.wav`);
+    const sourceAudioUrl = segment.source.sceneClipAudioUrl;
+    if (!sourceAudioUrl) {
+      await run(command, [
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-t",
+        String(normalizeDuration(segment)),
+        "-c:a",
+        "pcm_s16le",
+        paddedPath,
+      ]);
+      paddedPaths.push(paddedPath);
+      continue;
+    }
+
+    const sourcePath = await materializeUrl(sourceAudioUrl, targetPath, fetchImpl);
+    const trimEnd =
+      segment.source.endSecond ??
+      (segment.source.startSecond ?? 0) +
+        normalizeDuration(segment) * normalizePlaybackRate(segment);
+    const filters = [
+      `atrim=${segment.source.startSecond ?? 0}:${trimEnd}`,
+      "asetpts=PTS-STARTPTS",
+      atempoFilter(normalizePlaybackRate(segment)),
+      `apad,atrim=0:${normalizeDuration(segment)}`,
+    ].join(",");
+    await run(command, [
+      "-y",
+      "-i",
+      sourcePath,
+      "-af",
+      filters,
+      "-c:a",
+      "pcm_s16le",
+      paddedPath,
+    ]);
+    paddedPaths.push(paddedPath);
+  }
+
+  if (paddedPaths.length === 0) {
+    return undefined;
+  }
+
+  const concatListPath = join(workdir, "smart-edit-source-audio.txt");
+  const sourceAudioTrackPath = join(workdir, "source-audio.wav");
+  await writeFile(
+    concatListPath,
+    paddedPaths.map((path) => `file '${escapeConcatPath(path)}'`).join("\n"),
+    "utf8",
+  );
+  await run(command, [
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    concatListPath,
+    "-c:a",
+    "pcm_s16le",
+    sourceAudioTrackPath,
+  ]);
+  return sourceAudioTrackPath;
 };
 
 const concatSegments = async (
@@ -631,27 +734,33 @@ export const smartEditBgmProfile = (
 ): { lavfi: string; volume: number } | undefined =>
   bgmTrack === "none" ? undefined : bgmProfiles[bgmTrack] ?? bgmProfiles["creator-pop"];
 
-const addSyntheticBgm = async (
+const addAudioTracks = async (
   command: string,
   inputPath: string,
   outputPath: string,
   plan: SmartEditPlan,
   run: CommandRunner,
+  sourceAudioTrackPath?: string,
   voiceoverTrackPath?: string,
 ) => {
   const bgmProfile = smartEditBgmProfile(plan.audio.bgmTrack);
-  if (!bgmProfile) {
-    if (!voiceoverTrackPath) {
-      await run(command, ["-y", "-i", inputPath, "-c", "copy", outputPath]);
-      return;
-    }
+  const audioInputs = [
+    ...(sourceAudioTrackPath ? [{ label: "src", path: sourceAudioTrackPath, volume: 0.9 }] : []),
+    ...(voiceoverTrackPath ? [{ label: "voice", path: voiceoverTrackPath, volume: 1.0 }] : []),
+  ];
 
+  if (!bgmProfile && audioInputs.length === 0) {
+    await run(command, ["-y", "-i", inputPath, "-c", "copy", outputPath]);
+    return;
+  }
+
+  if (!bgmProfile && audioInputs.length === 1) {
     await run(command, [
       "-y",
       "-i",
       inputPath,
       "-i",
-      voiceoverTrackPath,
+      audioInputs[0]!.path,
       "-map",
       "0:v:0",
       "-map",
@@ -668,45 +777,31 @@ const addSyntheticBgm = async (
     return;
   }
 
-  if (voiceoverTrackPath) {
-    await run(command, [
-      "-y",
-      "-i",
-      inputPath,
-      "-i",
-      voiceoverTrackPath,
-      "-f",
-      "lavfi",
-      "-i",
-      bgmProfile.lavfi,
-      "-filter_complex",
-      `[1:a]volume=1.0[voice];[2:a]volume=${bgmProfile.volume}[bgm];[voice][bgm]amix=inputs=2:duration=first[aout]`,
-      "-map",
-      "0:v:0",
-      "-map",
-      "[aout]",
-      "-c:v",
-      "copy",
-      "-c:a",
-      "aac",
-      "-shortest",
-      "-movflags",
-      "+faststart",
-      outputPath,
-    ]);
-    return;
-  }
-
-  await run(command, [
+  const args = [
     "-y",
     "-i",
     inputPath,
-    "-f",
-    "lavfi",
-    "-i",
-    bgmProfile.lavfi,
+  ];
+  for (const input of audioInputs) {
+    args.push("-i", input.path);
+  }
+  if (bgmProfile) {
+    args.push("-f", "lavfi", "-i", bgmProfile.lavfi);
+  }
+  const filterParts = audioInputs.map(
+    (input, index) => `[${index + 1}:a]volume=${input.volume.toFixed(3)}[${input.label}]`,
+  );
+  const mixLabels = audioInputs.map((input) => `[${input.label}]`);
+  if (bgmProfile) {
+    const bgmInputIndex = audioInputs.length + 1;
+    filterParts.push(`[${bgmInputIndex}:a]volume=${bgmProfile.volume}[bgm]`);
+    mixLabels.push("[bgm]");
+  }
+  filterParts.push(`${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=first[aout]`);
+  await run(command, [
+    ...args,
     "-filter_complex",
-    `[1:a]volume=${bgmProfile.volume}[aout]`,
+    filterParts.join(";"),
     "-map",
     "0:v:0",
     "-map",
@@ -794,7 +889,22 @@ export const composeSmartEditToStorage = async (
     run,
   );
   const voiceoverTrackPath = await createVoiceoverTrack(command, ttsCommand, plan, workdir, run);
-  await addSyntheticBgm(command, stitchedPath, outputPath, plan, run, voiceoverTrackPath);
+  const sourceAudioTrackPath = await createSourceAudioTrack(
+    command,
+    plan,
+    workdir,
+    fetchImpl,
+    run,
+  );
+  await addAudioTracks(
+    command,
+    stitchedPath,
+    outputPath,
+    plan,
+    run,
+    sourceAudioTrackPath,
+    voiceoverTrackPath,
+  );
 
   const objectKey = createSmartEditObjectKey(projectId, exportId);
   const uploaded = await options.storageProvider.uploadObject({

@@ -7,6 +7,7 @@ import type {
   SmartEditPlan,
   SmartEditResult,
   SmartEditSegment,
+  SmartEditTimeline,
   TraceEvent,
 } from "@shopclip/shared";
 import {
@@ -131,13 +132,13 @@ const reorderSegments = (
   const current = sorted[index]!;
   sorted[index] = sorted[targetIndex]!;
   sorted[targetIndex] = current;
-  return {
+  return withRebuiltTimeline({
     ...plan,
     segments: sorted.map((segment, segmentIndex) => ({
       ...segment,
       order: segmentIndex + 1,
     })),
-  };
+  });
 };
 
 const replaceSegment = (
@@ -148,19 +149,10 @@ const replaceSegment = (
   const segments = plan.segments.map((segment) =>
     segment.id === segmentId ? update(segment) : segment,
   );
-  return {
+  return withRebuiltTimeline({
     ...plan,
     segments,
-    targetDurationSeconds: Math.min(
-      60,
-      Math.max(
-        1,
-        segments
-          .filter((segment) => segment.enabled)
-          .reduce((sum, segment) => sum + segment.durationSeconds, 0),
-      ),
-    ),
-  };
+  });
 };
 
 const formatTimelineTime = (seconds: number): string => {
@@ -180,6 +172,154 @@ const sourceRangeLabel = (segment: SmartEditSegment): string => {
 
 const timelineRangeLabel = (startSecond: number, durationSeconds: number): string =>
   `${formatTimelineTime(startSecond)}-${formatTimelineTime(startSecond + durationSeconds)}`;
+
+const planDurationSeconds = (segments: SmartEditSegment[]): number =>
+  Math.min(
+    60,
+    Math.max(
+      1,
+      segments
+        .filter((segment) => segment.enabled)
+        .reduce((sum, segment) => sum + segment.durationSeconds, 0),
+    ),
+  );
+
+const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
+  const enabledSegments = [...plan.segments]
+    .filter((segment) => segment.enabled)
+    .sort((left, right) => left.order - right.order);
+  const tracks: SmartEditTimeline["tracks"] = [
+    {
+      hidden: false,
+      id: "video-main",
+      kind: "video",
+      label: "Video",
+      locked: false,
+      muted: false,
+    },
+    {
+      hidden: false,
+      id: "audio-source",
+      kind: "audio",
+      label: "Source audio",
+      locked: false,
+      muted: false,
+    },
+    {
+      hidden: false,
+      id: "text-copy",
+      kind: "text",
+      label: "Text",
+      locked: false,
+      muted: false,
+    },
+    ...(plan.audio.bgmTrack !== "none"
+      ? [
+          {
+            hidden: false,
+            id: "bgm-bed",
+            kind: "bgm" as const,
+            label: "BGM",
+            locked: false,
+            muted: false,
+          },
+        ]
+      : []),
+  ];
+  const elements: SmartEditTimeline["elements"] = [];
+  let cursor = 0;
+  for (const segment of enabledSegments) {
+    const startSecond = cursor;
+    const durationSeconds = segment.durationSeconds;
+    const sourceStart = segment.source.startSecond ?? 0;
+    const sourceEnd = segment.source.endSecond;
+    cursor += durationSeconds;
+    elements.push({
+      detachedAudio: false,
+      durationSeconds,
+      hidden: false,
+      id: `${segment.id}-video`,
+      kind: "video",
+      label: `Scene ${segment.order}`,
+      muted: false,
+      playbackRate: segment.playbackRate ?? 1,
+      sceneId: segment.sceneId,
+      segmentId: segment.id,
+      sourceDurationSeconds:
+        sourceEnd !== undefined ? Math.max(0.1, sourceEnd - sourceStart) : durationSeconds,
+      sourceUrl:
+        segment.source.sceneClipVideoOnlyUrl ?? segment.source.sceneClipUrl ?? segment.source.imageUrl,
+      startSecond,
+      trackId: "video-main",
+      trimEndSecond: sourceEnd,
+      trimStartSecond: sourceStart,
+    });
+    if (segment.source.sceneClipAudioUrl) {
+      elements.push({
+        detachedAudio: true,
+        durationSeconds,
+        hidden: false,
+        id: `${segment.id}-audio`,
+        kind: "audio",
+        label: `Scene ${segment.order} audio`,
+        muted: false,
+        playbackRate: segment.playbackRate ?? 1,
+        sceneId: segment.sceneId,
+        segmentId: segment.id,
+        sourceUrl: segment.source.sceneClipAudioUrl,
+        startSecond,
+        trackId: "audio-source",
+        trimEndSecond: sourceEnd,
+        trimStartSecond: sourceStart,
+      });
+    }
+    elements.push({
+      detachedAudio: false,
+      durationSeconds,
+      hidden: false,
+      id: `${segment.id}-text`,
+      kind: "text",
+      label: segment.subtitle,
+      muted: false,
+      playbackRate: 1,
+      sceneId: segment.sceneId,
+      segmentId: segment.id,
+      startSecond,
+      text: segment.subtitle,
+      trackId: "text-copy",
+      trimStartSecond: 0,
+    });
+  }
+
+  if (plan.audio.bgmTrack !== "none" && cursor > 0) {
+    elements.push({
+      detachedAudio: false,
+      durationSeconds: cursor,
+      hidden: false,
+      id: "bgm-bed",
+      kind: "bgm",
+      label: plan.audio.bgmTrack,
+      muted: false,
+      playbackRate: 1,
+      startSecond: 0,
+      trackId: "bgm-bed",
+      trimStartSecond: 0,
+    });
+  }
+
+  return {
+    durationSeconds: cursor,
+    elements,
+    scale: plan.timeline?.scale ?? 1,
+    tracks,
+  };
+};
+
+const withRebuiltTimeline = (plan: SmartEditPlan): SmartEditPlan => ({
+  ...plan,
+  targetDurationSeconds: planDurationSeconds(plan.segments),
+  timeline: buildSmartEditTimeline(plan),
+});
 
 type SmartEditTrackId = "video" | "caption" | "voice" | "bgm";
 
@@ -444,19 +584,13 @@ export const SmartEditPanel = ({
       subtitle: `${selectedSegment.subtitle} (split)`,
     };
     sorted.splice(index, 1, firstSegment, secondSegment);
-    onPlanChange({
+    onPlanChange(withRebuiltTimeline({
       ...plan,
       segments: sorted.map((segment, segmentIndex) => ({
         ...segment,
         order: segmentIndex + 1,
       })),
-      targetDurationSeconds: Math.min(
-        60,
-        sorted
-          .filter((segment) => segment.enabled)
-          .reduce((sum, segment) => sum + segment.durationSeconds, 0),
-      ),
-    });
+    }));
     onSelectedSegmentChange(secondSegment.id);
   };
 
@@ -925,13 +1059,13 @@ export const SmartEditPanel = ({
                   }
                   const [moved] = sorted.splice(from, 1);
                   sorted.splice(to, 0, moved!);
-                  onPlanChange({
+                  onPlanChange(withRebuiltTimeline({
                     ...plan,
                     segments: sorted.map((candidate, index) => ({
                       ...candidate,
                       order: index + 1,
                     })),
-                  });
+                  }));
                 }}
               >
                 <strong>

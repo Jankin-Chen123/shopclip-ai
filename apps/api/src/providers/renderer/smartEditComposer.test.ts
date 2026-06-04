@@ -17,6 +17,7 @@ const makeWorkdir = async () => {
 
 const dataImage =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const dataAudio = "data:audio/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQ==";
 const dataVideo = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDE=";
 
 const assets: AssetMetadata[] = [
@@ -225,6 +226,52 @@ describe("smart edit composer", () => {
     expect(bgmCommand?.args.join(" ")).toContain("amix=inputs=2");
   });
 
+  it("uses separated generated scene audio as a source audio track in final mixing", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      durationSeconds: 4,
+      playbackRate: 2,
+      source: {
+        endSecond: 8,
+        kind: "generated-scene-clip",
+        sceneClipAudioUrl: dataAudio,
+        sceneClipUrl: dataVideo,
+        sceneClipVideoOnlyUrl: dataVideo,
+        startSecond: 0,
+      },
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const sourceAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+    );
+    expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=0:8");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("atempo=2.0000");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
+
+    const finalMixCommand = commands.at(-1);
+    expect(finalMixCommand?.args.some((arg) => arg.endsWith("source-audio.wav"))).toBe(true);
+    expect(finalMixCommand?.args.some((arg) => arg.endsWith("voiceover.wav"))).toBe(true);
+    expect(finalMixCommand?.args.join(" ")).toContain("[1:a]volume=0.900[src]");
+    expect(finalMixCommand?.args.join(" ")).toContain("[2:a]volume=1.000[voice]");
+    expect(finalMixCommand?.args.join(" ")).toContain("[src][voice]amix=inputs=2");
+  });
+
   it("maps each BGM selection to a distinct generated ffmpeg music bed", async () => {
     const { smartEditBgmProfile } = await import("./smartEditComposer.js");
 
@@ -379,6 +426,7 @@ describe("smart edit composer", () => {
           headers: { "content-type": "video/mp4" },
       }),
       storageProvider,
+      subtitlesEnabled: false,
       ttsCommand: "espeak-test",
       runCommand: async (command, args) => {
         commands.push({ command, args });
