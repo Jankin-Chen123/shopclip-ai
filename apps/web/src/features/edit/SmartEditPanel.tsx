@@ -536,34 +536,57 @@ export const duplicateSmartEditSegmentOnTimeline = (
   segmentId: string,
   duplicateToken = String(Date.now()),
 ): SmartEditPlan => {
+  return duplicateSmartEditSegmentsOnTimeline(plan, [segmentId], duplicateToken);
+};
+
+export const duplicateSmartEditSegmentsOnTimeline = (
+  plan: SmartEditPlan,
+  segmentIds: string[],
+  duplicateToken = String(Date.now()),
+): SmartEditPlan => {
+  const selectedIds = new Set(segmentIds);
+  if (selectedIds.size === 0) {
+    return plan;
+  }
   const sortedSegments = [...plan.segments].sort((left, right) => left.order - right.order);
-  const sourceIndex = sortedSegments.findIndex((segment) => segment.id === segmentId);
-  const sourceSegment = sortedSegments[sourceIndex];
-  if (!sourceSegment) {
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const nextSegments: SmartEditSegment[] = [];
+  const duplicateStarts = new Map<string, number>();
+  let duplicateIndex = 0;
+  for (const segment of sortedSegments) {
+    nextSegments.push(segment);
+    if (!selectedIds.has(segment.id)) {
+      continue;
+    }
+    duplicateIndex += 1;
+    const sourceStart = currentStarts.get(segment.id) ?? 0;
+    const duplicateId =
+      segmentIds.length === 1
+        ? `${segment.id}-${duplicateToken}`
+        : `${segment.id}-${duplicateToken}-${duplicateIndex}`;
+    const duplicateStart = clampTimelineStart(sourceStart + segment.durationSeconds);
+    duplicateStarts.set(duplicateId, duplicateStart);
+    nextSegments.push({
+      ...segment,
+      id: duplicateId,
+      order: segment.order + 1,
+      subtitle: `${segment.subtitle} (copy)`,
+      timelineStartSecond: duplicateStart,
+    });
+  }
+
+  if (duplicateIndex === 0) {
     return plan;
   }
 
-  const currentStarts = timelineStartsForSegments(plan.segments);
-  const sourceStart = currentStarts.get(sourceSegment.id) ?? 0;
-  const duplicateId = `${sourceSegment.id}-${duplicateToken}`;
-  const duplicateSegment: SmartEditSegment = {
-    ...sourceSegment,
-    id: duplicateId,
-    order: sourceSegment.order + 1,
-    subtitle: `${sourceSegment.subtitle} (copy)`,
-    timelineStartSecond: clampTimelineStart(sourceStart + sourceSegment.durationSeconds),
-  };
-  sortedSegments.splice(sourceIndex + 1, 0, duplicateSegment);
-
   return withRebuiltTimeline({
     ...plan,
-    segments: sortedSegments.map((segment, index) => ({
+    segments: nextSegments.map((segment, index) => ({
       ...segment,
       order: index + 1,
-      timelineStartSecond:
-        segment.id === duplicateId
-          ? duplicateSegment.timelineStartSecond
-          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+      timelineStartSecond: duplicateStarts.has(segment.id)
+        ? duplicateStarts.get(segment.id)!
+        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
 };
@@ -1308,6 +1331,23 @@ export const SmartEditPanel = ({
     }
   };
 
+  const duplicateSelectedSegments = () => {
+    if (!plan || selectedBatchSegments.length === 0) {
+      return;
+    }
+    const duplicateToken = `batch-${Date.now()}`;
+    const selectedIds = selectedBatchSegments.map((segment) => segment.id);
+    const nextPlan = duplicateSmartEditSegmentsOnTimeline(plan, selectedIds, duplicateToken);
+    commitPlanChange(nextPlan);
+    const duplicateIds = nextPlan.segments
+      .map((segment) => segment.id)
+      .filter((id) => selectedIds.some((sourceId) => id.startsWith(`${sourceId}-${duplicateToken}-`)));
+    if (duplicateIds.length > 0) {
+      setSelectedSegmentIds(duplicateIds);
+      onSelectedSegmentChange(duplicateIds[0]);
+    }
+  };
+
   const selectByOffset = (offset: number) => {
     if (sortedSegments.length === 0) {
       return;
@@ -1974,6 +2014,9 @@ export const SmartEditPanel = ({
             </Button>
             <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, captionHidden: false }))}>
               {copy.showCaptionsSelected}
+            </Button>
+            <Button icon={<Copy size={16} />} onClick={duplicateSelectedSegments}>
+              {copy.duplicateSelected}
             </Button>
             <Button
               disabled={selectedBatchSegments.length >= sortedSegments.length}

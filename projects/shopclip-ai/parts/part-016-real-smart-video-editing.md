@@ -553,3 +553,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Clipboard copy/paste across timeline positions, multi-select duplication, separate audio/text clip duplication, and command-level undo labels are still open.
+
+## 2026-06-05 Multi-Select Duplicate Timeline Command
+
+- Reference model:
+  - OpenCut `DuplicateElementsCommand` accepts multiple selected elements and duplicates them as command output.
+- Fix:
+  - Extended the smart-edit duplicate helper into `duplicateSmartEditSegmentsOnTimeline(plan, segmentIds, duplicateToken)`.
+  - Multi-selected clips are duplicated in timeline order, each duplicate is inserted directly after its source clip, and each duplicate starts at the source clip's timeline end.
+  - The duplicate command preserves all source/media/editing metadata and rebuilds target duration and timeline elements for export.
+  - Added `Duplicate selected` / `复制已选` to the smart-edit batch toolbar; after execution the generated copies become the active selection.
+- Verification:
+  - Added `App.test.tsx` coverage for duplicating two selected clips while preserving order, starts, and rebuilt timeline duration.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "duplicates multiple selected smart edit segments"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Clipboard paste-at-playhead, duplicate-to-free-track, ripple collision handling, and independent audio/text clip duplication remain open.

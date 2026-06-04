@@ -34,6 +34,7 @@ import {
 import {
   SmartEditPanel,
   duplicateSmartEditSegmentOnTimeline,
+  duplicateSmartEditSegmentsOnTimeline,
   moveSmartEditSegmentOnTimeline,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
@@ -1825,6 +1826,85 @@ describe("App", () => {
     expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-1-copy-1-video")?.startSecond).toBe(5);
     expect(nextPlan.timeline?.durationSeconds).toBe(9);
     expect(nextPlan.targetDurationSeconds).toBe(9);
+  });
+
+  it("duplicates multiple selected smart edit segments in timeline order", () => {
+    const baseSegment = {
+      assetTags: ["hero"],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds: 3,
+      enabled: true,
+      playbackRate: 1,
+      rationale: "Use the hero image.",
+      source: {
+        assetId: "asset-image",
+        imageUrl: "https://cdn.example.test/cup.png",
+        kind: "image-asset" as const,
+      },
+      sourceAudioMuted: false,
+      transition: "cut" as const,
+      voiceoverStartOffsetSeconds: 0,
+    };
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 9,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          ...baseSegment,
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          subtitle: "Hook",
+          timelineStartSecond: 0,
+          voiceover: "Hook",
+        },
+        {
+          ...baseSegment,
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          subtitle: "Demo",
+          timelineStartSecond: 3,
+          voiceover: "Demo",
+        },
+        {
+          ...baseSegment,
+          id: "segment-3",
+          sceneId: "scene-3",
+          order: 3,
+          subtitle: "CTA",
+          timelineStartSecond: 6,
+          voiceover: "CTA",
+        },
+      ],
+    };
+
+    const nextPlan = duplicateSmartEditSegmentsOnTimeline(
+      plan,
+      ["segment-1", "segment-3"],
+      "batch-1",
+    );
+
+    expect(nextPlan.segments.map((segment) => segment.id)).toEqual([
+      "segment-1",
+      "segment-1-batch-1-1",
+      "segment-2",
+      "segment-3",
+      "segment-3-batch-1-2",
+    ]);
+    expect(nextPlan.segments.map((segment) => segment.order)).toEqual([1, 2, 3, 4, 5]);
+    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 3, 3, 6, 9]);
+    expect(nextPlan.timeline?.durationSeconds).toBe(12);
+    expect(nextPlan.targetDurationSeconds).toBe(12);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {
