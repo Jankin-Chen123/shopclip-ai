@@ -603,3 +603,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Collision-aware placement, overwrite/insert/ripple modes, independent audio/text clip clipboard entries, and named command history remain open.
+
+## 2026-06-05 Collision-Aware Timeline Placement
+
+- Reference model:
+  - OpenCut timeline commands resolve element placement against existing timeline elements instead of blindly writing a start time.
+- Fix:
+  - Added shared timeline interval helpers and block placement resolution for Smart Edit clips.
+  - Dragging a clip now snaps to playhead/clip edges and resolves to the nearest non-overlapping legal position.
+  - Duplicate, paste-at-playhead, and clipboard paste now treat selected clips as a block: relative offsets are preserved, then the whole block is moved to the nearest open range.
+  - The timeline rebuild still drives target duration and export metadata, so render/export receives the resolved clip starts.
+- Verification:
+  - Updated `App.test.tsx` coverage for collision-aware drag placement: dragging a clip left into another clip now lands at the adjacent edge instead of overlapping.
+  - Updated multi-select duplicate coverage to verify copied blocks are moved after existing occupied ranges.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Explicit overwrite/insert/ripple modes, independent audio/text track items, edge preview guides, transform/effect panels, and named command history remain open.

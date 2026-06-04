@@ -1700,7 +1700,7 @@ describe("App", () => {
     expect(markup).toContain("tech-pulse");
   });
 
-  it("moves a smart edit segment horizontally while preserving timeline starts", () => {
+  it("moves a smart edit segment horizontally while snapping away from overlaps", () => {
     const plan: SmartEditPlan = {
       id: "plan-1",
       projectId: "project-1",
@@ -1764,10 +1764,15 @@ describe("App", () => {
 
     const nextPlan = moveSmartEditSegmentOnTimeline(plan, "segment-2", -1.25);
 
-    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 2.8]);
-    expect(nextPlan.targetDurationSeconds).toBe(6.8);
-    expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-2-video")?.startSecond).toBe(2.8);
-    expect(nextPlan.timeline?.durationSeconds).toBe(6.8);
+    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 4]);
+    expect(nextPlan.targetDurationSeconds).toBe(8);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-2-video")?.startSecond).toBe(4);
+    expect(nextPlan.timeline?.durationSeconds).toBe(8);
+
+    const snappedToPlayheadPlan = moveSmartEditSegmentOnTimeline(plan, "segment-2", 1.95, 6);
+
+    expect(snappedToPlayheadPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 6]);
+    expect(snappedToPlayheadPlan.timeline?.durationSeconds).toBe(10);
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {
@@ -1905,9 +1910,9 @@ describe("App", () => {
       "segment-3-batch-1-2",
     ]);
     expect(nextPlan.segments.map((segment) => segment.order)).toEqual([1, 2, 3, 4, 5]);
-    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 3, 3, 6, 9]);
-    expect(nextPlan.timeline?.durationSeconds).toBe(12);
-    expect(nextPlan.targetDurationSeconds).toBe(12);
+    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 9, 3, 6, 15]);
+    expect(nextPlan.timeline?.durationSeconds).toBe(18);
+    expect(nextPlan.targetDurationSeconds).toBe(18);
   });
 
   it("pastes selected smart edit segments at the playhead while preserving relative offsets", () => {
