@@ -7,6 +7,8 @@ import {
   Box,
   Check,
   Edit3,
+  ExternalLink,
+  Eye,
   FileText,
   Film,
   Images,
@@ -329,11 +331,13 @@ export const ProjectWorkspace = ({
     tone: project?.tone ?? "",
   }));
   const [selectedScriptId, setSelectedScriptId] = useState<string | undefined>();
+  const [selectedVideoId, setSelectedVideoId] = useState<string | undefined>();
 
   useEffect(() => {
     if (!project) {
       setIsOverviewEditing(false);
       setSelectedScriptId(undefined);
+      setSelectedVideoId(undefined);
       return;
     }
     setOverviewDraft({
@@ -347,6 +351,7 @@ export const ProjectWorkspace = ({
     });
     setIsOverviewEditing(false);
     setSelectedScriptId(undefined);
+    setSelectedVideoId(undefined);
   }, [project?.id]);
 
   useEffect(() => {
@@ -444,6 +449,7 @@ export const ProjectWorkspace = ({
   const videos = project.renderTasks.filter((task) => task.status === "completed");
   const activeAsset = project.assets.find((asset) => asset.type === "image") ?? project.assets[0];
   const selectedScript = scripts.find((candidate) => candidate.id === selectedScriptId);
+  const selectedVideo = videos.find((candidate) => candidate.id === selectedVideoId);
   const tabs: Array<{ id: ProjectDetailTab; icon: typeof Box; label: string }> = [
     { id: "overview", icon: Box, label: text.overview },
     { id: "materials", icon: Images, label: text.materials },
@@ -662,7 +668,13 @@ export const ProjectWorkspace = ({
                 {text.generateVideo}
               </Button>
             </div>
-            <VideoList videos={videos} onDeleteRenderTask={onDeleteRenderTask} />
+            <VideoList
+              videos={videos}
+              onDeleteRenderTask={onDeleteRenderTask}
+              onPreviewVideo={setSelectedVideoId}
+              previewLabel={language === "zh" ? "\u9884\u89c8" : "Preview"}
+              openLabel={language === "zh" ? "\u65b0\u7a97\u6253\u5f00" : "Open video"}
+            />
           </section>
         ) : null}
       </div>
@@ -680,6 +692,24 @@ export const ProjectWorkspace = ({
       {showScriptComposer ? (
         <ProjectModal title={text.addScript} onClose={onCloseScriptComposer}>
           <div className="project-script-composer">{scriptPanel}</div>
+        </ProjectModal>
+      ) : null}
+
+      {selectedVideo ? (
+        <ProjectModal
+          title={language === "zh" ? "\u89c6\u9891\u9884\u89c8" : "Video preview"}
+          onClose={() => setSelectedVideoId(undefined)}
+        >
+          <VideoPreview
+            noPreviewText={
+              language === "zh"
+                ? "\u8be5\u89c6\u9891\u6682\u65e0\u53ef\u9884\u89c8\u5730\u5740\u3002"
+                : "This video has no preview URL yet."
+            }
+            openLabel={language === "zh" ? "\u65b0\u7a97\u6253\u5f00" : "Open video"}
+            title={language === "zh" ? "\u89c6\u9891\u9884\u89c8" : "Video preview"}
+            video={selectedVideo}
+          />
         </ProjectModal>
       ) : null}
     </section>
@@ -737,21 +767,25 @@ const ScriptList = ({
   </div>
 );
 
-const ScriptDetail = ({
+export const ScriptDetail = ({
   onDeleteScript,
   script,
   title,
+  deleteLabel = "Delete",
 }: {
-  onDeleteScript: (scriptId: string) => void;
+  onDeleteScript?: (scriptId: string) => void;
   script: ScriptResult;
   title: string;
+  deleteLabel?: string;
 }) => (
   <article className="project-script-detail">
     <div className="project-detail-card-heading">
       <span>{title}</span>
-      <Button icon={<Trash2 size={16} />} onClick={() => onDeleteScript(script.id)}>
-        Delete
-      </Button>
+      {onDeleteScript ? (
+        <Button icon={<Trash2 size={16} />} onClick={() => onDeleteScript(script.id)}>
+          {deleteLabel}
+        </Button>
+      ) : null}
     </div>
     <h4>{script.hook}</h4>
     <MarkdownContent value={script.narrative} />
@@ -801,9 +835,15 @@ const MarkdownContent = ({ value }: { value: string }) => {
 
 const VideoList = ({
   onDeleteRenderTask,
+  onPreviewVideo,
+  openLabel,
+  previewLabel,
   videos,
 }: {
   onDeleteRenderTask: (renderTaskId: string) => void;
+  onPreviewVideo: (renderTaskId: string) => void;
+  openLabel: string;
+  previewLabel: string;
   videos: RenderTask[];
 }) =>
   videos.length > 0 ? (
@@ -821,9 +861,22 @@ const VideoList = ({
           <span>{video.provider ?? "renderer"}</span>
           <h4>{`Video ${index + 1}`}</h4>
           <p>{formatUpdatedAt(video.updatedAt)}</p>
-          {video.previewUrl || video.exportUrl ? (
-            <a href={video.exportUrl ?? video.previewUrl}>Open video</a>
-          ) : null}
+          <div className="project-video-actions">
+            <Button icon={<Eye size={16} />} onClick={() => onPreviewVideo(video.id)}>
+              {previewLabel}
+            </Button>
+            {video.previewUrl || video.exportUrl ? (
+              <a
+                className="project-video-link"
+                href={video.exportUrl ?? video.previewUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <ExternalLink size={15} aria-hidden="true" />
+                {openLabel}
+              </a>
+            ) : null}
+          </div>
         </article>
       ))}
     </div>
@@ -833,7 +886,45 @@ const VideoList = ({
     </div>
   );
 
-const ProjectModal = ({
+const VideoPreview = ({
+  noPreviewText,
+  openLabel,
+  title,
+  video,
+}: {
+  noPreviewText: string;
+  openLabel: string;
+  title: string;
+  video: RenderTask;
+}) => {
+  const videoUrl = video.previewUrl ?? video.exportUrl;
+  return (
+    <article className="project-video-preview">
+      <div className="project-detail-card-heading">
+        <span>{title}</span>
+        {videoUrl ? (
+          <a className="project-video-link" href={videoUrl} rel="noreferrer" target="_blank">
+            <ExternalLink size={15} aria-hidden="true" />
+            {openLabel}
+          </a>
+        ) : null}
+      </div>
+      <h4>{video.provider ?? "renderer"}</h4>
+      <p>{formatUpdatedAt(video.updatedAt)}</p>
+      {videoUrl ? (
+        <video controls preload="metadata" src={videoUrl}>
+          {noPreviewText}
+        </video>
+      ) : (
+        <div className="project-empty-state compact">
+          <strong>{noPreviewText}</strong>
+        </div>
+      )}
+    </article>
+  );
+};
+
+export const ProjectModal = ({
   children,
   onClose,
   title,

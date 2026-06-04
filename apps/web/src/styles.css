@@ -5874,6 +5874,36 @@ textarea {
   color: var(--muted);
 }
 
+.project-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.project-video-link {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.project-video-link:hover,
+.project-video-link:focus-visible {
+  border-color: rgba(34, 211, 238, 0.55);
+  outline: none;
+  color: #cffafe;
+}
+
 .project-script-card h4 {
   padding-right: 38px;
 }
@@ -5992,6 +6022,35 @@ textarea {
 .project-script-detail li p {
   margin: 6px 0;
   color: var(--text);
+}
+
+.project-video-preview {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 180px),
+    rgba(255, 255, 255, 0.035);
+}
+
+.project-video-preview h4,
+.project-video-preview p {
+  margin: 0;
+}
+
+.project-video-preview p {
+  color: var(--muted);
+}
+
+.project-video-preview video {
+  display: block;
+  width: 100%;
+  max-height: min(62vh, 620px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #020617;
 }
 
 .project-script-composer {
@@ -6188,6 +6247,23 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.project-studio-script-card:hover,
+.project-studio-script-card:focus-visible,
+.project-studio-script-card.active {
+  border-color: rgba(34, 211, 238, 0.55);
+  outline: none;
+  background: rgba(34, 211, 238, 0.075);
+}
+
+.project-studio-script-card:hover {
+  transform: translateY(-1px);
 }
 
 .project-studio-script-card span {

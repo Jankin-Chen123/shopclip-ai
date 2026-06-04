@@ -35,7 +35,12 @@ import { DashboardPanel } from "../features/dashboard/DashboardPanel";
 import { SmartEditPanel } from "../features/edit/SmartEditPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
-import { ProjectWorkspace, type ProjectDetailTab } from "../features/projects/ProjectWorkspace";
+import {
+  ProjectModal,
+  ProjectWorkspace,
+  ScriptDetail,
+  type ProjectDetailTab,
+} from "../features/projects/ProjectWorkspace";
 import {
   createDefaultStockProviderConfigs,
   createDefaultApiConfig,
@@ -634,6 +639,9 @@ export const App = ({
   const [isProjectScriptComposerOpen, setIsProjectScriptComposerOpen] = useState(false);
   const [isProjectStudioMode, setIsProjectStudioMode] = useState(false);
   const [projectStudioFlow, setProjectStudioFlow] = useState<ProjectStudioFlow>("script");
+  const [projectStudioPreviewScriptId, setProjectStudioPreviewScriptId] = useState<
+    string | undefined
+  >();
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceVideo[]>([]);
   const [renderTask, setRenderTask] = useState<RenderTask>();
@@ -1054,6 +1062,10 @@ export const App = ({
     };
   }, [renderTask?.id, renderTask?.status]);
 
+  useEffect(() => {
+    setProjectStudioPreviewScriptId(undefined);
+  }, [project?.id]);
+
   const handleCreateProject = () =>
     runAction("project", "project", async () => {
       const createdProject = await createProject(brief);
@@ -1223,10 +1235,6 @@ export const App = ({
 
   const handleSelectProjectScriptForStudio = (selectedScript: ScriptResult) => {
     if (!project) {
-      return;
-    }
-    if (selectedScript.scenes.length > 0) {
-      loadProjectScriptIntoStudio(selectedScript);
       return;
     }
 
@@ -2392,6 +2400,9 @@ export const App = ({
     },
   ];
   const projectScriptStudioFlow = projectStudioFlowItems[0]!;
+  const projectStudioPreviewScript = project?.scripts.find(
+    (candidate) => candidate.id === projectStudioPreviewScriptId,
+  );
 
   return (
     <AppShell
@@ -2655,8 +2666,8 @@ export const App = ({
                         <h3>{projectScriptStudioFlow.label}</h3>
                         <p>
                           {language === "zh"
-                            ? "\u9009\u62e9\u4e00\u4e2a\u5df2\u4fdd\u5b58\u7684\u9879\u76ee\u5267\u672c\uff0c\u5de5\u4f5c\u5ba4\u4f1a\u8f7d\u5165\u5b83\u7684\u5206\u955c\u5e76\u8fdb\u5165\u91cd\u7f16\u8f91\u6d41\u7a0b\u3002"
-                            : "Choose a saved project script. The studio will load its scenes and continue to storyboard editing."}
+                            ? "\u70b9\u51fb\u5267\u672c\u5361\u7247\u53ef\u9884\u89c8\u8be6\u60c5\uff0c\u70b9\u51fb\u751f\u6210\u5206\u955c\u540e\u4f1a\u8c03\u7528\u56fe\u7247\u751f\u6210\u6a21\u578b\u91cd\u65b0\u751f\u6210\u5206\u955c\u5e76\u8fdb\u5165\u91cd\u7f16\u8f91\u6d41\u7a0b\u3002"
+                            : "Click a script card to preview it, or generate a fresh AI storyboard before continuing to storyboard editing."}
                         </p>
                       </div>
                       <Button
@@ -2672,7 +2683,26 @@ export const App = ({
                     {project.scripts.length > 0 ? (
                       <div className="project-studio-script-grid">
                         {project.scripts.map((projectScript, index) => (
-                          <article className="project-studio-script-card" key={projectScript.id}>
+                          <article
+                            aria-label={
+                              language === "zh"
+                                ? `\u9884\u89c8\u5267\u672c ${index + 1}: ${projectScript.hook}`
+                                : `Preview script ${index + 1}: ${projectScript.hook}`
+                            }
+                            className={`project-studio-script-card ${
+                              projectStudioPreviewScriptId === projectScript.id ? "active" : ""
+                            }`.trim()}
+                            key={projectScript.id}
+                            onClick={() => setProjectStudioPreviewScriptId(projectScript.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setProjectStudioPreviewScriptId(projectScript.id);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
                             <div>
                               <span>
                                 {language === "zh"
@@ -2685,7 +2715,10 @@ export const App = ({
                             <Button
                               disabled={busyState !== "idle"}
                               icon={<ListVideo size={18} />}
-                              onClick={() => handleSelectProjectScriptForStudio(projectScript)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleSelectProjectScriptForStudio(projectScript);
+                              }}
                               variant="primary"
                             >
                               {language === "zh" ? "\u751f\u6210\u5206\u955c" : "Generate storyboard"}
@@ -2797,6 +2830,17 @@ export const App = ({
           </section>
         ) : null}
       </div>
+      {projectStudioPreviewScript ? (
+        <ProjectModal
+          title={language === "zh" ? "\u5267\u672c\u9884\u89c8" : "Script preview"}
+          onClose={() => setProjectStudioPreviewScriptId(undefined)}
+        >
+          <ScriptDetail
+            script={projectStudioPreviewScript}
+            title={language === "zh" ? "\u5267\u672c\u8be6\u60c5" : "Script detail"}
+          />
+        </ProjectModal>
+      ) : null}
     </AppShell>
   );
 };
