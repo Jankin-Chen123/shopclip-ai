@@ -296,6 +296,12 @@ const timelineRulerTicks = (durationSeconds: number): number[] => {
 const snapTimelineSeconds = (seconds: number): number =>
   Number((Math.round(seconds / TIMELINE_SNAP_SECONDS) * TIMELINE_SNAP_SECONDS).toFixed(3));
 
+const isTextEditingTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  target instanceof HTMLSelectElement ||
+  (target instanceof HTMLElement && target.isContentEditable);
+
 const planDurationSeconds = (segments: SmartEditSegment[]): number =>
   Math.min(
     600,
@@ -638,6 +644,61 @@ export const pasteSmartEditSegmentsAtPlayhead = (
   });
 };
 
+export const copySmartEditSegmentsToClipboard = (
+  plan: SmartEditPlan,
+  segmentIds: string[],
+): SmartEditClipboard | undefined => {
+  const selectedIds = new Set(segmentIds);
+  if (selectedIds.size === 0) {
+    return undefined;
+  }
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const items = [...plan.segments]
+    .sort((left, right) => left.order - right.order)
+    .filter((segment) => selectedIds.has(segment.id))
+    .map((segment) => ({
+      segment: { ...segment },
+      startSecond: currentStarts.get(segment.id) ?? 0,
+    }));
+  return items.length > 0 ? { items } : undefined;
+};
+
+export const pasteSmartEditClipboardAtPlayhead = (
+  plan: SmartEditPlan,
+  clipboard: SmartEditClipboard | undefined,
+  playheadSecond: number,
+  duplicateToken = String(Date.now()),
+): SmartEditPlan => {
+  if (!clipboard || clipboard.items.length === 0) {
+    return plan;
+  }
+  const sortedSegments = [...plan.segments].sort((left, right) => left.order - right.order);
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const earliestStart = Math.min(...clipboard.items.map((item) => item.startSecond));
+  const targetStart = clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const pastedSegments = clipboard.items.map((item, index): SmartEditSegment => ({
+    ...item.segment,
+    id: `${item.segment.id}-${duplicateToken}-${index + 1}`,
+    order: sortedSegments.length + index + 1,
+    subtitle: `${item.segment.subtitle} (copy)`,
+    timelineStartSecond: clampTimelineStart(targetStart + item.startSecond - earliestStart),
+  }));
+  const pastedStarts = new Map(
+    pastedSegments.map((segment) => [segment.id, segment.timelineStartSecond ?? 0]),
+  );
+
+  return withRebuiltTimeline({
+    ...plan,
+    segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
+      ...segment,
+      order: index + 1,
+      timelineStartSecond: pastedStarts.has(segment.id)
+        ? pastedStarts.get(segment.id)!
+        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+    })),
+  });
+};
+
 type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
 
 type SmartEditTrackSegment = {
@@ -667,6 +728,13 @@ type TimelineMoveDragState = {
   pointerId: number;
   segmentId: string;
   startClientX: number;
+};
+
+export type SmartEditClipboard = {
+  items: Array<{
+    segment: SmartEditSegment;
+    startSecond: number;
+  }>;
 };
 
 const timelineTrackSegments = (
@@ -856,6 +924,7 @@ export const SmartEditPanel = ({
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
+  const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
@@ -868,6 +937,7 @@ export const SmartEditPanel = ({
       setHistoryPlanId(plan?.id);
       setRedoStack([]);
       setSelectedSegmentIds([]);
+      setSmartEditClipboard(undefined);
       setUndoStack([]);
       setPlayheadSeconds(0);
     }
@@ -1378,6 +1448,18 @@ export const SmartEditPanel = ({
     }
   };
 
+  const copySelectedSegmentsToLocalClipboard = () => {
+    if (!plan || selectedBatchSegments.length === 0) {
+      return;
+    }
+    setSmartEditClipboard(
+      copySmartEditSegmentsToClipboard(
+        plan,
+        selectedBatchSegments.map((segment) => segment.id),
+      ),
+    );
+  };
+
   const duplicateSelectedSegments = () => {
     if (!plan || selectedBatchSegments.length === 0) {
       return;
@@ -1417,6 +1499,28 @@ export const SmartEditPanel = ({
     }
   };
 
+  const pasteClipboardAtPlayhead = () => {
+    if (!plan || !smartEditClipboard) {
+      return;
+    }
+    const duplicateToken = `clip-${Date.now()}`;
+    const nextPlan = pasteSmartEditClipboardAtPlayhead(
+      plan,
+      smartEditClipboard,
+      boundedPlayheadSeconds,
+      duplicateToken,
+    );
+    commitPlanChange(nextPlan);
+    const sourceIds = smartEditClipboard.items.map((item) => item.segment.id);
+    const pastedIds = nextPlan.segments
+      .map((segment) => segment.id)
+      .filter((id) => sourceIds.some((sourceId) => id.startsWith(`${sourceId}-${duplicateToken}-`)));
+    if (pastedIds.length > 0) {
+      setSelectedSegmentIds(pastedIds);
+      onSelectedSegmentChange(pastedIds[0]);
+    }
+  };
+
   const selectByOffset = (offset: number) => {
     if (sortedSegments.length === 0) {
       return;
@@ -1435,6 +1539,19 @@ export const SmartEditPanel = ({
       aria-labelledby="smart-edit-title"
       onKeyDown={(event) => {
         const isCommandKey = event.ctrlKey || event.metaKey;
+        if (isTextEditingTarget(event.target)) {
+          return;
+        }
+        if (isCommandKey && event.key.toLowerCase() === "c") {
+          event.preventDefault();
+          copySelectedSegmentsToLocalClipboard();
+          return;
+        }
+        if (isCommandKey && event.key.toLowerCase() === "v") {
+          event.preventDefault();
+          pasteClipboardAtPlayhead();
+          return;
+        }
         if (isCommandKey && event.key.toLowerCase() === "z") {
           event.preventDefault();
           if (event.shiftKey) {
@@ -1662,6 +1779,12 @@ export const SmartEditPanel = ({
                   onClick={splitSelectedSegment}
                 >
                   Split
+                </Button>
+                <Button
+                  icon={<Copy size={16} />}
+                  onClick={copySelectedSegmentsToLocalClipboard}
+                >
+                  {copy.copySelected}
                 </Button>
                 <Button
                   icon={<Copy size={16} />}
@@ -2057,6 +2180,13 @@ export const SmartEditPanel = ({
             {copy.splitAtPlayhead}
           </Button>
           <Button
+            disabled={!smartEditClipboard}
+            icon={<Copy size={16} />}
+            onClick={pasteClipboardAtPlayhead}
+          >
+            {copy.pasteClipboardAtPlayhead}
+          </Button>
+          <Button
             icon={<ZoomIn size={16} />}
             onClick={() => setTimelineZoom((current) => Math.min(3, Number((current + 0.25).toFixed(2))))}
           >
@@ -2083,6 +2213,9 @@ export const SmartEditPanel = ({
             </Button>
             <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, captionHidden: false }))}>
               {copy.showCaptionsSelected}
+            </Button>
+            <Button icon={<Copy size={16} />} onClick={copySelectedSegmentsToLocalClipboard}>
+              {copy.copySelected}
             </Button>
             <Button icon={<Copy size={16} />} onClick={duplicateSelectedSegments}>
               {copy.duplicateSelected}

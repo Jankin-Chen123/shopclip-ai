@@ -586,3 +586,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - True clipboard storage, keyboard shortcuts, collision-aware placement, ripple overwrite/insert modes, and independent multi-track paste are still open.
+
+## 2026-06-05 Clipboard Copy Paste Shortcuts
+
+- Reference model:
+  - OpenCut `ElementsClipboardHandler` copies selected elements into a clipboard entry and `PasteCommand` later places that snapshot at the target time.
+- Fix:
+  - Added `copySmartEditSegmentsToClipboard(plan, segmentIds)` and `pasteSmartEditClipboardAtPlayhead(plan, clipboard, playheadSecond, duplicateToken)`.
+  - Smart Edit now stores a local clipboard snapshot with copied segments and their original timeline starts.
+  - Added `Copy selected` / `复制已选` and `Paste copied` / `粘贴复制片段` actions.
+  - Added Ctrl/Cmd+C and Ctrl/Cmd+V support on the Smart Edit panel. Inputs, textareas, selects, and contenteditable elements keep their native copy/paste behavior.
+  - Clipboard is cleared when a new smart-edit plan is loaded to avoid cross-plan stale clips.
+- Verification:
+  - Added `App.test.tsx` coverage for copying two clips into a clipboard snapshot and pasting them later at playhead `12s` while preserving their `3s` relative offset.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "copies smart edit segments into a clipboard"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Collision-aware placement, overwrite/insert/ripple modes, independent audio/text clip clipboard entries, and named command history remain open.
