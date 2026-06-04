@@ -3294,6 +3294,71 @@ export const createP0Router = ({
     response.status(201).json({ script: parsedScript.data });
   });
 
+  router.post("/projects/:projectId/scripts/:scriptId/storyboard", async (request, response) => {
+    const project = await store.getProject(request.params.projectId);
+    if (!project) {
+      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+      return;
+    }
+
+    const script = project.scripts.find((candidate) => candidate.id === request.params.scriptId);
+    if (!script) {
+      sendNotFound(response, "SCRIPT_NOT_FOUND", "Script was not found.");
+      return;
+    }
+
+    const storyboardRequest: ScriptGenerationRequest = {
+      assetIds: [],
+      draftScript: script.narrative,
+      keywords: project.prepKeywords,
+      materials: [],
+      productionMode: "automatic",
+    };
+    const preparedAssetResult = await resolvePreparedAssets(project, storyboardRequest);
+    if (preparedAssetResult.invalidAssetIds.length > 0) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCRIPT_ASSETS",
+        "One or more requested assets do not exist or cannot be used in this project.",
+      );
+      return;
+    }
+
+    const providerResult = generateFallbackScript(project, {
+      assets: preparedAssetResult.assets,
+      request: storyboardRequest,
+      scriptSource: "fallback",
+    });
+    const scriptWithSceneImages = await renderStoryboardSceneImages(
+      project,
+      providerResult.script,
+      storyboardRequest,
+      preparedAssetResult.assets,
+      videoFrameExtractor,
+    );
+    const updatedScript = await store.updateScriptScenes(
+      script.id,
+      scriptWithSceneImages.scenes,
+      scriptWithSceneImages.constraints,
+    );
+    if (!updatedScript) {
+      sendNotFound(response, "SCRIPT_NOT_FOUND", "Script was not found.");
+      return;
+    }
+
+    const parsedScript = ScriptResultSchema.safeParse(updatedScript);
+    if (!parsedScript.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_GENERATED_SCRIPT",
+        "Generated storyboard failed contract validation.",
+      );
+      return;
+    }
+
+    response.status(201).json({ script: parsedScript.data });
+  });
+
   router.post("/projects/:projectId/generate-script", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {

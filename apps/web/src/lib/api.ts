@@ -504,6 +504,17 @@ export const saveScript = async (
     body: JSON.stringify(request),
   });
 
+export const generateScriptStoryboard = async (
+  projectId: string,
+  scriptId: string,
+): Promise<{ script: ScriptResult }> =>
+  requestJson(
+    `/projects/${encodeURIComponent(projectId)}/scripts/${encodeURIComponent(scriptId)}/storyboard`,
+    {
+      method: "POST",
+    },
+  );
+
 export const deleteScript = async (scriptId: string): Promise<{ deletedScript: ScriptResult }> =>
   requestJson(`/scripts/${encodeURIComponent(scriptId)}`, {
     method: "DELETE",

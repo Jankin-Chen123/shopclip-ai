@@ -993,6 +993,55 @@ export class PrismaProjectStore implements ProjectStore {
     return toScript(created);
   }
 
+  async updateScriptScenes(
+    scriptId: string,
+    scenes: StoryboardScene[],
+    constraints?: string[],
+  ): Promise<ScriptResult | undefined> {
+    const script = await this.prisma.script.findUnique({
+      where: { id: scriptId },
+      include: { scenes: true },
+    });
+    if (!script) {
+      return undefined;
+    }
+
+    const updated = await this.prisma.$transaction(async (prisma) => {
+      await prisma.storyboardScene.deleteMany({
+        where: { projectId: script.projectId },
+      });
+      return prisma.script.update({
+        where: { id: scriptId },
+        data: {
+          constraints: constraints ?? script.constraints,
+          scenes: {
+            create: scenes.map((scene) => ({
+              id: randomUUID(),
+              projectId: script.projectId,
+              order: scene.order,
+              durationSeconds: scene.durationSeconds,
+              subtitle: scene.subtitle,
+              voiceover: scene.voiceover,
+              visualPrompt: scene.visualPrompt,
+              assetRecallQuery: scene.assetRecallQuery,
+              imageUrl: scene.imageUrl,
+              assetId: scene.assetId,
+              status: scene.status,
+            })),
+          },
+          project: {
+            update: {
+              status: "ready",
+            },
+          },
+        },
+        include: { scenes: true },
+      });
+    });
+
+    return toScript(updated);
+  }
+
   async addRenderTask(
     projectId: string,
     renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,

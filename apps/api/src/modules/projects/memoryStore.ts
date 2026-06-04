@@ -763,6 +763,39 @@ export class MemoryProjectStore implements ProjectStore {
     return storedScript;
   }
 
+  updateScriptScenes(
+    scriptId: string,
+    scenes: StoryboardScene[],
+    constraints?: string[],
+  ): ScriptResult | undefined {
+    const timestamp = now();
+    for (const project of this.projects.values()) {
+      const scriptIndex = project.scripts.findIndex((candidate) => candidate.id === scriptId);
+      if (scriptIndex < 0) {
+        continue;
+      }
+      const currentScript = project.scripts[scriptIndex]!;
+      const nextScenes = scenes.map((scene) => ({
+        ...scene,
+        id: randomUUID(),
+        projectId: project.id,
+      }));
+      const nextScript: ScriptResult = {
+        ...currentScript,
+        constraints: constraints ?? currentScript.constraints,
+        scenes: nextScenes,
+      };
+      project.scripts = project.scripts.map((script) =>
+        script.id === scriptId ? nextScript : script,
+      );
+      project.scenes = nextScenes;
+      project.status = "ready";
+      project.updatedAt = timestamp;
+      return nextScript;
+    }
+    return undefined;
+  }
+
   addRenderTask(
     projectId: string,
     renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,

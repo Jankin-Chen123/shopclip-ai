@@ -62,6 +62,7 @@ import {
   extractTemplateFromScriptAssets,
   exportProject,
   generateScript,
+  generateScriptStoryboard,
   importExternalAsset,
   loadDashboard,
   listReferenceTemplates,
@@ -1202,7 +1203,7 @@ export const App = ({
     handlePageChange(flow === "render" ? "delivery" : flow === "edit" ? "edit" : "studio");
   };
 
-  const handleSelectProjectScriptForStudio = (selectedScript: ScriptResult) => {
+  const loadProjectScriptIntoStudio = (selectedScript: ScriptResult) => {
     setScript(selectedScript);
     setScriptDraft(selectedScript.narrative);
     setSelectedSceneId(selectedScript.scenes[0]?.id);
@@ -1218,6 +1219,34 @@ export const App = ({
         : current,
     );
     handleProjectStudioFlowChange("storyboard");
+  };
+
+  const handleSelectProjectScriptForStudio = (selectedScript: ScriptResult) => {
+    if (!project) {
+      return;
+    }
+    if (selectedScript.scenes.length > 0) {
+      loadProjectScriptIntoStudio(selectedScript);
+      return;
+    }
+
+    void runAction("script", "script", async () => {
+      const generated = await generateScriptStoryboard(project.id, selectedScript.id);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              scenes: generated.script.scenes,
+              scripts: current.scripts.map((candidate) =>
+                candidate.id === generated.script.id ? generated.script : candidate,
+              ),
+              status: "ready",
+            }
+          : current,
+      );
+      loadProjectScriptIntoStudio(generated.script);
+      refreshProjectHistory();
+    });
   };
 
   const replaceSceneInState = (updatedScene: StoryboardScene) => {
@@ -2654,7 +2683,7 @@ export const App = ({
                               <p>{projectScript.scenes.length} {language === "zh" ? "\u4e2a\u5206\u955c" : "scenes"}</p>
                             </div>
                             <Button
-                              disabled={projectScript.scenes.length === 0}
+                              disabled={busyState !== "idle"}
                               icon={<ListVideo size={18} />}
                               onClick={() => handleSelectProjectScriptForStudio(projectScript)}
                               variant="primary"
