@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -60,6 +61,7 @@ const MAX_SMART_EDIT_CLIP_SECONDS = 120;
 const TIMELINE_BASE_PX_PER_SECOND = 34;
 const TRIM_NUDGE_SECONDS = 0.1;
 const MAX_PLAN_HISTORY_LENGTH = 40;
+const TIMELINE_SNAP_SECONDS = 0.1;
 
 const clampSmartEditDuration = (durationSeconds: number): number =>
   Number.isFinite(durationSeconds)
@@ -188,6 +190,54 @@ const replaceSegment = (
   });
 };
 
+const trimSegmentSource = (
+  segment: SmartEditSegment,
+  edge: "in" | "out",
+  sourceDeltaSeconds: number,
+): SmartEditSegment => {
+  const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+  const sourceStart = segment.source.startSecond ?? 0;
+  const sourceEnd = segment.source.endSecond ?? sourceStart + segment.durationSeconds * playbackRate;
+  if (edge === "in") {
+    const nextStart = Math.max(
+      0,
+      Math.min(sourceEnd - MIN_SMART_EDIT_CLIP_SECONDS * playbackRate, sourceStart + sourceDeltaSeconds),
+    );
+    return {
+      ...segment,
+      durationSeconds: durationFromSourceRange(
+        nextStart,
+        sourceEnd,
+        playbackRate,
+        segment.durationSeconds,
+      ),
+      source: {
+        ...segment.source,
+        endSecond: sourceEnd,
+        startSecond: nextStart,
+      },
+    };
+  }
+  const nextEnd = Math.max(
+    sourceStart + MIN_SMART_EDIT_CLIP_SECONDS * playbackRate,
+    sourceEnd + sourceDeltaSeconds,
+  );
+  return {
+    ...segment,
+    durationSeconds: durationFromSourceRange(
+      sourceStart,
+      nextEnd,
+      playbackRate,
+      segment.durationSeconds,
+    ),
+    source: {
+      ...segment.source,
+      endSecond: nextEnd,
+      startSecond: sourceStart,
+    },
+  };
+};
+
 const formatTimelineTime = (seconds: number): string => {
   const boundedSeconds = Math.max(0, seconds);
   const minutes = Math.floor(boundedSeconds / 60);
@@ -230,6 +280,9 @@ const timelineRulerTicks = (durationSeconds: number): number[] => {
   }
   return ticks;
 };
+
+const snapTimelineSeconds = (seconds: number): number =>
+  Math.round(seconds / TIMELINE_SNAP_SECONDS) * TIMELINE_SNAP_SECONDS;
 
 const planDurationSeconds = (segments: SmartEditSegment[]): number =>
   Math.min(
@@ -395,6 +448,13 @@ type SmartEditTrackSegment = {
 type SmartEditTrack = {
   id: SmartEditTrackId;
   segments: SmartEditTrackSegment[];
+};
+
+type TrimDragState = {
+  edge: "in" | "out";
+  pointerId: number;
+  segmentId: string;
+  startClientX: number;
 };
 
 const timelineTrackSegments = (
@@ -572,9 +632,11 @@ export const SmartEditPanel = ({
   onTargetLanguageChange,
 }: SmartEditPanelProps) => {
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  const suppressTrimClickRef = useRef(false);
   const [draggedSegmentId, setDraggedSegmentId] = useState<string | undefined>();
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
+  const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [timelineZoom, setTimelineZoom] = useState(1);
@@ -829,50 +891,55 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, segmentId, (segment) => {
-      const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
-      const sourceStart = segment.source.startSecond ?? 0;
-      const sourceEnd =
-        segment.source.endSecond ?? sourceStart + segment.durationSeconds * playbackRate;
-      if (edge === "in") {
-        const nextStart = Math.max(
-          0,
-          Math.min(sourceEnd - MIN_SMART_EDIT_CLIP_SECONDS * playbackRate, sourceStart + deltaSeconds),
-        );
-        return {
-          ...segment,
-          durationSeconds: durationFromSourceRange(
-            nextStart,
-            sourceEnd,
-            playbackRate,
-            segment.durationSeconds,
-          ),
-          source: {
-            ...segment.source,
-            endSecond: sourceEnd,
-            startSecond: nextStart,
-          },
-        };
-      }
-      const nextEnd = Math.max(
-        sourceStart + MIN_SMART_EDIT_CLIP_SECONDS * playbackRate,
-        sourceEnd + deltaSeconds,
-      );
-      return {
-        ...segment,
-        durationSeconds: durationFromSourceRange(
-          sourceStart,
-          nextEnd,
-          playbackRate,
-          segment.durationSeconds,
-        ),
-        source: {
-          ...segment.source,
-          endSecond: nextEnd,
-          startSecond: sourceStart,
-        },
-      };
-    }));
+    commitPlanChange(replaceSegment(plan, segmentId, (segment) =>
+      trimSegmentSource(segment, edge, deltaSeconds),
+    ));
+  };
+
+  const startTrimDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    segmentId: string,
+    edge: "in" | "out",
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelectedSegmentChange(segmentId);
+    setTrimDrag({
+      edge,
+      pointerId: event.pointerId,
+      segmentId,
+      startClientX: event.clientX,
+    });
+  };
+
+  const finishTrimDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!plan || !trimDrag || trimDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const targetSegment = plan.segments.find((segment) => segment.id === trimDrag.segmentId);
+    if (!targetSegment) {
+      setTrimDrag(undefined);
+      return;
+    }
+    const timelineDeltaSeconds = snapTimelineSeconds(
+      (event.clientX - trimDrag.startClientX) / timelinePixelsPerSecond,
+    );
+    const sourceDeltaSeconds =
+      timelineDeltaSeconds * clampPlaybackRate(targetSegment.playbackRate ?? 1);
+    setTrimDrag(undefined);
+    if (Math.abs(sourceDeltaSeconds) < 0.001) {
+      return;
+    }
+    suppressTrimClickRef.current = true;
+    window.setTimeout(() => {
+      suppressTrimClickRef.current = false;
+    }, 0);
+    commitPlanChange(replaceSegment(plan, trimDrag.segmentId, (segment) =>
+      trimSegmentSource(segment, trimDrag.edge, sourceDeltaSeconds),
+    ));
   };
 
   const removeSelectedSegment = () => {
@@ -1516,13 +1583,22 @@ export const SmartEditPanel = ({
                 >
                   <button
                     aria-label={copy.trimIn}
-                    className="timeline-trim-handle left"
+                    className={`timeline-trim-handle left ${
+                      trimDrag?.segmentId === segment.id && trimDrag.edge === "in" ? "dragging" : ""
+                    }`.trim()}
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (suppressTrimClickRef.current) {
+                        return;
+                      }
                       onSelectedSegmentChange(segment.id);
                       nudgeSegmentTrim(segment.id, "in", TRIM_NUDGE_SECONDS);
                     }}
+                    onDragStart={(event) => event.preventDefault()}
+                    onPointerCancel={() => setTrimDrag(undefined)}
+                    onPointerDown={(event) => startTrimDrag(event, segment.id, "in")}
+                    onPointerUp={finishTrimDrag}
                   />
                   <strong>
                     {selectedSegment?.id === segment.id ? copy.selected : segment.order}
@@ -1534,13 +1610,22 @@ export const SmartEditPanel = ({
                   </small>
                   <button
                     aria-label={copy.trimOut}
-                    className="timeline-trim-handle right"
+                    className={`timeline-trim-handle right ${
+                      trimDrag?.segmentId === segment.id && trimDrag.edge === "out" ? "dragging" : ""
+                    }`.trim()}
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (suppressTrimClickRef.current) {
+                        return;
+                      }
                       onSelectedSegmentChange(segment.id);
                       nudgeSegmentTrim(segment.id, "out", -TRIM_NUDGE_SECONDS);
                     }}
+                    onDragStart={(event) => event.preventDefault()}
+                    onPointerCancel={() => setTrimDrag(undefined)}
+                    onPointerDown={(event) => startTrimDrag(event, segment.id, "out")}
+                    onPointerUp={finishTrimDrag}
                   />
                 </article>
               ))}

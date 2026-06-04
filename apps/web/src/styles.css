@@ -4833,9 +4833,11 @@ textarea {
 }
 
 .timeline-trim-handle:hover,
-.timeline-trim-handle:focus-visible {
+.timeline-trim-handle:focus-visible,
+.timeline-trim-handle.dragging {
   background: var(--primary-strong);
   outline: none;
+  opacity: 1;
 }
 
 .timeline-track strong {
