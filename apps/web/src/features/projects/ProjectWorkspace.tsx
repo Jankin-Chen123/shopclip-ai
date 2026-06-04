@@ -780,17 +780,25 @@ export const ScriptDetail = ({
   script,
 }: {
   script: ScriptResult;
-}) => (
-  <article className="project-script-detail">
-    {script.constraints.length > 0 ? (
+}) => {
+  const keywordConstraints = script.constraints.filter((constraint) =>
+    /关键词|keyword/iu.test(constraint),
+  );
+
+  return (
+    <article className="project-script-detail">
+      <h4>{script.hook}</h4>
+      <MarkdownContent value={script.narrative} />
+      {keywordConstraints.length > 0 ? (
       <div className="project-script-constraints">
-        {script.constraints.map((constraint) => (
+        {keywordConstraints.map((constraint) => (
           <span key={constraint}>{constraint}</span>
         ))}
       </div>
     ) : null}
-  </article>
-);
+    </article>
+  );
+};
 
 const EditableLibraryTitle = ({
   defaultValue,
