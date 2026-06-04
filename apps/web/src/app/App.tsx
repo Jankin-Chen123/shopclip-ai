@@ -2246,24 +2246,50 @@ export const App = ({
     });
   };
 
-  const createSmartEditRequest = () => ({
-    apiConfig,
-    instructions: smartEditInstructions || undefined,
-    locale: language === "zh" ? "zh-CN" : "en-US",
-    mediaSettings,
-    segments:
-      smartEditResult?.plan.segments.map((segment) => ({
+  const createSmartEditRequest = () => {
+    const renderedSceneSegments =
+      !smartEditResult && renderTask?.status === "completed" && renderTask.sceneClips
+        ? renderTask.sceneClips
+            .filter((clip) => clip.videoUrl)
+            .map((clip) => {
+              const scene = scenes.find((candidate) => candidate.id === clip.sceneId);
+              return {
+                sceneId: clip.sceneId,
+                durationSeconds: scene?.durationSeconds ?? 4,
+                enabled: true,
+                playbackRate: 1,
+                source: {
+                  kind: "generated-scene-clip" as const,
+                  sceneClipAudioUrl: clip.material?.audioUrl,
+                  sceneClipUrl: clip.videoUrl,
+                  sceneClipVideoOnlyUrl: clip.material?.videoOnlyUrl,
+                },
+                subtitle: clip.material?.text || clip.subtitle,
+                transition: clip.order === 1 ? ("cut" as const) : ("fade" as const),
+                voiceover: scene?.voiceover || clip.subtitle,
+              };
+            })
+        : [];
+    return {
+      apiConfig,
+      instructions: smartEditInstructions || undefined,
+      locale: language === "zh" ? "zh-CN" : "en-US",
+      mediaSettings,
+      segments:
+        smartEditResult?.plan.segments.map((segment) => ({
         sceneId: segment.sceneId,
         durationSeconds: segment.durationSeconds,
         enabled: segment.enabled,
+        playbackRate: segment.playbackRate,
         source: segment.source,
         subtitle: segment.subtitle,
         transition: segment.transition,
         voiceover: segment.voiceover,
-      })) ?? [],
-    targetLanguage: smartEditTargetLanguage.trim() || undefined,
-    videoSettings,
-  });
+        })) ?? renderedSceneSegments,
+      targetLanguage: smartEditTargetLanguage.trim() || undefined,
+      videoSettings,
+    };
+  };
 
   const applySmartEditRenderSnapshot = (render: RenderSnapshot) => {
     setExportResult(undefined);
@@ -2341,6 +2367,7 @@ export const App = ({
           sceneId: selectedSegment.sceneId,
           durationSeconds: selectedSegment.durationSeconds,
           enabled: selectedSegment.enabled,
+          playbackRate: selectedSegment.playbackRate,
           source: selectedSegment.source,
           subtitle: selectedSegment.subtitle,
           transition: selectedSegment.transition,
@@ -2849,6 +2876,7 @@ export const App = ({
                     (busyState === "smart-edit" || isSmartEditTaskRunning) && Boolean(smartEditResult)
                   }
                   mediaSettings={mediaSettings}
+                  renderTask={renderTask}
                   result={smartEditResult}
                   selectedSegmentId={selectedSmartEditSegmentId}
                   targetLanguage={smartEditTargetLanguage}

@@ -12,10 +12,12 @@ import type {
   ReferenceVideo,
   SmartEditPlan,
   SmartEditSegmentOutput,
+  SmartEditTimeline,
   ScriptGenerationRequest,
   ScriptResult,
   SceneRenderClip,
   StoryboardScene,
+  TraceEvent,
   ViralTemplate,
 } from "@shopclip/shared";
 import {
@@ -88,6 +90,7 @@ import {
   composeSmartEditToStorage,
   smartEditSegmentOutputsForResponse,
 } from "../../providers/renderer/smartEditComposer.js";
+import { materializeSceneClipsForSmartEdit } from "../../providers/renderer/sceneClipMaterializer.js";
 import { CosStorageProvider } from "../../providers/storage/cosStorageProvider.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { MemoryProjectStore } from "./memoryStore.js";
@@ -1190,6 +1193,7 @@ export type SceneClipComposer = (
 ) => Promise<string | undefined>;
 export type SmartEditPlanner = typeof createSmartEditPlan;
 export type SmartEditComposer = typeof composeSmartEditToStorage;
+export type SceneClipMaterializer = typeof materializeSceneClipsForSmartEdit;
 
 const downloadExternalAsset: ExternalAssetDownloader = async (asset) => {
   const sourceUrl = asset.downloadUrl ?? asset.previewUrl;
@@ -1355,6 +1359,142 @@ const smartEditSegmentClipsForPlan = (plan: SmartEditPlan, videoUrl?: string): S
       videoUrl,
     }));
 
+const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
+  const enabledSegments = [...plan.segments]
+    .filter((segment) => segment.enabled)
+    .sort((left, right) => left.order - right.order);
+  let cursor = 0;
+  const tracks: SmartEditTimeline["tracks"] = [
+    {
+      hidden: false,
+      id: "video-main",
+      kind: "video" as const,
+      label: "Video",
+      locked: false,
+      muted: false,
+    },
+    {
+      hidden: false,
+      id: "audio-source",
+      kind: "audio" as const,
+      label: "Source audio",
+      locked: false,
+      muted: false,
+    },
+    {
+      hidden: false,
+      id: "text-copy",
+      kind: "text" as const,
+      label: "Text",
+      locked: false,
+      muted: false,
+    },
+    ...(plan.audio.bgmTrack !== "none"
+      ? [
+          {
+            hidden: false,
+            id: "bgm-bed",
+            kind: "bgm" as const,
+            label: "BGM",
+            locked: false,
+            muted: false,
+          },
+        ]
+      : []),
+  ];
+  const elements: SmartEditTimeline["elements"] = enabledSegments.flatMap((segment) => {
+    const startSecond = cursor;
+    const durationSeconds = segment.durationSeconds;
+    cursor += durationSeconds;
+    const sourceStart = segment.source.startSecond ?? 0;
+    const sourceEnd = segment.source.endSecond;
+    return [
+      {
+        detachedAudio: false,
+        durationSeconds,
+        hidden: false,
+        id: `${segment.id}-video`,
+        kind: "video" as const,
+        label: `Scene ${segment.order}`,
+        muted: false,
+        playbackRate: segment.playbackRate ?? 1,
+        sceneId: segment.sceneId,
+        segmentId: segment.id,
+        sourceDurationSeconds:
+          sourceEnd !== undefined ? Math.max(0.1, sourceEnd - sourceStart) : durationSeconds,
+        sourceUrl: segment.source.sceneClipVideoOnlyUrl ?? segment.source.sceneClipUrl ?? segment.source.imageUrl,
+        startSecond,
+        trackId: "video-main",
+        trimEndSecond: sourceEnd,
+        trimStartSecond: sourceStart,
+      },
+      ...(segment.source.sceneClipAudioUrl
+        ? [
+            {
+              detachedAudio: true,
+              durationSeconds,
+              hidden: false,
+              id: `${segment.id}-audio`,
+              kind: "audio" as const,
+              label: `Scene ${segment.order} audio`,
+              muted: false,
+              playbackRate: segment.playbackRate ?? 1,
+              sceneId: segment.sceneId,
+              segmentId: segment.id,
+              sourceUrl: segment.source.sceneClipAudioUrl,
+              startSecond,
+              trackId: "audio-source",
+              trimEndSecond: sourceEnd,
+              trimStartSecond: sourceStart,
+            },
+          ]
+        : []),
+      {
+        detachedAudio: false,
+        durationSeconds,
+        hidden: false,
+        id: `${segment.id}-text`,
+        kind: "text" as const,
+        label: segment.subtitle,
+        muted: false,
+        playbackRate: 1,
+        sceneId: segment.sceneId,
+        segmentId: segment.id,
+        startSecond,
+        text: segment.subtitle,
+        trackId: "text-copy",
+        trimStartSecond: 0,
+      },
+    ];
+  });
+
+  if (plan.audio.bgmTrack !== "none" && cursor > 0) {
+    elements.push({
+      detachedAudio: false,
+      durationSeconds: cursor,
+      hidden: false,
+      id: "bgm-bed",
+      kind: "bgm",
+      label: plan.audio.bgmTrack,
+      muted: false,
+      playbackRate: 1,
+      startSecond: 0,
+      trackId: "bgm-bed",
+      trimStartSecond: 0,
+    });
+  }
+
+  return {
+    ...plan,
+    timeline: {
+      durationSeconds: cursor,
+      elements,
+      scale: 1,
+      tracks,
+    },
+  };
+};
+
 const smartEditFailureMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
@@ -1418,6 +1558,10 @@ const runSmartEditJob = async ({
     );
     return;
   }
+  plannerResult = {
+    ...plannerResult,
+    plan: withSmartEditTimeline(plannerResult.plan),
+  };
 
   await store.updateRenderTask(
     renderTaskId,
@@ -1610,6 +1754,7 @@ const runSmartEditSegmentRefreshJob = async ({
     );
     return;
   }
+  refreshPlan = withSmartEditTimeline(refreshPlan);
 
   await store.updateRenderTask(
     renderTaskId,
@@ -1702,6 +1847,7 @@ export interface P0RouterOptions {
   renderExportPublisher?: RenderExportPublisher;
   referenceDownloader?: ReferenceDownloadProvider;
   sceneClipComposer?: SceneClipComposer;
+  sceneClipMaterializer?: SceneClipMaterializer;
   smartEditComposer?: SmartEditComposer;
   smartEditPlanner?: SmartEditPlanner;
   videoFrameExtractor?: VideoFrameExtractor;
@@ -1713,6 +1859,7 @@ export const createP0Router = ({
   referenceDownloader,
   renderExportPublisher,
   sceneClipComposer,
+  sceneClipMaterializer = materializeSceneClipsForSmartEdit,
   smartEditComposer = composeSmartEditToStorage,
   smartEditPlanner = createSmartEditPlan,
   store = new MemoryProjectStore(),
@@ -1724,6 +1871,39 @@ export const createP0Router = ({
     renderExportPublisher ??
     sceneClipComposer ??
     createCosRenderExportPublisher({ storageProvider });
+  const materializeCompletedSceneClips = async (
+    projectId: string,
+    renderTaskId: string,
+    sceneClips: SceneRenderClip[] | undefined,
+  ): Promise<{
+    sceneClips: SceneRenderClip[] | undefined;
+    traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>;
+  }> => {
+    if (!sceneClips?.some((clip) => clip.status === "completed" && clip.videoUrl)) {
+      return { sceneClips, traceEvents: [] };
+    }
+
+    const materialized = await sceneClipMaterializer(projectId, renderTaskId, sceneClips, {
+      storageProvider,
+    });
+    const readyCount =
+      materialized?.filter((clip) => clip.material?.status === "ready").length ?? 0;
+    const failedCount =
+      materialized?.filter((clip) => clip.material?.status === "failed").length ?? 0;
+    return {
+      sceneClips: materialized,
+      traceEvents: [
+        {
+          status: failedCount > 0 ? "retrying" : "completed",
+          step: failedCount > 0 ? "scene-clip-materialize-partial" : "scene-clip-materialize",
+          message:
+            failedCount > 0
+              ? `Prepared ${readyCount} scene clips for smart editing; ${failedCount} clip material separations failed.`
+              : `Prepared ${readyCount} scene clips as video, audio, and text materials for smart editing.`,
+        },
+      ],
+    };
+  };
 
   const canUseAssetInProject = (asset: AssetMetadata, projectId: string): boolean =>
     !asset.projectId || asset.projectId === projectId;
@@ -3611,6 +3791,22 @@ export const createP0Router = ({
               step: "render-export-publish-failed",
               message:
                 error instanceof Error ? error.message : "Final render export publishing failed.",
+            });
+          }
+          try {
+            const materialized = await materializeCompletedSceneClips(
+              renderTask.project.id,
+              renderTask.renderTask.id,
+              providerResult.renderTask.sceneClips,
+            );
+            providerResult.renderTask.sceneClips = materialized.sceneClips;
+            providerResult.traceEvents.push(...materialized.traceEvents);
+          } catch (error) {
+            providerResult.traceEvents.push({
+              status: "failed",
+              step: "scene-clip-materialize-failed",
+              message:
+                error instanceof Error ? error.message : "Scene clip materialization failed.",
             });
           }
         }

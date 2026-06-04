@@ -436,6 +436,7 @@ const createLocalPlan = (
         durationSeconds: normalizeSegmentDuration(override?.durationSeconds ?? scene.durationSeconds),
         enabled: override?.enabled ?? true,
         order: index + 1,
+        playbackRate: override?.playbackRate ?? 1,
         rationale:
           linkedAsset || scene.imageUrl
             ? "Selected the closest structured asset or generated scene visual for this storyboard scene."
@@ -581,6 +582,10 @@ const normalizeModelSource = (
     assetId: cleanOptionalString(rawSource.assetId) ?? localSource.assetId,
     sliceId: cleanOptionalString(rawSource.sliceId) ?? localSource.sliceId,
     sceneClipUrl: cleanOptionalString(rawSource.sceneClipUrl) ?? localSource.sceneClipUrl,
+    sceneClipVideoOnlyUrl:
+      cleanOptionalString(rawSource.sceneClipVideoOnlyUrl) ?? localSource.sceneClipVideoOnlyUrl,
+    sceneClipAudioUrl:
+      cleanOptionalString(rawSource.sceneClipAudioUrl) ?? localSource.sceneClipAudioUrl,
     imageUrl: cleanOptionalString(rawSource.imageUrl) ?? localSource.imageUrl,
     startSecond:
       typeof rawSource.startSecond === "number" ? rawSource.startSecond : localSource.startSecond,
@@ -611,6 +616,10 @@ const normalizeModelSegment = (
       typeof rawSegment.durationSeconds === "number"
         ? normalizeSegmentDuration(rawSegment.durationSeconds)
         : localSegment.durationSeconds,
+    playbackRate:
+      typeof rawSegment.playbackRate === "number"
+        ? Math.max(0.25, Math.min(4, rawSegment.playbackRate))
+        : localSegment.playbackRate,
     transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
     voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,

@@ -4660,6 +4660,12 @@ textarea {
   font-size: 0.86rem;
 }
 
+.smart-edit-trim-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .timeline-header {
   display: flex;
   justify-content: space-between;
@@ -4764,6 +4770,21 @@ textarea {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.045);
   padding: 8px 10px;
+}
+
+.smart-edit-track-clip[role="button"] {
+  cursor: pointer;
+}
+
+.smart-edit-track-clip.active {
+  border-color: var(--primary-strong);
+  background: rgba(244, 114, 182, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.22);
+}
+
+.smart-edit-track-clip.muted,
+.smart-edit-track-clip.hidden {
+  opacity: 0.52;
 }
 
 .smart-edit-track-clip span,

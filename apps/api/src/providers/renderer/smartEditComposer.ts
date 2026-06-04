@@ -116,13 +116,21 @@ const assetForSegment = (
 
 const sourceUrlForSegment = (segment: SmartEditSegment, assets: AssetMetadata[]): string | undefined => {
   const asset = assetForSegment(segment, assets);
-  return segment.source.sceneClipUrl || segment.source.imageUrl || asset?.url;
+  return (
+    segment.source.sceneClipVideoOnlyUrl ||
+    segment.source.sceneClipUrl ||
+    segment.source.imageUrl ||
+    asset?.url
+  );
 };
 
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
 const normalizeDuration = (segment: SmartEditSegment): number =>
   Math.max(4, Math.min(12, segment.durationSeconds));
+
+const normalizePlaybackRate = (segment: SmartEditSegment): number =>
+  Math.max(0.25, Math.min(4, segment.playbackRate ?? 1));
 
 type OutputDimensions = {
   height: number;
@@ -180,6 +188,10 @@ const buildSegmentVideoFilter = (
   dimensions: OutputDimensions,
 ): string => {
   const filters = [buildScaleFilter(dimensions)];
+  const playbackRate = normalizePlaybackRate(segment);
+  if (playbackRate !== 1) {
+    filters.push(`setpts=${(1 / playbackRate).toFixed(4)}*PTS`);
+  }
   const duration = normalizeDuration(segment);
   const fadeDuration = transitionDurationSeconds(segment);
   if (segment.transition === "fade" && fadeDuration > 0 && duration > fadeDuration * 2) {
@@ -289,7 +301,8 @@ const createSegmentVideo = async ({
     segment.source.kind === "generated-scene-clip" &&
     segment.source.sceneClipUrl &&
     segment.source.startSecond === undefined &&
-    segment.source.endSecond === undefined
+    segment.source.endSecond === undefined &&
+    normalizePlaybackRate(segment) === 1
   ) {
     return materializeUrl(
       segment.source.sceneClipUrl,
@@ -339,7 +352,18 @@ const createSegmentVideo = async ({
     if (segment.source.startSecond !== undefined) {
       args.push("-ss", String(segment.source.startSecond));
     }
-    args.push("-i", sourcePath, "-t", String(duration), "-vf", buildSegmentVideoFilter(segment, dimensions));
+    const sourceDuration =
+      segment.source.startSecond !== undefined && segment.source.endSecond !== undefined
+        ? Math.max(0.1, segment.source.endSecond - segment.source.startSecond)
+        : duration * normalizePlaybackRate(segment);
+    args.push(
+      "-i",
+      sourcePath,
+      "-t",
+      String(sourceDuration),
+      "-vf",
+      buildSegmentVideoFilter(segment, dimensions),
+    );
     args.push(
       "-map",
       "0:v:0",

@@ -620,11 +620,63 @@ export const RenderRequestSchema = z.object({
 
 export const SmartEditTransitionSchema = z.enum(["cut", "fade", "crossfade", "wipe"]);
 
+export const SmartEditTimelineTrackSchema = z.object({
+  id: z.string().trim().min(1),
+  kind: z.enum(["video", "audio", "text", "bgm"]),
+  label: z.string().trim().min(1),
+  muted: z.boolean().default(false),
+  hidden: z.boolean().default(false),
+  locked: z.boolean().default(false),
+});
+
+export const SmartEditTimelineElementSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    trackId: z.string().trim().min(1),
+    kind: z.enum(["video", "audio", "text", "bgm"]),
+    sceneId: z.string().trim().min(1).optional(),
+    segmentId: z.string().trim().min(1).optional(),
+    sourceUrl: z.string().trim().min(1).optional(),
+    sourceObjectKey: z.string().trim().min(1).optional(),
+    text: z.string().trim().optional(),
+    label: z.string().trim().min(1),
+    startSecond: z.number().min(0),
+    durationSeconds: z.number().positive().max(120),
+    trimStartSecond: z.number().min(0).default(0),
+    trimEndSecond: z.number().min(0).optional(),
+    sourceDurationSeconds: z.number().positive().optional(),
+    playbackRate: z.number().min(0.25).max(4).default(1),
+    muted: z.boolean().default(false),
+    hidden: z.boolean().default(false),
+    detachedAudio: z.boolean().default(false),
+  })
+  .superRefine((element, context) => {
+    if (
+      element.trimEndSecond !== undefined &&
+      element.trimEndSecond <= element.trimStartSecond
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "trimEndSecond must be greater than trimStartSecond.",
+        path: ["trimEndSecond"],
+      });
+    }
+  });
+
+export const SmartEditTimelineSchema = z.object({
+  scale: z.number().positive().default(1),
+  durationSeconds: z.number().min(0).max(600),
+  tracks: z.array(SmartEditTimelineTrackSchema).default([]),
+  elements: z.array(SmartEditTimelineElementSchema).default([]),
+});
+
 export const SmartEditSourceSchema = z
   .object({
     assetId: z.string().trim().min(1).optional(),
     sliceId: z.string().trim().min(1).optional(),
     sceneClipUrl: z.string().trim().min(1).optional(),
+    sceneClipVideoOnlyUrl: z.string().trim().min(1).optional(),
+    sceneClipAudioUrl: z.string().trim().min(1).optional(),
     imageUrl: z.string().trim().min(1).optional(),
     startSecond: z.number().min(0).optional(),
     endSecond: z.number().positive().optional(),
@@ -655,6 +707,7 @@ export const SmartEditSegmentOverrideSchema = z.object({
   sceneId: z.string().trim().min(1),
   enabled: z.boolean().default(true),
   durationSeconds: z.number().min(4).max(12).optional(),
+  playbackRate: z.number().min(0.25).max(4).default(1),
   transition: SmartEditTransitionSchema.default("cut"),
   subtitle: z.string().trim().min(1).optional(),
   voiceover: z.string().trim().min(1).optional(),
@@ -687,6 +740,7 @@ export const SmartEditSegmentSchema = z.object({
   order: z.number().int().min(1),
   enabled: z.boolean().default(true),
   durationSeconds: z.number().min(4).max(12),
+  playbackRate: z.number().min(0.25).max(4).default(1),
   transition: SmartEditTransitionSchema.default("cut"),
   subtitle: z.string().trim().min(1),
   voiceover: z.string().trim().min(1),
@@ -709,6 +763,7 @@ export const SmartEditPlanSchema = z
     targetDurationSeconds: z.number().positive().max(60),
     segments: z.array(SmartEditSegmentSchema).min(1).max(40),
     audio: SmartEditAudioPlanSchema,
+    timeline: SmartEditTimelineSchema.optional(),
     createdAt: IsoDateTimeSchema,
   })
   .superRefine((plan, context) => {
@@ -729,6 +784,17 @@ export const SmartEditSegmentOutputSchema = z.object({
   sceneId: z.string().trim().min(1),
   objectKey: z.string().trim().min(1),
   videoUrl: z.string().trim().min(1),
+});
+
+export const SceneRenderClipMaterialSchema = z.object({
+  audioObjectKey: z.string().trim().min(1).optional(),
+  audioUrl: z.string().trim().min(1).optional(),
+  materializedAt: IsoDateTimeSchema,
+  status: z.enum(["ready", "failed"]),
+  text: z.string().trim().default(""),
+  videoObjectKey: z.string().trim().min(1).optional(),
+  videoOnlyUrl: z.string().trim().min(1).optional(),
+  errorMessage: z.string().trim().min(1).optional(),
 });
 
 export const SmartEditSegmentRefreshRequestSchema = z.object({
@@ -762,6 +828,7 @@ export const SceneRenderClipSchema = z.object({
   providerTaskId: z.string().trim().min(1).optional(),
   videoUrl: z.string().trim().min(1).optional(),
   coverUrl: z.string().trim().min(1).optional(),
+  material: SceneRenderClipMaterialSchema.optional(),
   errorMessage: z.string().trim().min(1).optional(),
 });
 

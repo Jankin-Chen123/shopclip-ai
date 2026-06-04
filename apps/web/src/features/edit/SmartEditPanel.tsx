@@ -3,6 +3,7 @@ import type {
   AssetMetadata,
   AssetSlice,
   MediaSettings,
+  RenderTask,
   SmartEditPlan,
   SmartEditResult,
   SmartEditSegment,
@@ -38,6 +39,7 @@ interface SmartEditPanelProps {
   onRefreshSegment: () => void;
   onSelectedSegmentChange: (segmentId: string | undefined) => void;
   onStartSmartEdit: () => void;
+  renderTask?: RenderTask;
   result?: SmartEditResult;
   selectedSegmentId?: string;
   targetLanguage: string;
@@ -142,10 +144,24 @@ const replaceSegment = (
   plan: SmartEditPlan,
   segmentId: string,
   update: (segment: SmartEditSegment) => SmartEditSegment,
-): SmartEditPlan => ({
-  ...plan,
-  segments: plan.segments.map((segment) => (segment.id === segmentId ? update(segment) : segment)),
-});
+): SmartEditPlan => {
+  const segments = plan.segments.map((segment) =>
+    segment.id === segmentId ? update(segment) : segment,
+  );
+  return {
+    ...plan,
+    segments,
+    targetDurationSeconds: Math.min(
+      60,
+      Math.max(
+        1,
+        segments
+          .filter((segment) => segment.enabled)
+          .reduce((sum, segment) => sum + segment.durationSeconds, 0),
+      ),
+    ),
+  };
+};
 
 const formatTimelineTime = (seconds: number): string => {
   const boundedSeconds = Math.max(0, seconds);
@@ -169,10 +185,13 @@ type SmartEditTrackId = "video" | "caption" | "voice" | "bgm";
 
 type SmartEditTrackSegment = {
   id: string;
+  segmentId?: string;
   title: string;
   range: string;
   meta: string;
   durationSeconds: number;
+  muted?: boolean;
+  hidden?: boolean;
 };
 
 type SmartEditTrack = {
@@ -183,9 +202,79 @@ type SmartEditTrack = {
 const timelineTrackSegments = (
   plan: SmartEditPlan | undefined,
   assets: AssetMetadata[],
+  renderTask?: RenderTask,
 ): SmartEditTrack[] => {
+  if (plan?.timeline?.elements?.length) {
+    return plan.timeline.tracks.map((track) => ({
+      id: (track.kind === "audio" ? "voice" : track.kind === "text" ? "caption" : track.kind) as SmartEditTrackId,
+      segments: plan.timeline!.elements
+        .filter((element) => element.trackId === track.id)
+        .map((element) => ({
+          durationSeconds: element.durationSeconds,
+          hidden: element.hidden,
+          id: element.id,
+          meta: `${element.playbackRate}x - trim ${formatTimelineTime(
+            element.trimStartSecond,
+          )}${element.trimEndSecond ? `-${formatTimelineTime(element.trimEndSecond)}` : ""}`,
+          muted: element.muted,
+          range: timelineRangeLabel(element.startSecond, element.durationSeconds),
+          segmentId: element.segmentId,
+          title: element.label,
+        })),
+    }));
+  }
+
   if (!plan) {
-    return [];
+    const renderedClips =
+      renderTask?.status === "completed"
+        ? [...(renderTask.sceneClips ?? [])]
+            .filter((clip) => clip.videoUrl)
+            .sort((left, right) => left.order - right.order)
+        : [];
+    if (renderedClips.length === 0) {
+      return [];
+    }
+    let cursor = 0;
+    const timedClips = renderedClips.map((clip) => {
+      const duration = 4;
+      const startSecond = cursor;
+      cursor += duration;
+      return { clip, duration, startSecond };
+    });
+    return [
+      {
+        id: "video",
+        segments: timedClips.map(({ clip, duration, startSecond }) => ({
+          durationSeconds: duration,
+          id: `${clip.sceneId}-video`,
+          meta: clip.material?.videoOnlyUrl ? "video-only material" : "generated clip",
+          range: timelineRangeLabel(startSecond, duration),
+          title: `Scene ${clip.order}`,
+        })),
+      },
+      {
+        id: "voice",
+        segments: timedClips
+          .filter(({ clip }) => clip.material?.audioUrl)
+          .map(({ clip, duration, startSecond }) => ({
+            durationSeconds: duration,
+            id: `${clip.sceneId}-audio`,
+            meta: "source audio material",
+            range: timelineRangeLabel(startSecond, duration),
+            title: `Scene ${clip.order} audio`,
+          })),
+      },
+      {
+        id: "caption",
+        segments: timedClips.map(({ clip, duration, startSecond }) => ({
+          durationSeconds: duration,
+          id: `${clip.sceneId}-text`,
+          meta: "storyboard text",
+          range: timelineRangeLabel(startSecond, duration),
+          title: clip.material?.text || clip.subtitle,
+        })),
+      },
+    ];
   }
 
   const enabledSegments = [...plan.segments]
@@ -205,6 +294,7 @@ const timelineTrackSegments = (
 
   const videoSegments = timedSegments.map(({ segment, startSecond }) => ({
     id: segment.id,
+    segmentId: segment.id,
     title: sourceLabel(segment, assets),
     range: timelineRangeLabel(startSecond, segment.durationSeconds),
     meta: sourceRangeLabel(segment),
@@ -214,6 +304,7 @@ const timelineTrackSegments = (
     .filter(({ segment }) => segment.subtitle.trim().length > 0)
     .map(({ segment, startSecond }) => ({
       id: `${segment.id}-caption`,
+      segmentId: segment.id,
       title: segment.subtitle,
       range: timelineRangeLabel(startSecond, segment.durationSeconds),
       meta: segment.transition,
@@ -223,6 +314,7 @@ const timelineTrackSegments = (
     .filter(({ segment }) => segment.voiceover.trim().length > 0)
     .map(({ segment, startSecond }) => ({
       id: `${segment.id}-voice`,
+      segmentId: segment.id,
       title: segment.voiceover,
       range: timelineRangeLabel(startSecond, segment.durationSeconds),
       meta: plan.audio.voice,
@@ -268,6 +360,7 @@ export const SmartEditPanel = ({
   onRefreshSegment,
   onSelectedSegmentChange,
   onStartSmartEdit,
+  renderTask,
   result,
   selectedSegmentId,
   targetLanguage,
@@ -297,7 +390,10 @@ export const SmartEditPanel = ({
     : 0;
   const selectedSourceLabel = selectedSegment ? sourceLabel(selectedSegment, assets) : "-";
   const audioLabel = plan?.audio.bgmTrack ?? mediaSettings.bgmTrack;
-  const trackSegments = useMemo(() => timelineTrackSegments(plan, assets), [assets, plan]);
+  const trackSegments = useMemo(
+    () => timelineTrackSegments(plan, assets, renderTask),
+    [assets, plan, renderTask],
+  );
   const trackLabels = {
     bgm: copy.bgmTrack,
     caption: copy.captionTrack,
@@ -310,6 +406,58 @@ export const SmartEditPanel = ({
       return;
     }
     onPlanChange(replaceSegment(plan, selectedSegment.id, update));
+  };
+
+  const splitSelectedSegment = () => {
+    if (!plan || !selectedSegment || selectedSegment.durationSeconds < 8) {
+      return;
+    }
+    const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
+    const index = sorted.findIndex((segment) => segment.id === selectedSegment.id);
+    if (index < 0) {
+      return;
+    }
+    const firstDuration = Math.max(4, selectedSegment.durationSeconds / 2);
+    const secondDuration = Math.max(4, selectedSegment.durationSeconds - firstDuration);
+    const sourceStart = selectedSegment.source.startSecond;
+    const sourceEnd = selectedSegment.source.endSecond;
+    const sourceMid =
+      sourceStart !== undefined && sourceEnd !== undefined
+        ? sourceStart + (sourceEnd - sourceStart) / 2
+        : undefined;
+    const firstSegment: SmartEditSegment = {
+      ...selectedSegment,
+      durationSeconds: firstDuration,
+      source:
+        sourceMid !== undefined
+          ? { ...selectedSegment.source, endSecond: sourceMid }
+          : selectedSegment.source,
+    };
+    const secondSegment: SmartEditSegment = {
+      ...selectedSegment,
+      durationSeconds: secondDuration,
+      id: `${selectedSegment.id}-split-${Date.now()}`,
+      source:
+        sourceMid !== undefined
+          ? { ...selectedSegment.source, startSecond: sourceMid, endSecond: sourceEnd }
+          : selectedSegment.source,
+      subtitle: `${selectedSegment.subtitle} (split)`,
+    };
+    sorted.splice(index, 1, firstSegment, secondSegment);
+    onPlanChange({
+      ...plan,
+      segments: sorted.map((segment, segmentIndex) => ({
+        ...segment,
+        order: segmentIndex + 1,
+      })),
+      targetDurationSeconds: Math.min(
+        60,
+        sorted
+          .filter((segment) => segment.enabled)
+          .reduce((sum, segment) => sum + segment.durationSeconds, 0),
+      ),
+    });
+    onSelectedSegmentChange(secondSegment.id);
   };
 
   const selectByOffset = (offset: number) => {
@@ -518,6 +666,13 @@ export const SmartEditPanel = ({
                 >
                   {copy.moveLater}
                 </Button>
+                <Button
+                  disabled={selectedSegment.durationSeconds < 8}
+                  icon={<Scissors size={16} />}
+                  onClick={splitSelectedSegment}
+                >
+                  Split
+                </Button>
               </div>
               <section className="smart-edit-inspector-section">
                 <h4>{copy.timingAndSource}</h4>
@@ -537,6 +692,65 @@ export const SmartEditPanel = ({
                     }
                   />
                 </label>
+                <label>
+                  Speed
+                  <input
+                    max={4}
+                    min={0.25}
+                    step={0.25}
+                    type="number"
+                    value={selectedSegment.playbackRate ?? 1}
+                    onChange={(event) =>
+                      updateSelectedSegment((segment) => ({
+                        ...segment,
+                        playbackRate: Math.max(0.25, Math.min(4, Number(event.target.value) || 1)),
+                      }))
+                    }
+                  />
+                </label>
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Source in
+                    <input
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.source.startSecond ?? 0}
+                      onChange={(event) => {
+                        const nextStart = Math.max(0, Number(event.target.value) || 0);
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          source: {
+                            ...segment.source,
+                            startSecond: nextStart,
+                          },
+                        }));
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Source out
+                    <input
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={
+                        selectedSegment.source.endSecond ??
+                        (selectedSegment.source.startSecond ?? 0) + selectedSegment.durationSeconds
+                      }
+                      onChange={(event) => {
+                        const nextEnd = Math.max(0.1, Number(event.target.value) || 0.1);
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          source: {
+                            ...segment.source,
+                            endSecond: nextEnd,
+                          },
+                        }));
+                      }}
+                    />
+                  </label>
+                </div>
                 <label>
                   {copy.transition}
                   <select
@@ -751,9 +965,24 @@ export const SmartEditPanel = ({
               <div className="smart-edit-track-clips">
                 {track.segments.map((segment) => (
                   <article
-                    className="smart-edit-track-clip"
+                    className={`smart-edit-track-clip ${
+                      segment.segmentId === selectedSegment?.id ? "active" : ""
+                    } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""}`.trim()}
                     key={segment.id}
+                    role={segment.segmentId ? "button" : undefined}
                     style={{ flexGrow: Math.max(1, segment.durationSeconds) }}
+                    tabIndex={segment.segmentId ? 0 : undefined}
+                    onClick={() => {
+                      if (segment.segmentId) {
+                        onSelectedSegmentChange(segment.segmentId);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (segment.segmentId && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        onSelectedSegmentChange(segment.segmentId);
+                      }
+                    }}
                   >
                     <span>{segment.range}</span>
                     <b>{segment.title}</b>
