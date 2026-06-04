@@ -36,6 +36,7 @@ import {
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   moveSmartEditSegmentOnTimeline,
+  pasteSmartEditSegmentsAtPlayhead,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
@@ -1905,6 +1906,76 @@ describe("App", () => {
     expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 3, 3, 6, 9]);
     expect(nextPlan.timeline?.durationSeconds).toBe(12);
     expect(nextPlan.targetDurationSeconds).toBe(12);
+  });
+
+  it("pastes selected smart edit segments at the playhead while preserving relative offsets", () => {
+    const baseSegment = {
+      assetTags: ["hero"],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds: 2,
+      enabled: true,
+      playbackRate: 1,
+      rationale: "Use the hero image.",
+      source: {
+        assetId: "asset-image",
+        imageUrl: "https://cdn.example.test/cup.png",
+        kind: "image-asset" as const,
+      },
+      sourceAudioMuted: false,
+      transition: "cut" as const,
+      voiceoverStartOffsetSeconds: 0,
+    };
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 8,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          ...baseSegment,
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          subtitle: "Hook",
+          timelineStartSecond: 1,
+          voiceover: "Hook",
+        },
+        {
+          ...baseSegment,
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          subtitle: "Demo",
+          timelineStartSecond: 4,
+          voiceover: "Demo",
+        },
+      ],
+    };
+
+    const nextPlan = pasteSmartEditSegmentsAtPlayhead(
+      plan,
+      ["segment-1", "segment-2"],
+      10,
+      "paste-1",
+    );
+
+    expect(nextPlan.segments.map((segment) => segment.id)).toEqual([
+      "segment-1",
+      "segment-2",
+      "segment-1-paste-1-1",
+      "segment-2-paste-1-2",
+    ]);
+    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([1, 4, 10, 13]);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-1-paste-1-1-video")?.startSecond).toBe(10);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-2-paste-1-2-video")?.startSecond).toBe(13);
+    expect(nextPlan.targetDurationSeconds).toBe(15);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

@@ -569,3 +569,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Clipboard paste-at-playhead, duplicate-to-free-track, ripple collision handling, and independent audio/text clip duplication remain open.
+
+## 2026-06-05 Paste Selected Clips At Playhead
+
+- Reference model:
+  - OpenCut `PasteCommand` pastes copied elements at a target time while preserving relative offsets from the earliest copied element.
+- Fix:
+  - Added `pasteSmartEditSegmentsAtPlayhead(plan, segmentIds, playheadSecond, duplicateToken)`.
+  - Selected smart-edit clips can now be copied to the current playhead position from the batch toolbar.
+  - The earliest selected clip is aligned to the playhead; later selected clips keep their relative timeline offsets.
+  - Pasted clips preserve source media, scene linkage, speed, original-audio mute state, caption/voice offsets, transition, asset tags, and duration.
+  - Newly pasted clips become the active multi-selection for immediate dragging, muting, deletion, or further duplication.
+- Verification:
+  - Added `App.test.tsx` coverage for pasting two selected clips from `1s` and `4s` to playhead `10s`, yielding pasted clips at `10s` and `13s`.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "pastes selected smart edit segments"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - True clipboard storage, keyboard shortcuts, collision-aware placement, ripple overwrite/insert modes, and independent multi-track paste are still open.

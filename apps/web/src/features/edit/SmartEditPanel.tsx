@@ -591,6 +591,53 @@ export const duplicateSmartEditSegmentsOnTimeline = (
   });
 };
 
+export const pasteSmartEditSegmentsAtPlayhead = (
+  plan: SmartEditPlan,
+  segmentIds: string[],
+  playheadSecond: number,
+  duplicateToken = String(Date.now()),
+): SmartEditPlan => {
+  const selectedIds = new Set(segmentIds);
+  if (selectedIds.size === 0) {
+    return plan;
+  }
+  const sortedSegments = [...plan.segments].sort((left, right) => left.order - right.order);
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const sourceSegments = sortedSegments.filter((segment) => selectedIds.has(segment.id));
+  if (sourceSegments.length === 0) {
+    return plan;
+  }
+  const earliestStart = Math.min(
+    ...sourceSegments.map((segment) => currentStarts.get(segment.id) ?? 0),
+  );
+  const targetStart = clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const pastedSegments = sourceSegments.map((segment, index): SmartEditSegment => {
+    const sourceStart = currentStarts.get(segment.id) ?? 0;
+    const relativeOffset = sourceStart - earliestStart;
+    return {
+      ...segment,
+      id: `${segment.id}-${duplicateToken}-${index + 1}`,
+      order: sortedSegments.length + index + 1,
+      subtitle: `${segment.subtitle} (copy)`,
+      timelineStartSecond: clampTimelineStart(targetStart + relativeOffset),
+    };
+  });
+  const pastedStarts = new Map(
+    pastedSegments.map((segment) => [segment.id, segment.timelineStartSecond ?? 0]),
+  );
+
+  return withRebuiltTimeline({
+    ...plan,
+    segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
+      ...segment,
+      order: index + 1,
+      timelineStartSecond: pastedStarts.has(segment.id)
+        ? pastedStarts.get(segment.id)!
+        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+    })),
+  });
+};
+
 type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
 
 type SmartEditTrackSegment = {
@@ -1348,6 +1395,28 @@ export const SmartEditPanel = ({
     }
   };
 
+  const pasteSelectedSegmentsAtPlayhead = () => {
+    if (!plan || selectedBatchSegments.length === 0) {
+      return;
+    }
+    const duplicateToken = `paste-${Date.now()}`;
+    const selectedIds = selectedBatchSegments.map((segment) => segment.id);
+    const nextPlan = pasteSmartEditSegmentsAtPlayhead(
+      plan,
+      selectedIds,
+      boundedPlayheadSeconds,
+      duplicateToken,
+    );
+    commitPlanChange(nextPlan);
+    const pastedIds = nextPlan.segments
+      .map((segment) => segment.id)
+      .filter((id) => selectedIds.some((sourceId) => id.startsWith(`${sourceId}-${duplicateToken}-`)));
+    if (pastedIds.length > 0) {
+      setSelectedSegmentIds(pastedIds);
+      onSelectedSegmentChange(pastedIds[0]);
+    }
+  };
+
   const selectByOffset = (offset: number) => {
     if (sortedSegments.length === 0) {
       return;
@@ -2017,6 +2086,9 @@ export const SmartEditPanel = ({
             </Button>
             <Button icon={<Copy size={16} />} onClick={duplicateSelectedSegments}>
               {copy.duplicateSelected}
+            </Button>
+            <Button icon={<Copy size={16} />} onClick={pasteSelectedSegmentsAtPlayhead}>
+              {copy.pasteSelectedAtPlayhead}
             </Button>
             <Button
               disabled={selectedBatchSegments.length >= sortedSegments.length}
