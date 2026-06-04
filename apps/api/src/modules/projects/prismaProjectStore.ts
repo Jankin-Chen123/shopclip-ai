@@ -153,6 +153,7 @@ const toScene = (scene: ProjectWithRelations["scenes"][number]): StoryboardScene
 const toScript = (script: ProjectWithRelations["scripts"][number]): ScriptResult => ({
   id: script.id,
   projectId: script.projectId,
+  displayName: script.displayName ?? undefined,
   hook: script.hook,
   narrative: script.narrative,
   constraints: script.constraints,
@@ -162,6 +163,7 @@ const toScript = (script: ProjectWithRelations["scripts"][number]): ScriptResult
 const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): RenderTask => ({
   id: task.id,
   projectId: task.projectId,
+  displayName: task.displayName ?? undefined,
   status: task.status,
   progress: task.progress,
   previewUrl: task.previewUrl ?? undefined,
@@ -963,6 +965,7 @@ export class PrismaProjectStore implements ProjectStore {
         data: {
           id: scriptId,
           projectId,
+          displayName: script.displayName,
           hook: script.hook,
           narrative: script.narrative,
           constraints: script.constraints,
@@ -1042,6 +1045,27 @@ export class PrismaProjectStore implements ProjectStore {
     return toScript(updated);
   }
 
+  async updateScriptDisplayName(
+    scriptId: string,
+    displayName: string | undefined,
+  ): Promise<ScriptResult | undefined> {
+    const updated = await this.prisma.script
+      .update({
+        where: { id: scriptId },
+        data: {
+          displayName,
+          project: {
+            update: {
+              updatedAt: new Date(),
+            },
+          },
+        },
+        include: { scenes: true },
+      })
+      .catch(() => undefined);
+    return updated ? toScript(updated) : undefined;
+  }
+
   async addRenderTask(
     projectId: string,
     renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,
@@ -1056,6 +1080,7 @@ export class PrismaProjectStore implements ProjectStore {
       data: {
         id: randomUUID(),
         projectId,
+        displayName: renderTask.displayName,
         status: renderTask.status,
         progress: renderTask.progress,
         previewUrl: renderTask.previewUrl,
@@ -1235,6 +1260,7 @@ export class PrismaProjectStore implements ProjectStore {
       where: { id: renderTaskId },
       data: {
         status: update.status,
+        displayName: update.displayName,
         progress: update.progress,
         previewUrl: update.previewUrl,
         exportUrl: update.exportUrl,

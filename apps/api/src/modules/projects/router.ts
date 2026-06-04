@@ -93,6 +93,10 @@ import type { StorageProvider } from "../../providers/storage/storageProvider.js
 import { MemoryProjectStore } from "./memoryStore.js";
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
+const LibraryDisplayNameUpdateSchema = z.object({
+  displayName: z.string().trim().min(1).max(80).optional(),
+});
+
 const sendNotFound = (response: Response, code: string, message: string) => {
   response.status(404).json({
     error: {
@@ -3461,6 +3465,25 @@ export const createP0Router = ({
     });
   });
 
+  router.patch("/scripts/:scriptId", async (request, response) => {
+    const parsedUpdate = LibraryDisplayNameUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedUpdate.success) {
+      sendInvalidRequest(response, "INVALID_SCRIPT_DISPLAY_NAME", "Script display name is invalid.");
+      return;
+    }
+
+    const updatedScript = await store.updateScriptDisplayName(
+      request.params.scriptId,
+      parsedUpdate.data.displayName,
+    );
+    if (!updatedScript) {
+      sendNotFound(response, "SCRIPT_NOT_FOUND", "Script was not found.");
+      return;
+    }
+
+    response.json({ script: updatedScript });
+  });
+
   router.delete("/scripts/:scriptId", async (request, response) => {
     const deletedScript = await store.deleteScript(request.params.scriptId);
     if (!deletedScript) {
@@ -3517,6 +3540,24 @@ export const createP0Router = ({
     }
 
     response.status(201).json(storedRender);
+  });
+
+  router.patch("/render-tasks/:renderTaskId", async (request, response) => {
+    const parsedUpdate = LibraryDisplayNameUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedUpdate.success) {
+      sendInvalidRequest(response, "INVALID_RENDER_TASK_DISPLAY_NAME", "Video display name is invalid.");
+      return;
+    }
+
+    const updatedRenderTask = await store.updateRenderTask(request.params.renderTaskId, {
+      displayName: parsedUpdate.data.displayName,
+    });
+    if (!updatedRenderTask) {
+      sendNotFound(response, "RENDER_TASK_NOT_FOUND", "Render task was not found.");
+      return;
+    }
+
+    response.json(updatedRenderTask);
   });
 
   router.delete("/render-tasks/:renderTaskId", async (request, response) => {

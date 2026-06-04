@@ -83,6 +83,10 @@ export interface ProjectStore {
     scenes: StoryboardScene[],
     constraints?: string[],
   ): MaybePromise<ScriptResult | undefined>;
+  updateScriptDisplayName(
+    scriptId: string,
+    displayName: string | undefined,
+  ): MaybePromise<ScriptResult | undefined>;
   addViralTemplate(template: ViralTemplate): MaybePromise<ViralTemplate>;
   createProject(brief: ProjectBrief): MaybePromise<ProjectSnapshot>;
   deleteAssets(assetIds: string[]): MaybePromise<AssetMetadata[]>;

@@ -515,6 +515,7 @@ export const ScriptResultSchema = z
   .object({
     id: z.string().trim().min(1),
     projectId: z.string().trim().min(1),
+    displayName: z.string().trim().min(1).max(80).optional(),
     hook: z.string().trim().min(1),
     narrative: z.string().trim().min(1),
     constraints: z.array(z.string().trim().min(1)).default([]),
@@ -767,6 +768,7 @@ export const SceneRenderClipSchema = z.object({
 export const RenderTaskSchema = z.object({
   id: z.string().trim().min(1),
   projectId: z.string().trim().min(1),
+  displayName: z.string().trim().min(1).max(80).optional(),
   status: RenderTaskStatusSchema,
   progress: z.number().min(0).max(100),
   previewUrl: z.string().trim().min(1).optional(),

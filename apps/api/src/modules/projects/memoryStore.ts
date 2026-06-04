@@ -796,6 +796,27 @@ export class MemoryProjectStore implements ProjectStore {
     return undefined;
   }
 
+  updateScriptDisplayName(
+    scriptId: string,
+    displayName: string | undefined,
+  ): ScriptResult | undefined {
+    const timestamp = now();
+    for (const project of this.projects.values()) {
+      const scriptIndex = project.scripts.findIndex((candidate) => candidate.id === scriptId);
+      if (scriptIndex < 0) {
+        continue;
+      }
+      const updatedScript: ScriptResult = {
+        ...project.scripts[scriptIndex]!,
+        displayName,
+      };
+      project.scripts[scriptIndex] = updatedScript;
+      project.updatedAt = timestamp;
+      return updatedScript;
+    }
+    return undefined;
+  }
+
   addRenderTask(
     projectId: string,
     renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,

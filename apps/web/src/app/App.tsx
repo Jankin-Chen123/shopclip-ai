@@ -91,7 +91,9 @@ import {
   startRender,
   updateProjectPrep,
   updateProjectBrief,
+  updateRenderTaskDisplayName,
   updateScene,
+  updateScriptDisplayName,
   uploadAssetFileToStorage,
   type AssetRecallCandidate,
   type AssetLibraryCategory,
@@ -1644,6 +1646,49 @@ export const App = ({
     });
   };
 
+  const handleRenameProjectScript = (scriptId: string, displayName: string) => {
+    const nextDisplayName = displayName.trim() || undefined;
+    void runAction("script", "script", async () => {
+      const { script: updatedScript } = await updateScriptDisplayName(scriptId, nextDisplayName);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              scripts: current.scripts.map((candidate) =>
+                candidate.id === updatedScript.id ? updatedScript : candidate,
+              ),
+            }
+          : current,
+      );
+      setScript((current) => (current?.id === updatedScript.id ? updatedScript : current));
+      refreshProjectHistory();
+    });
+  };
+
+  const handleRenameProjectRenderTask = (renderTaskId: string, displayName: string) => {
+    const nextDisplayName = displayName.trim() || undefined;
+    void runAction("render", "render", async () => {
+      const { renderTask: updatedRenderTask } = await updateRenderTaskDisplayName(
+        renderTaskId,
+        nextDisplayName,
+      );
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              renderTasks: current.renderTasks.map((candidate) =>
+                candidate.id === updatedRenderTask.id ? updatedRenderTask : candidate,
+              ),
+            }
+          : current,
+      );
+      setRenderTask((current) =>
+        current?.id === updatedRenderTask.id ? updatedRenderTask : current,
+      );
+      refreshProjectHistory();
+    });
+  };
+
   const createScriptGenerationRequest = () =>
     ({
       ...createScriptGenerationRequestPayload(assetPrepSnapshot, scriptDraft, apiConfig),
@@ -2533,6 +2578,8 @@ export const App = ({
                   onDeleteScript={handleDeleteProjectScript}
                   onGenerateVideo={handleGenerateProjectVideo}
                   onLoadProject={handleLoadProjectFromHistory}
+                  onRenameRenderTask={handleRenameProjectRenderTask}
+                  onRenameScript={handleRenameProjectScript}
                   onTabChange={setProjectDetailTab}
                   onUpdateProjectBrief={handleUpdateProjectBrief}
                   project={project}
@@ -2835,10 +2882,7 @@ export const App = ({
           title={language === "zh" ? "\u5267\u672c\u9884\u89c8" : "Script preview"}
           onClose={() => setProjectStudioPreviewScriptId(undefined)}
         >
-          <ScriptDetail
-            script={projectStudioPreviewScript}
-            title={language === "zh" ? "\u5267\u672c\u8be6\u60c5" : "Script detail"}
-          />
+          <ScriptDetail script={projectStudioPreviewScript} />
         </ProjectModal>
       ) : null}
     </AppShell>

@@ -240,9 +240,10 @@ model ViralTemplate {
 }
 
 model Script {
-  id          String            @id @default(cuid())
-  projectId   String
-  hook        String
+    id          String            @id @default(cuid())
+    projectId   String
+    displayName String?
+    hook        String
   narrative   String
   constraints String[]
   createdAt   DateTime          @default(now())
@@ -278,9 +279,10 @@ model StoryboardScene {
 }
 
 model RenderTask {
-  id           String           @id @default(cuid())
-  projectId    String
-  status       RenderTaskStatus @default(queued)
+    id           String           @id @default(cuid())
+    projectId    String
+    displayName  String?
+    status       RenderTaskStatus @default(queued)
   progress     Int              @default(0)
   previewUrl   String?
   exportUrl    String?

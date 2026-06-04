@@ -5874,19 +5874,13 @@ textarea {
   color: var(--muted);
 }
 
-.project-video-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-top: 18px;
-}
-
 .project-video-link {
   display: inline-flex;
   gap: 7px;
   align-items: center;
+  width: fit-content;
   min-height: 38px;
+  margin-top: 18px;
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -5906,6 +5900,94 @@ textarea {
 
 .project-script-card h4 {
   padding-right: 38px;
+}
+
+.project-video-card {
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.project-video-card:hover,
+.project-video-card:focus-visible {
+  border-color: rgba(34, 211, 238, 0.55);
+  outline: none;
+  background: rgba(34, 211, 238, 0.065);
+}
+
+.project-video-card:hover {
+  transform: translateY(-1px);
+}
+
+.project-card-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  margin: 14px 0 10px;
+}
+
+.project-card-name-row h4 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-card-rename {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+}
+
+.project-card-rename:hover,
+.project-card-rename:focus-visible {
+  border-color: rgba(34, 211, 238, 0.55);
+  outline: none;
+  color: #cffafe;
+}
+
+.project-card-name-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+
+.project-card-name-editor input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.project-card-name-editor button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+}
+
+.project-card-name-editor input:focus,
+.project-card-name-editor button:focus-visible,
+.project-card-name-editor button:hover {
+  border-color: rgba(34, 211, 238, 0.55);
+  outline: none;
 }
 
 .project-script-detail,

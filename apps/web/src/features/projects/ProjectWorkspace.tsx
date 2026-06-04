@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type { ProjectBrief, ProjectSummary, RenderTask, ScriptResult } from "@shopclip/shared";
 import {
   ArrowLeft,
@@ -6,9 +6,8 @@ import {
   BarChart3,
   Box,
   Check,
+  Download,
   Edit3,
-  ExternalLink,
-  Eye,
   FileText,
   Film,
   Images,
@@ -41,6 +40,8 @@ interface ProjectWorkspaceProps {
   onDeleteScript: (scriptId: string) => void;
   onGenerateVideo: () => void;
   onLoadProject: (projectId: string) => void;
+  onRenameRenderTask: (renderTaskId: string, displayName: string) => void;
+  onRenameScript: (scriptId: string, displayName: string) => void;
   onTabChange: (tab: ProjectDetailTab) => void;
   onUpdateProjectBrief: (brief: ProjectBrief) => void;
   project?: ProjectSnapshot;
@@ -291,6 +292,8 @@ export const ProjectWorkspace = ({
   onDeleteScript,
   onGenerateVideo,
   onLoadProject,
+  onRenameRenderTask,
+  onRenameScript,
   onTabChange,
   onUpdateProjectBrief,
   project,
@@ -648,6 +651,7 @@ export const ProjectWorkspace = ({
                   scripts={scripts}
                   selectedScriptId={selectedScriptId}
                   onDeleteScript={onDeleteScript}
+                  onRenameScript={onRenameScript}
                   onSelectScript={setSelectedScriptId}
                   selectLabel={uiText.selectScript}
                   sceneLabel={uiText.scenes}
@@ -671,9 +675,9 @@ export const ProjectWorkspace = ({
             <VideoList
               videos={videos}
               onDeleteRenderTask={onDeleteRenderTask}
+              onRenameRenderTask={onRenameRenderTask}
               onPreviewVideo={setSelectedVideoId}
-              previewLabel={language === "zh" ? "\u9884\u89c8" : "Preview"}
-              openLabel={language === "zh" ? "\u65b0\u7a97\u6253\u5f00" : "Open video"}
+              downloadLabel={language === "zh" ? "\u4e0b\u8f7d\u89c6\u9891" : "Download video"}
             />
           </section>
         ) : null}
@@ -681,11 +685,7 @@ export const ProjectWorkspace = ({
 
       {selectedScript ? (
         <ProjectModal title={uiText.scriptDetail} onClose={() => setSelectedScriptId(undefined)}>
-          <ScriptDetail
-            script={selectedScript}
-            title={uiText.scriptDetail}
-            onDeleteScript={onDeleteScript}
-          />
+          <ScriptDetail script={selectedScript} />
         </ProjectModal>
       ) : null}
 
@@ -706,7 +706,7 @@ export const ProjectWorkspace = ({
                 ? "\u8be5\u89c6\u9891\u6682\u65e0\u53ef\u9884\u89c8\u5730\u5740\u3002"
                 : "This video has no preview URL yet."
             }
-            openLabel={language === "zh" ? "\u65b0\u7a97\u6253\u5f00" : "Open video"}
+            downloadLabel={language === "zh" ? "\u4e0b\u8f7d\u89c6\u9891" : "Download video"}
             title={language === "zh" ? "\u89c6\u9891\u9884\u89c8" : "Video preview"}
             video={selectedVideo}
           />
@@ -718,6 +718,7 @@ export const ProjectWorkspace = ({
 
 const ScriptList = ({
   onDeleteScript,
+  onRenameScript,
   onSelectScript,
   sceneLabel,
   scripts,
@@ -725,6 +726,7 @@ const ScriptList = ({
   selectLabel,
 }: {
   onDeleteScript: (scriptId: string) => void;
+  onRenameScript: (scriptId: string, displayName: string) => void;
   onSelectScript: (scriptId: string) => void;
   sceneLabel: string;
   scripts: ScriptResult[];
@@ -732,9 +734,11 @@ const ScriptList = ({
   selectLabel: string;
 }) => (
   <div className="project-script-grid">
-    {scripts.map((script) => (
+    {scripts.map((script) => {
+      const cardTitle = script.displayName ?? script.hook;
+      return (
       <article
-        aria-label={`${selectLabel}: ${script.hook}`}
+        aria-label={`${selectLabel}: ${cardTitle}`}
         className={`project-library-card project-script-card ${
           selectedScriptId === script.id ? "active" : ""
         }`.trim()}
@@ -761,34 +765,23 @@ const ScriptList = ({
           <Trash2 size={15} aria-hidden="true" />
         </button>
         <span>{`${script.scenes.length} ${sceneLabel}`}</span>
-        <h4>{script.hook}</h4>
+        <EditableLibraryTitle
+          defaultValue={script.hook}
+          onSave={(displayName) => onRenameScript(script.id, displayName)}
+          title={cardTitle}
+        />
       </article>
-    ))}
+      );
+    })}
   </div>
 );
 
 export const ScriptDetail = ({
-  onDeleteScript,
   script,
-  title,
-  deleteLabel = "Delete",
 }: {
-  onDeleteScript?: (scriptId: string) => void;
   script: ScriptResult;
-  title: string;
-  deleteLabel?: string;
 }) => (
   <article className="project-script-detail">
-    <div className="project-detail-card-heading">
-      <span>{title}</span>
-      {onDeleteScript ? (
-        <Button icon={<Trash2 size={16} />} onClick={() => onDeleteScript(script.id)}>
-          {deleteLabel}
-        </Button>
-      ) : null}
-    </div>
-    <h4>{script.hook}</h4>
-    <MarkdownContent value={script.narrative} />
     {script.constraints.length > 0 ? (
       <div className="project-script-constraints">
         {script.constraints.map((constraint) => (
@@ -798,6 +791,81 @@ export const ScriptDetail = ({
     ) : null}
   </article>
 );
+
+const EditableLibraryTitle = ({
+  defaultValue,
+  onSave,
+  title,
+}: {
+  defaultValue: string;
+  onSave: (displayName: string) => void;
+  title: string;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onSave(draft);
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <form className="project-card-name-editor" onClick={(event) => event.stopPropagation()} onSubmit={handleSubmit}>
+        <input
+          aria-label="Card name"
+          autoFocus
+          maxLength={80}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setDraft(title);
+              setIsEditing(false);
+            }
+          }}
+          placeholder={defaultValue}
+          value={draft}
+        />
+        <button aria-label="Save name" type="submit">
+          <Check size={15} aria-hidden="true" />
+        </button>
+        <button
+          aria-label="Cancel rename"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setDraft(title);
+            setIsEditing(false);
+          }}
+          type="button"
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="project-card-name-row">
+      <h4>{title}</h4>
+      <button
+        aria-label="Rename card"
+        className="project-card-rename"
+        onClick={(event) => {
+          event.stopPropagation();
+          setDraft(title);
+          setIsEditing(true);
+        }}
+        type="button"
+      >
+        <Edit3 size={15} aria-hidden="true" />
+      </button>
+    </div>
+  );
+};
 
 const MarkdownContent = ({ value }: { value: string }) => {
   const blocks = parseMarkdownBlocks(value);
@@ -834,51 +902,70 @@ const MarkdownContent = ({ value }: { value: string }) => {
 };
 
 const VideoList = ({
+  downloadLabel,
   onDeleteRenderTask,
+  onRenameRenderTask,
   onPreviewVideo,
-  openLabel,
-  previewLabel,
   videos,
 }: {
+  downloadLabel: string;
   onDeleteRenderTask: (renderTaskId: string) => void;
+  onRenameRenderTask: (renderTaskId: string, displayName: string) => void;
   onPreviewVideo: (renderTaskId: string) => void;
-  openLabel: string;
-  previewLabel: string;
   videos: RenderTask[];
 }) =>
   videos.length > 0 ? (
     <div className="project-video-grid">
-      {videos.map((video, index) => (
-        <article className="project-library-card" key={video.id}>
+      {videos.map((video, index) => {
+        const defaultTitle = `Video ${index + 1}`;
+        const cardTitle = video.displayName ?? defaultTitle;
+        return (
+        <article
+          aria-label={cardTitle}
+          className="project-library-card project-video-card"
+          key={video.id}
+          onClick={() => onPreviewVideo(video.id)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onPreviewVideo(video.id);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <button
-            aria-label={`Delete Video ${index + 1}`}
+            aria-label={`Delete ${cardTitle}`}
             className="project-card-delete"
-            onClick={() => onDeleteRenderTask(video.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteRenderTask(video.id);
+            }}
             type="button"
           >
             <Trash2 size={15} aria-hidden="true" />
           </button>
           <span>{video.provider ?? "renderer"}</span>
-          <h4>{`Video ${index + 1}`}</h4>
+          <EditableLibraryTitle
+            defaultValue={defaultTitle}
+            onSave={(displayName) => onRenameRenderTask(video.id, displayName)}
+            title={cardTitle}
+          />
           <p>{formatUpdatedAt(video.updatedAt)}</p>
-          <div className="project-video-actions">
-            <Button icon={<Eye size={16} />} onClick={() => onPreviewVideo(video.id)}>
-              {previewLabel}
-            </Button>
-            {video.previewUrl || video.exportUrl ? (
-              <a
-                className="project-video-link"
-                href={video.exportUrl ?? video.previewUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <ExternalLink size={15} aria-hidden="true" />
-                {openLabel}
-              </a>
-            ) : null}
-          </div>
+          {video.previewUrl || video.exportUrl ? (
+            <a
+              className="project-video-link"
+              download
+              href={video.exportUrl ?? video.previewUrl}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Download size={15} aria-hidden="true" />
+              {downloadLabel}
+            </a>
+          ) : null}
         </article>
-      ))}
+        );
+      })}
     </div>
   ) : (
     <div className="project-empty-state compact">
@@ -887,13 +974,13 @@ const VideoList = ({
   );
 
 const VideoPreview = ({
+  downloadLabel,
   noPreviewText,
-  openLabel,
   title,
   video,
 }: {
+  downloadLabel: string;
   noPreviewText: string;
-  openLabel: string;
   title: string;
   video: RenderTask;
 }) => {
@@ -903,13 +990,13 @@ const VideoPreview = ({
       <div className="project-detail-card-heading">
         <span>{title}</span>
         {videoUrl ? (
-          <a className="project-video-link" href={videoUrl} rel="noreferrer" target="_blank">
-            <ExternalLink size={15} aria-hidden="true" />
-            {openLabel}
+          <a className="project-video-link" download href={videoUrl}>
+            <Download size={15} aria-hidden="true" />
+            {downloadLabel}
           </a>
         ) : null}
       </div>
-      <h4>{video.provider ?? "renderer"}</h4>
+      <h4>{video.displayName ?? video.provider ?? "renderer"}</h4>
       <p>{formatUpdatedAt(video.updatedAt)}</p>
       {videoUrl ? (
         <video controls preload="metadata" src={videoUrl}>
