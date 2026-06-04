@@ -4819,6 +4819,7 @@ textarea {
   cursor: pointer;
   padding: 10px;
   text-align: left;
+  touch-action: none;
   outline: none;
   overflow: hidden;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
@@ -4838,6 +4839,12 @@ textarea {
 
 .timeline-track article.disabled {
   opacity: 0.54;
+}
+
+.timeline-track article.moving {
+  border-color: var(--primary-strong);
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px rgba(244, 114, 182, 0.22);
 }
 
 .timeline-trim-handle {

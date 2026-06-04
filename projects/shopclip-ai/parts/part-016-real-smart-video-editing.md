@@ -516,3 +516,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
 - Remaining:
   - The next OpenCut-level increment should replace numeric start editing with direct horizontal drag, snapping, collision/ripple behavior, and explicit track lanes for independent video/audio/text clips.
+
+## 2026-06-05 Horizontal Timeline Clip Move
+
+- Reference model:
+  - Read `Jankin-Chen123/opencut-classic` at `cf5e79e`.
+  - The transferable pattern is command/action based timeline element movement: OpenCut's `MoveElementCommand` updates each selected element's `startTime` instead of treating drag as only list reordering.
+- Fix:
+  - Added `moveSmartEditSegmentOnTimeline(plan, segmentId, deltaSeconds)` as a tested timeline move helper.
+  - The helper materializes existing clip start positions, applies a snapped horizontal delta to the target clip, rebuilds the timeline, and updates total duration from the maximum clip end.
+  - The main Smart Edit timeline card now uses pointer drag to move the clip horizontally on the timeline. Reordering remains available through the existing `Move earlier` / `Move later` inspector controls.
+  - Added UI feedback and localized copy so users know clips can be dragged horizontally.
+- Verification:
+  - Added `App.test.tsx` coverage for moving a second clip from `4s` to snapped `2.8s`, preserving the first clip at `0s`, and rebuilding the timeline duration to `6.8s`.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "moves a smart edit segment horizontally"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/shared build`
+- Remaining:
+  - Collision/ripple editing, multi-track clip movement, copy/paste/duplicate commands, and richer clip transform/effect panels are still needed before claiming OpenCut-level editing depth.

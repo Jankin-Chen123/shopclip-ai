@@ -3,6 +3,7 @@ import type {
   ExternalAssetResult,
   ProjectSummary,
   ReferenceVideo,
+  SmartEditPlan,
   StoryboardScene,
   ViralTemplate,
 } from "@shopclip/shared";
@@ -30,7 +31,7 @@ import {
   InspirationPanel,
   replaceInspirationSessionHistoryResult,
 } from "../features/inspiration/InspirationPanel";
-import { SmartEditPanel } from "../features/edit/SmartEditPanel";
+import { SmartEditPanel, moveSmartEditSegmentOnTimeline } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
@@ -1689,6 +1690,76 @@ describe("App", () => {
     expect(markup).toContain("source 00:01.3-00:03.3");
     expect(markup).toContain("Cup demo.mp4");
     expect(markup).toContain("tech-pulse");
+  });
+
+  it("moves a smart edit segment horizontally while preserving timeline starts", () => {
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 8,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 0,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Hook",
+          voiceover: "Hook",
+          source: {
+            assetId: "asset-image",
+            imageUrl: "https://cdn.example.test/cup.png",
+            kind: "image-asset",
+          },
+          assetTags: ["hero"],
+          rationale: "Use the hero image.",
+        },
+        {
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 4,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "fade",
+          subtitle: "CTA",
+          voiceover: "CTA",
+          source: {
+            assetId: "asset-image",
+            imageUrl: "https://cdn.example.test/cup.png",
+            kind: "image-asset",
+          },
+          assetTags: ["hero"],
+          rationale: "Use the hero image.",
+        },
+      ],
+    };
+
+    const nextPlan = moveSmartEditSegmentOnTimeline(plan, "segment-2", -1.25);
+
+    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 2.8]);
+    expect(nextPlan.targetDurationSeconds).toBe(6.8);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-2-video")?.startSecond).toBe(2.8);
+    expect(nextPlan.timeline?.durationSeconds).toBe(6.8);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

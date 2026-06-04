@@ -293,7 +293,7 @@ const timelineRulerTicks = (durationSeconds: number): number[] => {
 };
 
 const snapTimelineSeconds = (seconds: number): number =>
-  Math.round(seconds / TIMELINE_SNAP_SECONDS) * TIMELINE_SNAP_SECONDS;
+  Number((Math.round(seconds / TIMELINE_SNAP_SECONDS) * TIMELINE_SNAP_SECONDS).toFixed(3));
 
 const planDurationSeconds = (segments: SmartEditSegment[]): number =>
   Math.min(
@@ -487,6 +487,49 @@ const withRebuiltTimeline = (plan: SmartEditPlan): SmartEditPlan => ({
   timeline: buildSmartEditTimeline(plan),
 });
 
+const timelineStartsForSegments = (segments: SmartEditSegment[]): Map<string, number> => {
+  const sortedSegments = [...segments].sort((left, right) => left.order - right.order);
+  const hasManualTimelineStarts = sortedSegments
+    .filter((segment) => segment.enabled)
+    .some((segment) => clampTimelineStart(segment.timelineStartSecond ?? 0) > 0);
+  const starts = new Map<string, number>();
+  let cursor = 0;
+  for (const segment of sortedSegments) {
+    const startSecond =
+      segment.enabled && hasManualTimelineStarts
+        ? clampTimelineStart(segment.timelineStartSecond ?? 0)
+        : cursor;
+    starts.set(segment.id, startSecond);
+    if (segment.enabled) {
+      cursor = Math.max(cursor, startSecond + segment.durationSeconds);
+    }
+  }
+  return starts;
+};
+
+export const moveSmartEditSegmentOnTimeline = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  deltaSeconds: number,
+): SmartEditPlan => {
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const currentStart = currentStarts.get(segmentId);
+  if (currentStart === undefined) {
+    return plan;
+  }
+  const nextStart = clampTimelineStart(snapTimelineSeconds(currentStart + deltaSeconds));
+  return withRebuiltTimeline({
+    ...plan,
+    segments: plan.segments.map((segment) => ({
+      ...segment,
+      timelineStartSecond:
+        segment.id === segmentId
+          ? nextStart
+          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+    })),
+  });
+};
+
 type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
 
 type SmartEditTrackSegment = {
@@ -507,6 +550,12 @@ type SmartEditTrack = {
 
 type TrimDragState = {
   edge: "in" | "out";
+  pointerId: number;
+  segmentId: string;
+  startClientX: number;
+};
+
+type TimelineMoveDragState = {
   pointerId: number;
   segmentId: string;
   startClientX: number;
@@ -695,10 +744,11 @@ export const SmartEditPanel = ({
 }: SmartEditPanelProps) => {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const suppressTrimClickRef = useRef(false);
-  const [draggedSegmentId, setDraggedSegmentId] = useState<string | undefined>();
+  const suppressTimelineMoveClickRef = useRef(false);
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
+  const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
@@ -749,21 +799,11 @@ export const SmartEditPanel = ({
     [timelineDurationSeconds],
   );
   const timedTimelineSegments = useMemo(() => {
-    const hasManualTimelineStarts = sortedSegments
-      .filter((segment) => segment.enabled)
-      .some((segment) => clampTimelineStart(segment.timelineStartSecond ?? 0) > 0);
-    let cursor = 0;
+    const currentStarts = timelineStartsForSegments(sortedSegments);
     return sortedSegments.map((segment) => {
-      const startSecond =
-        segment.enabled && hasManualTimelineStarts
-          ? clampTimelineStart(segment.timelineStartSecond ?? 0)
-          : cursor;
-      if (segment.enabled) {
-        cursor = Math.max(cursor, startSecond + segment.durationSeconds);
-      }
       return {
         segment,
-        startSecond,
+        startSecond: currentStarts.get(segment.id) ?? 0,
       };
     });
   }, [sortedSegments]);
@@ -1165,6 +1205,41 @@ export const SmartEditPanel = ({
     }, 0);
     commitPlanChange(replaceSegment(plan, trimDrag.segmentId, (segment) =>
       trimSegmentSource(segment, trimDrag.edge, sourceDeltaSeconds),
+    ));
+  };
+
+  const startTimelineMoveDrag = (
+    event: ReactPointerEvent<HTMLElement>,
+    segmentId: string,
+  ) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    selectTimelineSegment(segmentId, event);
+    setTimelineMoveDrag({
+      pointerId: event.pointerId,
+      segmentId,
+      startClientX: event.clientX,
+    });
+  };
+
+  const finishTimelineMoveDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!plan || !timelineMoveDrag || timelineMoveDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    const deltaSeconds = snapTimelineSeconds(
+      (event.clientX - timelineMoveDrag.startClientX) / timelinePixelsPerSecond,
+    );
+    setTimelineMoveDrag(undefined);
+    if (Math.abs(deltaSeconds) < 0.001) {
+      return;
+    }
+    suppressTimelineMoveClickRef.current = true;
+    window.setTimeout(() => {
+      suppressTimelineMoveClickRef.current = false;
+    }, 0);
+    commitPlanChange(moveSmartEditSegmentOnTimeline(
+      plan,
+      timelineMoveDrag.segmentId,
+      deltaSeconds,
     ));
   };
 
@@ -1877,9 +1952,10 @@ export const SmartEditPanel = ({
                   className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
                     selectedSegmentIdSet.has(segment.id) ? "selected" : ""
                   } ${
+                    timelineMoveDrag?.segmentId === segment.id ? "moving" : ""
+                  } ${
                     segment.enabled ? "" : "disabled"
                   }`.trim()}
-                  draggable
                   key={segment.id}
                   role="button"
                   style={{
@@ -1887,29 +1963,11 @@ export const SmartEditPanel = ({
                     width: Math.max(96, segment.durationSeconds * timelinePixelsPerSecond),
                   }}
                   tabIndex={0}
-                  onClick={(event) => selectTimelineSegment(segment.id, event)}
-                  onDragEnd={() => setDraggedSegmentId(undefined)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDragStart={() => setDraggedSegmentId(segment.id)}
-                  onDrop={() => {
-                    if (!plan || !draggedSegmentId || draggedSegmentId === segment.id) {
+                  onClick={(event) => {
+                    if (suppressTimelineMoveClickRef.current) {
                       return;
                     }
-                    const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
-                    const from = sorted.findIndex((candidate) => candidate.id === draggedSegmentId);
-                    const to = sorted.findIndex((candidate) => candidate.id === segment.id);
-                    if (from < 0 || to < 0) {
-                      return;
-                    }
-                    const [moved] = sorted.splice(from, 1);
-                    sorted.splice(to, 0, moved!);
-                    commitPlanChange(withRebuiltTimeline({
-                      ...plan,
-                      segments: sorted.map((candidate, index) => ({
-                        ...candidate,
-                        order: index + 1,
-                      })),
-                    }));
+                    selectTimelineSegment(segment.id, event);
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -1917,6 +1975,9 @@ export const SmartEditPanel = ({
                       selectTimelineSegment(segment.id);
                     }
                   }}
+                  onPointerCancel={() => setTimelineMoveDrag(undefined)}
+                  onPointerDown={(event) => startTimelineMoveDrag(event, segment.id)}
+                  onPointerUp={finishTimelineMoveDrag}
                 >
                   <button
                     aria-label={copy.trimIn}
