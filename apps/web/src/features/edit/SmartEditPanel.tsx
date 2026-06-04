@@ -20,6 +20,8 @@ import {
   SkipBack,
   SkipForward,
   Trash2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 import type { AppCopy } from "../../app/i18n";
@@ -51,6 +53,8 @@ interface SmartEditPanelProps {
 
 const MIN_SMART_EDIT_CLIP_SECONDS = 0.25;
 const MAX_SMART_EDIT_CLIP_SECONDS = 120;
+const TIMELINE_BASE_PX_PER_SECOND = 34;
+const TRIM_NUDGE_SECONDS = 0.1;
 
 const clampSmartEditDuration = (durationSeconds: number): number =>
   Number.isFinite(durationSeconds)
@@ -196,6 +200,31 @@ const sourceRangeLabel = (segment: SmartEditSegment): string => {
 
 const timelineRangeLabel = (startSecond: number, durationSeconds: number): string =>
   `${formatTimelineTime(startSecond)}-${formatTimelineTime(startSecond + durationSeconds)}`;
+
+const timelineRulerStep = (durationSeconds: number): number => {
+  if (durationSeconds <= 15) {
+    return 1;
+  }
+  if (durationSeconds <= 45) {
+    return 5;
+  }
+  if (durationSeconds <= 120) {
+    return 10;
+  }
+  return 30;
+};
+
+const timelineRulerTicks = (durationSeconds: number): number[] => {
+  const step = timelineRulerStep(durationSeconds);
+  const ticks: number[] = [];
+  for (let time = 0; time <= durationSeconds + 0.001; time += step) {
+    ticks.push(Number(time.toFixed(1)));
+  }
+  if (ticks.at(-1) !== durationSeconds) {
+    ticks.push(durationSeconds);
+  }
+  return ticks;
+};
 
 const planDurationSeconds = (segments: SmartEditSegment[]): number =>
   Math.min(
@@ -533,6 +562,8 @@ export const SmartEditPanel = ({
 }: SmartEditPanelProps) => {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const [draggedSegmentId, setDraggedSegmentId] = useState<string | undefined>();
+  const [playheadSeconds, setPlayheadSeconds] = useState(0);
+  const [timelineZoom, setTimelineZoom] = useState(1);
   const plan = result?.plan;
   const sortedSegments = useMemo(
     () => [...(plan?.segments ?? [])].sort((left, right) => left.order - right.order),
@@ -549,6 +580,27 @@ export const SmartEditPanel = ({
     (total, segment) => total + segment.durationSeconds,
     0,
   );
+  const timelineDurationSeconds = Math.max(1, enabledDurationSeconds);
+  const boundedPlayheadSeconds = Math.min(playheadSeconds, timelineDurationSeconds);
+  const timelinePixelsPerSecond = TIMELINE_BASE_PX_PER_SECOND * timelineZoom;
+  const timelineWidth = Math.max(720, timelineDurationSeconds * timelinePixelsPerSecond);
+  const rulerTicks = useMemo(
+    () => timelineRulerTicks(timelineDurationSeconds),
+    [timelineDurationSeconds],
+  );
+  const timedTimelineSegments = useMemo(() => {
+    let cursor = 0;
+    return sortedSegments.map((segment) => {
+      const startSecond = cursor;
+      if (segment.enabled) {
+        cursor += segment.durationSeconds;
+      }
+      return {
+        segment,
+        startSecond,
+      };
+    });
+  }, [sortedSegments]);
   const selectedSegmentIndex = selectedSegment
     ? sortedSegments.findIndex((segment) => segment.id === selectedSegment.id) + 1
     : 0;
@@ -620,6 +672,140 @@ export const SmartEditPanel = ({
       })),
     }));
     onSelectedSegmentChange(secondSegment.id);
+  };
+
+  const splitSegmentAtOffset = (
+    targetSegment: SmartEditSegment,
+    offsetSeconds: number,
+  ): string | undefined => {
+    if (
+      !plan ||
+      offsetSeconds < MIN_SMART_EDIT_CLIP_SECONDS ||
+      targetSegment.durationSeconds - offsetSeconds < MIN_SMART_EDIT_CLIP_SECONDS
+    ) {
+      return undefined;
+    }
+    const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
+    const index = sorted.findIndex((segment) => segment.id === targetSegment.id);
+    if (index < 0) {
+      return undefined;
+    }
+    const playbackRate = clampPlaybackRate(targetSegment.playbackRate ?? 1);
+    const firstDuration = clampSmartEditDuration(offsetSeconds);
+    const secondDuration = clampSmartEditDuration(targetSegment.durationSeconds - offsetSeconds);
+    const sourceStart = targetSegment.source.startSecond ?? 0;
+    const sourceEnd =
+      targetSegment.source.endSecond ?? sourceStart + targetSegment.durationSeconds * playbackRate;
+    const sourceMid = Math.min(sourceEnd, sourceStart + firstDuration * playbackRate);
+    const rightId = `${targetSegment.id}-split-${Date.now()}`;
+    sorted.splice(
+      index,
+      1,
+      {
+        ...targetSegment,
+        durationSeconds: firstDuration,
+        source: {
+          ...targetSegment.source,
+          endSecond: sourceMid,
+          startSecond: sourceStart,
+        },
+      },
+      {
+        ...targetSegment,
+        durationSeconds: secondDuration,
+        id: rightId,
+        source: {
+          ...targetSegment.source,
+          endSecond: sourceEnd,
+          startSecond: sourceMid,
+        },
+        subtitle: `${targetSegment.subtitle} (split)`,
+      },
+    );
+    onPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: sorted.map((segment, segmentIndex) => ({
+        ...segment,
+        order: segmentIndex + 1,
+      })),
+    }));
+    return rightId;
+  };
+
+  const splitAtPlayhead = () => {
+    if (!plan) {
+      return;
+    }
+    const target = timedTimelineSegments.find(
+      ({ segment, startSecond }) =>
+        segment.enabled &&
+        boundedPlayheadSeconds > startSecond &&
+        boundedPlayheadSeconds < startSecond + segment.durationSeconds,
+    );
+    if (!target) {
+      return;
+    }
+    const rightId = splitSegmentAtOffset(
+      target.segment,
+      boundedPlayheadSeconds - target.startSecond,
+    );
+    if (rightId) {
+      onSelectedSegmentChange(rightId);
+    }
+  };
+
+  const nudgeSegmentTrim = (
+    segmentId: string,
+    edge: "in" | "out",
+    deltaSeconds: number,
+  ) => {
+    if (!plan) {
+      return;
+    }
+    onPlanChange(replaceSegment(plan, segmentId, (segment) => {
+      const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+      const sourceStart = segment.source.startSecond ?? 0;
+      const sourceEnd =
+        segment.source.endSecond ?? sourceStart + segment.durationSeconds * playbackRate;
+      if (edge === "in") {
+        const nextStart = Math.max(
+          0,
+          Math.min(sourceEnd - MIN_SMART_EDIT_CLIP_SECONDS * playbackRate, sourceStart + deltaSeconds),
+        );
+        return {
+          ...segment,
+          durationSeconds: durationFromSourceRange(
+            nextStart,
+            sourceEnd,
+            playbackRate,
+            segment.durationSeconds,
+          ),
+          source: {
+            ...segment.source,
+            endSecond: sourceEnd,
+            startSecond: nextStart,
+          },
+        };
+      }
+      const nextEnd = Math.max(
+        sourceStart + MIN_SMART_EDIT_CLIP_SECONDS * playbackRate,
+        sourceEnd + deltaSeconds,
+      );
+      return {
+        ...segment,
+        durationSeconds: durationFromSourceRange(
+          sourceStart,
+          nextEnd,
+          playbackRate,
+          segment.durationSeconds,
+        ),
+        source: {
+          ...segment.source,
+          endSecond: nextEnd,
+          startSecond: sourceStart,
+        },
+      };
+    }));
   };
 
   const removeSelectedSegment = () => {
@@ -1133,53 +1319,132 @@ export const SmartEditPanel = ({
           <h3>{copy.timeline}</h3>
           <span>{copy.deleteHint}</span>
         </div>
+        <div className="timeline-toolbar" aria-label={copy.timelineControls}>
+          <Button
+            icon={<ZoomOut size={16} />}
+            onClick={() => setTimelineZoom((current) => Math.max(0.5, Number((current - 0.25).toFixed(2))))}
+          >
+            {copy.zoomOut}
+          </Button>
+          <label>
+            {copy.playhead}
+            <input
+              max={timelineDurationSeconds}
+              min={0}
+              step={0.1}
+              type="range"
+              value={boundedPlayheadSeconds}
+              onChange={(event) => setPlayheadSeconds(Number(event.target.value))}
+            />
+          </label>
+          <strong>{formatTimelineTime(boundedPlayheadSeconds)}</strong>
+          <Button
+            disabled={!plan}
+            icon={<Scissors size={16} />}
+            onClick={splitAtPlayhead}
+          >
+            {copy.splitAtPlayhead}
+          </Button>
+          <Button
+            icon={<ZoomIn size={16} />}
+            onClick={() => setTimelineZoom((current) => Math.min(3, Number((current + 0.25).toFixed(2))))}
+          >
+            {copy.zoomIn}
+          </Button>
+        </div>
         {sortedSegments.length > 0 ? (
-          <div className="timeline-track">
-            {sortedSegments.map((segment) => (
-              <button
-                aria-pressed={selectedSegment?.id === segment.id}
-                className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
-                  segment.enabled ? "" : "disabled"
-                }`.trim()}
-                draggable
-                key={segment.id}
-                style={{ flexGrow: Math.max(1, segment.durationSeconds) }}
-                type="button"
-                onClick={() => onSelectedSegmentChange(segment.id)}
-                onDragEnd={() => setDraggedSegmentId(undefined)}
-                onDragOver={(event) => event.preventDefault()}
-                onDragStart={() => setDraggedSegmentId(segment.id)}
-                onDrop={() => {
-                  if (!plan || !draggedSegmentId || draggedSegmentId === segment.id) {
-                    return;
-                  }
-                  const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
-                  const from = sorted.findIndex((candidate) => candidate.id === draggedSegmentId);
-                  const to = sorted.findIndex((candidate) => candidate.id === segment.id);
-                  if (from < 0 || to < 0) {
-                    return;
-                  }
-                  const [moved] = sorted.splice(from, 1);
-                  sorted.splice(to, 0, moved!);
-                  onPlanChange(withRebuiltTimeline({
-                    ...plan,
-                    segments: sorted.map((candidate, index) => ({
-                      ...candidate,
-                      order: index + 1,
-                    })),
-                  }));
-                }}
-              >
-                <strong>
-                  {selectedSegment?.id === segment.id ? copy.selected : segment.order}
-                </strong>
-                <span>{segment.subtitle}</span>
-                <small>
-                  {segment.durationSeconds}s - {segment.transition}
-                  {!segment.enabled ? ` - ${copy.disabled}` : ""}
-                </small>
-              </button>
-            ))}
+          <div className="timeline-scroll">
+            <div className="timeline-ruler" style={{ width: timelineWidth }}>
+              {rulerTicks.map((tick) => (
+                <span
+                  key={tick}
+                  style={{ left: Math.min(tick, timelineDurationSeconds) * timelinePixelsPerSecond }}
+                >
+                  {formatTimelineTime(tick)}
+                </span>
+              ))}
+            </div>
+            <div
+              className="timeline-playhead"
+              style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
+            />
+            <div className="timeline-track" style={{ width: timelineWidth }}>
+              {timedTimelineSegments.map(({ segment, startSecond }) => (
+                <article
+                  aria-label={`${copy.selectedSegment} ${segment.order}`}
+                  aria-pressed={selectedSegment?.id === segment.id}
+                  className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
+                    segment.enabled ? "" : "disabled"
+                  }`.trim()}
+                  draggable
+                  key={segment.id}
+                  role="button"
+                  style={{
+                    width: Math.max(96, segment.durationSeconds * timelinePixelsPerSecond),
+                  }}
+                  tabIndex={0}
+                  onClick={() => onSelectedSegmentChange(segment.id)}
+                  onDragEnd={() => setDraggedSegmentId(undefined)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragStart={() => setDraggedSegmentId(segment.id)}
+                  onDrop={() => {
+                    if (!plan || !draggedSegmentId || draggedSegmentId === segment.id) {
+                      return;
+                    }
+                    const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
+                    const from = sorted.findIndex((candidate) => candidate.id === draggedSegmentId);
+                    const to = sorted.findIndex((candidate) => candidate.id === segment.id);
+                    if (from < 0 || to < 0) {
+                      return;
+                    }
+                    const [moved] = sorted.splice(from, 1);
+                    sorted.splice(to, 0, moved!);
+                    onPlanChange(withRebuiltTimeline({
+                      ...plan,
+                      segments: sorted.map((candidate, index) => ({
+                        ...candidate,
+                        order: index + 1,
+                      })),
+                    }));
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectedSegmentChange(segment.id);
+                    }
+                  }}
+                >
+                  <button
+                    aria-label={copy.trimIn}
+                    className="timeline-trim-handle left"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectedSegmentChange(segment.id);
+                      nudgeSegmentTrim(segment.id, "in", TRIM_NUDGE_SECONDS);
+                    }}
+                  />
+                  <strong>
+                    {selectedSegment?.id === segment.id ? copy.selected : segment.order}
+                  </strong>
+                  <span>{segment.subtitle}</span>
+                  <small>
+                    {timelineRangeLabel(startSecond, segment.durationSeconds)} / {segment.durationSeconds.toFixed(1)}s
+                    {!segment.enabled ? ` - ${copy.disabled}` : ""}
+                  </small>
+                  <button
+                    aria-label={copy.trimOut}
+                    className="timeline-trim-handle right"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectedSegmentChange(segment.id);
+                      nudgeSegmentTrim(segment.id, "out", -TRIM_NUDGE_SECONDS);
+                    }}
+                  />
+                </article>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="empty-state compact">
