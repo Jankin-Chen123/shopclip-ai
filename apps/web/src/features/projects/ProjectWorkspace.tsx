@@ -156,6 +156,45 @@ const splitMarkdownTableCells = (line: string): string[] =>
     .split("|")
     .map((cell) => cell.trim());
 
+const visualColumnIndexForHeaders = (headers: string[]): number => {
+  const normalizedHeaders = headers.map((header) => header.toLowerCase());
+  const visualIndex = normalizedHeaders.findIndex(
+    (header) =>
+      header.includes("画面") ||
+      header.includes("visual") ||
+      header.includes("prompt"),
+  );
+  if (visualIndex >= 0) {
+    return visualIndex;
+  }
+  return headers.length >= 5 ? 3 : Math.max(0, headers.length - 2);
+};
+
+const normalizeMarkdownTableRow = (headers: string[], row: string[]): string[] => {
+  if (row.length === headers.length) {
+    return row;
+  }
+  if (row.length < headers.length) {
+    return [...row, ...Array.from({ length: headers.length - row.length }, () => "")];
+  }
+
+  const visualIndex = visualColumnIndexForHeaders(headers);
+  const tailColumnCount = headers.length - visualIndex - 1;
+  if (visualIndex <= 0 || tailColumnCount < 1) {
+    return [...row.slice(0, headers.length - 1), row.slice(headers.length - 1).join(" | ")];
+  }
+
+  const head = row.slice(0, visualIndex);
+  const tail = row.slice(row.length - tailColumnCount);
+  const mergedVisual = row.slice(visualIndex, row.length - tailColumnCount).join(" | ");
+  return [...head, mergedVisual, ...tail];
+};
+
+const isLikelyTableRowStart = (value: string): boolean =>
+  /^\d+(?:\.\d+)?\s*(?:s|秒)?(?:\s*[-~至到]\s*\d+(?:\.\d+)?\s*(?:s|秒)?)?$/iu.test(
+    value.trim(),
+  );
+
 const parseInlineMarkdownTable = (text: string): MarkdownTableBlock | undefined => {
   const cells = splitMarkdownTableCells(text);
   const dividerIndex = cells.findIndex(isMarkdownDividerCell);
@@ -170,9 +209,24 @@ const parseInlineMarkdownTable = (text: string): MarkdownTableBlock | undefined 
   }
 
   const rows: string[][] = [];
-  for (let index = dividerIndex + rowWidth; index < cells.length; index += rowWidth) {
-    const row = cells.slice(index, index + rowWidth);
-    if (row.length === rowWidth && row.some((cell) => cell.length > 0)) {
+  const dataCells = cells.slice(dividerIndex + rowWidth);
+  const rawRows: string[][] = [];
+  let currentRow: string[] = [];
+  for (const cell of dataCells) {
+    if (currentRow.length > 0 && isLikelyTableRowStart(cell)) {
+      rawRows.push(currentRow);
+      currentRow = [cell];
+    } else {
+      currentRow.push(cell);
+    }
+  }
+  if (currentRow.length > 0) {
+    rawRows.push(currentRow);
+  }
+
+  for (const rawRow of rawRows) {
+    const row = normalizeMarkdownTableRow(headers, rawRow);
+    if (row.some((cell) => cell.length > 0)) {
       rows.push(row);
     }
   }
@@ -204,7 +258,10 @@ const parseMarkdownBlocks = (value: string): MarkdownBlock[] => {
       index += 2;
       const rows: string[][] = [];
       while (index < lines.length && (lines[index] ?? "").includes("|")) {
-        rows.push(splitMarkdownTableCells(lines[index] ?? ""));
+        const row = normalizeMarkdownTableRow(headers, splitMarkdownTableCells(lines[index] ?? ""));
+        if (row.some((cell) => cell.length > 0)) {
+          rows.push(row);
+        }
         index += 1;
       }
       index -= 1;
@@ -705,15 +762,6 @@ const ScriptDetail = ({
         ))}
       </div>
     ) : null}
-    <ol>
-      {script.scenes.map((scene) => (
-        <li key={scene.id}>
-          <strong>{`${scene.order}. ${scene.durationSeconds}s`}</strong>
-          <p>{scene.subtitle}</p>
-          <small>{scene.visualPrompt}</small>
-        </li>
-      ))}
-    </ol>
   </article>
 );
 

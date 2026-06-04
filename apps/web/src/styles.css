@@ -5926,6 +5926,7 @@ textarea {
 }
 
 .project-markdown-table-wrap {
+  max-width: 100%;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -5933,8 +5934,9 @@ textarea {
 }
 
 .project-markdown-content table {
-  width: 100%;
-  min-width: 780px;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
   border-collapse: collapse;
 }
 
@@ -5946,6 +5948,13 @@ textarea {
   text-align: left;
   vertical-align: top;
   line-height: 1.65;
+  min-width: 160px;
+}
+
+.project-markdown-content th:first-child,
+.project-markdown-content td:first-child {
+  min-width: 72px;
+  white-space: nowrap;
 }
 
 .project-markdown-content th {
