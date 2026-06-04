@@ -4799,15 +4799,15 @@ textarea {
 }
 
 .timeline-track {
-  display: flex;
-  gap: 0;
+  position: relative;
   min-width: 100%;
   min-height: 116px;
   padding-top: 8px;
 }
 
 .timeline-track article {
-  position: relative;
+  position: absolute;
+  top: 8px;
   display: grid;
   grid-template-rows: auto minmax(36px, 1fr) auto;
   gap: 6px;
@@ -4822,10 +4822,6 @@ textarea {
   outline: none;
   overflow: hidden;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
-}
-
-.timeline-track article + article {
-  margin-left: 8px;
 }
 
 .timeline-track article.active,

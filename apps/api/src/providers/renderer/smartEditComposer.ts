@@ -132,8 +132,24 @@ const normalizeDuration = (segment: SmartEditSegment): number =>
 const normalizePlaybackRate = (segment: SmartEditSegment): number =>
   Math.max(0.25, Math.min(4, segment.playbackRate ?? 1));
 
+const normalizeTimelineStart = (segment: SmartEditSegment): number =>
+  Math.max(0, Math.min(600, segment.timelineStartSecond ?? 0));
+
 const normalizeInSegmentOffset = (offsetSeconds: number | undefined, segment: SmartEditSegment): number =>
   Math.max(0, Math.min(normalizeDuration(segment) - 0.01, offsetSeconds ?? 0));
+
+const timelineSegmentStartSeconds = (segments: SmartEditSegment[]): Map<string, number> => {
+  const starts = new Map<string, number>();
+  const hasManualStarts = segments.some((segment) => normalizeTimelineStart(segment) > 0);
+  let cursor = 0;
+  for (const segment of segments) {
+    const requestedStart = normalizeTimelineStart(segment);
+    const start = hasManualStarts ? requestedStart : cursor;
+    starts.set(segment.id, start);
+    cursor = Math.max(cursor, start + normalizeDuration(segment));
+  }
+  return starts;
+};
 
 type OutputDimensions = {
   height: number;
@@ -454,6 +470,26 @@ const atempoFilter = (playbackRate: number): string => {
   return factors.map((factor) => `atempo=${factor.toFixed(4)}`).join(",");
 };
 
+const createSilenceAudioSegment = async (
+  command: string,
+  durationSeconds: number,
+  outputPath: string,
+  run: CommandRunner,
+) => {
+  await run(command, [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "anullsrc=channel_layout=stereo:sample_rate=44100",
+    "-t",
+    String(durationSeconds),
+    "-c:a",
+    "pcm_s16le",
+    outputPath,
+  ]);
+};
+
 const createSourceAudioTrack = async (
   command: string,
   plan: SmartEditPlan,
@@ -473,24 +509,24 @@ const createSourceAudioTrack = async (
   }
 
   const paddedPaths: string[] = [];
+  const timelineStarts = timelineSegmentStartSeconds(enabledSegments);
+  let cursor = 0;
   for (const [index, segment] of enabledSegments.entries()) {
     const targetPath = join(workdir, `source-audio-${index + 1}.m4a`);
     const paddedPath = join(workdir, `source-audio-${index + 1}-padded.wav`);
+    const start = timelineStarts.get(segment.id) ?? cursor;
+    const gapDuration = start - cursor;
+    if (gapDuration > 0.01) {
+      const gapPath = join(workdir, `source-audio-gap-${index + 1}.wav`);
+      await createSilenceAudioSegment(command, gapDuration, gapPath, run);
+      paddedPaths.push(gapPath);
+      cursor += gapDuration;
+    }
     const sourceAudioUrl = segment.sourceAudioMuted ? undefined : segment.source.sceneClipAudioUrl;
     if (!sourceAudioUrl) {
-      await run(command, [
-        "-y",
-        "-f",
-        "lavfi",
-        "-i",
-        "anullsrc=channel_layout=stereo:sample_rate=44100",
-        "-t",
-        String(normalizeDuration(segment)),
-        "-c:a",
-        "pcm_s16le",
-        paddedPath,
-      ]);
+      await createSilenceAudioSegment(command, normalizeDuration(segment), paddedPath, run);
       paddedPaths.push(paddedPath);
+      cursor = Math.max(cursor, start) + normalizeDuration(segment);
       continue;
     }
 
@@ -516,6 +552,7 @@ const createSourceAudioTrack = async (
       paddedPath,
     ]);
     paddedPaths.push(paddedPath);
+    cursor = Math.max(cursor, start) + normalizeDuration(segment);
   }
 
   if (paddedPaths.length === 0) {
@@ -581,13 +618,70 @@ const concatSegments = async (
   ]);
 };
 
+const createBlackVideoSegment = async (
+  command: string,
+  dimensions: OutputDimensions,
+  durationSeconds: number,
+  outputPath: string,
+  run: CommandRunner,
+) => {
+  await run(command, [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    `color=c=black:s=${dimensions.width}x${dimensions.height}:r=30:d=${durationSeconds.toFixed(2)}`,
+    "-an",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "23",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ]);
+};
+
 const stitchSegmentsWithTransitions = async (
   command: string,
   segments: Array<{ path: string; segment: SmartEditSegment }>,
+  dimensions: OutputDimensions,
   workdir: string,
   outputPath: string,
   run: CommandRunner,
 ) => {
+  const timelineStarts = timelineSegmentStartSeconds(segments.map(({ segment }) => segment));
+  const hasTimelineGap = segments.some(({ segment }, index) => {
+    if (index === 0) {
+      return (timelineStarts.get(segment.id) ?? 0) > 0.01;
+    }
+    const previous = segments[index - 1]!;
+    const previousEnd = (timelineStarts.get(previous.segment.id) ?? 0) + normalizeDuration(previous.segment);
+    return (timelineStarts.get(segment.id) ?? 0) - previousEnd > 0.01;
+  });
+  if (hasTimelineGap) {
+    const pathsWithGaps: string[] = [];
+    let cursor = 0;
+    for (const [index, { path, segment }] of segments.entries()) {
+      const start = timelineStarts.get(segment.id) ?? cursor;
+      const gapDuration = start - cursor;
+      if (gapDuration > 0.01) {
+        const gapPath = join(workdir, `timeline-gap-${index + 1}.mp4`);
+        await createBlackVideoSegment(command, dimensions, gapDuration, gapPath, run);
+        pathsWithGaps.push(gapPath);
+        cursor += gapDuration;
+      }
+      pathsWithGaps.push(path);
+      cursor = Math.max(cursor, start) + normalizeDuration(segment);
+    }
+    await concatSegments(command, pathsWithGaps, workdir, outputPath, run);
+    return;
+  }
+
   const hasTimelineTransition = segments.some(({ segment }, index) => {
     if (index === 0) {
       return false;
@@ -668,9 +762,23 @@ const createVoiceoverTrack = async (
   }
 
   const paddedPaths: string[] = [];
+  const timelineStarts = timelineSegmentStartSeconds(enabledSegments);
+  let cursor = 0;
   for (const [index, segment] of enabledSegments.entries()) {
     const voiceText = segment.voiceover.trim() || segment.subtitle.trim();
+    const start = timelineStarts.get(segment.id) ?? cursor;
+    const gapDuration = start - cursor;
+    if (gapDuration > 0.01) {
+      const gapPath = join(workdir, `voice-gap-${index + 1}.wav`);
+      await createSilenceAudioSegment(command, gapDuration, gapPath, run);
+      paddedPaths.push(gapPath);
+      cursor += gapDuration;
+    }
     if (!voiceText) {
+      const silencePath = join(workdir, `voice-${index + 1}-silence.wav`);
+      await createSilenceAudioSegment(command, normalizeDuration(segment), silencePath, run);
+      paddedPaths.push(silencePath);
+      cursor = Math.max(cursor, start) + normalizeDuration(segment);
       continue;
     }
     const rawVoicePath = join(workdir, `voice-${index + 1}.wav`);
@@ -699,6 +807,7 @@ const createVoiceoverTrack = async (
       paddedVoicePath,
     ]);
     paddedPaths.push(paddedVoicePath);
+    cursor = Math.max(cursor, start) + normalizeDuration(segment);
   }
 
   if (paddedPaths.length === 0) {
@@ -899,6 +1008,7 @@ export const composeSmartEditToStorage = async (
       path: segmentOutput.outputPath,
       segment: enabledSegments.find((segment) => segment.id === segmentOutput.segmentId)!,
     })),
+    dimensions,
     workdir,
     stitchedPath,
     run,

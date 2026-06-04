@@ -494,3 +494,25 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web lint`
   - `corepack pnpm --filter @shopclip/web build`
+
+## 2026-06-05 Manual Timeline Start And Gap Export
+
+- OpenCut-style gap closed:
+  - The previous smart-edit timeline could trim, split, reorder, mute, and offset captions/voice, but clips still exported as a strict sequence.
+  - This made the UI closer to a segment list than a real editing timeline because an empty gap before a clip could not survive export.
+- Fix:
+  - Added `timelineStartSecond` to smart-edit segment contracts and request overrides.
+  - The Smart Edit inspector now exposes a timeline start field. When a user first edits a start time or splits a clip, the current sequential positions are materialized onto all clips so later clips do not accidentally jump to `0s`.
+  - Timeline duration, ruler, playhead bounds, track-stack elements, and segment cards now use the maximum clip end time rather than only the sum of durations.
+  - The primary timeline row now uses absolute positioning so visible empty space matches the target timeline.
+  - Backend ffmpeg export now detects timeline gaps and inserts generated black video gaps before concat.
+  - Source audio and generated voiceover tracks insert matching silent audio gaps so separated scene audio, text/voice, and video stay aligned.
+- Verification:
+  - Added `smartEditComposer.test.ts` coverage for a `2s` manual gap across video, source audio, and voice tracks.
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+- Remaining:
+  - The next OpenCut-level increment should replace numeric start editing with direct horizontal drag, snapping, collision/ripple behavior, and explicit track lanes for independent video/audio/text clips.

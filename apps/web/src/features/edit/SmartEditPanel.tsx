@@ -79,6 +79,9 @@ const clampInSegmentOffset = (offsetSeconds: number, durationSeconds: number): n
     ? Math.max(0, Math.min(Math.max(0, durationSeconds - 0.1), offsetSeconds))
     : 0;
 
+const clampTimelineStart = (startSecond: number): number =>
+  Number.isFinite(startSecond) ? Math.max(0, Math.min(600, startSecond)) : 0;
+
 const durationFromSourceRange = (
   startSecond: number | undefined,
   endSecond: number | undefined,
@@ -297,16 +300,32 @@ const planDurationSeconds = (segments: SmartEditSegment[]): number =>
     600,
     Math.max(
       1,
-      segments
-        .filter((segment) => segment.enabled)
-        .reduce((sum, segment) => sum + segment.durationSeconds, 0),
+      timelineDurationForSegments(segments),
     ),
   );
+
+const timelineDurationForSegments = (segments: SmartEditSegment[]): number => {
+  const enabledSegments = segments.filter((segment) => segment.enabled);
+  const hasManualTimelineStarts = enabledSegments.some(
+    (segment) => clampTimelineStart(segment.timelineStartSecond ?? 0) > 0,
+  );
+  let cursor = 0;
+  for (const segment of enabledSegments) {
+    const startSecond = hasManualTimelineStarts
+      ? clampTimelineStart(segment.timelineStartSecond ?? 0)
+      : cursor;
+    cursor = Math.max(cursor, startSecond + segment.durationSeconds);
+  }
+  return cursor;
+};
 
 const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
   const enabledSegments = [...plan.segments]
     .filter((segment) => segment.enabled)
     .sort((left, right) => left.order - right.order);
+  const hasManualTimelineStarts = enabledSegments.some(
+    (segment) => clampTimelineStart(segment.timelineStartSecond ?? 0) > 0,
+  );
   const tracks: SmartEditTimeline["tracks"] = [
     {
       hidden: false,
@@ -356,11 +375,13 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
   const elements: SmartEditTimeline["elements"] = [];
   let cursor = 0;
   for (const segment of enabledSegments) {
-    const startSecond = cursor;
+    const startSecond = hasManualTimelineStarts
+      ? clampTimelineStart(segment.timelineStartSecond ?? 0)
+      : cursor;
     const durationSeconds = segment.durationSeconds;
     const sourceStart = segment.source.startSecond ?? 0;
     const sourceEnd = segment.source.endSecond;
-    cursor += durationSeconds;
+    cursor = Math.max(cursor, startSecond + durationSeconds);
     elements.push({
       detachedAudio: false,
       durationSeconds,
@@ -719,7 +740,7 @@ export const SmartEditPanel = ({
     (total, segment) => total + segment.durationSeconds,
     0,
   );
-  const timelineDurationSeconds = Math.max(1, enabledDurationSeconds);
+  const timelineDurationSeconds = Math.max(1, timelineDurationForSegments(sortedSegments));
   const boundedPlayheadSeconds = Math.min(playheadSeconds, timelineDurationSeconds);
   const timelinePixelsPerSecond = TIMELINE_BASE_PX_PER_SECOND * timelineZoom;
   const timelineWidth = Math.max(720, timelineDurationSeconds * timelinePixelsPerSecond);
@@ -728,11 +749,17 @@ export const SmartEditPanel = ({
     [timelineDurationSeconds],
   );
   const timedTimelineSegments = useMemo(() => {
+    const hasManualTimelineStarts = sortedSegments
+      .filter((segment) => segment.enabled)
+      .some((segment) => clampTimelineStart(segment.timelineStartSecond ?? 0) > 0);
     let cursor = 0;
     return sortedSegments.map((segment) => {
-      const startSecond = cursor;
+      const startSecond =
+        segment.enabled && hasManualTimelineStarts
+          ? clampTimelineStart(segment.timelineStartSecond ?? 0)
+          : cursor;
       if (segment.enabled) {
-        cursor += segment.durationSeconds;
+        cursor = Math.max(cursor, startSecond + segment.durationSeconds);
       }
       return {
         segment,
@@ -910,6 +937,25 @@ export const SmartEditPanel = ({
     commitPlanChange(replaceSegment(plan, selectedSegment.id, update));
   };
 
+  const updateSelectedSegmentTimelineStart = (nextStartSecond: number) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    const currentStarts = new Map(
+      timedTimelineSegments.map(({ segment, startSecond }) => [segment.id, startSecond]),
+    );
+    commitPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: plan.segments.map((segment) => ({
+        ...segment,
+        timelineStartSecond:
+          segment.id === selectedSegment.id
+            ? clampTimelineStart(nextStartSecond)
+            : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+      })),
+    }));
+  };
+
   const splitSelectedSegment = () => {
     if (
       !plan ||
@@ -943,6 +989,8 @@ export const SmartEditPanel = ({
       ...selectedSegment,
       durationSeconds: secondDuration,
       id: `${selectedSegment.id}-split-${Date.now()}`,
+      timelineStartSecond:
+        clampTimelineStart(selectedSegment.timelineStartSecond ?? 0) + firstDuration,
       source:
         sourceMid !== undefined
           ? { ...selectedSegment.source, startSecond: sourceMid, endSecond: sourceEnd }
@@ -950,11 +998,21 @@ export const SmartEditPanel = ({
       subtitle: `${selectedSegment.subtitle} (split)`,
     };
     sorted.splice(index, 1, firstSegment, secondSegment);
+    const currentStarts = new Map(
+      timedTimelineSegments.map(({ segment, startSecond }) => [segment.id, startSecond]),
+    );
+    const selectedStart = clampTimelineStart(currentStarts.get(selectedSegment.id) ?? 0);
     commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: sorted.map((segment, segmentIndex) => ({
         ...segment,
         order: segmentIndex + 1,
+        timelineStartSecond:
+          segment.id === selectedSegment.id
+            ? selectedStart
+            : segment.id === secondSegment.id
+              ? selectedStart + firstDuration
+              : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
       })),
     }));
     onSelectedSegmentChange(secondSegment.id);
@@ -1000,6 +1058,7 @@ export const SmartEditPanel = ({
         ...targetSegment,
         durationSeconds: secondDuration,
         id: rightId,
+        timelineStartSecond: clampTimelineStart(targetSegment.timelineStartSecond ?? 0) + firstDuration,
         source: {
           ...targetSegment.source,
           endSecond: sourceEnd,
@@ -1008,11 +1067,21 @@ export const SmartEditPanel = ({
         subtitle: `${targetSegment.subtitle} (split)`,
       },
     );
+    const currentStarts = new Map(
+      timedTimelineSegments.map(({ segment, startSecond }) => [segment.id, startSecond]),
+    );
+    const targetStart = clampTimelineStart(currentStarts.get(targetSegment.id) ?? 0);
     commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: sorted.map((segment, segmentIndex) => ({
         ...segment,
         order: segmentIndex + 1,
+        timelineStartSecond:
+          segment.id === targetSegment.id
+            ? targetStart
+            : segment.id === rightId
+              ? targetStart + firstDuration
+              : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
       })),
     }));
     return rightId;
@@ -1195,6 +1264,11 @@ export const SmartEditPanel = ({
           <strong>{enabledDurationSeconds}s</strong>
         </div>
         <div>
+          <Clock3 size={16} />
+          <span>{copy.timelineTotal}</span>
+          <strong>{timelineDurationSeconds.toFixed(1)}s</strong>
+        </div>
+        <div>
           <Film size={16} />
           <span>{copy.selectedSegment}</span>
           <strong>
@@ -1370,6 +1444,19 @@ export const SmartEditPanel = ({
                         ...segment,
                         durationSeconds: clampSmartEditDuration(Number(event.target.value)),
                       }))
+                    }
+                  />
+                </label>
+                <label>
+                  {copy.timelineStart}
+                  <input
+                    max={600}
+                    min={0}
+                    step={0.1}
+                    type="number"
+                    value={selectedSegment.timelineStartSecond ?? 0}
+                    onChange={(event) =>
+                      updateSelectedSegmentTimelineStart(Number(event.target.value))
                     }
                   />
                 </label>
@@ -1796,6 +1883,7 @@ export const SmartEditPanel = ({
                   key={segment.id}
                   role="button"
                   style={{
+                    left: startSecond * timelinePixelsPerSecond,
                     width: Math.max(96, segment.durationSeconds * timelinePixelsPerSecond),
                   }}
                   tabIndex={0}

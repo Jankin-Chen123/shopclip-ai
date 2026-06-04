@@ -58,6 +58,7 @@ const createPlan = (): SmartEditPlan => ({
       assetTags: ["product", "demo"],
       durationSeconds: 4,
       enabled: true,
+      timelineStartSecond: 0,
       order: 1,
       rationale: "Use the structured product demo slice.",
       sceneId: "scene-1",
@@ -81,6 +82,7 @@ const createPlan = (): SmartEditPlan => ({
       assetTags: ["hero", "packshot"],
       durationSeconds: 4,
       enabled: true,
+      timelineStartSecond: 0,
       order: 2,
       rationale: "Use the product hero image for the CTA.",
       sceneId: "scene-2",
@@ -720,5 +722,55 @@ describe("smart edit composer", () => {
     );
     expect(voicePadCommand?.args.join(" ")).toContain("adelay=800:all=1");
     expect(voicePadCommand?.args.join(" ")).toContain("atrim=0:4");
+  });
+
+  it("preserves manual timeline gaps across video, source audio, and voice tracks", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = plan.segments.map((segment, index) => ({
+      ...segment,
+      durationSeconds: 4,
+      timelineStartSecond: index === 0 ? 0 : 6,
+      source: {
+        endSecond: 4,
+        kind: "generated-scene-clip",
+        sceneClipAudioUrl: dataAudio,
+        sceneClipUrl: dataVideo,
+        sceneClipVideoOnlyUrl: dataVideo,
+        startSecond: 0,
+      },
+      transition: "cut",
+    }));
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const videoGapCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("timeline-gap-2.mp4")),
+    );
+    expect(videoGapCommand?.args).toEqual(expect.arrayContaining(["-f", "lavfi"]));
+    expect(videoGapCommand?.args.join(" ")).toContain("color=c=black");
+    expect(videoGapCommand?.args.join(" ")).toContain("d=2.00");
+
+    const sourceAudioGapCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-gap-2.wav")),
+    );
+    expect(sourceAudioGapCommand?.args).toEqual(expect.arrayContaining(["-t", "2"]));
+
+    const voiceGapCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("voice-gap-2.wav")),
+    );
+    expect(voiceGapCommand?.args).toEqual(expect.arrayContaining(["-t", "2"]));
   });
 });

@@ -1364,6 +1364,9 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
     .filter((segment) => segment.enabled)
     .sort((left, right) => left.order - right.order);
   let cursor = 0;
+  const hasManualTimelineStarts = enabledSegments.some(
+    (segment) => (segment.timelineStartSecond ?? 0) > 0,
+  );
   const tracks: SmartEditTimeline["tracks"] = [
     {
       hidden: false,
@@ -1411,9 +1414,11 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
       : []),
   ];
   const elements: SmartEditTimeline["elements"] = enabledSegments.flatMap((segment) => {
-    const startSecond = cursor;
+    const startSecond = hasManualTimelineStarts
+      ? Math.max(0, Math.min(600, segment.timelineStartSecond ?? 0))
+      : cursor;
     const durationSeconds = segment.durationSeconds;
-    cursor += durationSeconds;
+    cursor = Math.max(cursor, startSecond + durationSeconds);
     const sourceStart = segment.source.startSecond ?? 0;
     const sourceEnd = segment.source.endSecond;
     return [
