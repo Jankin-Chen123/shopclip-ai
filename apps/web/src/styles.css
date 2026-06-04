@@ -4705,6 +4705,42 @@ textarea {
   font-size: 0.82rem;
 }
 
+.timeline-batch-toolbar,
+.timeline-selection-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 8px;
+}
+
+.timeline-batch-toolbar > strong,
+.timeline-selection-hint span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.timeline-selection-hint button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 5px 9px;
+}
+
+.timeline-selection-hint button:hover,
+.timeline-selection-hint button:focus-visible {
+  border-color: var(--primary-strong);
+  outline: none;
+}
+
 .timeline-scroll {
   position: relative;
   min-height: 154px;
@@ -4797,6 +4833,11 @@ textarea {
   border-color: var(--primary-strong);
   background: rgba(244, 114, 182, 0.12);
   box-shadow: 0 0 0 2px rgba(244, 114, 182, 0.18);
+}
+
+.timeline-track article.selected:not(.active) {
+  border-color: rgba(244, 114, 182, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.22);
 }
 
 .timeline-track article.disabled {
@@ -4937,6 +4978,10 @@ textarea {
   border-color: var(--primary-strong);
   background: rgba(244, 114, 182, 0.12);
   box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.22);
+}
+
+.smart-edit-track-clip.selected:not(.active) {
+  border-color: rgba(244, 114, 182, 0.58);
 }
 
 .smart-edit-track-clip.muted,

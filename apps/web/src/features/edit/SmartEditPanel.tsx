@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type {
   AssetMetadata,
@@ -636,6 +637,7 @@ export const SmartEditPanel = ({
   const [draggedSegmentId, setDraggedSegmentId] = useState<string | undefined>();
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
@@ -646,6 +648,7 @@ export const SmartEditPanel = ({
     if (plan?.id !== historyPlanId) {
       setHistoryPlanId(plan?.id);
       setRedoStack([]);
+      setSelectedSegmentIds([]);
       setUndoStack([]);
       setPlayheadSeconds(0);
     }
@@ -656,6 +659,17 @@ export const SmartEditPanel = ({
   );
   const selectedSegment =
     sortedSegments.find((segment) => segment.id === selectedSegmentId) ?? sortedSegments[0];
+  useEffect(() => {
+    if (!selectedSegment) {
+      setSelectedSegmentIds([]);
+      return;
+    }
+    setSelectedSegmentIds((current) => {
+      const validIds = new Set(sortedSegments.map((segment) => segment.id));
+      const next = current.filter((id) => validIds.has(id));
+      return next.length > 0 ? next : [selectedSegment.id];
+    });
+  }, [selectedSegment, sortedSegments]);
   const selectedPreviewMedia = previewMediaForSegment(selectedSegment, assets);
   const selectedSlices = selectedSegment?.source.assetId
     ? assetSlices.filter((slice) => slice.assetId === selectedSegment.source.assetId)
@@ -690,6 +704,8 @@ export const SmartEditPanel = ({
     ? sortedSegments.findIndex((segment) => segment.id === selectedSegment.id) + 1
     : 0;
   const selectedSourceLabel = selectedSegment ? sourceLabel(selectedSegment, assets) : "-";
+  const selectedSegmentIdSet = useMemo(() => new Set(selectedSegmentIds), [selectedSegmentIds]);
+  const selectedBatchSegments = sortedSegments.filter((segment) => selectedSegmentIdSet.has(segment.id));
   const audioLabel = plan?.audio.bgmTrack ?? mediaSettings.bgmTrack;
   const trackSegments = useMemo(
     () => timelineTrackSegments(plan, assets, renderTask),
@@ -731,6 +747,94 @@ export const SmartEditPanel = ({
     setUndoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
     onPlanChange(nextPlan);
     onSelectedSegmentChange(nextPlan.segments[0]?.id);
+  };
+
+  const selectTimelineSegment = (
+    segmentId: string,
+    event?: ReactMouseEvent<HTMLElement>,
+  ) => {
+    const isToggle = Boolean(event?.ctrlKey || event?.metaKey);
+    const isRange = Boolean(event?.shiftKey);
+    if (isRange && selectedSegment) {
+      const anchorIndex = sortedSegments.findIndex((segment) => segment.id === selectedSegment.id);
+      const targetIndex = sortedSegments.findIndex((segment) => segment.id === segmentId);
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const [start, end] =
+          anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+        setSelectedSegmentIds(sortedSegments.slice(start, end + 1).map((segment) => segment.id));
+        onSelectedSegmentChange(segmentId);
+        return;
+      }
+    }
+    if (isToggle) {
+      setSelectedSegmentIds((current) => {
+        const currentSet = new Set(current);
+        if (currentSet.has(segmentId) && currentSet.size > 1) {
+          currentSet.delete(segmentId);
+        } else {
+          currentSet.add(segmentId);
+        }
+        return sortedSegments
+          .map((segment) => segment.id)
+          .filter((id) => currentSet.has(id));
+      });
+      onSelectedSegmentChange(segmentId);
+      return;
+    }
+    setSelectedSegmentIds([segmentId]);
+    onSelectedSegmentChange(segmentId);
+  };
+
+  const selectAllSegments = () => {
+    if (sortedSegments.length === 0) {
+      return;
+    }
+    setSelectedSegmentIds(sortedSegments.map((segment) => segment.id));
+    onSelectedSegmentChange(sortedSegments[0]?.id);
+  };
+
+  const clearMultiSelection = () => {
+    if (!selectedSegment) {
+      setSelectedSegmentIds([]);
+      return;
+    }
+    setSelectedSegmentIds([selectedSegment.id]);
+  };
+
+  const removeSegments = (segmentIds: string[]) => {
+    if (!plan || segmentIds.length === 0 || sortedSegments.length <= 1) {
+      return;
+    }
+    const removeIdSet = new Set(segmentIds);
+    const nextSegments = sortedSegments
+      .filter((segment) => !removeIdSet.has(segment.id))
+      .map((segment, index) => ({
+        ...segment,
+        order: index + 1,
+      }));
+    if (nextSegments.length === 0 || nextSegments.length === sortedSegments.length) {
+      return;
+    }
+    commitPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: nextSegments,
+    }));
+    const nextSelectedId = nextSegments[Math.min(selectedSegmentIndex - 1, nextSegments.length - 1)]?.id;
+    onSelectedSegmentChange(nextSelectedId);
+    setSelectedSegmentIds(nextSelectedId ? [nextSelectedId] : []);
+  };
+
+  const updateSelectedSegments = (
+    update: (segment: SmartEditSegment) => SmartEditSegment,
+  ) => {
+    if (!plan || selectedBatchSegments.length === 0) {
+      return;
+    }
+    const selectedIds = new Set(selectedBatchSegments.map((segment) => segment.id));
+    commitPlanChange(withRebuiltTimeline({
+      ...plan,
+      segments: plan.segments.map((segment) => (selectedIds.has(segment.id) ? update(segment) : segment)),
+    }));
   };
 
   const setSourceAudioTrackMuted = (muted: boolean) => {
@@ -943,20 +1047,10 @@ export const SmartEditPanel = ({
   };
 
   const removeSelectedSegment = () => {
-    if (!plan || !selectedSegment || sortedSegments.length <= 1) {
+    if (!selectedSegment) {
       return;
     }
-    const nextSegments = sortedSegments
-      .filter((segment) => segment.id !== selectedSegment.id)
-      .map((segment, index) => ({
-        ...segment,
-        order: index + 1,
-      }));
-    commitPlanChange(withRebuiltTimeline({
-      ...plan,
-      segments: nextSegments,
-    }));
-    onSelectedSegmentChange(nextSegments[Math.min(selectedSegmentIndex - 1, nextSegments.length - 1)]?.id);
+    removeSegments(selectedBatchSegments.length > 1 ? selectedSegmentIds : [selectedSegment.id]);
   };
 
   const selectByOffset = (offset: number) => {
@@ -989,6 +1083,11 @@ export const SmartEditPanel = ({
         if (isCommandKey && event.key.toLowerCase() === "y") {
           event.preventDefault();
           redoPlanChange();
+          return;
+        }
+        if (isCommandKey && event.key.toLowerCase() === "a") {
+          event.preventDefault();
+          selectAllSegments();
           return;
         }
         if (event.key === "ArrowLeft") {
@@ -1046,7 +1145,11 @@ export const SmartEditPanel = ({
           <Film size={16} />
           <span>{copy.selectedSegment}</span>
           <strong>
-            {selectedSegmentIndex > 0 ? `${selectedSegmentIndex} / ${sortedSegments.length}` : "-"}
+            {selectedBatchSegments.length > 1
+              ? copy.selectedCount(selectedBatchSegments.length)
+              : selectedSegmentIndex > 0
+                ? `${selectedSegmentIndex} / ${sortedSegments.length}`
+                : "-"}
           </strong>
         </div>
         <div>
@@ -1519,6 +1622,38 @@ export const SmartEditPanel = ({
             {copy.zoomIn}
           </Button>
         </div>
+        {selectedBatchSegments.length > 1 ? (
+          <div className="timeline-batch-toolbar" aria-label={copy.batchActions}>
+            <strong>{copy.selectedCount(selectedBatchSegments.length)}</strong>
+            <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, enabled: true }))}>
+              {copy.enableSelected}
+            </Button>
+            <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, enabled: false }))}>
+              {copy.disableSelected}
+            </Button>
+            <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, sourceAudioMuted: true }))}>
+              {copy.muteSelected}
+            </Button>
+            <Button onClick={() => updateSelectedSegments((segment) => ({ ...segment, sourceAudioMuted: false }))}>
+              {copy.unmuteSelected}
+            </Button>
+            <Button
+              disabled={selectedBatchSegments.length >= sortedSegments.length}
+              icon={<Trash2 size={16} />}
+              onClick={() => removeSegments(selectedSegmentIds)}
+            >
+              {copy.deleteSelected}
+            </Button>
+            <Button onClick={clearMultiSelection}>{copy.clearSelection}</Button>
+          </div>
+        ) : (
+          <div className="timeline-selection-hint">
+            <span>{copy.multiSelectHint}</span>
+            <button type="button" onClick={selectAllSegments}>
+              {copy.selectAll}
+            </button>
+          </div>
+        )}
         {sortedSegments.length > 0 ? (
           <div className="timeline-scroll">
             <div className="timeline-ruler" style={{ width: timelineWidth }}>
@@ -1539,8 +1674,10 @@ export const SmartEditPanel = ({
               {timedTimelineSegments.map(({ segment, startSecond }) => (
                 <article
                   aria-label={`${copy.selectedSegment} ${segment.order}`}
-                  aria-pressed={selectedSegment?.id === segment.id}
+                  aria-pressed={selectedSegmentIdSet.has(segment.id)}
                   className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
+                    selectedSegmentIdSet.has(segment.id) ? "selected" : ""
+                  } ${
                     segment.enabled ? "" : "disabled"
                   }`.trim()}
                   draggable
@@ -1550,7 +1687,7 @@ export const SmartEditPanel = ({
                     width: Math.max(96, segment.durationSeconds * timelinePixelsPerSecond),
                   }}
                   tabIndex={0}
-                  onClick={() => onSelectedSegmentChange(segment.id)}
+                  onClick={(event) => selectTimelineSegment(segment.id, event)}
                   onDragEnd={() => setDraggedSegmentId(undefined)}
                   onDragOver={(event) => event.preventDefault()}
                   onDragStart={() => setDraggedSegmentId(segment.id)}
@@ -1577,7 +1714,7 @@ export const SmartEditPanel = ({
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelectedSegmentChange(segment.id);
+                      selectTimelineSegment(segment.id);
                     }
                   }}
                 >
@@ -1674,6 +1811,8 @@ export const SmartEditPanel = ({
                   <article
                     className={`smart-edit-track-clip ${
                       segment.segmentId === selectedSegment?.id ? "active" : ""
+                    } ${
+                      segment.segmentId && selectedSegmentIdSet.has(segment.segmentId) ? "selected" : ""
                     } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""}`.trim()}
                     key={segment.id}
                     role={segment.segmentId ? "button" : undefined}
@@ -1681,13 +1820,13 @@ export const SmartEditPanel = ({
                     tabIndex={segment.segmentId ? 0 : undefined}
                     onClick={() => {
                       if (segment.segmentId) {
-                        onSelectedSegmentChange(segment.segmentId);
+                        selectTimelineSegment(segment.segmentId);
                       }
                     }}
                     onKeyDown={(event) => {
                       if (segment.segmentId && (event.key === "Enter" || event.key === " ")) {
                         event.preventDefault();
-                        onSelectedSegmentChange(segment.segmentId);
+                        selectTimelineSegment(segment.segmentId);
                       }
                     }}
                   >
