@@ -4976,18 +4976,22 @@ textarea {
 }
 
 .smart-edit-track-clips {
-  display: flex;
-  gap: 8px;
   min-width: 0;
   overflow-x: auto;
   padding-bottom: 2px;
 }
 
+.smart-edit-track-lane {
+  position: relative;
+  min-width: 100%;
+  min-height: 74px;
+}
+
 .smart-edit-track-clip {
+  position: absolute;
+  top: 0;
   display: grid;
   grid-template-rows: auto minmax(18px, 1fr) auto;
-  min-width: 154px;
-  max-width: 280px;
   gap: 4px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
@@ -4997,6 +5001,12 @@ textarea {
 
 .smart-edit-track-clip[role="button"] {
   cursor: pointer;
+}
+
+.smart-edit-track-clip.moving {
+  border-color: var(--primary-strong);
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22);
 }
 
 .smart-edit-track-clip.active {

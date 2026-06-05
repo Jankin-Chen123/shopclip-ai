@@ -841,6 +841,7 @@ type SmartEditTrackSegment = {
   range: string;
   meta: string;
   durationSeconds: number;
+  startSecond: number;
   muted?: boolean;
   hidden?: boolean;
 };
@@ -863,11 +864,50 @@ type TimelineMoveDragState = {
   startClientX: number;
 };
 
+type TrackClipMoveDragState = {
+  pointerId: number;
+  startClientX: number;
+  trackClip: SmartEditTrackSegment;
+};
+
 export type SmartEditClipboard = {
   items: Array<{
     segment: SmartEditSegment;
     startSecond: number;
   }>;
+};
+
+export const moveSmartEditTrackClipOnTimeline = (
+  plan: SmartEditPlan,
+  trackClip: Pick<SmartEditTrackSegment, "segmentId" | "trackId">,
+  deltaSeconds: number,
+  playheadSecond?: number,
+): SmartEditPlan => {
+  if (!trackClip.segmentId) {
+    return plan;
+  }
+  if (trackClip.trackId === "video" || trackClip.trackId === "sourceAudio") {
+    return moveSmartEditSegmentOnTimeline(plan, trackClip.segmentId, deltaSeconds, playheadSecond);
+  }
+  if (trackClip.trackId === "caption") {
+    return replaceSegment(plan, trackClip.segmentId, (segment) => ({
+      ...segment,
+      captionStartOffsetSeconds: clampInSegmentOffset(
+        snapTimelineSeconds((segment.captionStartOffsetSeconds ?? 0) + deltaSeconds),
+        segment.durationSeconds,
+      ),
+    }));
+  }
+  if (trackClip.trackId === "voice") {
+    return replaceSegment(plan, trackClip.segmentId, (segment) => ({
+      ...segment,
+      voiceoverStartOffsetSeconds: clampInSegmentOffset(
+        snapTimelineSeconds((segment.voiceoverStartOffsetSeconds ?? 0) + deltaSeconds),
+        segment.durationSeconds,
+      ),
+    }));
+  }
+  return plan;
 };
 
 const timelineTrackSegments = (
@@ -896,6 +936,7 @@ const timelineTrackSegments = (
           muted: element.muted,
           range: timelineRangeLabel(element.startSecond, element.durationSeconds),
           segmentId: element.segmentId,
+          startSecond: element.startSecond,
           trackId: (track.id === "audio-source"
             ? "sourceAudio"
             : track.kind === "audio"
@@ -933,6 +974,7 @@ const timelineTrackSegments = (
           id: `${clip.sceneId}-video`,
           meta: clip.material?.videoOnlyUrl ? "video-only material" : "generated clip",
           range: timelineRangeLabel(startSecond, duration),
+          startSecond,
           trackId: "video",
           title: `Scene ${clip.order}`,
         })),
@@ -946,6 +988,7 @@ const timelineTrackSegments = (
             id: `${clip.sceneId}-audio`,
             meta: "source audio material",
             range: timelineRangeLabel(startSecond, duration),
+            startSecond,
             trackId: "sourceAudio",
             title: `Scene ${clip.order} audio`,
           })),
@@ -957,6 +1000,7 @@ const timelineTrackSegments = (
           id: `${clip.sceneId}-text`,
           meta: "storyboard text",
           range: timelineRangeLabel(startSecond, duration),
+          startSecond,
           trackId: "caption",
           title: clip.material?.text || clip.subtitle,
         })),
@@ -985,6 +1029,7 @@ const timelineTrackSegments = (
     range: timelineRangeLabel(startSecond, segment.durationSeconds),
     meta: sourceRangeLabel(segment),
     durationSeconds: segment.durationSeconds,
+    startSecond,
     trackId: "video" as const,
   }));
   const sourceAudioSegments = timedSegments
@@ -996,6 +1041,7 @@ const timelineTrackSegments = (
       range: timelineRangeLabel(startSecond, segment.durationSeconds),
       meta: segment.sourceAudioMuted ? "muted source audio" : "source audio material",
       durationSeconds: segment.durationSeconds,
+      startSecond,
       muted: segment.sourceAudioMuted ?? false,
       trackId: "sourceAudio" as const,
     }));
@@ -1011,6 +1057,7 @@ const timelineTrackSegments = (
       ),
       meta: segment.transition,
       durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.captionStartOffsetSeconds ?? 0)),
+      startSecond: startSecond + (segment.captionStartOffsetSeconds ?? 0),
       hidden: segment.captionHidden ?? false,
       trackId: "caption" as const,
     }));
@@ -1026,6 +1073,7 @@ const timelineTrackSegments = (
       ),
       meta: plan.audio.voice,
       durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+      startSecond: startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
       trackId: "voice" as const,
     }));
   const tracks: SmartEditTrack[] = [
@@ -1046,6 +1094,7 @@ const timelineTrackSegments = (
           range: timelineRangeLabel(0, durationSeconds),
           meta: plan.audio.targetLanguage ?? "project audio",
           durationSeconds: Math.max(1, durationSeconds),
+          startSecond: 0,
           trackId: "bgm",
         },
       ],
@@ -1086,6 +1135,7 @@ export const SmartEditPanel = ({
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [selectedTrackClipId, setSelectedTrackClipId] = useState<string | undefined>();
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
+  const [trackClipMoveDrag, setTrackClipMoveDrag] = useState<TrackClipMoveDragState | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
@@ -1611,6 +1661,47 @@ export const SmartEditPanel = ({
       deltaSeconds,
       boundedPlayheadSeconds,
     ));
+  };
+
+  const startTrackClipMoveDrag = (
+    event: ReactPointerEvent<HTMLElement>,
+    trackClip: SmartEditTrackSegment,
+  ) => {
+    if (trackClip.trackId === "bgm") {
+      selectTrackClip(trackClip);
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    selectTrackClip(trackClip);
+    setTrackClipMoveDrag({
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      trackClip,
+    });
+  };
+
+  const finishTrackClipMoveDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!plan || !trackClipMoveDrag || trackClipMoveDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    const deltaSeconds = snapTimelineSeconds(
+      (event.clientX - trackClipMoveDrag.startClientX) / timelinePixelsPerSecond,
+    );
+    setTrackClipMoveDrag(undefined);
+    if (Math.abs(deltaSeconds) < 0.001) {
+      return;
+    }
+    suppressTimelineMoveClickRef.current = true;
+    window.setTimeout(() => {
+      suppressTimelineMoveClickRef.current = false;
+    }, 0);
+    const nextPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      trackClipMoveDrag.trackClip,
+      deltaSeconds,
+      boundedPlayheadSeconds,
+    );
+    commitPlanChange(nextPlan);
   };
 
   const removeSelectedSegment = () => {
@@ -2701,34 +2792,47 @@ export const SmartEditPanel = ({
                 ) : null}
               </div>
               <div className="smart-edit-track-clips">
-                {track.segments.map((segment) => (
-                  <article
-                    className={`smart-edit-track-clip ${
-                      segment.segmentId === selectedSegment?.id ? "active" : ""
-                    } ${
-                      segment.segmentId && selectedSegmentIdSet.has(segment.segmentId) ? "selected" : ""
-                    } ${
-                      selectedTrackClipId === segment.id ? "track-selected" : ""
-                    } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""}`.trim()}
-                    key={segment.id}
-                    role="button"
-                    style={{ flexGrow: Math.max(1, segment.durationSeconds) }}
-                    tabIndex={0}
-                    onClick={() => {
-                      selectTrackClip(segment);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
+                <div className="smart-edit-track-lane" style={{ width: timelineWidth }}>
+                  {track.segments.map((segment) => (
+                    <article
+                      className={`smart-edit-track-clip ${
+                        segment.segmentId === selectedSegment?.id ? "active" : ""
+                      } ${
+                        segment.segmentId && selectedSegmentIdSet.has(segment.segmentId) ? "selected" : ""
+                      } ${
+                        selectedTrackClipId === segment.id ? "track-selected" : ""
+                      } ${
+                        trackClipMoveDrag?.trackClip.id === segment.id ? "moving" : ""
+                      } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""}`.trim()}
+                      key={segment.id}
+                      role="button"
+                      style={{
+                        left: segment.startSecond * timelinePixelsPerSecond,
+                        width: Math.max(116, segment.durationSeconds * timelinePixelsPerSecond),
+                      }}
+                      tabIndex={0}
+                      onClick={() => {
+                        if (suppressTimelineMoveClickRef.current) {
+                          return;
+                        }
                         selectTrackClip(segment);
-                      }
-                    }}
-                  >
-                    <span>{segment.range}</span>
-                    <b>{segment.title}</b>
-                    <small>{segment.meta}</small>
-                  </article>
-                ))}
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          selectTrackClip(segment);
+                        }
+                      }}
+                      onPointerCancel={() => setTrackClipMoveDrag(undefined)}
+                      onPointerDown={(event) => startTrackClipMoveDrag(event, segment)}
+                      onPointerUp={finishTrackClipMoveDrag}
+                    >
+                      <span>{segment.range}</span>
+                      <b>{segment.title}</b>
+                      <small>{segment.meta}</small>
+                    </article>
+                  ))}
+                </div>
               </div>
             </section>
           ))}

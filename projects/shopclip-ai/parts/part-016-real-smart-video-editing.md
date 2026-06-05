@@ -637,3 +637,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx -t "track stack"`
 - Remaining:
   - True independent clip records for audio/text, drag handles on each track row, overwrite/insert/ripple modes, effect/transform panels, and visual snap guide overlays remain open.
+
+## 2026-06-05 Track-Level Timeline Movement
+
+- Reference model:
+  - OpenCut timeline elements carry their own track, start time, duration, and editable media metadata. Moving an element is a timeline command, not only a scene reorder.
+- Fix:
+  - Added `moveSmartEditTrackClipOnTimeline(plan, trackClip, deltaSeconds, playheadSecond)` for track-level command adaptation.
+  - Track stack clips now carry `startSecond` and render against the same `timelineWidth` / pixels-per-second scale as the main timeline.
+  - Dragging video or source-audio material rows moves the owning segment through the existing collision-aware placement path, keeping video and separated source audio aligned for export.
+  - Dragging caption or voice rows adjusts only `captionStartOffsetSeconds` or `voiceoverStartOffsetSeconds`, so text/audio timing can be edited independently while still persisting into the current `SmartEditPlan`.
+  - The track stack now visually behaves like a real timeline surface instead of a proportional flex summary row.
+- Verification:
+  - Added `App.test.tsx` coverage for moving a source-audio track material with its video segment and moving a caption material by changing only its offset.
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx -t "track-level"`
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Separate persistent clip records for video/audio/text, ripple/overwrite/insert edit modes, clip transform/effect panels, visual snap guides, and full OpenCut-style command history are still needed before claiming CapCut/OpenCut-level parity.

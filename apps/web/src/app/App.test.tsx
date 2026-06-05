@@ -37,6 +37,7 @@ import {
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   moveSmartEditSegmentOnTimeline,
+  moveSmartEditTrackClipOnTimeline,
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
 } from "../features/edit/SmartEditPanel";
@@ -1779,6 +1780,101 @@ describe("App", () => {
 
     expect(snappedToPlayheadPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 6]);
     expect(snappedToPlayheadPlan.timeline?.durationSeconds).toBe(10);
+  });
+
+  it("moves track-level source audio with its segment and offsets caption material independently", () => {
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 8,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 0,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0.2,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Hook",
+          voiceover: "Hook",
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.test/scene-1.m4a",
+            sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 0,
+            endSecond: 4,
+          },
+          assetTags: ["hero"],
+          rationale: "Use the rendered scene clip.",
+        },
+        {
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 4,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Demo",
+          voiceover: "Demo",
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.test/scene-2.m4a",
+            sceneClipUrl: "https://cdn.example.test/scene-2.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-2-video.mp4",
+            startSecond: 0,
+            endSecond: 4,
+          },
+          assetTags: ["demo"],
+          rationale: "Use the rendered scene clip.",
+        },
+      ],
+    };
+
+    const movedSourceAudioPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { segmentId: "segment-2", trackId: "sourceAudio" },
+      2,
+    );
+
+    expect(movedSourceAudioPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 6]);
+    expect(
+      movedSourceAudioPlan.timeline?.elements.find((element) => element.id === "segment-2-audio")?.startSecond,
+    ).toBe(6);
+    expect(
+      movedSourceAudioPlan.timeline?.elements.find((element) => element.id === "segment-2-video")?.startSecond,
+    ).toBe(6);
+
+    const movedCaptionPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { segmentId: "segment-1", trackId: "caption" },
+      0.7,
+    );
+
+    expect(movedCaptionPlan.segments[0]?.timelineStartSecond).toBe(0);
+    expect(movedCaptionPlan.segments[0]?.captionStartOffsetSeconds).toBe(0.9);
+    expect(
+      movedCaptionPlan.timeline?.elements.find((element) => element.id === "segment-1-text")?.startSecond,
+    ).toBe(0.9);
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {
