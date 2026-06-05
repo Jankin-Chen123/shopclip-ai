@@ -637,10 +637,39 @@ const resolveTimelineBlockStart = (
   return candidates.find((candidate) => !hasCollision(candidate)) ?? snappedDesired;
 };
 
+const resolveInsertTimelineStart = (
+  intervals: SmartEditTimelineInterval[],
+  desiredStart: number,
+): number => {
+  const snappedDesired = clampTimelineStart(snapTimelineSeconds(desiredStart));
+  const containingInterval = intervals.find(
+    (interval) =>
+      snappedDesired > interval.startSecond + 0.001 &&
+      snappedDesired < interval.endSecond - 0.001,
+  );
+  return containingInterval ? containingInterval.endSecond : snappedDesired;
+};
+
 export const moveSmartEditSegmentOnTimeline = (
   plan: SmartEditPlan,
   segmentId: string,
   deltaSeconds: number,
+  playheadSecond?: number,
+): SmartEditPlan => {
+  return moveSmartEditSegmentOnTimelineWithMode(
+    plan,
+    segmentId,
+    deltaSeconds,
+    "magnetic",
+    playheadSecond,
+  );
+};
+
+export const moveSmartEditSegmentOnTimelineWithMode = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  deltaSeconds: number,
+  editMode: SmartEditTimelineEditMode = "magnetic",
   playheadSecond?: number,
 ): SmartEditPlan => {
   const currentStarts = timelineStartsForSegments(plan.segments);
@@ -648,6 +677,56 @@ export const moveSmartEditSegmentOnTimeline = (
   const targetSegment = plan.segments.find((segment) => segment.id === segmentId);
   if (currentStart === undefined || !targetSegment) {
     return plan;
+  }
+  if (editMode !== "magnetic") {
+    const existingIntervals = timelineIntervalsForSegments(
+      plan.segments,
+      currentStarts,
+      new Set([segmentId]),
+    );
+    const desiredStart =
+      editMode === "insert"
+        ? resolveInsertTimelineStart(existingIntervals, currentStart + deltaSeconds)
+        : clampTimelineStart(snapTimelineSeconds(currentStart + deltaSeconds));
+    const desiredEnd = snapTimelineSeconds(desiredStart + targetSegment.durationSeconds);
+    return withRebuiltTimeline({
+      ...plan,
+      segments: plan.segments.map((segment) => {
+        const startSecond = clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0);
+        if (segment.id === segmentId) {
+          return {
+            ...segment,
+            enabled: true,
+            timelineStartSecond: desiredStart,
+          };
+        }
+        if (
+          editMode === "overwrite" &&
+          segment.enabled &&
+          existingIntervals.some(
+            (interval) =>
+              interval.id === segment.id &&
+              intervalsOverlap(desiredStart, desiredEnd, interval.startSecond, interval.endSecond),
+          )
+        ) {
+          return {
+            ...segment,
+            enabled: false,
+            timelineStartSecond: startSecond,
+          };
+        }
+        if (editMode === "insert" && segment.enabled && startSecond >= desiredStart - 0.001) {
+          return {
+            ...segment,
+            timelineStartSecond: clampTimelineStart(startSecond + targetSegment.durationSeconds),
+          };
+        }
+        return {
+          ...segment,
+          timelineStartSecond: startSecond,
+        };
+      }),
+    });
   }
   const intervals = timelineIntervalsForSegments(plan.segments, currentStarts, new Set([segmentId]));
   const snapPoints = [
@@ -761,6 +840,7 @@ export const pasteSmartEditSegmentsAtPlayhead = (
   segmentIds: string[],
   playheadSecond: number,
   duplicateToken = String(Date.now()),
+  editMode: SmartEditTimelineEditMode = "magnetic",
 ): SmartEditPlan => {
   const selectedIds = new Set(segmentIds);
   if (selectedIds.size === 0) {
@@ -776,15 +856,25 @@ export const pasteSmartEditSegmentsAtPlayhead = (
     ...sourceSegments.map((segment) => currentStarts.get(segment.id) ?? 0),
   );
   const intervals = timelineIntervalsForSegments(sortedSegments, currentStarts);
-  const targetStart = resolveTimelineBlockStart(
-    intervals,
-    sourceSegments.map((segment) => ({
-      durationSeconds: segment.durationSeconds,
-      offsetSecond: (currentStarts.get(segment.id) ?? 0) - earliestStart,
-    })),
-    playheadSecond,
-    [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
+  const blockItems = sourceSegments.map((segment) => ({
+    durationSeconds: segment.durationSeconds,
+    offsetSecond: (currentStarts.get(segment.id) ?? 0) - earliestStart,
+  }));
+  const targetStart =
+    editMode === "magnetic"
+      ? resolveTimelineBlockStart(
+          intervals,
+          blockItems,
+          playheadSecond,
+          [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
+        )
+      : editMode === "insert"
+        ? resolveInsertTimelineStart(intervals, playheadSecond)
+        : clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const blockEnd = Math.max(
+    ...blockItems.map((item) => targetStart + item.offsetSecond + item.durationSeconds),
   );
+  const blockDuration = Math.max(0, blockEnd - targetStart);
   const pastedSegments = sourceSegments.map((segment, index): SmartEditSegment => {
     const sourceStart = currentStarts.get(segment.id) ?? 0;
     const relativeOffset = sourceStart - earliestStart;
@@ -805,9 +895,27 @@ export const pasteSmartEditSegmentsAtPlayhead = (
     segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
       ...segment,
       order: index + 1,
+      enabled:
+        editMode === "overwrite" &&
+        !pastedStarts.has(segment.id) &&
+        segment.enabled &&
+        intervals.some(
+          (interval) =>
+            interval.id === segment.id &&
+            intervalsOverlap(targetStart, blockEnd, interval.startSecond, interval.endSecond),
+        )
+          ? false
+          : segment.enabled,
       timelineStartSecond: pastedStarts.has(segment.id)
         ? pastedStarts.get(segment.id)!
-        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+        : editMode === "insert" &&
+            segment.enabled &&
+            clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) >=
+              targetStart - 0.001
+          ? clampTimelineStart(
+              (currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) + blockDuration,
+            )
+          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
 };
@@ -836,6 +944,7 @@ export const pasteSmartEditClipboardAtPlayhead = (
   clipboard: SmartEditClipboard | undefined,
   playheadSecond: number,
   duplicateToken = String(Date.now()),
+  editMode: SmartEditTimelineEditMode = "magnetic",
 ): SmartEditPlan => {
   if (!clipboard || clipboard.items.length === 0) {
     return plan;
@@ -844,15 +953,25 @@ export const pasteSmartEditClipboardAtPlayhead = (
   const currentStarts = timelineStartsForSegments(plan.segments);
   const earliestStart = Math.min(...clipboard.items.map((item) => item.startSecond));
   const intervals = timelineIntervalsForSegments(sortedSegments, currentStarts);
-  const targetStart = resolveTimelineBlockStart(
-    intervals,
-    clipboard.items.map((item) => ({
-      durationSeconds: item.segment.durationSeconds,
-      offsetSecond: item.startSecond - earliestStart,
-    })),
-    playheadSecond,
-    [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
+  const blockItems = clipboard.items.map((item) => ({
+    durationSeconds: item.segment.durationSeconds,
+    offsetSecond: item.startSecond - earliestStart,
+  }));
+  const targetStart =
+    editMode === "magnetic"
+      ? resolveTimelineBlockStart(
+          intervals,
+          blockItems,
+          playheadSecond,
+          [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
+        )
+      : editMode === "insert"
+        ? resolveInsertTimelineStart(intervals, playheadSecond)
+        : clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const blockEnd = Math.max(
+    ...blockItems.map((item) => targetStart + item.offsetSecond + item.durationSeconds),
   );
+  const blockDuration = Math.max(0, blockEnd - targetStart);
   const pastedSegments = clipboard.items.map((item, index): SmartEditSegment => ({
     ...item.segment,
     id: `${item.segment.id}-${duplicateToken}-${index + 1}`,
@@ -869,14 +988,34 @@ export const pasteSmartEditClipboardAtPlayhead = (
     segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
       ...segment,
       order: index + 1,
+      enabled:
+        editMode === "overwrite" &&
+        !pastedStarts.has(segment.id) &&
+        segment.enabled &&
+        intervals.some(
+          (interval) =>
+            interval.id === segment.id &&
+            intervalsOverlap(targetStart, blockEnd, interval.startSecond, interval.endSecond),
+        )
+          ? false
+          : segment.enabled,
       timelineStartSecond: pastedStarts.has(segment.id)
         ? pastedStarts.get(segment.id)!
-        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+        : editMode === "insert" &&
+            segment.enabled &&
+            clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) >=
+              targetStart - 0.001
+          ? clampTimelineStart(
+              (currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) + blockDuration,
+            )
+          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
 };
 
 type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
+
+export type SmartEditTimelineEditMode = "magnetic" | "insert" | "overwrite";
 
 type SmartEditTrackSegment = {
   id: string;
@@ -922,17 +1061,30 @@ export type SmartEditClipboard = {
   }>;
 };
 
+const smartEditTimelineEditModes: SmartEditTimelineEditMode[] = [
+  "magnetic",
+  "insert",
+  "overwrite",
+];
+
 export const moveSmartEditTrackClipOnTimeline = (
   plan: SmartEditPlan,
   trackClip: Pick<SmartEditTrackSegment, "segmentId" | "trackId">,
   deltaSeconds: number,
+  editMode: SmartEditTimelineEditMode = "magnetic",
   playheadSecond?: number,
 ): SmartEditPlan => {
   if (!trackClip.segmentId) {
     return plan;
   }
   if (trackClip.trackId === "video") {
-    return moveSmartEditSegmentOnTimeline(plan, trackClip.segmentId, deltaSeconds, playheadSecond);
+    return moveSmartEditSegmentOnTimelineWithMode(
+      plan,
+      trackClip.segmentId,
+      deltaSeconds,
+      editMode,
+      playheadSecond,
+    );
   }
   if (trackClip.trackId === "sourceAudio") {
     return replaceSegment(plan, trackClip.segmentId, (segment) => ({
@@ -1218,6 +1370,7 @@ export const SmartEditPanel = ({
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
   const [trackClipMoveDrag, setTrackClipMoveDrag] = useState<TrackClipMoveDragState | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
+  const [timelineEditMode, setTimelineEditMode] = useState<SmartEditTimelineEditMode>("magnetic");
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
@@ -1736,10 +1889,11 @@ export const SmartEditPanel = ({
     window.setTimeout(() => {
       suppressTimelineMoveClickRef.current = false;
     }, 0);
-    commitPlanChange(moveSmartEditSegmentOnTimeline(
+    commitPlanChange(moveSmartEditSegmentOnTimelineWithMode(
       plan,
       timelineMoveDrag.segmentId,
       deltaSeconds,
+      timelineEditMode,
       boundedPlayheadSeconds,
     ));
   };
@@ -1780,6 +1934,7 @@ export const SmartEditPanel = ({
       plan,
       trackClipMoveDrag.trackClip,
       deltaSeconds,
+      timelineEditMode,
       boundedPlayheadSeconds,
     );
     commitPlanChange(nextPlan);
@@ -1852,6 +2007,7 @@ export const SmartEditPanel = ({
       selectedIds,
       boundedPlayheadSeconds,
       duplicateToken,
+      timelineEditMode,
     );
     commitPlanChange(nextPlan);
     const pastedIds = nextPlan.segments
@@ -1873,6 +2029,7 @@ export const SmartEditPanel = ({
       smartEditClipboard,
       boundedPlayheadSeconds,
       duplicateToken,
+      timelineEditMode,
     );
     commitPlanChange(nextPlan);
     const sourceIds = smartEditClipboard.items.map((item) => item.segment.id);
@@ -2730,6 +2887,19 @@ export const SmartEditPanel = ({
           >
             {copy.redo}
           </Button>
+          <div className="timeline-edit-mode-toggle" aria-label={copy.editMode}>
+            {smartEditTimelineEditModes.map((mode) => (
+              <button
+                aria-pressed={timelineEditMode === mode}
+                className={timelineEditMode === mode ? "active" : ""}
+                key={mode}
+                type="button"
+                onClick={() => setTimelineEditMode(mode)}
+              >
+                {copy.editModes[mode]}
+              </button>
+            ))}
+          </div>
           <Button
             icon={<ZoomOut size={16} />}
             onClick={() => setTimelineZoom((current) => Math.max(0.5, Number((current - 0.25).toFixed(2))))}

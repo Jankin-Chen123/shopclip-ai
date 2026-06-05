@@ -677,3 +677,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
 - Remaining:
   - Fully separate persistent timeline element records, ripple/overwrite/insert modes, transform/effect panels, visual snap guides, and OpenCut-style command labels/history are still open.
+
+## 2026-06-05 Timeline Edit Modes
+
+- Reference model:
+  - OpenCut timeline commands distinguish placement semantics instead of always resolving collisions the same way.
+- Fix:
+  - Added `SmartEditTimelineEditMode` with `magnetic`, `insert`, and `overwrite` modes.
+  - Existing magnetic mode keeps collision-aware placement and edge/playhead snapping.
+  - Insert mode places the moved or pasted clip at the requested insertion point and ripples later enabled clips forward by the inserted block duration. If the user drops inside an existing clip, the insertion point resolves to that clip's end boundary to avoid creating an impossible partial overlap in the current segment-backed model.
+  - Overwrite mode places the moved or pasted clip at the requested time and disables enabled clips that overlap the replacement interval, so export receives only the surviving timeline material.
+  - Timeline toolbar now exposes a compact three-state edit-mode switch; main video clip dragging, selected paste, and clipboard paste all use the current mode.
+  - Track-level source-audio/caption/voice movement remains independent offset editing and does not trigger video overwrite/insert semantics.
+- Verification:
+  - Added `App.test.tsx` coverage for segment movement in insert/overwrite modes and selected-clip paste in insert/overwrite modes.
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx -t "edit modes|pasting selected|moves a smart edit segment"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Partial-clip split-on-insert, true timeline-element persistence, transform/effect panels, visual snap guides, and named command history are still open.

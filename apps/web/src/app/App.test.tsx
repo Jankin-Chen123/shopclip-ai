@@ -37,6 +37,7 @@ import {
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   moveSmartEditSegmentOnTimeline,
+  moveSmartEditSegmentOnTimelineWithMode,
   moveSmartEditTrackClipOnTimeline,
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
@@ -1782,6 +1783,93 @@ describe("App", () => {
     expect(snappedToPlayheadPlan.timeline?.durationSeconds).toBe(10);
   });
 
+  it("supports insert and overwrite timeline edit modes for segment moves", () => {
+    const baseSegment = {
+      assetTags: ["hero"],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds: 3,
+      enabled: true,
+      playbackRate: 1,
+      rationale: "Use the hero image.",
+      source: {
+        assetId: "asset-image",
+        imageUrl: "https://cdn.example.test/cup.png",
+        kind: "image-asset" as const,
+      },
+      sourceAudioMuted: false,
+      transition: "cut" as const,
+      voiceoverStartOffsetSeconds: 0,
+    };
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 9,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          ...baseSegment,
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          subtitle: "Hook",
+          timelineStartSecond: 0,
+          voiceover: "Hook",
+        },
+        {
+          ...baseSegment,
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          subtitle: "Demo",
+          timelineStartSecond: 3,
+          voiceover: "Demo",
+        },
+        {
+          ...baseSegment,
+          id: "segment-3",
+          sceneId: "scene-3",
+          order: 3,
+          subtitle: "CTA",
+          timelineStartSecond: 6,
+          voiceover: "CTA",
+        },
+      ],
+    };
+
+    const insertPlan = moveSmartEditSegmentOnTimelineWithMode(
+      plan,
+      "segment-3",
+      -3,
+      "insert",
+    );
+
+    expect(insertPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 6, 3]);
+    expect(insertPlan.segments.map((segment) => segment.enabled)).toEqual([true, true, true]);
+    expect(insertPlan.timeline?.durationSeconds).toBe(9);
+
+    const overwritePlan = moveSmartEditSegmentOnTimelineWithMode(
+      plan,
+      "segment-3",
+      -4,
+      "overwrite",
+    );
+
+    expect(overwritePlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 3, 2]);
+    expect(overwritePlan.segments.map((segment) => segment.enabled)).toEqual([false, false, true]);
+    expect(overwritePlan.timeline?.elements.map((element) => element.segmentId)).toEqual([
+      "segment-3",
+      "segment-3",
+      "segment-3",
+    ]);
+  });
+
   it("moves track-level source audio with its segment and offsets caption material independently", () => {
     const plan: SmartEditPlan = {
       id: "plan-1",
@@ -2105,6 +2193,89 @@ describe("App", () => {
     expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-1-paste-1-1-video")?.startSecond).toBe(10);
     expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-2-paste-1-2-video")?.startSecond).toBe(13);
     expect(nextPlan.targetDurationSeconds).toBe(15);
+  });
+
+  it("applies insert and overwrite modes when pasting selected smart edit segments", () => {
+    const baseSegment = {
+      assetTags: ["hero"],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds: 2,
+      enabled: true,
+      playbackRate: 1,
+      rationale: "Use the hero image.",
+      source: {
+        assetId: "asset-image",
+        imageUrl: "https://cdn.example.test/cup.png",
+        kind: "image-asset" as const,
+      },
+      sourceAudioMuted: false,
+      transition: "cut" as const,
+      voiceoverStartOffsetSeconds: 0,
+    };
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 8,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          ...baseSegment,
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          subtitle: "Hook",
+          timelineStartSecond: 0,
+          voiceover: "Hook",
+        },
+        {
+          ...baseSegment,
+          id: "segment-2",
+          sceneId: "scene-2",
+          order: 2,
+          subtitle: "Demo",
+          timelineStartSecond: 2,
+          voiceover: "Demo",
+        },
+        {
+          ...baseSegment,
+          id: "segment-3",
+          sceneId: "scene-3",
+          order: 3,
+          subtitle: "CTA",
+          timelineStartSecond: 4,
+          voiceover: "CTA",
+        },
+      ],
+    };
+
+    const insertPlan = pasteSmartEditSegmentsAtPlayhead(
+      plan,
+      ["segment-1"],
+      2,
+      "insert-1",
+      "insert",
+    );
+
+    expect(insertPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 4, 6, 2]);
+    expect(insertPlan.segments.map((segment) => segment.enabled)).toEqual([true, true, true, true]);
+
+    const overwritePlan = pasteSmartEditSegmentsAtPlayhead(
+      plan,
+      ["segment-1"],
+      2,
+      "overwrite-1",
+      "overwrite",
+    );
+
+    expect(overwritePlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 2, 4, 2]);
+    expect(overwritePlan.segments.map((segment) => segment.enabled)).toEqual([true, false, true, true]);
   });
 
   it("copies smart edit segments into a clipboard snapshot and pastes it later", () => {
