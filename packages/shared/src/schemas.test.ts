@@ -854,6 +854,15 @@ describe("shared contract schemas", () => {
             sceneClipUrl: "https://cdn.example.test/scene.mp4",
             sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
             sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+            sceneClipAudioWaveform: {
+              sampleRate: 8000,
+              durationSeconds: 4,
+              bucketDurationSeconds: 1,
+              buckets: [
+                { index: 0, startSecond: 0, durationSeconds: 1, rms: 0.12, peak: 0.3 },
+                { index: 1, startSecond: 1, durationSeconds: 1, rms: 0.42, peak: 0.98 },
+              ],
+            },
           },
           assetTags: ["demo"],
           rationale: "Use the generated scene clip.",
@@ -912,6 +921,15 @@ describe("shared contract schemas", () => {
               { id: "element-volume-start", timeSecond: 0, volume: 0.5 },
               { id: "element-volume-end", timeSecond: 1.1, volume: 0.85 },
             ],
+            audioWaveform: {
+              sampleRate: 8000,
+              durationSeconds: 2.25,
+              bucketDurationSeconds: 0.75,
+              buckets: [
+                { index: 0, startSecond: 0, durationSeconds: 0.75, rms: 0.18, peak: 0.4 },
+                { index: 1, startSecond: 0.75, durationSeconds: 0.75, rms: 0.55, peak: 1 },
+              ],
+            },
             muted: false,
             detachedAudio: true,
           },
@@ -948,6 +966,10 @@ describe("shared contract schemas", () => {
         expect.objectContaining({ id: "element-volume-start", volume: 0.5 }),
         expect.objectContaining({ id: "element-volume-end", volume: 0.85 }),
       ],
+      audioWaveform: expect.objectContaining({
+        sampleRate: 8000,
+        buckets: [expect.objectContaining({ rms: 0.18 }), expect.objectContaining({ peak: 1 })],
+      }),
     });
     expect(plan.segments[0]).toMatchObject({
       sourceAudioFadeInSeconds: 0.25,

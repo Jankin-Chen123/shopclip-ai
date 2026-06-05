@@ -54,6 +54,8 @@ import type {
   ScriptResultSchema,
   ShotTypeSchema,
   SmartEditAudioPlanSchema,
+  SmartEditAudioWaveformBucketSchema,
+  SmartEditAudioWaveformSchema,
   SmartEditAudioVolumeKeyframeSchema,
   SmartEditPlanSchema,
   SmartEditRequestSchema,
@@ -143,6 +145,8 @@ export type VideoGenerationSettings = z.infer<typeof VideoGenerationSettingsSche
 export type RenderRequest = z.infer<typeof RenderRequestSchema>;
 export type SmartEditTransition = z.infer<typeof SmartEditTransitionSchema>;
 export type SmartEditSource = z.infer<typeof SmartEditSourceSchema>;
+export type SmartEditAudioWaveformBucket = z.infer<typeof SmartEditAudioWaveformBucketSchema>;
+export type SmartEditAudioWaveform = z.infer<typeof SmartEditAudioWaveformSchema>;
 export type SmartEditAudioVolumeKeyframe = z.infer<typeof SmartEditAudioVolumeKeyframeSchema>;
 export type SmartEditTransform = z.infer<typeof SmartEditTransformSchema>;
 export type SmartEditEffects = z.infer<typeof SmartEditEffectsSchema>;

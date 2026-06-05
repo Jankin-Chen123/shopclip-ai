@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 
-import type { SceneRenderClip, SceneRenderClipMaterial } from "@shopclip/shared";
+import type { SceneRenderClip, SceneRenderClipMaterial, SmartEditAudioWaveform } from "@shopclip/shared";
 
 import type { StorageProvider } from "../storage/storageProvider.js";
 import { formatFfmpegExitError } from "./ffmpegComposer.js";
@@ -22,6 +22,9 @@ const commandFromEnv = () =>
 
 const materialExportDir = () =>
   process.env.RENDER_EXPORT_DIR?.trim() || join(tmpdir(), "shopclip-ai-render-exports");
+
+const WAVEFORM_SAMPLE_RATE = 8000;
+const WAVEFORM_BUCKET_COUNT = 96;
 
 const runCommand: CommandRunner = (command, args) =>
   new Promise<void>((resolve, reject) => {
@@ -134,6 +137,115 @@ const extractAudio = async (
   }
 };
 
+const extractWaveformPcm = async (
+  command: string,
+  inputPath: string,
+  outputPath: string,
+  run: CommandRunner,
+): Promise<boolean> => {
+  try {
+    await run(command, [
+      "-y",
+      "-i",
+      inputPath,
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      String(WAVEFORM_SAMPLE_RATE),
+      "-f",
+      "f32le",
+      outputPath,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const analyzeWaveformPcm = (
+  pcmBuffer: Buffer,
+  sampleRate = WAVEFORM_SAMPLE_RATE,
+  targetBucketCount = WAVEFORM_BUCKET_COUNT,
+): SmartEditAudioWaveform | undefined => {
+  const sampleCount = Math.floor(pcmBuffer.byteLength / Float32Array.BYTES_PER_ELEMENT);
+  if (sampleCount <= 0) {
+    return undefined;
+  }
+  const durationSeconds = sampleCount / sampleRate;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return undefined;
+  }
+
+  const bucketCount = Math.max(1, Math.min(targetBucketCount, sampleCount));
+  const samplesPerBucket = Math.ceil(sampleCount / bucketCount);
+  const buckets: SmartEditAudioWaveform["buckets"] = [];
+
+  for (let bucketIndex = 0; bucketIndex < bucketCount; bucketIndex += 1) {
+    const startSample = bucketIndex * samplesPerBucket;
+    const endSample = Math.min(sampleCount, startSample + samplesPerBucket);
+    if (startSample >= endSample) {
+      break;
+    }
+
+    let peak = 0;
+    let squareSum = 0;
+    let validSamples = 0;
+    for (let sampleIndex = startSample; sampleIndex < endSample; sampleIndex += 1) {
+      const sample = pcmBuffer.readFloatLE(sampleIndex * Float32Array.BYTES_PER_ELEMENT);
+      if (!Number.isFinite(sample)) {
+        continue;
+      }
+      const amplitude = Math.min(1, Math.abs(sample));
+      peak = Math.max(peak, amplitude);
+      squareSum += amplitude * amplitude;
+      validSamples += 1;
+    }
+
+    if (validSamples === 0) {
+      continue;
+    }
+
+    const startSecond = startSample / sampleRate;
+    const bucketDurationSeconds = (endSample - startSample) / sampleRate;
+    buckets.push({
+      durationSeconds: Number(bucketDurationSeconds.toFixed(3)),
+      index: bucketIndex,
+      peak: Number(peak.toFixed(4)),
+      rms: Number(Math.sqrt(squareSum / validSamples).toFixed(4)),
+      startSecond: Number(startSecond.toFixed(3)),
+    });
+  }
+
+  if (buckets.length === 0) {
+    return undefined;
+  }
+
+  return {
+    bucketDurationSeconds: Number((samplesPerBucket / sampleRate).toFixed(3)),
+    buckets,
+    durationSeconds: Number(durationSeconds.toFixed(3)),
+    sampleRate,
+  };
+};
+
+const analyzeAudioWaveform = async (
+  command: string,
+  audioPath: string,
+  outputPath: string,
+  run: CommandRunner,
+): Promise<SmartEditAudioWaveform | undefined> => {
+  try {
+    const hasPcm = await extractWaveformPcm(command, audioPath, outputPath, run);
+    if (!hasPcm) {
+      return undefined;
+    }
+    return analyzeWaveformPcm(await readFile(outputPath));
+  } catch {
+    return undefined;
+  }
+};
+
 const materialKey = (
   projectId: string,
   renderTaskId: string,
@@ -165,8 +277,12 @@ export const materializeSceneClipForSmartEdit = async (
     );
     const videoOnlyPath = join(workdir, "video-only.mp4");
     const audioPath = join(workdir, "audio.m4a");
+    const waveformPcmPath = join(workdir, "audio-waveform.f32le");
     await extractVideoOnly(command, inputPath, videoOnlyPath, run);
     const hasAudio = await extractAudio(command, inputPath, audioPath, run);
+    const audioWaveform = hasAudio
+      ? await analyzeAudioWaveform(command, audioPath, waveformPcmPath, run)
+      : undefined;
 
     const videoUpload = await options.storageProvider.uploadObject({
       body: await readFile(videoOnlyPath),
@@ -184,6 +300,7 @@ export const materializeSceneClipForSmartEdit = async (
     const material: SceneRenderClipMaterial = {
       audioObjectKey: audioUpload?.objectKey,
       audioUrl: audioUpload?.publicUrl,
+      audioWaveform,
       materializedAt: new Date().toISOString(),
       status: "ready",
       text: clip.subtitle,

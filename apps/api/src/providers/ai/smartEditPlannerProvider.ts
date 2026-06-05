@@ -595,6 +595,7 @@ const normalizeModelSource = (
       cleanOptionalString(rawSource.sceneClipVideoOnlyUrl) ?? localSource.sceneClipVideoOnlyUrl,
     sceneClipAudioUrl:
       cleanOptionalString(rawSource.sceneClipAudioUrl) ?? localSource.sceneClipAudioUrl,
+    sceneClipAudioWaveform: localSource.sceneClipAudioWaveform,
     imageUrl: cleanOptionalString(rawSource.imageUrl) ?? localSource.imageUrl,
     startSecond:
       typeof rawSource.startSecond === "number" ? rawSource.startSecond : localSource.startSecond,

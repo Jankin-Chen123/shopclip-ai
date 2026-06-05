@@ -2267,6 +2267,7 @@ export const App = ({
                 source: {
                   kind: "generated-scene-clip" as const,
                   sceneClipAudioUrl: clip.material?.audioUrl,
+                  sceneClipAudioWaveform: clip.material?.audioWaveform,
                   sceneClipUrl: clip.videoUrl,
                   sceneClipVideoOnlyUrl: clip.material?.videoOnlyUrl,
                 },

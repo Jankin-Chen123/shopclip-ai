@@ -1064,3 +1064,28 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Volume keyframes are still numeric list controls; waveform display, drag handles on the waveform, curve handles, and richer multitrack audio bus controls remain open.
   - Full completion still requires live runtime evidence after deployment for render-to-material-to-smart-edit using real generated scene clips.
+
+## 2026-06-05 Audio Waveform Materials
+
+- Reference model:
+  - OpenCut-style audio clips show the actual audio shape on the timeline, and trims reveal the corresponding source-audio slice instead of a generic placeholder.
+- Fix:
+  - Added shared `SmartEditAudioWaveform` contracts with RMS/peak buckets for generated scene materials, smart-edit sources, and timeline elements.
+  - Extended scene clip materialization so ffmpeg exports 8kHz mono float PCM from each extracted scene audio file; Node computes compact RMS/peak buckets and persists them on `SceneRenderClipMaterial.audioWaveform`.
+  - Carried waveform metadata from generated scene clips into Smart Edit requests, planner-normalized sources, backend timeline audio elements, and frontend track clips.
+  - Added Smart Edit timeline waveform strips for source-audio clips, including clipped-peak styling and trim-aware bucket selection.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/sceneClipMaterializer.test.ts`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - The waveform is currently a visual timeline summary; direct drag editing on waveform/volume lines and waveform-level split handles remain open.
+  - Full completion still requires live runtime evidence after deployment for real model render to ffmpeg materialization to Smart Edit waveform display.

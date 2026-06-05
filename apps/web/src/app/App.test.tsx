@@ -1675,6 +1675,16 @@ describe("App", () => {
                   assetId: "asset-video",
                   kind: "video-slice",
                   sceneClipAudioUrl: "https://cdn.example.test/scene-1-audio.m4a",
+                  sceneClipAudioWaveform: {
+                    sampleRate: 8000,
+                    durationSeconds: 4,
+                    bucketDurationSeconds: 1,
+                    buckets: [
+                      { index: 0, startSecond: 0, durationSeconds: 1, rms: 0.12, peak: 0.25 },
+                      { index: 1, startSecond: 1, durationSeconds: 1, rms: 0.48, peak: 1 },
+                      { index: 2, startSecond: 2, durationSeconds: 1, rms: 0.31, peak: 0.7 },
+                    ],
+                  },
                   sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-1-video.mp4",
                   sliceId: "slice-demo",
                   startSecond: 1.25,
@@ -1710,6 +1720,8 @@ describe("App", () => {
     expect(markup).toContain("Cup demo.mp4");
     expect(markup).toContain("Scene 1 audio");
     expect(markup).toContain("source audio material");
+    expect(markup).toContain("Waveform RMS preview for Scene 1 audio");
+    expect(markup).toContain("smart-edit-waveform-bar clipped");
     expect(markup).toContain("role=\"button\"");
     expect(markup).toContain("tech-pulse");
   });

@@ -657,6 +657,21 @@ export const SmartEditAudioVolumeKeyframeSchema = z.object({
   volume: z.number().min(0).max(4),
 });
 
+export const SmartEditAudioWaveformBucketSchema = z.object({
+  durationSeconds: z.number().positive().max(10),
+  index: z.number().int().min(0),
+  peak: z.number().min(0).max(1),
+  rms: z.number().min(0).max(1),
+  startSecond: z.number().min(0).max(600),
+});
+
+export const SmartEditAudioWaveformSchema = z.object({
+  bucketDurationSeconds: z.number().positive().max(10),
+  buckets: z.array(SmartEditAudioWaveformBucketSchema).min(1).max(240),
+  durationSeconds: z.number().positive().max(600),
+  sampleRate: z.number().int().positive().max(192000),
+});
+
 export const SmartEditTimelineElementSchema = z
   .object({
     id: z.string().trim().min(1),
@@ -676,6 +691,7 @@ export const SmartEditTimelineElementSchema = z
     playbackRate: z.number().min(0.25).max(4).default(1),
     audioVolume: z.number().min(0).max(4).optional(),
     audioVolumeKeyframes: z.array(SmartEditAudioVolumeKeyframeSchema).max(40).optional(),
+    audioWaveform: SmartEditAudioWaveformSchema.optional(),
     audioFadeInSeconds: z.number().min(0).max(10).optional(),
     audioFadeOutSeconds: z.number().min(0).max(10).optional(),
     muted: z.boolean().default(false),
@@ -710,6 +726,7 @@ export const SmartEditSourceSchema = z
     sceneClipUrl: z.string().trim().min(1).optional(),
     sceneClipVideoOnlyUrl: z.string().trim().min(1).optional(),
     sceneClipAudioUrl: z.string().trim().min(1).optional(),
+    sceneClipAudioWaveform: SmartEditAudioWaveformSchema.optional(),
     imageUrl: z.string().trim().min(1).optional(),
     startSecond: z.number().min(0).optional(),
     endSecond: z.number().positive().optional(),
@@ -899,6 +916,7 @@ export const SmartEditSegmentOutputSchema = z.object({
 export const SceneRenderClipMaterialSchema = z.object({
   audioObjectKey: z.string().trim().min(1).optional(),
   audioUrl: z.string().trim().min(1).optional(),
+  audioWaveform: SmartEditAudioWaveformSchema.optional(),
   materializedAt: IsoDateTimeSchema,
   status: z.enum(["ready", "failed"]),
   text: z.string().trim().default(""),

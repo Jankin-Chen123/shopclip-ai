@@ -1482,6 +1482,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
               audioFadeOutSeconds: segment.sourceAudioFadeOutSeconds ?? 0,
               audioVolume: segment.sourceAudioVolume ?? 1,
               audioVolumeKeyframes: segment.sourceAudioVolumeKeyframes,
+              audioWaveform: segment.source.sceneClipAudioWaveform,
               playbackRate: segment.playbackRate ?? 1,
               sceneId: segment.sceneId,
               segmentId: segment.id,
