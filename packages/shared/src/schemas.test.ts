@@ -193,6 +193,38 @@ describe("shared contract schemas", () => {
             fadeInSeconds: 0.25,
             fadeOutSeconds: 0.35,
           },
+          visualKeyframes: [
+            {
+              id: "kf_intro_push",
+              easing: "linear",
+              timeSecond: 0,
+              transform: {
+                scale: 1,
+                rotateDegrees: 0,
+                offsetXPercent: 0,
+                offsetYPercent: 0,
+                opacity: 1,
+              },
+            },
+            {
+              id: "kf_product_closeup",
+              easing: "linear",
+              timeSecond: 2.4,
+              transform: {
+                scale: 1.35,
+                rotateDegrees: -3,
+                offsetXPercent: 12,
+                offsetYPercent: -8,
+                opacity: 0.75,
+              },
+              effects: {
+                blur: 0.8,
+                sharpen: 0.5,
+                fadeInSeconds: 0,
+                fadeOutSeconds: 0,
+              },
+            },
+          ],
           assetTags: ["demo", "closeup"],
           rationale: "The selected slice shows the lid action clearly.",
         },
@@ -208,6 +240,10 @@ describe("shared contract schemas", () => {
     expect(plan.success).toBe(true);
     expect(plan.success ? plan.data.segments[0]?.transform?.scale : undefined).toBe(1.18);
     expect(plan.success ? plan.data.segments[0]?.effects?.blur : undefined).toBe(1.5);
+    expect(plan.success ? plan.data.segments[0]?.visualKeyframes?.map((keyframe) => keyframe.id) : undefined).toEqual([
+      "kf_intro_push",
+      "kf_product_closeup",
+    ]);
 
     expect(
       SmartEditSegmentSchema.safeParse({
@@ -225,6 +261,20 @@ describe("shared contract schemas", () => {
           fadeInSeconds: 10,
           fadeOutSeconds: 10,
         },
+        visualKeyframes: [
+          {
+            id: "bad_keyframe",
+            easing: "linear",
+            timeSecond: 121,
+            transform: {
+              scale: 6,
+              rotateDegrees: 0,
+              offsetXPercent: 0,
+              offsetYPercent: 0,
+              opacity: 1,
+            },
+          },
+        ],
       }).success,
     ).toBe(false);
 

@@ -327,8 +327,87 @@ const normalizedEffects = (segment: SmartEditSegment) => ({
   sharpen: Math.max(0, Math.min(2, segment.effects?.sharpen ?? 0)),
 });
 
+const normalizedVisualKeyframes = (segment: SmartEditSegment) =>
+  (segment.visualKeyframes ?? [])
+    .map((keyframe) => ({
+      ...keyframe,
+      timeSecond: Math.max(0, Math.min(normalizeDuration(segment), keyframe.timeSecond)),
+      transform: {
+        offsetXPercent: Math.max(-100, Math.min(100, keyframe.transform.offsetXPercent)),
+        offsetYPercent: Math.max(-100, Math.min(100, keyframe.transform.offsetYPercent)),
+        opacity: Math.max(0, Math.min(1, keyframe.transform.opacity)),
+        rotateDegrees: Math.max(-180, Math.min(180, keyframe.transform.rotateDegrees)),
+        scale: Math.max(0.1, Math.min(4, keyframe.transform.scale)),
+      },
+    }))
+    .sort((left, right) => left.timeSecond - right.timeSecond);
+
+const escapedFfmpegExpression = (expression: string): string =>
+  expression.replace(/,/gu, "\\,");
+
+const linearKeyframeExpression = (
+  keyframes: ReturnType<typeof normalizedVisualKeyframes>,
+  valueAt: (keyframe: ReturnType<typeof normalizedVisualKeyframes>[number]) => number,
+  fallback: number,
+): string => {
+  if (keyframes.length < 2) {
+    return fallback.toFixed(3);
+  }
+  const unique = keyframes.filter(
+    (keyframe, index) =>
+      index === 0 || Math.abs(keyframe.timeSecond - keyframes[index - 1]!.timeSecond) > 0.001,
+  );
+  if (unique.length < 2) {
+    return valueAt(unique[0]!).toFixed(3);
+  }
+  const first = unique[0]!;
+  const last = unique.at(-1)!;
+  let expression = valueAt(last).toFixed(3);
+  for (let index = unique.length - 2; index >= 0; index -= 1) {
+    const left = unique[index]!;
+    const right = unique[index + 1]!;
+    const leftTime = left.timeSecond.toFixed(3);
+    const rightTime = right.timeSecond.toFixed(3);
+    const leftValue = valueAt(left).toFixed(3);
+    const rightValue = valueAt(right).toFixed(3);
+    const span = Math.max(0.001, right.timeSecond - left.timeSecond).toFixed(3);
+    const interpolation =
+      right.easing === "hold"
+        ? leftValue
+        : `(${leftValue}+(${rightValue}-${leftValue})*(t-${leftTime})/${span})`;
+    expression = `if(lte(t,${leftTime}),${leftValue},if(gte(t,${rightTime}),${expression},${interpolation}))`;
+  }
+  return escapedFfmpegExpression(
+    `if(lte(t,${first.timeSecond.toFixed(3)}),${valueAt(first).toFixed(3)},${expression})`,
+  );
+};
+
 const buildScaleFilter = (segment: SmartEditSegment, dimensions: OutputDimensions): string => {
   const transform = normalizedTransform(segment);
+  const keyframes = normalizedVisualKeyframes(segment);
+  if (keyframes.length >= 2) {
+    const scaleExpression = linearKeyframeExpression(
+      keyframes,
+      (keyframe) => keyframe.transform.scale,
+      transform.scale,
+    );
+    const offsetXExpression = linearKeyframeExpression(
+      keyframes,
+      (keyframe) => keyframe.transform.offsetXPercent,
+      transform.offsetXPercent,
+    );
+    const offsetYExpression = linearKeyframeExpression(
+      keyframes,
+      (keyframe) => keyframe.transform.offsetYPercent,
+      transform.offsetYPercent,
+    );
+    return [
+      `scale=w='trunc((${dimensions.width}*${scaleExpression})/2)*2':h='trunc((${dimensions.height}*${scaleExpression})/2)*2':force_original_aspect_ratio=increase:eval=frame`,
+      `crop=${dimensions.width}:${dimensions.height}:x='(in_w-${dimensions.width})/2+(${dimensions.width}*${offsetXExpression}/100)':y='(in_h-${dimensions.height})/2+(${dimensions.height}*${offsetYExpression}/100)'`,
+      "fps=30",
+      "format=yuv420p",
+    ].join(",");
+  }
   const scaledWidth = Math.max(2, Math.round((dimensions.width * transform.scale) / 2) * 2);
   const scaledHeight = Math.max(2, Math.round((dimensions.height * transform.scale) / 2) * 2);
   const offsetX = Math.round((dimensions.width * transform.offsetXPercent) / 100);
@@ -368,11 +447,28 @@ const buildSegmentVideoFilter = (
 ): string => {
   const transform = normalizedTransform(segment);
   const effects = normalizedEffects(segment);
+  const keyframes = normalizedVisualKeyframes(segment);
   const filters = [buildScaleFilter(segment, dimensions)];
-  if (transform.rotateDegrees !== 0) {
+  if (keyframes.length >= 2) {
+    const rotationExpression = linearKeyframeExpression(
+      keyframes,
+      (keyframe) => (keyframe.transform.rotateDegrees * Math.PI) / 180,
+      (transform.rotateDegrees * Math.PI) / 180,
+    );
+    if (keyframes.some((keyframe) => keyframe.transform.rotateDegrees !== 0)) {
+      filters.push(`rotate='${rotationExpression}':fillcolor=black`);
+    }
+    const opacityExpression = linearKeyframeExpression(
+      keyframes,
+      (keyframe) => keyframe.transform.opacity,
+      transform.opacity,
+    );
+    filters.push("format=yuva420p");
+    filters.push(`colorchannelmixer=aa='${opacityExpression}'`);
+  } else if (transform.rotateDegrees !== 0) {
     filters.push(`rotate=${((transform.rotateDegrees * Math.PI) / 180).toFixed(4)}:fillcolor=black`);
   }
-  if (transform.opacity < 1) {
+  if (keyframes.length < 2 && transform.opacity < 1) {
     filters.push("format=yuva420p");
     filters.push(`colorchannelmixer=aa=${transform.opacity.toFixed(3)}`);
   }
@@ -400,7 +496,7 @@ const buildSegmentVideoFilter = (
     filters.push(`fade=t=in:st=0:d=${fadeDuration.toFixed(2)}`);
     filters.push(`fade=t=out:st=${(duration - fadeDuration).toFixed(2)}:d=${fadeDuration.toFixed(2)}`);
   }
-  if (transform.opacity < 1) {
+  if (transform.opacity < 1 || keyframes.length >= 2) {
     filters.push("format=yuv420p");
   }
   return filters.join(",");

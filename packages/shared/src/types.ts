@@ -68,6 +68,7 @@ import type {
   SmartEditTimelineTrackSchema,
   SmartEditTransformSchema,
   SmartEditTransitionSchema,
+  SmartEditVisualKeyframeSchema,
   StoryboardSceneSchema,
   ReferenceVideoAnalysisSchema,
   StructuredAssetMetadataSchema,
@@ -140,6 +141,7 @@ export type SmartEditTransition = z.infer<typeof SmartEditTransitionSchema>;
 export type SmartEditSource = z.infer<typeof SmartEditSourceSchema>;
 export type SmartEditTransform = z.infer<typeof SmartEditTransformSchema>;
 export type SmartEditEffects = z.infer<typeof SmartEditEffectsSchema>;
+export type SmartEditVisualKeyframe = z.infer<typeof SmartEditVisualKeyframeSchema>;
 export type SmartEditTimelineTrack = z.infer<typeof SmartEditTimelineTrackSchema>;
 export type SmartEditTimelineElement = z.infer<typeof SmartEditTimelineElementSchema>;
 export type SmartEditTimeline = z.infer<typeof SmartEditTimelineSchema>;

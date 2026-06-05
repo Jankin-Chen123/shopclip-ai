@@ -534,7 +534,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -606,6 +606,93 @@ const normalizeModelSource = (
   ) as SmartEditPlan["segments"][number]["source"];
 };
 
+const normalizeModelTransform = (
+  rawTransform: unknown,
+  localTransform: SmartEditPlan["segments"][number]["transform"],
+): SmartEditPlan["segments"][number]["transform"] | undefined => {
+  if (!isRecord(rawTransform)) {
+    return localTransform;
+  }
+  return {
+    offsetXPercent:
+      typeof rawTransform.offsetXPercent === "number"
+        ? Math.max(-100, Math.min(100, rawTransform.offsetXPercent))
+        : localTransform?.offsetXPercent ?? 0,
+    offsetYPercent:
+      typeof rawTransform.offsetYPercent === "number"
+        ? Math.max(-100, Math.min(100, rawTransform.offsetYPercent))
+        : localTransform?.offsetYPercent ?? 0,
+    opacity:
+      typeof rawTransform.opacity === "number"
+        ? Math.max(0, Math.min(1, rawTransform.opacity))
+        : localTransform?.opacity ?? 1,
+    rotateDegrees:
+      typeof rawTransform.rotateDegrees === "number"
+        ? Math.max(-180, Math.min(180, rawTransform.rotateDegrees))
+        : localTransform?.rotateDegrees ?? 0,
+    scale:
+      typeof rawTransform.scale === "number"
+        ? Math.max(0.1, Math.min(4, rawTransform.scale))
+        : localTransform?.scale ?? 1,
+  };
+};
+
+const normalizeModelEffects = (
+  rawEffects: unknown,
+  localEffects: SmartEditPlan["segments"][number]["effects"],
+): SmartEditPlan["segments"][number]["effects"] | undefined => {
+  if (!isRecord(rawEffects)) {
+    return localEffects;
+  }
+  return {
+    blur:
+      typeof rawEffects.blur === "number" ? Math.max(0, Math.min(20, rawEffects.blur)) : localEffects?.blur ?? 0,
+    fadeInSeconds:
+      typeof rawEffects.fadeInSeconds === "number"
+        ? Math.max(0, Math.min(5, rawEffects.fadeInSeconds))
+        : localEffects?.fadeInSeconds ?? 0,
+    fadeOutSeconds:
+      typeof rawEffects.fadeOutSeconds === "number"
+        ? Math.max(0, Math.min(5, rawEffects.fadeOutSeconds))
+        : localEffects?.fadeOutSeconds ?? 0,
+    sharpen:
+      typeof rawEffects.sharpen === "number"
+        ? Math.max(0, Math.min(2, rawEffects.sharpen))
+        : localEffects?.sharpen ?? 0,
+  };
+};
+
+const normalizeModelVisualKeyframes = (
+  rawKeyframes: unknown,
+  localSegment: SmartEditPlan["segments"][number],
+) => {
+  if (!Array.isArray(rawKeyframes)) {
+    return localSegment.visualKeyframes ?? [];
+  }
+  return rawKeyframes
+    .filter(isRecord)
+    .slice(0, 40)
+    .map((keyframe, index) => ({
+      easing: enumStringOr(keyframe.easing, new Set<"linear" | "hold">(["linear", "hold"]), "linear"),
+      effects: normalizeModelEffects(keyframe.effects, localSegment.effects),
+      id: getString(keyframe.id) ?? `${localSegment.id}_visual_keyframe_${index + 1}`,
+      timeSecond:
+        typeof keyframe.timeSecond === "number"
+          ? Math.max(0, Math.min(localSegment.durationSeconds, keyframe.timeSecond))
+          : 0,
+      transform:
+        normalizeModelTransform(keyframe.transform, localSegment.transform) ??
+        {
+          offsetXPercent: 0,
+          offsetYPercent: 0,
+          opacity: 1,
+          rotateDegrees: 0,
+          scale: 1,
+        },
+    }))
+    .sort((left, right) => left.timeSecond - right.timeSecond);
+};
+
 const normalizeModelSegment = (
   rawSegment: unknown,
   localSegment: SmartEditPlan["segments"][number],
@@ -669,6 +756,9 @@ const normalizeModelSegment = (
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
     voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,
     source: normalizeModelSource(rawSegment.source, localSegment.source),
+    transform: normalizeModelTransform(rawSegment.transform, localSegment.transform),
+    effects: normalizeModelEffects(rawSegment.effects, localSegment.effects),
+    visualKeyframes: normalizeModelVisualKeyframes(rawSegment.visualKeyframes, localSegment),
     assetTags: Array.isArray(rawSegment.assetTags)
       ? rawSegment.assetTags.map(getString).filter((tag): tag is string => Boolean(tag))
       : localSegment.assetTags,

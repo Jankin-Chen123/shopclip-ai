@@ -805,3 +805,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Export is still bridged through `SmartEditSegment`; direct arbitrary element-stack rendering is still open.
   - Keyframes, masks, richer effect stacks, grouped element selection, and OpenCut-level timeline UI polish are still open.
+
+## 2026-06-05 Visual Transform Keyframes
+
+- Reference model:
+  - OpenCut stores keyframes on timeline elements and command handlers upsert/remove/retime keyframes against a property path.
+  - This increment adapts that model to ShopClip's current segment-backed compatibility layer by adding visual keyframes to smart-edit segments, then exporting them as ffmpeg time expressions.
+- Fix:
+  - Added `SmartEditVisualKeyframeSchema` with id, in-segment time, easing, transform, and optional effects.
+  - Smart edit planner prompt and model normalization now accept `visualKeyframes`, clamp out-of-range times/values, and preserve normalized model keyframes in the executable plan.
+  - Smart Edit inspector now shows a Visual keyframes section, can add a keyframe at the current playhead using the segment's current transform/effects, and can delete existing keyframes.
+  - ffmpeg segment rendering now converts two or more visual keyframes into time-based expressions for scale, crop X/Y offset, rotation, and opacity while preserving the existing static transform/effects path for non-keyframed segments.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "smart edit|timeline"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "transform|keyframes|persistent|timeline|subtitle|source audio"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|editor workspace|persistent|duplicates|pastes|copies|clipboard|splits"`
+- Remaining:
+  - Keyframes are still segment-backed, not fully arbitrary element property paths.
+  - Masks, richer effect stacks, curve editing, grouped element selection, and direct arbitrary element-stack export are still open.

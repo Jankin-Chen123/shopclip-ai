@@ -374,6 +374,19 @@ describe("smart edit planner provider", () => {
                 },
                 subtitle: "这只小猫水杯也太可爱了！",
                 transition: "quick push-in",
+                visualKeyframes: [
+                  {
+                    id: "model_push_in",
+                    timeSecond: 99,
+                    transform: {
+                      offsetXPercent: 140,
+                      offsetYPercent: -120,
+                      opacity: 0.55,
+                      rotateDegrees: 0,
+                      scale: 1.45,
+                    },
+                  },
+                ],
                 voiceover: "这只小猫水杯也太可爱了！",
               },
             ],
@@ -430,6 +443,21 @@ describe("smart edit planner provider", () => {
       imageUrl: "https://storage.example.test/cat-cup.png",
       kind: "image-asset",
     });
+    expect(result.plan.segments[0]?.visualKeyframes).toEqual([
+      {
+        easing: "linear",
+        effects: undefined,
+        id: "model_push_in",
+        timeSecond: 4,
+        transform: {
+          offsetXPercent: 100,
+          offsetYPercent: -100,
+          opacity: 0.55,
+          rotateDegrees: 0,
+          scale: 1.45,
+        },
+      },
+    ]);
     expect(result.plan.segments[0]?.subtitle).toBe("这只小猫水杯也太可爱了！");
   });
 

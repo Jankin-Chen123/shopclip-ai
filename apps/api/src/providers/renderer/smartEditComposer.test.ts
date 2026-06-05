@@ -561,6 +561,73 @@ describe("smart edit composer", () => {
     expect(videoFilter).toContain("fade=t=out:st=3.50:d=0.50");
   });
 
+  it("exports visual transform keyframes as time-based ffmpeg video expressions", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      durationSeconds: 4,
+      transform: {
+        offsetXPercent: 0,
+        offsetYPercent: 0,
+        opacity: 1,
+        rotateDegrees: 0,
+        scale: 1,
+      },
+      visualKeyframes: [
+        {
+          id: "kf-start",
+          easing: "linear",
+          timeSecond: 0,
+          transform: {
+            offsetXPercent: 0,
+            offsetYPercent: 0,
+            opacity: 1,
+            rotateDegrees: 0,
+            scale: 1,
+          },
+        },
+        {
+          id: "kf-push",
+          easing: "linear",
+          timeSecond: 2,
+          transform: {
+            offsetXPercent: 16,
+            offsetYPercent: -10,
+            opacity: 0.65,
+            rotateDegrees: 0,
+            scale: 1.4,
+          },
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    const videoFilter = firstRawCommand?.args[firstRawCommand.args.indexOf("-vf") + 1] ?? "";
+    expect(videoFilter).toContain("eval=frame");
+    expect(videoFilter).toContain("if(lte(t\\,0.000)");
+    expect(videoFilter).toContain("if(gte(t\\,2.000)");
+    expect(videoFilter).toContain("colorchannelmixer=aa='");
+    expect(videoFilter).toContain("0.650");
+    expect(videoFilter).toContain("crop=720:1280:x='(in_w-720)/2+");
+  });
+
   it("uses real ffmpeg fade and xfade filters for requested visual transitions", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

@@ -4660,6 +4660,48 @@ textarea {
   font-size: 0.86rem;
 }
 
+.smart-edit-section-header,
+.smart-edit-keyframe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.smart-edit-keyframe-list {
+  display: grid;
+  gap: 8px;
+}
+
+.smart-edit-keyframe-row {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  padding: 9px 10px;
+}
+
+.smart-edit-keyframe-row div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.smart-edit-keyframe-row span,
+.smart-edit-keyframe-row small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.smart-edit-keyframe-row button {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface-strong);
+  cursor: pointer;
+}
+
 .track-clip-inspector {
   border-color: rgba(59, 130, 246, 0.28);
   border-radius: 8px;

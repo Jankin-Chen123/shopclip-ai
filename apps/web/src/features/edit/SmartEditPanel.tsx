@@ -123,6 +123,11 @@ const clampSharpen = (sharpen: number): number =>
 const clampEffectFade = (seconds: number): number =>
   Number.isFinite(seconds) ? Math.max(0, Math.min(5, seconds)) : 0;
 
+const clampVisualKeyframeTime = (seconds: number, durationSeconds: number): number =>
+  Number.isFinite(seconds)
+    ? Math.max(0, Math.min(Math.max(0, durationSeconds), Number(seconds.toFixed(3))))
+    : 0;
+
 const transformForSegment = (segment: SmartEditSegment) => ({
   offsetXPercent: clampPercentOffset(segment.transform?.offsetXPercent ?? 0),
   offsetYPercent: clampPercentOffset(segment.transform?.offsetYPercent ?? 0),
@@ -137,6 +142,9 @@ const effectsForSegment = (segment: SmartEditSegment) => ({
   fadeOutSeconds: clampEffectFade(segment.effects?.fadeOutSeconds ?? 0),
   sharpen: clampSharpen(segment.effects?.sharpen ?? 0),
 });
+
+const visualKeyframesForSegment = (segment: SmartEditSegment) =>
+  [...(segment.visualKeyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
 
 const durationFromSourceRange = (
   startSecond: number | undefined,
@@ -2273,6 +2281,46 @@ export const SmartEditPanel = ({
     commitPlanChange(replaceSegment(plan, selectedSegment.id, update), { label: "Edit segment" });
   };
 
+  const addVisualKeyframeAtPlayhead = () => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    const selectedStart = segmentTimelineBaseStart(plan, selectedSegment.id);
+    const timeSecond = clampVisualKeyframeTime(
+      boundedPlayheadSeconds - selectedStart,
+      selectedSegment.durationSeconds,
+    );
+    const token = `${Date.now()}`;
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
+      const keyframes = visualKeyframesForSegment(segment).filter(
+        (keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05,
+      );
+      return {
+        ...segment,
+        visualKeyframes: [
+          ...keyframes,
+          {
+            easing: "linear" as const,
+            effects: effectsForSegment(segment),
+            id: `${segment.id}-visual-kf-${token}`,
+            timeSecond,
+            transform: transformForSegment(segment),
+          },
+        ].sort((left, right) => left.timeSecond - right.timeSecond),
+      };
+    }), { label: "Add visual keyframe" });
+  };
+
+  const removeVisualKeyframe = (keyframeId: string) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
+      ...segment,
+      visualKeyframes: visualKeyframesForSegment(segment).filter((keyframe) => keyframe.id !== keyframeId),
+    })), { label: "Remove visual keyframe" });
+  };
+
   const updateTrackClipSegment = (
     trackClip: SmartEditTrackSegment | undefined,
     update: (segment: SmartEditSegment) => SmartEditSegment,
@@ -3554,6 +3602,36 @@ export const SmartEditPanel = ({
                       }
                     />
                   </label>
+                </div>
+              </section>
+              <section className="smart-edit-inspector-section">
+                <div className="smart-edit-section-header">
+                  <h4>Visual keyframes</h4>
+                  <Button onClick={addVisualKeyframeAtPlayhead}>Add keyframe</Button>
+                </div>
+                <div className="smart-edit-keyframe-list">
+                  {visualKeyframesForSegment(selectedSegment).length > 0 ? (
+                    visualKeyframesForSegment(selectedSegment).map((keyframe) => (
+                      <article className="smart-edit-keyframe-row" key={keyframe.id}>
+                        <div>
+                          <strong>{keyframe.timeSecond.toFixed(1)}s</strong>
+                          <span>
+                            Scale {keyframe.transform.scale.toFixed(2)} · Opacity{" "}
+                            {keyframe.transform.opacity.toFixed(2)}
+                          </span>
+                          <small>
+                            X {keyframe.transform.offsetXPercent.toFixed(0)} / Y{" "}
+                            {keyframe.transform.offsetYPercent.toFixed(0)}
+                          </small>
+                        </div>
+                        <button type="button" onClick={() => removeVisualKeyframe(keyframe.id)}>
+                          Delete
+                        </button>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="empty-state">No visual keyframes.</p>
+                  )}
                 </div>
               </section>
               <section className="smart-edit-inspector-section">

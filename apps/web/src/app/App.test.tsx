@@ -2968,6 +2968,38 @@ describe("App", () => {
                   fadeInSeconds: 0.2,
                   fadeOutSeconds: 0.4,
                 },
+                visualKeyframes: [
+                  {
+                    id: "kf-start",
+                    easing: "linear",
+                    timeSecond: 0,
+                    transform: {
+                      scale: 1.1,
+                      rotateDegrees: -2,
+                      offsetXPercent: 6,
+                      offsetYPercent: -4,
+                      opacity: 0.9,
+                    },
+                  },
+                  {
+                    id: "kf-closeup",
+                    easing: "linear",
+                    timeSecond: 0.8,
+                    transform: {
+                      scale: 1.35,
+                      rotateDegrees: -1,
+                      offsetXPercent: 12,
+                      offsetYPercent: -6,
+                      opacity: 0.75,
+                    },
+                    effects: {
+                      blur: 0,
+                      sharpen: 0.5,
+                      fadeInSeconds: 0,
+                      fadeOutSeconds: 0,
+                    },
+                  },
+                ],
                 assetTags: ["demo"],
                 rationale: "Use the product pour slice.",
               },
@@ -3020,6 +3052,10 @@ describe("App", () => {
     expect(markup).toContain("Visual effects");
     expect(markup).toContain("Blur");
     expect(markup).toContain("Fade out");
+    expect(markup).toContain("Visual keyframes");
+    expect(markup).toContain("Add keyframe");
+    expect(markup).toContain("0.8s");
+    expect(markup).toContain("Scale 1.35");
     expect(markup).toContain("Copy and voice");
     expect(markup).toContain("Segment state");
     expect(markup).toContain("Selected");

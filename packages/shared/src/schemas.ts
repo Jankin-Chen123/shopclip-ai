@@ -718,6 +718,14 @@ export const SmartEditEffectsSchema = z.object({
   fadeOutSeconds: z.number().min(0).max(5).default(0),
 });
 
+export const SmartEditVisualKeyframeSchema = z.object({
+  id: z.string().trim().min(1),
+  timeSecond: z.number().min(0).max(120),
+  transform: SmartEditTransformSchema,
+  effects: SmartEditEffectsSchema.optional(),
+  easing: z.enum(["linear", "hold"]).default("linear"),
+});
+
 export const SmartEditSegmentOverrideSchema = z.object({
   sceneId: z.string().trim().min(1),
   enabled: z.boolean().default(true),
@@ -738,6 +746,7 @@ export const SmartEditSegmentOverrideSchema = z.object({
   source: SmartEditSourceSchema.optional(),
   transform: SmartEditTransformSchema.optional(),
   effects: SmartEditEffectsSchema.optional(),
+  visualKeyframes: z.array(SmartEditVisualKeyframeSchema).max(40).optional(),
 });
 
 export const SmartEditRequestSchema = z.object({
@@ -782,6 +791,7 @@ export const SmartEditSegmentSchema = z.object({
   source: SmartEditSourceSchema,
   transform: SmartEditTransformSchema.optional(),
   effects: SmartEditEffectsSchema.optional(),
+  visualKeyframes: z.array(SmartEditVisualKeyframeSchema).max(40).optional(),
   assetTags: z.array(z.string().trim().min(1)).default([]),
   rationale: z.string().trim().min(1),
 });
