@@ -1083,6 +1083,70 @@ const splitPersistentTimelineElement = (
   return [leftElement, rightElement];
 };
 
+const trimPersistentTimelineElementAtSecond = (
+  element: SmartEditTimelineElement,
+  splitSecond: number,
+  side: "left" | "right",
+): SmartEditTimelineElement[] => {
+  const elementStart = clampTimelineStart(element.startSecond);
+  const elementEnd = snapTimelineSeconds(elementStart + element.durationSeconds);
+  if (side === "left") {
+    if (splitSecond <= elementStart + 0.001) {
+      return [];
+    }
+    if (splitSecond >= elementEnd - 0.001) {
+      return [element];
+    }
+  } else {
+    if (splitSecond <= elementStart + 0.001) {
+      return [element];
+    }
+    if (splitSecond >= elementEnd - 0.001) {
+      return [];
+    }
+  }
+
+  const playbackRate = clampPlaybackRate(element.playbackRate ?? 1);
+  const trimStart = element.trimStartSecond ?? 0;
+  const trimEnd = element.trimEndSecond ?? trimStart + element.durationSeconds * playbackRate;
+  const usesSourceTrim = element.kind === "video" || element.kind === "audio";
+
+  if (side === "left") {
+    const nextDuration = Math.max(0, snapTimelineSeconds(splitSecond - elementStart));
+    if (nextDuration < MIN_SMART_EDIT_CLIP_SECONDS) {
+      return [];
+    }
+    return [
+      {
+        ...element,
+        durationSeconds: nextDuration,
+        ...(usesSourceTrim
+          ? { trimEndSecond: Math.min(trimEnd, trimStart + nextDuration * playbackRate) }
+          : {}),
+      },
+    ];
+  }
+
+  const nextDuration = Math.max(0, snapTimelineSeconds(elementEnd - splitSecond));
+  if (nextDuration < MIN_SMART_EDIT_CLIP_SECONDS) {
+    return [];
+  }
+  const sourceOffsetSeconds = Math.max(0, splitSecond - elementStart) * playbackRate;
+  return [
+    {
+      ...element,
+      durationSeconds: nextDuration,
+      startSecond: splitSecond,
+      ...(usesSourceTrim
+        ? {
+            trimEndSecond: trimEnd,
+            trimStartSecond: Math.min(trimEnd, trimStart + sourceOffsetSeconds),
+          }
+        : {}),
+    },
+  ];
+};
+
 const splitPersistentTimelineElementsForSegment = (
   plan: SmartEditPlan,
   segmentId: string,
@@ -1106,6 +1170,26 @@ const splitPersistentTimelineElementsForSegment = (
       rightSegmentId,
       splitToken,
     );
+  });
+};
+
+const trimPersistentTimelineElementsForSegment = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  splitSecond: number,
+  side: "left" | "right",
+): SmartEditTimeline["elements"] | undefined => {
+  if (!plan.timeline || !hasPersistentTimelineElements(plan.timeline)) {
+    return undefined;
+  }
+  return plan.timeline.elements.flatMap((element) => {
+    if (element.segmentId !== segmentId) {
+      return [element];
+    }
+    if (isDerivedTimelineElement(element)) {
+      return [];
+    }
+    return trimPersistentTimelineElementAtSecond(element, splitSecond, side);
   });
 };
 
@@ -1159,6 +1243,68 @@ export const splitSmartEditSegmentOnTimeline = (
           : segment.id === rightId
             ? clampTimelineStart(targetStart + firstDuration)
             : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+    })),
+  });
+};
+
+export const trimSmartEditSegmentAtPlayhead = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  offsetSeconds: number,
+  side: "left" | "right",
+): SmartEditPlan | undefined => {
+  const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
+  const targetSegment = sorted.find((segment) => segment.id === segmentId);
+  if (!targetSegment) {
+    return undefined;
+  }
+  const splitSegment = splitSmartEditSegmentForInsert(
+    targetSegment,
+    offsetSeconds,
+    `${targetSegment.id}-trim-preview`,
+  );
+  if (!splitSegment) {
+    return undefined;
+  }
+
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const targetStart = segmentTimelineBaseStart(plan, targetSegment.id, currentStarts);
+  const retainedSegment =
+    side === "left"
+      ? splitSegment.left
+      : {
+          ...splitSegment.right,
+          id: targetSegment.id,
+          subtitle: targetSegment.subtitle,
+          timelineStartSecond: clampTimelineStart(targetStart + splitSegment.left.durationSeconds),
+        };
+  const splitSecond = snapTimelineSeconds(targetStart + splitSegment.left.durationSeconds);
+  const retainedElements = trimPersistentTimelineElementsForSegment(
+    plan,
+    targetSegment.id,
+    splitSecond,
+    side,
+  );
+
+  return withRebuiltTimeline({
+    ...(retainedElements && plan.timeline
+      ? {
+          ...plan,
+          timeline: {
+            ...plan.timeline,
+            elements: retainedElements,
+          },
+        }
+      : plan),
+    segments: sorted.map((segment, segmentIndex) => ({
+      ...(segment.id === targetSegment.id ? retainedSegment : segment),
+      order: segmentIndex + 1,
+      timelineStartSecond:
+        segment.id === targetSegment.id
+          ? side === "left"
+            ? targetStart
+            : clampTimelineStart(targetStart + splitSegment.left.durationSeconds)
+          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
 };
@@ -3118,6 +3264,35 @@ export const SmartEditPanel = ({
     }
   };
 
+  const trimAtPlayhead = (side: "left" | "right") => {
+    if (!plan) {
+      return;
+    }
+    const target = timedTimelineSegments.find(
+      ({ segment, startSecond }) =>
+        segment.enabled &&
+        boundedPlayheadSeconds > startSecond &&
+        boundedPlayheadSeconds < startSecond + segment.durationSeconds,
+    );
+    if (!target) {
+      return;
+    }
+    const nextPlan = trimSmartEditSegmentAtPlayhead(
+      plan,
+      target.segment.id,
+      boundedPlayheadSeconds - target.startSecond,
+      side,
+    );
+    if (!nextPlan) {
+      return;
+    }
+    commitPlanChange(nextPlan, {
+      label: side === "left" ? "Trim left at playhead" : "Trim right at playhead",
+    });
+    onSelectedSegmentChange(target.segment.id);
+    setSelectedSegmentIds([target.segment.id]);
+  };
+
   const nudgeSegmentTrim = (
     segmentId: string,
     edge: "in" | "out",
@@ -3406,6 +3581,21 @@ export const SmartEditPanel = ({
         if (isCommandKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
           selectAllSegments();
+          return;
+        }
+        if (!isCommandKey && event.key.toLowerCase() === "s") {
+          event.preventDefault();
+          splitAtPlayhead();
+          return;
+        }
+        if (!isCommandKey && event.key.toLowerCase() === "q") {
+          event.preventDefault();
+          trimAtPlayhead("right");
+          return;
+        }
+        if (!isCommandKey && event.key.toLowerCase() === "w") {
+          event.preventDefault();
+          trimAtPlayhead("left");
           return;
         }
         if (event.key === "ArrowLeft") {
@@ -5140,6 +5330,20 @@ export const SmartEditPanel = ({
             onClick={splitAtPlayhead}
           >
             {copy.splitAtPlayhead}
+          </Button>
+          <Button
+            disabled={!plan}
+            icon={<Scissors size={16} />}
+            onClick={() => trimAtPlayhead("right")}
+          >
+            {copy.trimLeftAtPlayhead}
+          </Button>
+          <Button
+            disabled={!plan}
+            icon={<Scissors size={16} />}
+            onClick={() => trimAtPlayhead("left")}
+          >
+            {copy.trimRightAtPlayhead}
           </Button>
           <Button
             disabled={!plan}

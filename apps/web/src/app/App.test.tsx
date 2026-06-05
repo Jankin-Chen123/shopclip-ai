@@ -47,6 +47,7 @@ import {
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
   splitSmartEditSegmentOnTimeline,
+  trimSmartEditSegmentAtPlayhead,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
@@ -2276,6 +2277,162 @@ describe("App", () => {
     expect(split?.timeline?.elements.find((element) => element.id === "right-caption")).toMatchObject({
       segmentId: "segment-1-split-token-1",
       startSecond: 4,
+    });
+  });
+
+  it("trims persistent smart edit timeline elements to the left or right of the playhead", () => {
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use independently edited timeline elements.",
+      targetDurationSeconds: 7,
+      createdAt: "2026-06-05T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 1,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Segment voice",
+          voiceover: "Segment voice",
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.test/scene-1.m4a",
+            sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 0,
+            endSecond: 4,
+          },
+          assetTags: ["hero"],
+          rationale: "Use the rendered scene clip.",
+        },
+      ],
+      timeline: {
+        scale: 1,
+        durationSeconds: 6,
+        tracks: [
+          { id: "video-main", kind: "video", label: "Video" },
+          { id: "audio-source", kind: "audio", label: "Source audio" },
+          { id: "text-copy", kind: "text", label: "Text" },
+        ],
+        elements: [
+          {
+            id: "persisted-video",
+            durationSeconds: 4,
+            hidden: false,
+            kind: "video",
+            label: "Persisted video",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            sourceUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 1,
+            trackId: "video-main",
+            trimEndSecond: 4,
+            trimStartSecond: 0,
+          },
+          {
+            id: "persisted-source-audio",
+            detachedAudio: true,
+            durationSeconds: 4,
+            hidden: false,
+            kind: "audio",
+            label: "Persisted source audio",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            sourceUrl: "https://cdn.example.test/scene-1.m4a",
+            startSecond: 1,
+            trackId: "audio-source",
+            trimEndSecond: 4,
+            trimStartSecond: 0,
+          },
+          {
+            id: "persisted-caption",
+            durationSeconds: 3,
+            hidden: false,
+            kind: "text",
+            label: "Edited caption",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            startSecond: 1.5,
+            text: "Edited caption",
+            trackId: "text-copy",
+            trimStartSecond: 0,
+          },
+        ],
+      },
+    };
+
+    const keepRight = trimSmartEditSegmentAtPlayhead(plan, "segment-1", 1.5, "right");
+
+    expect(keepRight?.segments[0]).toMatchObject({
+      durationSeconds: 2.5,
+      id: "segment-1",
+      timelineStartSecond: 2.5,
+      source: {
+        startSecond: 1.5,
+        endSecond: 4,
+      },
+    });
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "persisted-video")).toMatchObject({
+      durationSeconds: 2.5,
+      startSecond: 2.5,
+      trimEndSecond: 4,
+      trimStartSecond: 1.5,
+    });
+    expect(
+      keepRight?.timeline?.elements.find((element) => element.id === "persisted-source-audio"),
+    ).toMatchObject({
+      durationSeconds: 2.5,
+      startSecond: 2.5,
+      trimEndSecond: 4,
+      trimStartSecond: 1.5,
+    });
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "persisted-caption")).toMatchObject({
+      durationSeconds: 2,
+      startSecond: 2.5,
+      text: "Edited caption",
+    });
+
+    const keepLeft = trimSmartEditSegmentAtPlayhead(plan, "segment-1", 1.5, "left");
+
+    expect(keepLeft?.segments[0]).toMatchObject({
+      durationSeconds: 1.5,
+      id: "segment-1",
+      timelineStartSecond: 1,
+      source: {
+        startSecond: 0,
+        endSecond: 1.5,
+      },
+    });
+    expect(keepLeft?.timeline?.elements.find((element) => element.id === "persisted-video")).toMatchObject({
+      durationSeconds: 1.5,
+      startSecond: 1,
+      trimEndSecond: 1.5,
+      trimStartSecond: 0,
+    });
+    expect(keepLeft?.timeline?.elements.find((element) => element.id === "persisted-caption")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1.5,
+      text: "Edited caption",
     });
   });
 

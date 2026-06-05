@@ -1089,3 +1089,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - The waveform is currently a visual timeline summary; direct drag editing on waveform/volume lines and waveform-level split handles remain open.
   - Full completion still requires live runtime evidence after deployment for real model render to ffmpeg materialization to Smart Edit waveform display.
+
+## 2026-06-05 OpenCut Split-Left And Split-Right Actions
+
+- Reference model:
+  - OpenCut exposes `S` for split, `Q` for split-left, and `W` for split-right. Split-left keeps the right side of the clip at the playhead; split-right keeps the left side.
+- Fix:
+  - Added `trimSmartEditSegmentAtPlayhead` so Smart Edit can retain only the left or right side of a timeline clip without creating a second clip.
+  - Segment source ranges, playback-rate-aware durations, timeline starts, and persistent video/source-audio/text timeline elements are trimmed together.
+  - Added toolbar actions for trimming left/right at the playhead and keyboard shortcuts matching OpenCut: `S`, `Q`, and `W`.
+  - Localized the new timeline actions in English and Chinese.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "trims persistent smart edit timeline elements"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Split-left/right currently operate on the enabled segment under the playhead; direct retain-side operations on arbitrary unowned audio/text elements should be added next.
+  - Full completion still requires broader OpenCut-style element-level editing and live runtime proof after deployment.
