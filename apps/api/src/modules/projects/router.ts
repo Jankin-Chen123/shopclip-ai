@@ -1954,7 +1954,10 @@ export const createP0Router = ({
     sceneClips: SceneRenderClip[] | undefined;
     traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>;
   }> => {
-    if (!sceneClips?.some((clip) => clip.status === "completed" && clip.videoUrl)) {
+    const hasMissingCompletedMaterials = sceneClips?.some(
+      (clip) => clip.status === "completed" && clip.videoUrl && !clip.material,
+    );
+    if (!hasMissingCompletedMaterials) {
       return { sceneClips, traceEvents: [] };
     }
 
@@ -3830,6 +3833,48 @@ export const createP0Router = ({
     if (!renderTask) {
       sendNotFound(response, "RENDER_TASK_NOT_FOUND", "Render task was not found.");
       return;
+    }
+
+    if (
+      renderTask.renderTask.provider === "volcengine-seedance" &&
+      renderTask.renderTask.status === "completed" &&
+      renderTask.renderTask.sceneClips?.some(
+        (clip) => clip.status === "completed" && clip.videoUrl && !clip.material,
+      )
+    ) {
+      const traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [];
+      try {
+        const materialized = await materializeCompletedSceneClips(
+          renderTask.project.id,
+          renderTask.renderTask.id,
+          renderTask.renderTask.sceneClips,
+        );
+        traceEvents.push(...materialized.traceEvents);
+        const updated = await store.updateRenderTask(
+          renderTask.renderTask.id,
+          { sceneClips: materialized.sceneClips },
+          traceEvents,
+        );
+        if (updated) {
+          response.json(updated);
+          return;
+        }
+      } catch (error) {
+        traceEvents.push({
+          status: "failed",
+          step: "scene-clip-materialize-failed",
+          message: error instanceof Error ? error.message : "Scene clip materialization failed.",
+        });
+        const updated = await store.updateRenderTask(
+          renderTask.renderTask.id,
+          {},
+          traceEvents,
+        );
+        if (updated) {
+          response.json(updated);
+          return;
+        }
+      }
     }
 
     if (

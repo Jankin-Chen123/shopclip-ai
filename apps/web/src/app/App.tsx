@@ -486,6 +486,38 @@ export const isRenderTaskPollingActive = (
 const isSmartEditTask = (renderTask: Pick<RenderTask, "provider"> | undefined): boolean =>
   renderTask?.provider === "smart-edit-ffmpeg";
 
+export const hasCompletedSceneClips = (renderTask: RenderTask | undefined): boolean =>
+  renderTask?.status === "completed" &&
+  renderTask.sceneClips?.some((clip) => clip.status === "completed" && Boolean(clip.videoUrl)) ===
+    true;
+
+export const needsSceneClipMaterialRefresh = (renderTask: RenderTask | undefined): boolean =>
+  renderTask?.provider === "volcengine-seedance" &&
+  hasCompletedSceneClips(renderTask) &&
+  renderTask.sceneClips?.some(
+    (clip) => clip.status === "completed" && Boolean(clip.videoUrl) && !clip.material,
+  ) === true;
+
+export const selectStudioBaseRenderTask = (renderTasks: RenderTask[]): RenderTask | undefined =>
+  [...renderTasks]
+    .reverse()
+    .find((candidate) => !isSmartEditTask(candidate) && hasCompletedSceneClips(candidate)) ??
+  renderTasks.at(-1);
+
+export const selectLatestCompletedSmartEditTask = (
+  renderTasks: RenderTask[],
+): RenderTask | undefined =>
+  [...renderTasks]
+    .reverse()
+    .find(
+      (candidate) =>
+        isSmartEditTask(candidate) &&
+        candidate.status === "completed" &&
+        Boolean(candidate.smartEditPlan) &&
+        Boolean(candidate.exportUrl) &&
+        Boolean(candidate.previewUrl),
+    );
+
 const smartEditResultFromRenderSnapshot = (
   render: RenderSnapshot,
 ): SmartEditResult | undefined => {
@@ -1100,7 +1132,8 @@ export const App = ({
 
   const applyLoadedProject = (loadedProject: ProjectSnapshot) => {
     const latestScript = loadedProject.scripts.at(-1);
-    const latestRender = loadedProject.renderTasks.at(-1);
+    const studioBaseRender = selectStudioBaseRenderTask(loadedProject.renderTasks);
+    const latestSmartEditRender = selectLatestCompletedSmartEditTask(loadedProject.renderTasks);
     setProject(loadedProject);
     setProjectDetailTab("overview");
     setIsProjectScriptComposerOpen(false);
@@ -1120,24 +1153,25 @@ export const App = ({
     setScriptProductionMode("automatic");
     setSelectedReferenceIdForScript(undefined);
     setSelectedTemplateIdForScript(undefined);
-    setRenderTask(latestRender);
+    setRenderTask(studioBaseRender);
     setTraceEvents([]);
     if (
-      latestRender?.provider === "smart-edit-ffmpeg" &&
-      latestRender.status === "completed" &&
-      latestRender.smartEditPlan &&
-      latestRender.exportUrl &&
-      latestRender.previewUrl
+      studioBaseRender &&
+      isSmartEditTask(studioBaseRender) &&
+      latestSmartEditRender?.id === studioBaseRender.id &&
+      latestSmartEditRender.smartEditPlan &&
+      latestSmartEditRender.exportUrl &&
+      latestSmartEditRender.previewUrl
     ) {
       setSmartEditResult({
-        exportUrl: latestRender.exportUrl,
-        plan: latestRender.smartEditPlan,
-        previewUrl: latestRender.previewUrl,
-        renderTaskId: latestRender.id,
-        segmentOutputs: latestRender.smartEditSegmentOutputs ?? [],
+        exportUrl: latestSmartEditRender.exportUrl,
+        plan: latestSmartEditRender.smartEditPlan,
+        previewUrl: latestSmartEditRender.previewUrl,
+        renderTaskId: latestSmartEditRender.id,
+        segmentOutputs: latestSmartEditRender.smartEditSegmentOutputs ?? [],
         traceEvents: [],
       });
-      setSelectedSmartEditSegmentId(latestRender.smartEditPlan.segments[0]?.id);
+      setSelectedSmartEditSegmentId(latestSmartEditRender.smartEditPlan.segments[0]?.id);
     } else {
       setSmartEditResult(undefined);
       setSelectedSmartEditSegmentId(undefined);
@@ -1197,11 +1231,38 @@ export const App = ({
     });
   };
 
+  const refreshStudioBaseRenderMaterials = (candidate: RenderTask | undefined) => {
+    if (!candidate || !needsSceneClipMaterialRefresh(candidate)) {
+      return;
+    }
+    const renderTaskId = candidate.id;
+    void runAction("render", "render", async () => {
+      const render = await loadRenderTask(renderTaskId);
+      setRenderTask(render.renderTask);
+      setTraceEvents(render.traceEvents);
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              renderTasks: current.renderTasks.map((task) =>
+                task.id === render.renderTask.id ? render.renderTask : task,
+              ),
+            }
+          : current,
+      );
+    });
+  };
+
   const handleGenerateProjectVideo = () => {
+    const baseRender = project ? selectStudioBaseRenderTask(project.renderTasks) : renderTask;
+    setRenderTask(baseRender);
+    setSmartEditResult(undefined);
+    setSelectedSmartEditSegmentId(undefined);
     setProjectDetailTab("videos");
     setIsProjectStudioMode(true);
     setProjectStudioFlow("script");
     handlePageChange("studio");
+    refreshStudioBaseRenderMaterials(baseRender);
   };
 
   const handleSaveVideoAndReturn = () => {
@@ -1215,6 +1276,9 @@ export const App = ({
     setIsProjectStudioMode(true);
     setProjectStudioFlow(flow);
     handlePageChange(flow === "render" ? "delivery" : flow === "edit" ? "edit" : "studio");
+    if (flow === "edit") {
+      refreshStudioBaseRenderMaterials(renderTask);
+    }
   };
 
   const loadProjectScriptIntoStudio = (selectedScript: ScriptResult) => {

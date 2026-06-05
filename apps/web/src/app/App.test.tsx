@@ -3,6 +3,7 @@ import type {
   ExternalAssetResult,
   ProjectSummary,
   ReferenceVideo,
+  RenderTask,
   SmartEditPlan,
   StoryboardScene,
   ViralTemplate,
@@ -76,9 +77,12 @@ import {
   getPreparedAssetsByBucket,
   getReferenceScriptAssets,
   hasUsableStockProviderCredential,
+  needsSceneClipMaterialRefresh,
   isRenderTaskPollingActive,
   mergeReferences,
   pruneAssetPrepSnapshotDeletedAssets,
+  selectLatestCompletedSmartEditTask,
+  selectStudioBaseRenderTask,
 } from "./App";
 import { copy } from "./i18n";
 import { listReferenceVideos, regenerateScene, resolveApiDownloadUrl } from "../lib/api";
@@ -129,6 +133,52 @@ const makeReferenceVideo = (reference: Partial<ReferenceVideo>): ReferenceVideo 
   createdAt: "2026-05-30T00:00:00.000Z",
   updatedAt: "2026-05-30T00:00:00.000Z",
   ...reference,
+});
+
+const makeRenderTask = (renderTask: Partial<RenderTask>): RenderTask => ({
+  id: "render-task-1",
+  projectId: "project-1",
+  status: "completed",
+  progress: 100,
+  provider: "volcengine-seedance",
+  createdAt: "2026-06-05T00:00:00.000Z",
+  updatedAt: "2026-06-05T00:00:00.000Z",
+  ...renderTask,
+});
+
+const makeMinimalSmartEditPlan = (): SmartEditPlan => ({
+  id: "smart-edit-plan-1",
+  projectId: "project-1",
+  strategy: "Test plan",
+  targetDurationSeconds: 4,
+  segments: [
+    {
+      id: "segment-1",
+      sceneId: "scene-1",
+      order: 1,
+      enabled: true,
+      durationSeconds: 4,
+      timelineStartSecond: 0,
+      playbackRate: 1,
+      sourceAudioMuted: false,
+      sourceAudioStartOffsetSeconds: 0,
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      voiceoverStartOffsetSeconds: 0,
+      transition: "cut",
+      subtitle: "Caption",
+      voiceover: "Voice",
+      source: { kind: "generated-scene-clip", sceneClipUrl: "/scene.mp4" },
+      assetTags: [],
+      rationale: "Test",
+    },
+  ],
+  audio: {
+    bgmTrack: "creator-pop",
+    targetLanguage: "zh-CN",
+    voice: "clear-host",
+  },
+  createdAt: "2026-06-05T00:00:00.000Z",
 });
 
 const makeViralTemplate = (template: Partial<ViralTemplate>): ViralTemplate => ({
@@ -224,6 +274,87 @@ describe("App", () => {
     expect(markup).toContain("Script library");
     expect(markup).toContain("Video library");
     expect(markup).toContain("Generate video");
+  });
+
+  it("uses the latest source render task as the studio base instead of the latest smart edit export", () => {
+    const sourceRender = makeRenderTask({
+      id: "source-render",
+      provider: "volcengine-seedance",
+      sceneClips: [
+        {
+          sceneId: "scene-1",
+          order: 1,
+          subtitle: "Caption",
+          status: "completed",
+          progress: 100,
+          videoUrl: "/scene.mp4",
+          material: {
+            status: "ready",
+            videoOnlyUrl: "/scene-video.mp4",
+            audioUrl: "/scene-audio.m4a",
+            text: "Caption",
+          },
+        },
+      ],
+    });
+    const smartEditExport = makeRenderTask({
+      id: "smart-edit-export",
+      provider: "smart-edit-ffmpeg",
+      previewUrl: "/smart-edit.mp4",
+      exportUrl: "/smart-edit.mp4",
+      smartEditPlan: makeMinimalSmartEditPlan(),
+      createdAt: "2026-06-05T00:05:00.000Z",
+      updatedAt: "2026-06-05T00:05:00.000Z",
+    });
+
+    expect(selectStudioBaseRenderTask([sourceRender, smartEditExport])?.id).toBe(
+      "source-render",
+    );
+    expect(selectLatestCompletedSmartEditTask([sourceRender, smartEditExport])?.id).toBe(
+      "smart-edit-export",
+    );
+  });
+
+  it("detects completed source render tasks that still need scene clip materialization", () => {
+    expect(
+      needsSceneClipMaterialRefresh(
+        makeRenderTask({
+          sceneClips: [
+            {
+              sceneId: "scene-1",
+              order: 1,
+              subtitle: "Caption",
+              status: "completed",
+              progress: 100,
+              videoUrl: "/scene.mp4",
+            },
+          ],
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      needsSceneClipMaterialRefresh(
+        makeRenderTask({
+          sceneClips: [
+            {
+              sceneId: "scene-1",
+              order: 1,
+              subtitle: "Caption",
+              status: "completed",
+              progress: 100,
+              videoUrl: "/scene.mp4",
+              material: {
+                status: "ready",
+                videoOnlyUrl: "/scene-video.mp4",
+                audioUrl: "/scene-audio.m4a",
+                text: "Caption",
+              },
+            },
+          ],
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("renders concept-inspired creation workspace chrome", () => {

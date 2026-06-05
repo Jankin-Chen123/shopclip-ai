@@ -1171,3 +1171,29 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Need a deployed browser pass through the Studio Smart Edit timeline to validate the base demo ergonomics end to end.
+
+## 2026-06-05 Studio Source Render Material Handoff
+
+- Browser finding:
+  - A live `https://shopclip.site/` pass reached Project -> Video library -> Generate video -> Studio -> Smart edit.
+  - The Smart Edit workspace showed video, caption, voice, and BGM tracks, but `Source audio track` was empty for the selected project.
+  - API inspection showed the project had later `smart-edit-ffmpeg` tasks after the original `volcengine-seedance` scene-render tasks. The frontend loaded the latest smart-edit export as the studio input, so Smart Edit did not start from the original rendered scene clips that should be materialized into video/audio/text.
+- Fix:
+  - Added frontend render-task selection helpers so the Studio base render prefers the latest completed non-smart-edit scene render with scene clips, instead of blindly using the latest render task.
+  - Entering the project video flow now clears stale smart-edit result state and uses the selected source render task as the material input for the Smart Edit step.
+  - Added a frontend material-refresh detector for completed Seedance tasks whose scene clips have `videoUrl` but no ffmpeg `material` payload.
+  - Extended `GET /render-tasks/:renderTaskId` so historical completed Seedance tasks can be materialized on demand when scene clips are missing video/audio/text material records.
+  - Avoided repeat materialization for clips that already have a material payload.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "studio base|materialization"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `git diff --check` passed with only the existing CRLF normalization warning for `apps/web/src/app/App.tsx`.
+- Remaining:
+  - Deploy and re-run the live Studio Smart Edit browser pass to confirm the source audio track is populated after the server materializes the historical source render task.
+  - Full completion still requires runtime evidence for a fresh render-to-material-to-smart-edit path using newly generated scene clips.
