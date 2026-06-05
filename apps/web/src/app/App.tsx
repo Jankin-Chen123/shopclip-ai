@@ -498,11 +498,28 @@ export const needsSceneClipMaterialRefresh = (renderTask: RenderTask | undefined
     (clip) => clip.status === "completed" && Boolean(clip.videoUrl) && !clip.material,
   ) === true;
 
-export const selectStudioBaseRenderTask = (renderTasks: RenderTask[]): RenderTask | undefined =>
-  [...renderTasks]
+const hasSceneClipAudioMaterial = (renderTask: RenderTask | undefined): boolean =>
+  hasCompletedSceneClips(renderTask) &&
+  renderTask?.sceneClips?.some((clip) => Boolean(clip.material?.audioUrl)) === true;
+
+export const selectStudioBaseRenderTask = (renderTasks: RenderTask[]): RenderTask | undefined => {
+  const sourceRenders = [...renderTasks]
     .reverse()
-    .find((candidate) => !isSmartEditTask(candidate) && hasCompletedSceneClips(candidate)) ??
-  renderTasks.at(-1);
+    .filter((candidate) => !isSmartEditTask(candidate) && hasCompletedSceneClips(candidate));
+
+  return (
+    sourceRenders.find(hasSceneClipAudioMaterial) ??
+    sourceRenders.find(
+      (candidate) =>
+        candidate.videoSettings?.generateAudio === true &&
+        candidate.sceneClips?.some(
+          (clip) => clip.status === "completed" && Boolean(clip.videoUrl) && !clip.material,
+        ) === true,
+    ) ??
+    sourceRenders[0] ??
+    renderTasks.at(-1)
+  );
+};
 
 export const selectLatestCompletedSmartEditTask = (
   renderTasks: RenderTask[],

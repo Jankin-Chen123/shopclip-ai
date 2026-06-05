@@ -1180,12 +1180,14 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - API inspection showed the project had later `smart-edit-ffmpeg` tasks after the original `volcengine-seedance` scene-render tasks. The frontend loaded the latest smart-edit export as the studio input, so Smart Edit did not start from the original rendered scene clips that should be materialized into video/audio/text.
 - Fix:
   - Added frontend render-task selection helpers so the Studio base render prefers the latest completed non-smart-edit scene render with scene clips, instead of blindly using the latest render task.
+  - Source-render selection now prioritizes tasks that already expose audio material, then completed source render tasks configured with `generateAudio=true`, so silent or failed historical tasks do not outrank usable audio inputs.
   - Entering the project video flow now clears stale smart-edit result state and uses the selected source render task as the material input for the Smart Edit step.
+  - Changed the default video render settings to generate audio, matching the current product assumption that model-rendered scene clips include audio by default.
   - Added a frontend material-refresh detector for completed Seedance tasks whose scene clips have `videoUrl` but no ffmpeg `material` payload.
   - Extended `GET /render-tasks/:renderTaskId` so historical completed Seedance tasks can be materialized on demand when scene clips are missing video/audio/text material records.
   - Avoided repeat materialization for clips that already have a material payload.
 - Verification:
-  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "studio base|materialization"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "studio base|audio materials|materialization|generates audio"`
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/api typecheck`
@@ -1194,6 +1196,9 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/web lint`
   - `git diff --check` passed with only the existing CRLF normalization warning for `apps/web/src/app/App.tsx`.
+- Deployment evidence:
+  - Deployed commit `44318e1` to `/www/wwwroot/shopclip-ai`; server health returned `{"service":"api","status":"ok","version":"0.1.0"}` and public `https://shopclip.site/` returned `200`.
+  - Calling `GET /api/render-tasks/d091315f-97d8-4c36-8c01-f5a55ea6326e` after deployment triggered the new materialization path. The 2026-05-29 historical Volcengine clip URLs returned HTTP 403, so the task recorded `scene-clip-materialize-partial` with zero ready materials; this confirms the route runs but old signed provider URLs are not a valid acceptance sample.
 - Remaining:
-  - Deploy and re-run the live Studio Smart Edit browser pass to confirm the source audio track is populated after the server materializes the historical source render task.
+  - Deploy the follow-up default-audio/source-priority patch and re-run the live Studio Smart Edit browser pass.
   - Full completion still requires runtime evidence for a fresh render-to-material-to-smart-edit path using newly generated scene clips.

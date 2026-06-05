@@ -48,7 +48,7 @@ const statusTone = (status?: string) => {
 export const defaultVideoSettings: VideoGenerationSettings = {
   ratio: "9:16",
   resolution: "720p",
-  generateAudio: false,
+  generateAudio: true,
   watermark: false,
 };
 

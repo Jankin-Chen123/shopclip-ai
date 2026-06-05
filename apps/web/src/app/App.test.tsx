@@ -280,6 +280,7 @@ describe("App", () => {
     const sourceRender = makeRenderTask({
       id: "source-render",
       provider: "volcengine-seedance",
+      videoSettings: { ratio: "9:16", resolution: "720p", generateAudio: true, watermark: false },
       sceneClips: [
         {
           sceneId: "scene-1",
@@ -312,6 +313,45 @@ describe("App", () => {
     );
     expect(selectLatestCompletedSmartEditTask([sourceRender, smartEditExport])?.id).toBe(
       "smart-edit-export",
+    );
+  });
+
+  it("prefers source render tasks that can provide audio materials for the studio timeline", () => {
+    const silentRender = makeRenderTask({
+      id: "silent-source-render",
+      provider: "volcengine-seedance",
+      videoSettings: { ratio: "9:16", resolution: "720p", generateAudio: false, watermark: false },
+      createdAt: "2026-06-05T00:10:00.000Z",
+      updatedAt: "2026-06-05T00:10:00.000Z",
+      sceneClips: [
+        {
+          sceneId: "scene-silent",
+          order: 1,
+          subtitle: "Silent",
+          status: "completed",
+          progress: 100,
+          videoUrl: "/silent.mp4",
+        },
+      ],
+    });
+    const audioRender = makeRenderTask({
+      id: "audio-source-render",
+      provider: "volcengine-seedance",
+      videoSettings: { ratio: "9:16", resolution: "720p", generateAudio: true, watermark: false },
+      sceneClips: [
+        {
+          sceneId: "scene-audio",
+          order: 1,
+          subtitle: "Audio",
+          status: "completed",
+          progress: 100,
+          videoUrl: "/audio.mp4",
+        },
+      ],
+    });
+
+    expect(selectStudioBaseRenderTask([audioRender, silentRender])?.id).toBe(
+      "audio-source-render",
     );
   });
 
@@ -355,6 +395,10 @@ describe("App", () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  it("generates audio by default for model-rendered videos", () => {
+    expect(defaultVideoSettings.generateAudio).toBe(true);
   });
 
   it("renders concept-inspired creation workspace chrome", () => {
