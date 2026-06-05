@@ -46,6 +46,7 @@ import {
   moveSmartEditTrackClipOnTimeline,
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
+  removeSmartEditSegmentsFromTimeline,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
@@ -3339,6 +3340,166 @@ describe("App", () => {
     expect(leftTrimmedVoice?.segmentId).toBeUndefined();
     expect(keepRight?.targetDurationSeconds).toBe(4);
     expect(keepLeft?.targetDurationSeconds).toBe(4);
+  });
+
+  it("ripples the timeline when deleting a smart edit segment", () => {
+    const baseSegment = {
+      assetTags: ["hero"],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds: 2,
+      enabled: true,
+      playbackRate: 1,
+      rationale: "Use the hero image.",
+      source: {
+        assetId: "asset-image",
+        imageUrl: "https://cdn.example.test/cup.png",
+        kind: "image-asset" as const,
+      },
+      sourceAudioMuted: false,
+      transition: "cut" as const,
+      voiceoverStartOffsetSeconds: 0,
+    };
+    const plan = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-02T00:00:00.000Z",
+        id: "plan-1",
+        projectId: "project-1",
+        segments: [
+          {
+            ...baseSegment,
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            subtitle: "Hook",
+            timelineStartSecond: 0,
+            voiceover: "Hook",
+          },
+          {
+            ...baseSegment,
+            id: "segment-2",
+            sceneId: "scene-2",
+            order: 2,
+            subtitle: "Demo",
+            timelineStartSecond: 2,
+            voiceover: "Demo",
+          },
+          {
+            ...baseSegment,
+            id: "segment-3",
+            sceneId: "scene-3",
+            order: 3,
+            subtitle: "CTA",
+            timelineStartSecond: 4,
+            voiceover: "CTA",
+          },
+        ],
+        strategy: "Use compact timeline clips.",
+        targetDurationSeconds: 6,
+      } satisfies SmartEditPlan,
+      5.2,
+      "tail",
+    );
+
+    const nextPlan = removeSmartEditSegmentsFromTimeline(
+      plan,
+      ["segment-2"],
+      "ripple",
+    );
+
+    expect(nextPlan.segments.map((segment) => segment.id)).toEqual(["segment-1", "segment-3"]);
+    expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 2]);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "segment-3-video")?.startSecond).toBe(2);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "voice-tail")?.startSecond).toBe(3.2);
+    expect(nextPlan.timeline?.durationSeconds).toBe(5.2);
+    expect(nextPlan.targetDurationSeconds).toBe(5.2);
+  });
+
+  it("ripples later timeline materials after trim-left and trim-right actions", () => {
+    const plan = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-02T00:00:00.000Z",
+        id: "plan-1",
+        projectId: "project-1",
+        segments: [
+          {
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            timelineStartSecond: 0,
+            transition: "cut",
+            subtitle: "Hook",
+            voiceover: "Hook",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 0,
+            },
+          },
+          {
+            id: "segment-2",
+            sceneId: "scene-2",
+            order: 2,
+            enabled: true,
+            durationSeconds: 2,
+            timelineStartSecond: 4,
+            transition: "cut",
+            subtitle: "CTA",
+            voiceover: "CTA",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 4,
+            },
+          },
+        ],
+        strategy: "Use compact timeline clips.",
+        targetDurationSeconds: 7,
+      } satisfies SmartEditPlan,
+      6,
+      "tail",
+    );
+
+    const keepRight = trimSmartEditSegmentAtPlayhead(
+      plan,
+      "segment-1",
+      1.5,
+      "right",
+      "ripple",
+    );
+    const keepLeft = trimSmartEditSegmentAtPlayhead(
+      plan,
+      "segment-1",
+      1.5,
+      "left",
+      "ripple",
+    );
+
+    expect(keepRight?.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 2.5]);
+    expect(keepRight?.segments.map((segment) => segment.durationSeconds)).toEqual([2.5, 2]);
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "segment-1-video")).toMatchObject({
+      startSecond: 0,
+      trimStartSecond: 1.5,
+    });
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "voice-tail")?.startSecond).toBe(4.5);
+    expect(keepRight?.targetDurationSeconds).toBe(6.5);
+
+    expect(keepLeft?.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 1.5]);
+    expect(keepLeft?.segments.map((segment) => segment.durationSeconds)).toEqual([1.5, 2]);
+    expect(keepLeft?.timeline?.elements.find((element) => element.id === "voice-tail")?.startSecond).toBe(3.5);
+    expect(keepLeft?.targetDurationSeconds).toBe(5.5);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

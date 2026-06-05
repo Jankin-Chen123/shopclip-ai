@@ -882,6 +882,68 @@ const withRebuiltTimeline = (plan: SmartEditPlan): SmartEditPlan => {
   };
 };
 
+type SmartEditRippleGap = {
+  endSecond: number;
+  startSecond: number;
+};
+
+const normalizedRippleGaps = (gaps: SmartEditRippleGap[]): SmartEditRippleGap[] =>
+  gaps
+    .map((gap) => ({
+      endSecond: snapTimelineSeconds(Math.max(gap.startSecond, gap.endSecond)),
+      startSecond: snapTimelineSeconds(Math.min(gap.startSecond, gap.endSecond)),
+    }))
+    .filter((gap) => gap.endSecond - gap.startSecond >= MIN_SMART_EDIT_CLIP_SECONDS)
+    .sort((left, right) => left.startSecond - right.startSecond);
+
+const rippleShiftAtSecond = (second: number, gaps: SmartEditRippleGap[]): number =>
+  normalizedRippleGaps(gaps).reduce((shiftSeconds, gap) => {
+    const gapDurationSeconds = snapTimelineSeconds(gap.endSecond - gap.startSecond);
+    if (second >= gap.endSecond - 0.001) {
+      return snapTimelineSeconds(shiftSeconds + gapDurationSeconds);
+    }
+    return shiftSeconds;
+  }, 0);
+
+const rippleTimelineStart = (second: number, gaps: SmartEditRippleGap[]): number => {
+  const normalized = normalizedRippleGaps(gaps);
+  const containingGap = normalized.find(
+    (gap) => second > gap.startSecond + 0.001 && second < gap.endSecond + 0.001,
+  );
+  if (containingGap) {
+    return clampTimelineStart(
+      snapTimelineSeconds(containingGap.startSecond - rippleShiftAtSecond(containingGap.startSecond, normalized)),
+    );
+  }
+  return clampTimelineStart(snapTimelineSeconds(second - rippleShiftAtSecond(second, normalized)));
+};
+
+const shiftTimelineElementsByRippleGaps = (
+  elements: SmartEditTimeline["elements"],
+  gaps: SmartEditRippleGap[],
+): SmartEditTimeline["elements"] =>
+  normalizedRippleGaps(gaps).length === 0
+    ? elements
+    : elements.map((element) => ({
+        ...element,
+        startSecond: rippleTimelineStart(element.startSecond, gaps),
+      }));
+
+const shiftSegmentsByRippleGaps = (
+  segments: SmartEditSegment[],
+  gaps: SmartEditRippleGap[],
+  currentStarts = timelineStartsForSegments(segments),
+): SmartEditSegment[] =>
+  normalizedRippleGaps(gaps).length === 0
+    ? segments
+    : segments.map((segment) => ({
+        ...segment,
+        timelineStartSecond: rippleTimelineStart(
+          currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0,
+          gaps,
+        ),
+      }));
+
 const timelineStartsForSegments = (segments: SmartEditSegment[]): Map<string, number> => {
   const sortedSegments = [...segments].sort((left, right) => left.order - right.order);
   const hasManualTimelineStarts = sortedSegments
@@ -1252,6 +1314,7 @@ export const trimSmartEditSegmentAtPlayhead = (
   segmentId: string,
   offsetSeconds: number,
   side: "left" | "right",
+  editMode: SmartEditTimelineEditMode = "magnetic",
 ): SmartEditPlan | undefined => {
   const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
   const targetSegment = sorted.find((segment) => segment.id === segmentId);
@@ -1285,27 +1348,99 @@ export const trimSmartEditSegmentAtPlayhead = (
     splitSecond,
     side,
   );
+  const removedGap: SmartEditRippleGap =
+    side === "left"
+      ? {
+          endSecond: snapTimelineSeconds(targetStart + targetSegment.durationSeconds),
+          startSecond: splitSecond,
+        }
+      : {
+          endSecond: splitSecond,
+          startSecond: targetStart,
+        };
+  const shouldRipple = editMode === "ripple";
+  const baseSegments = sorted.map((segment, segmentIndex) => ({
+    ...(segment.id === targetSegment.id ? retainedSegment : segment),
+    order: segmentIndex + 1,
+    timelineStartSecond:
+      segment.id === targetSegment.id
+        ? side === "left"
+          ? targetStart
+          : clampTimelineStart(targetStart + splitSegment.left.durationSeconds)
+        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+  }));
+  const nextSegments = shouldRipple
+    ? shiftSegmentsByRippleGaps(baseSegments, [removedGap], currentStarts)
+    : baseSegments;
+  const nextElements =
+    shouldRipple && retainedElements
+      ? shiftTimelineElementsByRippleGaps(retainedElements, [removedGap])
+      : retainedElements;
 
   return withRebuiltTimeline({
-    ...(retainedElements && plan.timeline
+    ...(nextElements && plan.timeline
       ? {
           ...plan,
           timeline: {
             ...plan.timeline,
-            elements: retainedElements,
+            elements: nextElements,
           },
         }
       : plan),
-    segments: sorted.map((segment, segmentIndex) => ({
-      ...(segment.id === targetSegment.id ? retainedSegment : segment),
-      order: segmentIndex + 1,
-      timelineStartSecond:
-        segment.id === targetSegment.id
-          ? side === "left"
-            ? targetStart
-            : clampTimelineStart(targetStart + splitSegment.left.durationSeconds)
-          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
-    })),
+    segments: nextSegments,
+  });
+};
+
+export const removeSmartEditSegmentsFromTimeline = (
+  plan: SmartEditPlan,
+  segmentIds: string[],
+  editMode: SmartEditTimelineEditMode = "magnetic",
+): SmartEditPlan => {
+  if (segmentIds.length === 0 || plan.segments.length <= 1) {
+    return plan;
+  }
+  const removeIdSet = new Set(segmentIds);
+  const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const removedSegments = sorted.filter((segment) => removeIdSet.has(segment.id));
+  const retainedSegments = sorted.filter((segment) => !removeIdSet.has(segment.id));
+  if (removedSegments.length === 0 || retainedSegments.length === 0) {
+    return plan;
+  }
+  const removedGaps = removedSegments
+    .filter((segment) => segment.enabled)
+    .map((segment) => {
+      const startSecond = currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0;
+      return {
+        endSecond: snapTimelineSeconds(startSecond + segment.durationSeconds),
+        startSecond,
+      };
+    });
+  const orderedSegments = retainedSegments.map((segment, index) => ({
+    ...segment,
+    order: index + 1,
+    timelineStartSecond: clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+  }));
+  const nextSegments =
+    editMode === "ripple"
+      ? shiftSegmentsByRippleGaps(orderedSegments, removedGaps, currentStarts)
+      : orderedSegments;
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const retainedElements = baseTimeline.elements.filter(
+    (element) => !element.segmentId || !removeIdSet.has(element.segmentId),
+  );
+  const nextElements =
+    editMode === "ripple"
+      ? shiftTimelineElementsByRippleGaps(retainedElements, removedGaps)
+      : retainedElements;
+
+  return withRebuiltTimeline({
+    ...plan,
+    timeline: {
+      ...baseTimeline,
+      elements: nextElements,
+    },
+    segments: nextSegments,
   });
 };
 
@@ -1819,7 +1954,7 @@ export const pasteSmartEditClipboardAtPlayhead = (
   });
 };
 
-export type SmartEditTimelineEditMode = "magnetic" | "insert" | "overwrite";
+export type SmartEditTimelineEditMode = "magnetic" | "insert" | "overwrite" | "ripple";
 
 type SmartEditTrackSegment = {
   id: string;
@@ -1958,6 +2093,7 @@ const smartEditTimelineEditModes: SmartEditTimelineEditMode[] = [
   "magnetic",
   "insert",
   "overwrite",
+  "ripple",
 ];
 
 const ensureTimelineTrack = (
@@ -2143,6 +2279,7 @@ export const trimSmartEditTimelineElementAtPlayhead = (
   elementId: string,
   playheadSecond: number,
   side: "left" | "right",
+  editMode: SmartEditTimelineEditMode = "magnetic",
 ): SmartEditPlan | undefined => {
   const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
   const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
@@ -2163,11 +2300,37 @@ export const trimSmartEditTimelineElementAtPlayhead = (
     splitSecond,
     side,
   );
+  const removedGap: SmartEditRippleGap =
+    side === "left"
+      ? {
+          endSecond: elementEnd,
+          startSecond: splitSecond,
+        }
+      : {
+          endSecond: splitSecond,
+          startSecond: elementStart,
+        };
+  const nextElements =
+    editMode === "ripple"
+      ? shiftTimelineElementsByRippleGaps(
+          baseTimeline.elements.flatMap((element) =>
+            element.id === targetElement.id ? retainedElements : [element],
+          ),
+          [removedGap],
+        )
+      : baseTimeline.elements.flatMap((element) =>
+          element.id === targetElement.id ? retainedElements : [element],
+        );
+  const nextSegments =
+    editMode === "ripple"
+      ? shiftSegmentsByRippleGaps(plan.segments, [removedGap])
+      : plan.segments;
   return withUpdatedTimelineElements(
-    plan,
-    baseTimeline.elements.flatMap((element) =>
-      element.id === targetElement.id ? retainedElements : [element],
-    ),
+    {
+      ...plan,
+      segments: nextSegments,
+    },
+    nextElements,
     baseTimeline.tracks,
   );
 };
@@ -2825,21 +2988,21 @@ export const SmartEditPanel = ({
     if (!plan || segmentIds.length === 0 || sortedSegments.length <= 1) {
       return;
     }
-    const removeIdSet = new Set(segmentIds);
-    const nextSegments = sortedSegments
-      .filter((segment) => !removeIdSet.has(segment.id))
-      .map((segment, index) => ({
-        ...segment,
-        order: index + 1,
-      }));
-    if (nextSegments.length === 0 || nextSegments.length === sortedSegments.length) {
+    const nextPlan = removeSmartEditSegmentsFromTimeline(
+      plan,
+      segmentIds,
+      timelineEditMode,
+    );
+    if (nextPlan === plan || nextPlan.segments.length === sortedSegments.length) {
       return;
     }
-    commitPlanChange(withRebuiltTimeline({
-      ...plan,
-      segments: nextSegments,
-    }), { label: segmentIds.length > 1 ? "Remove selected clips" : "Remove clip" });
-    const nextSelectedId = nextSegments[Math.min(selectedSegmentIndex - 1, nextSegments.length - 1)]?.id;
+    commitPlanChange(nextPlan, {
+      label:
+        segmentIds.length > 1
+          ? `Remove selected clips (${timelineEditMode})`
+          : `Remove clip (${timelineEditMode})`,
+    });
+    const nextSelectedId = nextPlan.segments[Math.min(selectedSegmentIndex - 1, nextPlan.segments.length - 1)]?.id;
     onSelectedSegmentChange(nextSelectedId);
     setSelectedSegmentIds(nextSelectedId ? [nextSelectedId] : []);
   };
@@ -3383,6 +3546,7 @@ export const SmartEditPanel = ({
           selectedTrackClip.id,
           boundedPlayheadSeconds,
           side,
+          timelineEditMode,
         );
         if (nextPlan) {
           commitPlanChange(nextPlan, {
@@ -3404,6 +3568,7 @@ export const SmartEditPanel = ({
             targetSegment.id,
             boundedPlayheadSeconds - selectedTrackClip.startSecond,
             side,
+            timelineEditMode,
           );
           if (nextPlan) {
             commitPlanChange(nextPlan, {
@@ -3430,6 +3595,7 @@ export const SmartEditPanel = ({
       target.segment.id,
       boundedPlayheadSeconds - target.startSecond,
       side,
+      timelineEditMode,
     );
     if (!nextPlan) {
       return;

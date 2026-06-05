@@ -1128,3 +1128,27 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Ripple delete/trim for following clips is still incomplete.
   - Waveform editing is still display-first; direct waveform volume/keyframe manipulation remains open.
   - Full completion still requires live runtime proof for the real model render -> ffmpeg materialization -> Smart Edit editing/export chain.
+
+## 2026-06-05 Basic Demo Scope And Ripple Editing
+
+- Scope decision:
+  - The current demo target is video, audio, and subtitle editing only.
+  - OpenCut-style fine-grained features such as stickers and complex effects are intentionally deferred until the base editing demo is usable.
+- Reference model:
+  - OpenCut has a ripple editing toggle. In ShopClip this is adapted as a fourth timeline edit mode alongside Magnetic, Insert, and Overwrite.
+- Fix:
+  - Added `ripple` as a Smart Edit timeline mode in English and Chinese.
+  - Added `removeSmartEditSegmentsFromTimeline` so deleting a video segment can remove its video/audio/text elements and shift later video, audio, subtitle, and independent material clips left by the deleted gap.
+  - Extended segment trim-left/trim-right so ripple mode shifts later timeline materials by the removed side duration.
+  - Extended independent timeline element trim-left/trim-right so audio/subtitle material cuts can also close the gap across the timeline.
+  - The feature stays within the base demo surface: video clips, source audio/voice audio, and text/subtitle clips.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "ripples"` initially failed because ripple delete was missing and trim did not shift later clips.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "ripples"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - The basic demo still needs a real browser pass on the deployed Studio timeline to confirm the visible workflow is smooth enough for user trial.
+  - Waveform display exists, but direct drag editing of volume/keyframes can wait until after the base video/audio/subtitle demo is reviewed.
