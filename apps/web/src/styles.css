@@ -5156,6 +5156,11 @@ textarea {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22);
 }
 
+.smart-edit-track-clip.trimming {
+  border-color: var(--primary-strong);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
 .smart-edit-track-clip.active {
   border-color: var(--primary-strong);
   background: rgba(244, 114, 182, 0.12);
@@ -5175,6 +5180,42 @@ textarea {
 .smart-edit-track-clip.muted,
 .smart-edit-track-clip.hidden {
   opacity: 0.52;
+}
+
+.smart-edit-track-trim-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  border: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+
+.smart-edit-track-trim-handle.left {
+  left: 0;
+}
+
+.smart-edit-track-trim-handle.right {
+  right: 0;
+}
+
+.smart-edit-track-clip:hover .smart-edit-track-trim-handle,
+.smart-edit-track-clip:focus-visible .smart-edit-track-trim-handle,
+.smart-edit-track-clip.track-selected .smart-edit-track-trim-handle,
+.smart-edit-track-clip.trimming .smart-edit-track-trim-handle {
+  opacity: 1;
+}
+
+.smart-edit-track-trim-handle:hover,
+.smart-edit-track-trim-handle:focus-visible,
+.smart-edit-track-trim-handle.dragging {
+  background: var(--primary-strong);
+  outline: none;
+  opacity: 1;
 }
 
 .smart-edit-track-clip span,

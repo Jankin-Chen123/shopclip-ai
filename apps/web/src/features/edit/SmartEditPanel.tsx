@@ -2033,6 +2033,13 @@ type TrackClipMoveDragState = {
   trackClip: SmartEditTrackSegment;
 };
 
+type TrackClipTrimDragState = {
+  edge: "in" | "out";
+  pointerId: number;
+  startClientX: number;
+  trackClip: SmartEditTrackSegment;
+};
+
 export type SmartEditClipboard = {
   items: Array<{
     elements?: SmartEditTimeline["elements"];
@@ -2638,6 +2645,212 @@ export const trimSmartEditTimelineElementAtPlayhead = (
   );
 };
 
+const resizePersistentTimelineElementEdge = (
+  element: SmartEditTimelineElement,
+  edge: "in" | "out",
+  deltaSeconds: number,
+): SmartEditTimelineElement | undefined => {
+  const playbackRate = clampPlaybackRate(element.playbackRate ?? 1);
+  const usesSourceTrim = element.kind === "video" || element.kind === "audio";
+  const startSecond = clampTimelineStart(element.startSecond);
+  const durationSeconds = Math.max(MIN_SMART_EDIT_CLIP_SECONDS, element.durationSeconds);
+  const endSecond = snapTimelineSeconds(startSecond + durationSeconds);
+  const trimStart = element.trimStartSecond ?? 0;
+  const trimEnd = element.trimEndSecond ?? trimStart + durationSeconds * playbackRate;
+
+  if (edge === "in") {
+    const earliestStart = usesSourceTrim
+      ? Math.max(0, startSecond - trimStart / playbackRate)
+      : 0;
+    const latestStart = Math.max(earliestStart, endSecond - MIN_SMART_EDIT_CLIP_SECONDS);
+    const nextStart = Math.min(
+      latestStart,
+      Math.max(earliestStart, snapTimelineSeconds(startSecond + deltaSeconds)),
+    );
+    const actualDelta = snapTimelineSeconds(nextStart - startSecond);
+    if (Math.abs(actualDelta) < 0.001) {
+      return undefined;
+    }
+    const nextDuration = Math.max(
+      MIN_SMART_EDIT_CLIP_SECONDS,
+      snapTimelineSeconds(durationSeconds - actualDelta),
+    );
+    return {
+      ...element,
+      durationSeconds: nextDuration,
+      startSecond: nextStart,
+      ...(usesSourceTrim
+        ? {
+            trimEndSecond: trimEnd,
+            trimStartSecond: Math.max(0, trimStart + actualDelta * playbackRate),
+          }
+        : {}),
+    };
+  }
+
+  const nextDuration = Math.max(
+    MIN_SMART_EDIT_CLIP_SECONDS,
+    snapTimelineSeconds(durationSeconds + deltaSeconds),
+  );
+  if (Math.abs(nextDuration - durationSeconds) < 0.001) {
+    return undefined;
+  }
+  return {
+    ...element,
+    durationSeconds: nextDuration,
+    ...(usesSourceTrim
+      ? {
+          trimEndSecond: Math.max(
+            trimStart + MIN_SMART_EDIT_CLIP_SECONDS * playbackRate,
+            trimEnd + (nextDuration - durationSeconds) * playbackRate,
+          ),
+          trimStartSecond: trimStart,
+        }
+      : {}),
+  };
+};
+
+const resizeSmartEditSegmentEdge = (
+  segment: SmartEditSegment,
+  startSecond: number,
+  edge: "in" | "out",
+  deltaSeconds: number,
+): SmartEditSegment | undefined => {
+  const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+  const sourceStart = segment.source.startSecond ?? 0;
+  const sourceEnd = segment.source.endSecond ?? sourceStart + segment.durationSeconds * playbackRate;
+  if (edge === "in") {
+    const earliestStart = Math.max(0, startSecond - sourceStart / playbackRate);
+    const latestStart = Math.max(
+      earliestStart,
+      startSecond + segment.durationSeconds - MIN_SMART_EDIT_CLIP_SECONDS,
+    );
+    const nextStart = Math.min(
+      latestStart,
+      Math.max(earliestStart, snapTimelineSeconds(startSecond + deltaSeconds)),
+    );
+    const actualDelta = snapTimelineSeconds(nextStart - startSecond);
+    if (Math.abs(actualDelta) < 0.001) {
+      return undefined;
+    }
+    const nextSourceStart = Math.max(0, sourceStart + actualDelta * playbackRate);
+    return {
+      ...segment,
+      durationSeconds: durationFromSourceRange(
+        nextSourceStart,
+        sourceEnd,
+        playbackRate,
+        segment.durationSeconds,
+      ),
+      source: {
+        ...segment.source,
+        endSecond: sourceEnd,
+        startSecond: nextSourceStart,
+      },
+      timelineStartSecond: nextStart,
+    };
+  }
+
+  const nextDuration = Math.max(
+    MIN_SMART_EDIT_CLIP_SECONDS,
+    snapTimelineSeconds(segment.durationSeconds + deltaSeconds),
+  );
+  if (Math.abs(nextDuration - segment.durationSeconds) < 0.001) {
+    return undefined;
+  }
+  return {
+    ...segment,
+    durationSeconds: nextDuration,
+    source: {
+      ...segment.source,
+      endSecond: Math.max(
+        sourceStart + MIN_SMART_EDIT_CLIP_SECONDS * playbackRate,
+        sourceEnd + (nextDuration - segment.durationSeconds) * playbackRate,
+      ),
+      startSecond: sourceStart,
+    },
+    timelineStartSecond: startSecond,
+  };
+};
+
+export const resizeSmartEditTrackClipEdge = (
+  plan: SmartEditPlan,
+  trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
+  edge: "in" | "out",
+  deltaSeconds: number,
+): SmartEditPlan => {
+  const snappedDelta = snapTimelineSeconds(deltaSeconds);
+  if (Math.abs(snappedDelta) < 0.001) {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) =>
+    element.id === trackClip.id ||
+    Boolean(
+      trackClip.segmentId &&
+        element.segmentId === trackClip.segmentId &&
+        smartEditTrackIdForElement(element) === trackClip.trackId,
+    ),
+  );
+  if (targetElement && !isDerivedTimelineElement(targetElement)) {
+    const resizedElement = resizePersistentTimelineElementEdge(targetElement, edge, snappedDelta);
+    if (!resizedElement) {
+      return plan;
+    }
+    return withUpdatedTimelineElements(
+      plan,
+      baseTimeline.elements.map((element) =>
+        element.id === targetElement.id ? resizedElement : element,
+      ),
+      baseTimeline.tracks,
+    );
+  }
+  if (trackClip.trackId === "video" && trackClip.segmentId) {
+    const currentStarts = timelineStartsForSegments(plan.segments);
+    const targetSegment = plan.segments.find((segment) => segment.id === trackClip.segmentId);
+    if (!targetSegment) {
+      return plan;
+    }
+    const startSecond = currentStarts.get(targetSegment.id) ?? targetSegment.timelineStartSecond ?? 0;
+    const resizedSegment = resizeSmartEditSegmentEdge(
+      targetSegment,
+      startSecond,
+      edge,
+      snappedDelta,
+    );
+    if (!resizedSegment) {
+      return plan;
+    }
+    return withRebuiltTimeline({
+      ...plan,
+      segments: plan.segments.map((segment) =>
+        segment.id === targetSegment.id
+          ? resizedSegment
+          : {
+              ...segment,
+              timelineStartSecond: clampTimelineStart(
+                currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0,
+              ),
+            },
+      ),
+    });
+  }
+  if (targetElement) {
+    const resizedElement = resizePersistentTimelineElementEdge(targetElement, edge, snappedDelta);
+    if (!resizedElement) {
+      return plan;
+    }
+    return withUpdatedTimelineElements(
+      plan,
+      baseTimeline.elements.map((element) =>
+        element.id === targetElement.id ? resizedElement : element,
+      ),
+      baseTimeline.tracks,
+    );
+  }
+  return plan;
+};
+
 export const removeSmartEditTimelineElementFromTimeline = (
   plan: SmartEditPlan,
   elementId: string,
@@ -3155,6 +3368,7 @@ export const SmartEditPanel = ({
   const [selectedTrackClipId, setSelectedTrackClipId] = useState<string | undefined>();
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
   const [trackClipMoveDrag, setTrackClipMoveDrag] = useState<TrackClipMoveDragState | undefined>();
+  const [trackClipTrimDrag, setTrackClipTrimDrag] = useState<TrackClipTrimDragState | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [timelineEditMode, setTimelineEditMode] = useState<SmartEditTimelineEditMode>("magnetic");
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
@@ -3170,6 +3384,10 @@ export const SmartEditPanel = ({
       setCommandHistory(createSmartEditCommandHistory());
       setSelectedSegmentIds([]);
       setSelectedTrackClipId(undefined);
+      setTrackClipMoveDrag(undefined);
+      setTrackClipTrimDrag(undefined);
+      setTimelineMoveDrag(undefined);
+      setTrimDrag(undefined);
       setSmartEditClipboard(undefined);
       setPlayheadSeconds(0);
       setSrtImportText("");
@@ -4207,6 +4425,71 @@ export const SmartEditPanel = ({
       boundedPlayheadSeconds,
     );
     commitPlanChange(nextPlan, { label: `Move ${trackClipMoveDrag.trackClip.trackId} material` });
+  };
+
+  const trimTrackClipEdge = (
+    trackClip: SmartEditTrackSegment,
+    edge: "in" | "out",
+    deltaSeconds: number,
+  ) => {
+    if (!plan || trackClip.trackId === "bgm" || isTimelineTrackLocked(trackClip.trackId)) {
+      return;
+    }
+    const nextPlan = resizeSmartEditTrackClipEdge(plan, trackClip, edge, deltaSeconds);
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, {
+      label: edge === "in" ? `Trim ${trackClip.trackId} in` : `Trim ${trackClip.trackId} out`,
+    });
+    setSelectedTrackClipId(trackClip.id);
+    setSelectedSegmentIds(trackClip.segmentId ? [trackClip.segmentId] : []);
+    if (trackClip.segmentId) {
+      onSelectedSegmentChange(trackClip.segmentId);
+    } else {
+      onSelectedSegmentChange(undefined);
+    }
+  };
+
+  const startTrackClipTrimDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    trackClip: SmartEditTrackSegment,
+    edge: "in" | "out",
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (trackClip.trackId === "bgm" || isTimelineTrackLocked(trackClip.trackId)) {
+      selectTrackClip(trackClip);
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    selectTrackClip(trackClip);
+    setTrackClipTrimDrag({
+      edge,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      trackClip,
+    });
+  };
+
+  const finishTrackClipTrimDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!trackClipTrimDrag || trackClipTrimDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const deltaSeconds = snapTimelineSeconds(
+      (event.clientX - trackClipTrimDrag.startClientX) / timelinePixelsPerSecond,
+    );
+    setTrackClipTrimDrag(undefined);
+    if (Math.abs(deltaSeconds) < 0.001) {
+      return;
+    }
+    suppressTimelineMoveClickRef.current = true;
+    window.setTimeout(() => {
+      suppressTimelineMoveClickRef.current = false;
+    }, 0);
+    trimTrackClipEdge(trackClipTrimDrag.trackClip, trackClipTrimDrag.edge, deltaSeconds);
   };
 
   const removeSelectedSegment = () => {
@@ -6526,6 +6809,8 @@ export const SmartEditPanel = ({
                         selectedTrackClipId === segment.id ? "track-selected" : ""
                       } ${
                         trackClipMoveDrag?.trackClip.id === segment.id ? "moving" : ""
+                      } ${
+                        trackClipTrimDrag?.trackClip.id === segment.id ? "trimming" : ""
                       } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""} ${
                         trackLocked ? "locked" : ""
                       }`.trim()}
@@ -6548,14 +6833,63 @@ export const SmartEditPanel = ({
                           selectTrackClip(segment);
                         }
                       }}
-                      onPointerCancel={() => setTrackClipMoveDrag(undefined)}
+                      onPointerCancel={() => {
+                        setTrackClipMoveDrag(undefined);
+                        setTrackClipTrimDrag(undefined);
+                      }}
                       onPointerDown={(event) => startTrackClipMoveDrag(event, segment)}
                       onPointerUp={finishTrackClipMoveDrag}
                     >
+                      {segment.trackId !== "bgm" ? (
+                        <button
+                          aria-label={`Trim ${trackLabels[track.id]} in`}
+                          className={`smart-edit-track-trim-handle left ${
+                            trackClipTrimDrag?.trackClip.id === segment.id &&
+                            trackClipTrimDrag.edge === "in"
+                              ? "dragging"
+                              : ""
+                          }`.trim()}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (suppressTimelineMoveClickRef.current) {
+                              return;
+                            }
+                            trimTrackClipEdge(segment, "in", TRIM_NUDGE_SECONDS);
+                          }}
+                          onDragStart={(event) => event.preventDefault()}
+                          onPointerCancel={() => setTrackClipTrimDrag(undefined)}
+                          onPointerDown={(event) => startTrackClipTrimDrag(event, segment, "in")}
+                          onPointerUp={finishTrackClipTrimDrag}
+                        />
+                      ) : null}
                       <span>{segment.range}</span>
                       <b>{segment.title}</b>
                       {segment.waveform ? <SmartEditWaveformStrip segment={segment} /> : null}
                       <small>{segment.meta}</small>
+                      {segment.trackId !== "bgm" ? (
+                        <button
+                          aria-label={`Trim ${trackLabels[track.id]} out`}
+                          className={`smart-edit-track-trim-handle right ${
+                            trackClipTrimDrag?.trackClip.id === segment.id &&
+                            trackClipTrimDrag.edge === "out"
+                              ? "dragging"
+                              : ""
+                          }`.trim()}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (suppressTimelineMoveClickRef.current) {
+                              return;
+                            }
+                            trimTrackClipEdge(segment, "out", -TRIM_NUDGE_SECONDS);
+                          }}
+                          onDragStart={(event) => event.preventDefault()}
+                          onPointerCancel={() => setTrackClipTrimDrag(undefined)}
+                          onPointerDown={(event) => startTrackClipTrimDrag(event, segment, "out")}
+                          onPointerUp={finishTrackClipTrimDrag}
+                        />
+                      ) : null}
                     </article>
                   ))}
                 </div>

@@ -1513,3 +1513,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
 - Remaining:
   - Full OpenCut-level parity is still broader than the current base demo. The next practical upgrades should stay focused on video/audio/subtitle timeline ergonomics such as slip edit, linked selection, and better clip handles.
+
+## 2026-06-06 Timeline Clip Edge Resize
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a CutCap/OpenCut-style direct manipulation primitive: users can trim timeline materials from the left or right edge instead of relying only on playhead trim commands.
+- Fix:
+  - Added `resizeSmartEditTrackClipEdge` for track-level clip resizing.
+  - Independent video/audio timeline materials now update `startSecond`, `durationSeconds`, `trimStartSecond`, and `trimEndSecond` when their edges are resized.
+  - Independent subtitle/text materials now update timeline start and duration from edge resize while preserving text/style payload.
+  - Main video storyboard clips can also be resized from the track stack; resizing updates the segment source range and timeline start/duration.
+  - Track stack clips now render left/right trim handles, support click nudge and pointer-drag resize, and respect locked tracks.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "resizes independent smart edit video"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - This improves the base timeline editing demo. Later upgrades can add linked A/V selection, slip edit, drag previews, and multi-track selection ergonomics.

@@ -56,6 +56,7 @@ import {
   splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
+  resizeSmartEditTrackClipEdge,
   updateSmartEditTimelineElement,
   updateSmartEditTimelineTrack,
 } from "../features/edit/SmartEditPanel";
@@ -3969,6 +3970,90 @@ Second imported caption`,
     expect(leftTrimmedVoice?.segmentId).toBeUndefined();
     expect(keepRight?.targetDurationSeconds).toBe(4);
     expect(keepLeft?.targetDurationSeconds).toBe(4);
+  });
+
+  it("resizes independent smart edit video and subtitle materials from timeline clip edges", () => {
+    const basePlan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-resize",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 4,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Use generated scene material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 4,
+                kind: "video-slice",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Edit generated scene materials.",
+          targetDurationSeconds: 5,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "video-edge",
+      ),
+      2,
+      "caption-edge",
+    );
+
+    const videoElementId = "video-segment-1-video-edge";
+    const trimmedVideo = resizeSmartEditTrackClipEdge(
+      basePlan,
+      { id: videoElementId, trackId: "video" },
+      "in",
+      0.8,
+    );
+    expect(trimmedVideo.timeline?.elements.find((element) => element.id === videoElementId)).toMatchObject({
+      durationSeconds: 3.2,
+      startSecond: 1.8,
+      trimEndSecond: 4,
+      trimStartSecond: 0.8,
+    });
+
+    const extendedVideo = resizeSmartEditTrackClipEdge(
+      trimmedVideo,
+      { id: videoElementId, trackId: "video" },
+      "out",
+      0.6,
+    );
+    expect(extendedVideo.timeline?.elements.find((element) => element.id === videoElementId)).toMatchObject({
+      durationSeconds: 3.8,
+      trimEndSecond: 4.6,
+      trimStartSecond: 0.8,
+    });
+
+    const resizedCaption = resizeSmartEditTrackClipEdge(
+      extendedVideo,
+      { id: "text-caption-edge", trackId: "caption" },
+      "out",
+      -0.7,
+    );
+    expect(resizedCaption.timeline?.elements.find((element) => element.id === "text-caption-edge")).toMatchObject({
+      durationSeconds: 1.3,
+      startSecond: 2,
+      text: "New text",
+    });
+    expect(resizedCaption.targetDurationSeconds).toBeGreaterThanOrEqual(5);
   });
 
   it("ripples the timeline when deleting a smart edit segment", () => {
