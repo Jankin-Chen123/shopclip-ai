@@ -1257,3 +1257,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Direct browser validation on the deployed Studio timeline is still needed before claiming the full objective complete.
   - The fresh model-render -> ffmpeg scene-materialization -> Smart Edit timeline evidence is still required for full completion.
+
+## 2026-06-05 Seedance Completion Materialization Regression
+
+- Objective alignment:
+  - The requested Studio flow requires model-rendered scene clips to become separate video, audio, and text materials before Smart Edit consumes them.
+  - The backend already materializes completed Seedance scene clips during `GET /render-tasks/:renderTaskId`; this increment adds direct regression evidence for that contract.
+- Verification fix:
+  - Upgraded the multi-scene Seedance render flow test so a completed render-task poll now proves both final export publication and scene-clip materialization.
+  - Injected a fake `sceneClipMaterializer` and asserted that completed scene clips return `material.status=ready`, `videoOnlyUrl`, `audioUrl`, and text copied from the storyboard subtitle.
+  - Asserted the response trace includes `scene-clip-materialize`, which is the server-side handoff signal for Smart Edit material readiness.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api run test src/seedance-render-flow.test.ts -t "published COS final video URL and materializes"`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/api lint`
+- Remaining:
+  - Still need a live fresh render on `shopclip.site` that produces non-expired scene clip URLs, materializes them with real ffmpeg, and shows editable video/audio/subtitle tracks in Smart Edit.

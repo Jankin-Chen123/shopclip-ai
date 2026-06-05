@@ -1,5 +1,6 @@
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
+import type { SceneRenderClip } from "@shopclip/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app";
@@ -278,7 +279,7 @@ describe("Seedance render API flow", () => {
     expect(exported.body.error.code).toBe("EXPORT_COMPOSE_FAILED");
   });
 
-  it("returns the published COS final video URL for multi-scene Seedance exports", async () => {
+  it("returns the published COS final video URL and materializes scene clips for smart edit", async () => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
@@ -290,8 +291,27 @@ describe("Seedance render API flow", () => {
     });
     const composedUrl =
       "https://cdn.example.test/projects/composed-project/exports/final/export.mp4";
+    const renderExportPublisher = vi.fn(async () => composedUrl);
+    const sceneClipMaterializer = vi.fn(
+      async (
+        _projectId: string,
+        renderTaskId: string,
+        sceneClips: SceneRenderClip[] | undefined,
+      ) =>
+        sceneClips?.map((clip) => ({
+          ...clip,
+          material: {
+            audioUrl: `https://cdn.example.test/${renderTaskId}/scene-${clip.order}/audio.m4a`,
+            materializedAt: "2026-06-05T00:00:00.000Z",
+            status: "ready" as const,
+            text: clip.subtitle,
+            videoOnlyUrl: `https://cdn.example.test/${renderTaskId}/scene-${clip.order}/video-only.mp4`,
+          },
+        })),
+    );
     const app = createApp({
-      renderExportPublisher: async () => composedUrl,
+      renderExportPublisher,
+      sceneClipMaterializer,
     });
     server = app.listen(0);
     await new Promise<void>((resolve) => {
@@ -356,14 +376,41 @@ describe("Seedance render API flow", () => {
 
     let polled:
       | {
-          body: { renderTask: { status: string; exportUrl?: string } };
+          body: {
+            renderTask: {
+              id: string;
+              status: string;
+              exportUrl?: string;
+              sceneClips?: Array<{
+                material?: {
+                  audioUrl?: string;
+                  status: string;
+                  text?: string;
+                  videoOnlyUrl?: string;
+                };
+              }>;
+            };
+            traceEvents: Array<{ step: string; status: string }>;
+          };
         }
       | undefined;
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      polled = await request<{ renderTask: { status: string; exportUrl?: string } }>(
-        baseUrl,
-        `/api/render-tasks/${render.body.renderTask.id}`,
-      );
+      polled = await request<{
+        renderTask: {
+          id: string;
+          status: string;
+          exportUrl?: string;
+          sceneClips?: Array<{
+            material?: {
+              audioUrl?: string;
+              status: string;
+              text?: string;
+              videoOnlyUrl?: string;
+            };
+          }>;
+        };
+        traceEvents: Array<{ step: string; status: string }>;
+      }>(baseUrl, `/api/render-tasks/${render.body.renderTask.id}`);
       if (polled.body.renderTask.status === "completed") {
         break;
       }
@@ -371,6 +418,19 @@ describe("Seedance render API flow", () => {
     }
 
     expect(polled?.body.renderTask.exportUrl).toBe(composedUrl);
+    expect(renderExportPublisher).toHaveBeenCalledTimes(1);
+    expect(sceneClipMaterializer).toHaveBeenCalledTimes(1);
+    expect(polled?.body.renderTask.sceneClips?.every((clip) => clip.material?.status === "ready")).toBe(
+      true,
+    );
+    expect(polled?.body.renderTask.sceneClips?.[0]?.material).toMatchObject({
+      audioUrl: `https://cdn.example.test/${polled?.body.renderTask.id}/scene-1/audio.m4a`,
+      text: expect.any(String),
+      videoOnlyUrl: `https://cdn.example.test/${polled?.body.renderTask.id}/scene-1/video-only.mp4`,
+    });
+    expect(polled?.body.traceEvents.map((event) => event.step)).toContain(
+      "scene-clip-materialize",
+    );
     const exported = await request<{ exportUrl: string; downloadUrl: string }>(
       baseUrl,
       `/api/projects/${created.body.project.id}/export`,
