@@ -1983,6 +1983,7 @@ type SmartEditTimelineElementPatch = Partial<
     | "hidden"
     | "label"
     | "muted"
+    | "playbackRate"
     | "startSecond"
     | "text"
   >
@@ -2198,7 +2199,7 @@ export const addSmartEditTimelineTextElement = (
   );
 };
 
-const updateSmartEditTimelineElement = (
+export const updateSmartEditTimelineElement = (
   plan: SmartEditPlan,
   elementId: string,
   patch: SmartEditTimelineElementPatch,
@@ -2229,6 +2230,10 @@ const updateSmartEditTimelineElement = (
               patch.durationSeconds === undefined
                 ? element.durationSeconds
                 : clampSmartEditDuration(patch.durationSeconds),
+            playbackRate:
+              patch.playbackRate === undefined
+                ? element.playbackRate
+                : clampPlaybackRate(patch.playbackRate),
             startSecond:
               patch.startSecond === undefined
                 ? element.startSecond
@@ -4601,6 +4606,21 @@ export const SmartEditPanel = ({
               {selectedTimelineElement.kind === "audio" ? (
                 <>
                   <div className="smart-edit-trim-grid">
+                    <label>
+                      Speed
+                      <input
+                        min={0.25}
+                        max={4}
+                        step={0.25}
+                        type="number"
+                        value={selectedTimelineElement.playbackRate ?? 1}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            playbackRate: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
                     <label>
                       Audio volume
                       <input

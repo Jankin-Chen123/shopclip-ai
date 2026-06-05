@@ -1238,3 +1238,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Deploy this scope lock and let the user experience the simplified Studio Smart Edit demo before adding advanced visual editing features.
+
+## 2026-06-05 Independent Audio Speed Control
+
+- Scope:
+  - Continues the user-trial demo direction: video, audio, and subtitle editing only.
+  - Targets the "speed up / slow down" part of basic editing for standalone audio or voice material placed on the Smart Edit timeline.
+- Fix:
+  - Exposed `playbackRate` updates through the existing smart-edit timeline element update helper.
+  - Added a `Speed` control to the independent audio material inspector, clamped to the shared `[0.25, 4]` range.
+  - Reused the existing backend composer path that applies ffmpeg `atempo` for independent audio timeline elements, so the UI field is connected to export behavior rather than being display-only.
+  - Added regression coverage proving independent audio material speed is clamped and persisted in the smart-edit plan.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "independent audio material speed|smart edit|timeline"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Direct browser validation on the deployed Studio timeline is still needed before claiming the full objective complete.
+  - The fresh model-render -> ffmpeg scene-materialization -> Smart Edit timeline evidence is still required for full completion.

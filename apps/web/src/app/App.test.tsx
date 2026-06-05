@@ -53,6 +53,7 @@ import {
   splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
+  updateSmartEditTimelineElement,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
@@ -3345,6 +3346,53 @@ describe("App", () => {
     });
     expect(nextPlan.timeline?.durationSeconds).toBe(4.3);
     expect(nextPlan.targetDurationSeconds).toBe(4.3);
+  });
+
+  it("updates independent audio material speed on the smart edit timeline", () => {
+    const plan = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        segments: [
+          {
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            timelineStartSecond: 0,
+            transition: "cut",
+            subtitle: "Hook",
+            voiceover: "",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 0,
+            },
+          },
+        ],
+        targetDurationSeconds: 4,
+      } satisfies SmartEditPlan,
+      1,
+      "speed",
+    );
+
+    const fastPlan = updateSmartEditTimelineElement(plan, "voice-speed", {
+      playbackRate: 8,
+    });
+    expect(fastPlan.timeline?.elements.find((element) => element.id === "voice-speed")).toMatchObject({
+      playbackRate: 4,
+    });
+
+    const slowPlan = updateSmartEditTimelineElement(fastPlan, "voice-speed", {
+      playbackRate: 0.1,
+    });
+    expect(slowPlan.timeline?.elements.find((element) => element.id === "voice-speed")).toMatchObject({
+      playbackRate: 0.25,
+    });
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {
