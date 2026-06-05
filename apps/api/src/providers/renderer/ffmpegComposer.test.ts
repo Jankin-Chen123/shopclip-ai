@@ -83,7 +83,7 @@ describe("ffmpeg composer", () => {
 
     expect(ass).toContain("Style: Default,Noto Sans CJK SC,42");
     expect(ass).toContain(",48,48,96,0");
-    expect(ass).toContain("Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,\u4e2d\u6587\u5b57\u5e55");
+    expect(ass).toContain("Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,\u4e2d\u6587\u5b57\u5e55");
   });
 
   it("uses a CJK-capable subtitle font by default and allows environment override", async () => {
@@ -154,10 +154,10 @@ describe("ffmpeg composer", () => {
     expect(firstSubtitlePath).toBeTruthy();
     expect(secondSubtitlePath).toBeTruthy();
     await expect(readFile(firstSubtitlePath!, "utf8")).resolves.toContain(
-      "Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,Opening hook copy",
+      "Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,Opening hook copy",
     );
     await expect(readFile(secondSubtitlePath!, "utf8")).resolves.toContain(
-      "Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,Second scene copy",
+      "Dialogue: 0,0:00:00.00,9:59:59.99,Default,,0,0,0,,Second scene copy",
     );
 
     const concatListPath = commands[2]?.args[commands[2].args.indexOf("-i") + 1];

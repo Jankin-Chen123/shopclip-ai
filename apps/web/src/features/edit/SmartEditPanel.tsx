@@ -127,6 +127,9 @@ const clampSharpen = (sharpen: number): number =>
 const clampEffectFade = (seconds: number): number =>
   Number.isFinite(seconds) ? Math.max(0, Math.min(5, seconds)) : 0;
 
+const clampAudioFade = (seconds: number): number =>
+  Number.isFinite(seconds) ? Number(Math.max(0, Math.min(10, seconds)).toFixed(2)) : 0;
+
 const clampVisualKeyframeTime = (seconds: number, durationSeconds: number): number =>
   Number.isFinite(seconds)
     ? Math.max(0, Math.min(Math.max(0, durationSeconds), Number(seconds.toFixed(3))))
@@ -749,6 +752,8 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         kind: "audio",
         label: `Scene ${segment.order} audio`,
         muted: segment.sourceAudioMuted ?? false,
+        audioFadeInSeconds: segment.sourceAudioFadeInSeconds ?? 0,
+        audioFadeOutSeconds: segment.sourceAudioFadeOutSeconds ?? 0,
         playbackRate: segment.playbackRate ?? 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
@@ -802,6 +807,8 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         kind: "audio",
         label: segment.voiceover,
         muted: false,
+        audioFadeInSeconds: segment.voiceoverFadeInSeconds ?? 0,
+        audioFadeOutSeconds: segment.voiceoverFadeOutSeconds ?? 0,
         playbackRate: 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
@@ -1655,7 +1662,14 @@ type SmartEditTrackSegment = {
 type SmartEditTimelineElementPatch = Partial<
   Pick<
     SmartEditTimelineElement,
-    "durationSeconds" | "hidden" | "label" | "muted" | "startSecond" | "text"
+    | "audioFadeInSeconds"
+    | "audioFadeOutSeconds"
+    | "durationSeconds"
+    | "hidden"
+    | "label"
+    | "muted"
+    | "startSecond"
+    | "text"
   >
 >;
 
@@ -1881,6 +1895,14 @@ const updateSmartEditTimelineElement = (
         ? {
             ...element,
             ...patch,
+            audioFadeInSeconds:
+              patch.audioFadeInSeconds === undefined
+                ? element.audioFadeInSeconds
+                : clampAudioFade(patch.audioFadeInSeconds),
+            audioFadeOutSeconds:
+              patch.audioFadeOutSeconds === undefined
+                ? element.audioFadeOutSeconds
+                : clampAudioFade(patch.audioFadeOutSeconds),
             durationSeconds:
               patch.durationSeconds === undefined
                 ? element.durationSeconds
@@ -1966,6 +1988,8 @@ export const moveSmartEditTrackClipOnTimeline = (
             return {
               ...segment,
               sourceAudioDurationSeconds: targetElement.durationSeconds,
+              sourceAudioFadeInSeconds: targetElement.audioFadeInSeconds ?? 0,
+              sourceAudioFadeOutSeconds: targetElement.audioFadeOutSeconds ?? 0,
               sourceAudioMuted: targetElement.muted,
               sourceAudioStartOffsetSeconds: nextOffset,
             };
@@ -1984,6 +2008,8 @@ export const moveSmartEditTrackClipOnTimeline = (
               ...segment,
               voiceover: targetElement.text?.trim() || targetElement.label || segment.voiceover,
               voiceoverDurationSeconds: targetElement.durationSeconds,
+              voiceoverFadeInSeconds: targetElement.audioFadeInSeconds ?? 0,
+              voiceoverFadeOutSeconds: targetElement.audioFadeOutSeconds ?? 0,
               voiceoverStartOffsetSeconds: nextOffset,
             };
           }
@@ -3398,6 +3424,40 @@ export const SmartEditPanel = ({
                       }
                     />
                   </label>
+                  <div className="smart-edit-trim-grid">
+                    <label>
+                      Audio fade in
+                      <input
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        type="number"
+                        value={selectedSegment.sourceAudioFadeInSeconds ?? 0}
+                        onChange={(event) =>
+                          updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                            ...segment,
+                            sourceAudioFadeInSeconds: clampAudioFade(Number(event.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Audio fade out
+                      <input
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        type="number"
+                        value={selectedSegment.sourceAudioFadeOutSeconds ?? 0}
+                        onChange={(event) =>
+                          updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                            ...segment,
+                            sourceAudioFadeOutSeconds: clampAudioFade(Number(event.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
                   <label className="toggle-row">
                     <input
                       checked={selectedSegment.sourceAudioMuted ?? false}
@@ -3550,6 +3610,40 @@ export const SmartEditPanel = ({
                       }
                     />
                   </label>
+                  <div className="smart-edit-trim-grid">
+                    <label>
+                      Voice fade in
+                      <input
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        type="number"
+                        value={selectedSegment.voiceoverFadeInSeconds ?? 0}
+                        onChange={(event) =>
+                          updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                            ...segment,
+                            voiceoverFadeInSeconds: clampAudioFade(Number(event.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Voice fade out
+                      <input
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        type="number"
+                        value={selectedSegment.voiceoverFadeOutSeconds ?? 0}
+                        onChange={(event) =>
+                          updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                            ...segment,
+                            voiceoverFadeOutSeconds: clampAudioFade(Number(event.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
                 </>
               ) : null}
             </section>
@@ -3600,16 +3694,50 @@ export const SmartEditPanel = ({
                 />
               </label>
               {selectedTimelineElement.kind === "audio" ? (
-                <label className="toggle-row">
-                  <input
-                    checked={selectedTimelineElement.muted ?? false}
-                    type="checkbox"
-                    onChange={(event) =>
-                      updateSelectedTimelineElement({ muted: event.target.checked })
-                    }
-                  />
-                  {selectedTimelineElement.muted ? copy.unmuteSelected : copy.muteSelected}
-                </label>
+                <>
+                  <div className="smart-edit-trim-grid">
+                    <label>
+                      Audio fade in
+                      <input
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        type="number"
+                        value={selectedTimelineElement.audioFadeInSeconds ?? 0}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            audioFadeInSeconds: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Audio fade out
+                      <input
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        type="number"
+                        value={selectedTimelineElement.audioFadeOutSeconds ?? 0}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            audioFadeOutSeconds: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label className="toggle-row">
+                    <input
+                      checked={selectedTimelineElement.muted ?? false}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateSelectedTimelineElement({ muted: event.target.checked })
+                      }
+                    />
+                    {selectedTimelineElement.muted ? copy.unmuteSelected : copy.muteSelected}
+                  </label>
+                </>
               ) : null}
               <label className="toggle-row">
                 <input

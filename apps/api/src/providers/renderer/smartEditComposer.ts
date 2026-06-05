@@ -1131,6 +1131,30 @@ const atempoFilter = (playbackRate: number): string => {
   return factors.map((factor) => `atempo=${factor.toFixed(4)}`).join(",");
 };
 
+const normalizeAudioFadeSeconds = (seconds: number | undefined, durationSeconds: number): number =>
+  Math.max(0, Math.min(10, durationSeconds, seconds ?? 0));
+
+const audioFadeFilters = (
+  durationSeconds: number,
+  fadeInSeconds?: number,
+  fadeOutSeconds?: number,
+): string[] => {
+  const fadeIn = normalizeAudioFadeSeconds(fadeInSeconds, durationSeconds);
+  const fadeOut = normalizeAudioFadeSeconds(fadeOutSeconds, durationSeconds);
+  return [
+    ...(fadeIn > 0 && durationSeconds > fadeIn
+      ? [`afade=t=in:st=0:d=${fadeIn.toFixed(2)}`]
+      : []),
+    ...(fadeOut > 0 && durationSeconds > fadeOut
+      ? [
+          `afade=t=out:st=${Math.max(0, durationSeconds - fadeOut).toFixed(2)}:d=${fadeOut.toFixed(
+            2,
+          )}`,
+        ]
+      : []),
+  ];
+};
+
 const createSilenceAudioSegment = async (
   command: string,
   durationSeconds: number,
@@ -1154,7 +1178,10 @@ const createSilenceAudioSegment = async (
 type SourceAudioTimelineClip = {
   delaySeconds: number;
   durationSeconds: number;
+  fadeInSeconds: number;
+  fadeOutSeconds: number;
   id: string;
+  mediaDurationSeconds: number;
   playbackRate: number;
   sourceUrl: string;
   startSecond: number;
@@ -1213,7 +1240,10 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
       {
         delaySeconds: audioOffsetSeconds,
         durationSeconds: normalizeDuration(segment),
+        fadeInSeconds: sourceAudioElement?.audioFadeInSeconds ?? segment.sourceAudioFadeInSeconds ?? 0,
+        fadeOutSeconds: sourceAudioElement?.audioFadeOutSeconds ?? segment.sourceAudioFadeOutSeconds ?? 0,
         id: segment.id,
+        mediaDurationSeconds: audioDurationSeconds,
         playbackRate: normalizePlaybackRate(segment),
         sourceUrl: sourceAudioUrl,
         startSecond: timelineStarts.get(segment.id) ?? 0,
@@ -1236,7 +1266,10 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
       return {
         delaySeconds: 0,
         durationSeconds: element.durationSeconds,
+        fadeInSeconds: element.audioFadeInSeconds ?? 0,
+        fadeOutSeconds: element.audioFadeOutSeconds ?? 0,
         id: element.id,
+        mediaDurationSeconds: element.durationSeconds,
         playbackRate: element.playbackRate ?? 1,
         sourceUrl: element.sourceUrl!,
         startSecond: element.startSecond,
@@ -1284,6 +1317,7 @@ const createMixedSourceAudioTrack = async (
       `atrim=${clip.trimStartSecond}:${clip.trimEndSecond}`,
       "asetpts=PTS-STARTPTS",
       atempoFilter(clip.playbackRate),
+      ...audioFadeFilters(clip.mediaDurationSeconds, clip.fadeInSeconds, clip.fadeOutSeconds),
       `adelay=${globalDelayMilliseconds}:all=1`,
       `apad,atrim=0:${timelineDurationSeconds}`,
     ].join(",");
@@ -1361,6 +1395,7 @@ const createSourceAudioTrack = async (
       `atrim=${clip.trimStartSecond}:${clip.trimEndSecond}`,
       "asetpts=PTS-STARTPTS",
       atempoFilter(clip.playbackRate),
+      ...audioFadeFilters(clip.mediaDurationSeconds, clip.fadeInSeconds, clip.fadeOutSeconds),
       ...(audioOffsetMilliseconds > 0 ? [`adelay=${audioOffsetMilliseconds}:all=1`] : []),
       `apad,atrim=0:${clip.durationSeconds}`,
     ].join(",");
@@ -1575,6 +1610,8 @@ const stitchSegmentsWithTransitions = async (
 
 type VoiceoverTimelineClip = {
   durationSeconds: number;
+  fadeInSeconds: number;
+  fadeOutSeconds: number;
   id: string;
   startSecond: number;
   text: string;
@@ -1599,6 +1636,8 @@ const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] =>
     return [
       {
         durationSeconds: voiceDurationSeconds,
+        fadeInSeconds: segment.voiceoverFadeInSeconds ?? 0,
+        fadeOutSeconds: segment.voiceoverFadeOutSeconds ?? 0,
         id: segment.id,
         startSecond: (timelineStarts.get(segment.id) ?? 0) + voiceOffsetSeconds,
         text: voiceText,
@@ -1622,6 +1661,8 @@ const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] =>
       return [
         {
           durationSeconds: element.durationSeconds,
+          fadeInSeconds: element.audioFadeInSeconds ?? 0,
+          fadeOutSeconds: element.audioFadeOutSeconds ?? 0,
           id: element.id,
           startSecond: element.startSecond,
           text,
@@ -1653,6 +1694,7 @@ const createVoiceoverTrack = async (
     const voiceFilter = [
       `atrim=0:${clip.durationSeconds}`,
       "asetpts=PTS-STARTPTS",
+      ...audioFadeFilters(clip.durationSeconds, clip.fadeInSeconds, clip.fadeOutSeconds),
       `adelay=${voiceDelayMilliseconds}:all=1`,
       `apad,atrim=0:${timelineDurationSeconds}`,
     ].join(",");

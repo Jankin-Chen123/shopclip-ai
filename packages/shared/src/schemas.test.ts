@@ -829,9 +829,13 @@ describe("shared contract schemas", () => {
           timelineStartSecond: 0,
           playbackRate: 1,
           sourceAudioMuted: false,
+          sourceAudioFadeInSeconds: 0.25,
+          sourceAudioFadeOutSeconds: 0.35,
           captionHidden: false,
           captionStartOffsetSeconds: 0,
           voiceoverStartOffsetSeconds: 0,
+          voiceoverFadeInSeconds: 0.2,
+          voiceoverFadeOutSeconds: 0.3,
           transition: "cut",
           subtitle: "Default caption",
           voiceover: "Default voice",
@@ -891,6 +895,8 @@ describe("shared contract schemas", () => {
             startSecond: 0.5,
             durationSeconds: 2.25,
             trimStartSecond: 0.2,
+            audioFadeInSeconds: 0.3,
+            audioFadeOutSeconds: 0.4,
             muted: false,
             detachedAudio: true,
           },
@@ -919,6 +925,16 @@ describe("shared contract schemas", () => {
     expect(plan.timeline?.elements.find((element) => element.kind === "text")?.text).toBe(
       "Persistent caption",
     );
+    expect(plan.timeline?.elements.find((element) => element.id === "clip-audio-1")).toMatchObject({
+      audioFadeInSeconds: 0.3,
+      audioFadeOutSeconds: 0.4,
+    });
+    expect(plan.segments[0]).toMatchObject({
+      sourceAudioFadeInSeconds: 0.25,
+      sourceAudioFadeOutSeconds: 0.35,
+      voiceoverFadeInSeconds: 0.2,
+      voiceoverFadeOutSeconds: 0.3,
+    });
   });
 
   it("validates smart edit results and segment refresh requests with reusable segment outputs", () => {

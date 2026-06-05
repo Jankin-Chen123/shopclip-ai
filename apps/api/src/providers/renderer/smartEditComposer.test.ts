@@ -336,6 +336,8 @@ describe("smart edit composer", () => {
         {
           detachedAudio: true,
           durationSeconds: 1.5,
+          audioFadeInSeconds: 0.25,
+          audioFadeOutSeconds: 0.35,
           hidden: false,
           id: "persisted-source-audio",
           kind: "audio",
@@ -570,6 +572,8 @@ describe("smart edit composer", () => {
         {
           detachedAudio: true,
           durationSeconds: 1.5,
+          audioFadeInSeconds: 0.25,
+          audioFadeOutSeconds: 0.35,
           hidden: false,
           id: "free-audio",
           kind: "audio",
@@ -614,6 +618,8 @@ describe("smart edit composer", () => {
     );
     expect(freeAudioCommand).toBeTruthy();
     expect(freeAudioCommand!.args.join(" ")).toContain("atrim=1:2.5");
+    expect(freeAudioCommand!.args.join(" ")).toContain("afade=t=in:st=0:d=0.25");
+    expect(freeAudioCommand!.args.join(" ")).toContain("afade=t=out:st=1.15:d=0.35");
     expect(freeAudioCommand!.args.join(" ")).toContain("apad,atrim=0:1.5");
     expect(
       commands.some((entry) => entry.args.some((arg) => arg.endsWith("source-audio-gap-1.wav"))),
@@ -750,6 +756,8 @@ describe("smart edit composer", () => {
         {
           detachedAudio: false,
           durationSeconds: 1.5,
+          audioFadeInSeconds: 0.2,
+          audioFadeOutSeconds: 0.3,
           hidden: false,
           id: "free-voice",
           kind: "audio",
@@ -782,6 +790,8 @@ describe("smart edit composer", () => {
     );
     expect(voiceLaneCommand).toBeTruthy();
     expect(voiceLaneCommand!.args.join(" ")).toContain("atrim=0:1.5");
+    expect(voiceLaneCommand!.args.join(" ")).toContain("afade=t=in:st=0:d=0.20");
+    expect(voiceLaneCommand!.args.join(" ")).toContain("afade=t=out:st=1.20:d=0.30");
     expect(voiceLaneCommand!.args.join(" ")).toContain("adelay=2000:all=1");
     expect(voiceLaneCommand!.args.join(" ")).toContain("apad,atrim=0:5");
 
@@ -1546,6 +1556,8 @@ describe("smart edit composer", () => {
         startSecond: 1,
       },
       sourceAudioDurationSeconds: index === 0 ? 1.5 : undefined,
+      sourceAudioFadeInSeconds: index === 0 ? 0.2 : 0,
+      sourceAudioFadeOutSeconds: index === 0 ? 0.3 : 0,
       sourceAudioStartOffsetSeconds: index === 0 ? 0.7 : 0,
       transition: "cut",
     }));
@@ -1564,6 +1576,8 @@ describe("smart edit composer", () => {
       entry.args.some((arg) => arg.endsWith("source-audio-segment-video-padded.wav")),
     );
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("afade=t=in:st=0:d=0.20");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("afade=t=out:st=1.20:d=0.30");
     expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=700:all=1");
     expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
   });
@@ -1608,6 +1622,8 @@ describe("smart edit composer", () => {
     const plan = createPlan();
     plan.segments[0] = {
       ...plan.segments[0]!,
+      voiceoverFadeInSeconds: 0.2,
+      voiceoverFadeOutSeconds: 0.4,
       voiceoverDurationSeconds: 1.6,
       voiceoverStartOffsetSeconds: 0.5,
     };
@@ -1627,6 +1643,8 @@ describe("smart edit composer", () => {
     );
     expect(voicePadCommand).toBeTruthy();
     expect(voicePadCommand!.args.join(" ")).toContain("atrim=0:1.6");
+    expect(voicePadCommand!.args.join(" ")).toContain("afade=t=in:st=0:d=0.20");
+    expect(voicePadCommand!.args.join(" ")).toContain("afade=t=out:st=1.20:d=0.40");
     expect(voicePadCommand!.args.join(" ")).toContain("adelay=500:all=1");
     expect(voicePadCommand!.args.join(" ")).toContain("apad,atrim=0:4");
   });

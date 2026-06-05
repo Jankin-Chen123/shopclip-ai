@@ -218,6 +218,29 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/shared build`
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/web typecheck`
+
+## 2026-06-05 Audio Fade Controls For Smart Edit Timeline
+
+- User-facing improvement:
+  - Smart edit now exposes audio fade-in and fade-out controls for generated scene source audio, segment voiceover clips, and independent timeline audio elements.
+  - These controls align the timeline closer to OpenCut-style clip inspection: users can trim/move audio material and control fade envelopes without leaving the editor.
+- Contract/backend behavior:
+  - `SmartEditTimelineElement`, `SmartEditSegment`, and `SmartEditSegmentOverride` now accept optional audio fade fields.
+  - The smart-edit ffmpeg composer applies `afade` to separated source audio clips, independent audio timeline elements, segment voiceover, and independent voice elements.
+  - Backend project route timeline metadata includes the fade values so persisted plans round-trip through render-task history.
+- Test maintenance:
+  - Updated the ffmpeg subtitle tests to assert the current generated ASS end timestamp `9:59:59.99`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/ffmpegComposer.test.ts src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
   - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
   - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
   - `corepack pnpm --filter @shopclip/api build`
