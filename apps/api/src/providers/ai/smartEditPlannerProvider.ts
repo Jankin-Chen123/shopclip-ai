@@ -534,7 +534,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -662,6 +662,36 @@ const normalizeModelEffects = (
   };
 };
 
+const normalizeModelVisualMask = (
+  rawMask: unknown,
+  localMask: SmartEditPlan["segments"][number]["visualMask"],
+): SmartEditPlan["segments"][number]["visualMask"] | undefined => {
+  if (!isRecord(rawMask)) {
+    return localMask;
+  }
+  return {
+    heightPercent:
+      typeof rawMask.heightPercent === "number"
+        ? Math.max(1, Math.min(100, rawMask.heightPercent))
+        : localMask?.heightPercent ?? 80,
+    id: getString(rawMask.id) ?? localMask?.id ?? "model_visual_mask",
+    inverted: typeof rawMask.inverted === "boolean" ? rawMask.inverted : localMask?.inverted ?? false,
+    type: enumStringOr(rawMask.type, new Set<"rectangle" | "ellipse">(["rectangle", "ellipse"]), localMask?.type ?? "rectangle"),
+    widthPercent:
+      typeof rawMask.widthPercent === "number"
+        ? Math.max(1, Math.min(100, rawMask.widthPercent))
+        : localMask?.widthPercent ?? 80,
+    xPercent:
+      typeof rawMask.xPercent === "number"
+        ? Math.max(0, Math.min(100, rawMask.xPercent))
+        : localMask?.xPercent ?? 50,
+    yPercent:
+      typeof rawMask.yPercent === "number"
+        ? Math.max(0, Math.min(100, rawMask.yPercent))
+        : localMask?.yPercent ?? 50,
+  };
+};
+
 const normalizeModelVisualKeyframes = (
   rawKeyframes: unknown,
   localSegment: SmartEditPlan["segments"][number],
@@ -758,6 +788,7 @@ const normalizeModelSegment = (
     source: normalizeModelSource(rawSegment.source, localSegment.source),
     transform: normalizeModelTransform(rawSegment.transform, localSegment.transform),
     effects: normalizeModelEffects(rawSegment.effects, localSegment.effects),
+    visualMask: normalizeModelVisualMask(rawSegment.visualMask, localSegment.visualMask),
     visualKeyframes: normalizeModelVisualKeyframes(rawSegment.visualKeyframes, localSegment),
     assetTags: Array.isArray(rawSegment.assetTags)
       ? rawSegment.assetTags.map(getString).filter((tag): tag is string => Boolean(tag))

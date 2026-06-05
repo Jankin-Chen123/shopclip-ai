@@ -327,6 +327,22 @@ const normalizedEffects = (segment: SmartEditSegment) => ({
   sharpen: Math.max(0, Math.min(2, segment.effects?.sharpen ?? 0)),
 });
 
+const normalizedVisualMask = (segment: SmartEditSegment) => {
+  const mask = segment.visualMask;
+  if (!mask) {
+    return undefined;
+  }
+  return {
+    heightPercent: Math.max(1, Math.min(100, mask.heightPercent)),
+    id: mask.id,
+    inverted: mask.inverted,
+    type: mask.type,
+    widthPercent: Math.max(1, Math.min(100, mask.widthPercent)),
+    xPercent: Math.max(0, Math.min(100, mask.xPercent)),
+    yPercent: Math.max(0, Math.min(100, mask.yPercent)),
+  };
+};
+
 const normalizedVisualKeyframes = (segment: SmartEditSegment) =>
   (segment.visualKeyframes ?? [])
     .map((keyframe) => ({
@@ -344,6 +360,35 @@ const normalizedVisualKeyframes = (segment: SmartEditSegment) =>
 
 const escapedFfmpegExpression = (expression: string): string =>
   expression.replace(/,/gu, "\\,");
+
+const buildVisualMaskFilter = (
+  segment: SmartEditSegment,
+  dimensions: OutputDimensions,
+): string | undefined => {
+  const mask = normalizedVisualMask(segment);
+  if (!mask) {
+    return undefined;
+  }
+  const centerX = (dimensions.width * mask.xPercent) / 100;
+  const centerY = (dimensions.height * mask.yPercent) / 100;
+  const halfWidth = Math.max(1, (dimensions.width * mask.widthPercent) / 100 / 2);
+  const halfHeight = Math.max(1, (dimensions.height * mask.heightPercent) / 100 / 2);
+  const insideExpression =
+    mask.type === "ellipse"
+      ? `lte(pow((X-${centerX.toFixed(2)})/${halfWidth.toFixed(2)},2)+pow((Y-${centerY.toFixed(2)})/${halfHeight.toFixed(2)},2),1)`
+      : `between(X,${(centerX - halfWidth).toFixed(2)},${(centerX + halfWidth).toFixed(2)})*between(Y,${(centerY - halfHeight).toFixed(2)},${(centerY + halfHeight).toFixed(2)})`;
+  const lumaExpression = mask.inverted
+    ? `if(${insideExpression},0,p(X,Y))`
+    : `if(${insideExpression},p(X,Y),0)`;
+  const chromaExpression = mask.inverted
+    ? `if(${insideExpression},128,p(X,Y))`
+    : `if(${insideExpression},p(X,Y),128)`;
+  return [
+    `lum='${escapedFfmpegExpression(lumaExpression)}'`,
+    `cb='${escapedFfmpegExpression(chromaExpression)}'`,
+    `cr='${escapedFfmpegExpression(chromaExpression)}'`,
+  ].join(":");
+};
 
 const linearKeyframeExpression = (
   keyframes: ReturnType<typeof normalizedVisualKeyframes>,
@@ -477,6 +522,10 @@ const buildSegmentVideoFilter = (
   }
   if (effects.sharpen > 0) {
     filters.push(`unsharp=5:5:${effects.sharpen.toFixed(2)}:5:5:0.00`);
+  }
+  const maskFilter = buildVisualMaskFilter(segment, dimensions);
+  if (maskFilter) {
+    filters.push(`geq=${maskFilter}`);
   }
   const playbackRate = normalizePlaybackRate(segment);
   if (playbackRate !== 1) {

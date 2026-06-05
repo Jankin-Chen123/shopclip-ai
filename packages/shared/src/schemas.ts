@@ -718,6 +718,16 @@ export const SmartEditEffectsSchema = z.object({
   fadeOutSeconds: z.number().min(0).max(5).default(0),
 });
 
+export const SmartEditVisualMaskSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.enum(["rectangle", "ellipse"]),
+  inverted: z.boolean().default(false),
+  xPercent: z.number().min(0).max(100).default(50),
+  yPercent: z.number().min(0).max(100).default(50),
+  widthPercent: z.number().min(1).max(100).default(80),
+  heightPercent: z.number().min(1).max(100).default(80),
+});
+
 export const SmartEditVisualKeyframeSchema = z.object({
   id: z.string().trim().min(1),
   timeSecond: z.number().min(0).max(120),
@@ -746,6 +756,7 @@ export const SmartEditSegmentOverrideSchema = z.object({
   source: SmartEditSourceSchema.optional(),
   transform: SmartEditTransformSchema.optional(),
   effects: SmartEditEffectsSchema.optional(),
+  visualMask: SmartEditVisualMaskSchema.optional(),
   visualKeyframes: z.array(SmartEditVisualKeyframeSchema).max(40).optional(),
 });
 
@@ -791,6 +802,7 @@ export const SmartEditSegmentSchema = z.object({
   source: SmartEditSourceSchema,
   transform: SmartEditTransformSchema.optional(),
   effects: SmartEditEffectsSchema.optional(),
+  visualMask: SmartEditVisualMaskSchema.optional(),
   visualKeyframes: z.array(SmartEditVisualKeyframeSchema).max(40).optional(),
   assetTags: z.array(z.string().trim().min(1)).default([]),
   rationale: z.string().trim().min(1),

@@ -2968,6 +2968,15 @@ describe("App", () => {
                   fadeInSeconds: 0.2,
                   fadeOutSeconds: 0.4,
                 },
+                visualMask: {
+                  id: "mask-focus",
+                  type: "ellipse",
+                  inverted: true,
+                  xPercent: 50,
+                  yPercent: 45,
+                  widthPercent: 70,
+                  heightPercent: 60,
+                },
                 visualKeyframes: [
                   {
                     id: "kf-start",
@@ -3052,6 +3061,9 @@ describe("App", () => {
     expect(markup).toContain("Visual effects");
     expect(markup).toContain("Blur");
     expect(markup).toContain("Fade out");
+    expect(markup).toContain("Visual mask");
+    expect(markup).toContain("Mask type");
+    expect(markup).toContain("Invert mask");
     expect(markup).toContain("Visual keyframes");
     expect(markup).toContain("Add keyframe");
     expect(markup).toContain("0.8s");

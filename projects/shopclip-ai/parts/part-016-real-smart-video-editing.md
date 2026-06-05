@@ -824,3 +824,28 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Keyframes are still segment-backed, not fully arbitrary element property paths.
   - Masks, richer effect stacks, curve editing, grouped element selection, and direct arbitrary element-stack export are still open.
+
+## 2026-06-05 Visual Mask Controls
+
+- Reference model:
+  - OpenCut stores masks on editable timeline elements and exposes command handlers for toggling inverted masks, removing masks, and editing custom mask points.
+  - This increment adapts that model to ShopClip's current segment-backed Smart Edit bridge before adding freeform point editing.
+- Fix:
+  - Added `SmartEditVisualMaskSchema` with rectangle/ellipse mask type, inverted mode, center position, and size percentages.
+  - Smart edit planner prompt and model normalization now accept `visualMask`, clamp out-of-range values, and preserve normalized masks in the executable plan.
+  - Smart Edit inspector now shows a Visual mask section with mask type, invert toggle, and X/Y/W/H controls on the selected video segment.
+  - The ffmpeg smart-edit composer now exports rectangle and ellipse masks as real `geq` pixel expressions, including inverted mask behavior.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "validates real smart edit"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "visual masks"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "editor workspace"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "smart edit|timeline"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "transform|keyframes|mask|persistent|timeline|subtitle|source audio"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|editor workspace|persistent|duplicates|pastes|copies|clipboard|splits"`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Mask support is still segment-backed and limited to rectangle/ellipse export.
+  - Freeform mask points, mask feathering, curve editing, richer effect stacks, grouped element selection, and direct arbitrary element-stack export are still open.

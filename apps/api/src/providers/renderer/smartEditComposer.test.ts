@@ -628,6 +628,47 @@ describe("smart edit composer", () => {
     expect(videoFilter).toContain("crop=720:1280:x='(in_w-720)/2+");
   });
 
+  it("exports visual masks as ffmpeg pixel expressions", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      durationSeconds: 4,
+      visualMask: {
+        heightPercent: 60,
+        id: "mask-product-focus",
+        inverted: true,
+        type: "ellipse",
+        widthPercent: 70,
+        xPercent: 50,
+        yPercent: 45,
+      },
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    const videoFilter = firstRawCommand?.args[firstRawCommand.args.indexOf("-vf") + 1] ?? "";
+    expect(videoFilter).toContain("geq=");
+    expect(videoFilter).toContain("pow((X-360.00)/252.00\\,2)+pow((Y-576.00)/384.00\\,2)");
+    expect(videoFilter).toContain("lte(");
+    expect(videoFilter).toContain("0\\,p(X\\,Y)");
+  });
+
   it("uses real ffmpeg fade and xfade filters for requested visual transitions", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

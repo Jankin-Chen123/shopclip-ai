@@ -374,6 +374,15 @@ describe("smart edit planner provider", () => {
                 },
                 subtitle: "这只小猫水杯也太可爱了！",
                 transition: "quick push-in",
+                visualMask: {
+                  heightPercent: 140,
+                  id: "model_focus_mask",
+                  inverted: true,
+                  type: "ellipse",
+                  widthPercent: 72,
+                  xPercent: 120,
+                  yPercent: -10,
+                },
                 visualKeyframes: [
                   {
                     id: "model_push_in",
@@ -442,6 +451,15 @@ describe("smart edit planner provider", () => {
       assetId: "asset-image",
       imageUrl: "https://storage.example.test/cat-cup.png",
       kind: "image-asset",
+    });
+    expect(result.plan.segments[0]?.visualMask).toEqual({
+      heightPercent: 100,
+      id: "model_focus_mask",
+      inverted: true,
+      type: "ellipse",
+      widthPercent: 72,
+      xPercent: 100,
+      yPercent: 0,
     });
     expect(result.plan.segments[0]?.visualKeyframes).toEqual([
       {

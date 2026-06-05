@@ -193,6 +193,15 @@ describe("shared contract schemas", () => {
             fadeInSeconds: 0.25,
             fadeOutSeconds: 0.35,
           },
+          visualMask: {
+            id: "mask_product_focus",
+            type: "ellipse",
+            inverted: false,
+            xPercent: 50,
+            yPercent: 46,
+            widthPercent: 72,
+            heightPercent: 58,
+          },
           visualKeyframes: [
             {
               id: "kf_intro_push",
@@ -240,6 +249,8 @@ describe("shared contract schemas", () => {
     expect(plan.success).toBe(true);
     expect(plan.success ? plan.data.segments[0]?.transform?.scale : undefined).toBe(1.18);
     expect(plan.success ? plan.data.segments[0]?.effects?.blur : undefined).toBe(1.5);
+    expect(plan.success ? plan.data.segments[0]?.visualMask?.type : undefined).toBe("ellipse");
+    expect(plan.success ? plan.data.segments[0]?.visualMask?.widthPercent : undefined).toBe(72);
     expect(plan.success ? plan.data.segments[0]?.visualKeyframes?.map((keyframe) => keyframe.id) : undefined).toEqual([
       "kf_intro_push",
       "kf_product_closeup",
@@ -275,6 +286,15 @@ describe("shared contract schemas", () => {
             },
           },
         ],
+        visualMask: {
+          id: "bad_mask",
+          type: "ellipse",
+          inverted: false,
+          xPercent: 150,
+          yPercent: -20,
+          widthPercent: 0,
+          heightPercent: 140,
+        },
       }).success,
     ).toBe(false);
 

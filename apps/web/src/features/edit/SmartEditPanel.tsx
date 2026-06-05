@@ -143,6 +143,29 @@ const effectsForSegment = (segment: SmartEditSegment) => ({
   sharpen: clampSharpen(segment.effects?.sharpen ?? 0),
 });
 
+const visualMaskForSegment = (segment: SmartEditSegment) => ({
+  heightPercent: Number.isFinite(segment.visualMask?.heightPercent ?? Number.NaN)
+    ? Math.max(1, Math.min(100, segment.visualMask!.heightPercent))
+    : 80,
+  id: segment.visualMask?.id ?? `${segment.id}-visual-mask`,
+  inverted: segment.visualMask?.inverted ?? false,
+  type: segment.visualMask?.type ?? "rectangle",
+  widthPercent: Number.isFinite(segment.visualMask?.widthPercent ?? Number.NaN)
+    ? Math.max(1, Math.min(100, segment.visualMask!.widthPercent))
+    : 80,
+  xPercent: Number.isFinite(segment.visualMask?.xPercent ?? Number.NaN)
+    ? Math.max(0, Math.min(100, segment.visualMask!.xPercent))
+    : 50,
+  yPercent: Number.isFinite(segment.visualMask?.yPercent ?? Number.NaN)
+    ? Math.max(0, Math.min(100, segment.visualMask!.yPercent))
+    : 50,
+});
+
+const clampMaskPercentInput = (value: string, fallback: number, min: number) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? Math.max(min, Math.min(100, parsedValue)) : fallback;
+};
+
 const visualKeyframesForSegment = (segment: SmartEditSegment) =>
   [...(segment.visualKeyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
 
@@ -3597,6 +3620,125 @@ export const SmartEditPanel = ({
                           effects: {
                             ...effectsForSegment(segment),
                             fadeOutSeconds: clampEffectFade(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+              <section className="smart-edit-inspector-section">
+                <h4>Visual mask</h4>
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Mask type
+                    <select
+                      value={selectedSegment.visualMask?.type ?? "none"}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          visualMask:
+                            event.target.value === "none"
+                              ? undefined
+                              : {
+                                  ...visualMaskForSegment(segment),
+                                  type: event.target.value as "rectangle" | "ellipse",
+                                },
+                        }))
+                      }
+                    >
+                      <option value="none">None</option>
+                      <option value="rectangle">Rectangle</option>
+                      <option value="ellipse">Ellipse</option>
+                    </select>
+                  </label>
+                  <label className="smart-edit-checkbox-label">
+                    <input
+                      checked={selectedSegment.visualMask?.inverted ?? false}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          visualMask: {
+                            ...visualMaskForSegment(segment),
+                            inverted: event.target.checked,
+                          },
+                        }))
+                      }
+                    />
+                    Invert mask
+                  </label>
+                  <label>
+                    Mask X
+                    <input
+                      max={100}
+                      min={0}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.visualMask?.xPercent ?? 50}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          visualMask: {
+                            ...visualMaskForSegment(segment),
+                            xPercent: clampMaskPercentInput(event.target.value, 50, 0),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Mask Y
+                    <input
+                      max={100}
+                      min={0}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.visualMask?.yPercent ?? 50}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          visualMask: {
+                            ...visualMaskForSegment(segment),
+                            yPercent: clampMaskPercentInput(event.target.value, 50, 0),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Mask W
+                    <input
+                      max={100}
+                      min={1}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.visualMask?.widthPercent ?? 80}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          visualMask: {
+                            ...visualMaskForSegment(segment),
+                            widthPercent: clampMaskPercentInput(event.target.value, 80, 1),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Mask H
+                    <input
+                      max={100}
+                      min={1}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.visualMask?.heightPercent ?? 80}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          visualMask: {
+                            ...visualMaskForSegment(segment),
+                            heightPercent: clampMaskPercentInput(event.target.value, 80, 1),
                           },
                         }))
                       }
