@@ -955,3 +955,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Voiceover is still generated from segment text rather than arbitrary timeline text/audio elements.
   - Direct element-stack rendering still needs richer text styling/keyframes and fuller audio lane controls such as volume envelopes and clip-level fades.
+
+## 2026-06-05 Timeline Voice Element Export
+
+- Reference model:
+  - OpenCut treats text/audio timeline elements as independent edit records; a voice item should be able to exist on the timeline without being forced through a storyboard segment field.
+- Fix:
+  - Reworked smart-edit voiceover export around `VoiceoverTimelineClip` descriptors.
+  - Segment voiceover remains supported, but explicit `segment.voiceover` is now the source for segment narration; subtitles are not implicitly converted into narration when voiceover is empty.
+  - Unowned timeline elements on the `voiceover` track can now carry `text` and generate TTS audio independently from any `segmentId`.
+  - Each voice clip is rendered as a full-timeline WAV lane with global `adelay`, then mixed into `voiceover.wav`; this matches the source-audio lane model and lets narration material be placed freely on the timeline.
+  - Single voice tracks still flow into the final export through the existing audio attachment path; multiple source/voice/BGM tracks continue to use final `amix`.
+- Verification:
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "generates voiceover audio from unowned timeline voice"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "voiceover|voice tracks|voice track|timeline gaps"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "persistent|timeline|source audio|subtitle|voice|effect|keyframes|mask|transition|global source-audio|overlapping"`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+- Remaining:
+  - Frontend still needs richer direct creation/conversion controls for arbitrary timeline voice/text elements.
+  - Voice lanes do not yet expose volume envelopes, fades, or waveform-level editing.
+  - Full completion still requires live runtime evidence for render-to-material-to-smart-edit and broader OpenCut-style editor parity.

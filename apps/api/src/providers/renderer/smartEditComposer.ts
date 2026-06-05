@@ -1573,6 +1573,64 @@ const stitchSegmentsWithTransitions = async (
   ]);
 };
 
+type VoiceoverTimelineClip = {
+  durationSeconds: number;
+  id: string;
+  startSecond: number;
+  text: string;
+};
+
+const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] => {
+  const enabledSegments = [...plan.segments]
+    .filter((segment) => segment.enabled)
+    .sort((left, right) => left.order - right.order);
+  const timelineStarts = timelineSegmentStartSeconds(enabledSegments);
+  const segmentClips = enabledSegments.flatMap((segment): VoiceoverTimelineClip[] => {
+    const voiceText = segment.voiceover.trim();
+    if (!voiceText) {
+      return [];
+    }
+    const voiceOffsetSeconds = normalizeInSegmentOffset(segment.voiceoverStartOffsetSeconds, segment);
+    const voiceDurationSeconds = normalizeInSegmentClipDuration(
+      segment.voiceoverDurationSeconds,
+      segment.voiceoverStartOffsetSeconds,
+      segment,
+    );
+    return [
+      {
+        durationSeconds: voiceDurationSeconds,
+        id: segment.id,
+        startSecond: (timelineStarts.get(segment.id) ?? 0) + voiceOffsetSeconds,
+        text: voiceText,
+      },
+    ];
+  });
+  const timelineVoiceClips = (plan.timeline?.elements ?? [])
+    .filter(
+      (element) =>
+        (timelineElementTrackKind(element) === "voice" ||
+          (timelineElementTrackKind(element) === "caption" && !element.segmentId)) &&
+        !element.segmentId &&
+        !element.hidden &&
+        !element.muted,
+    )
+    .flatMap((element): VoiceoverTimelineClip[] => {
+      const text = (element.text?.trim() || element.label.trim()).trim();
+      if (!text) {
+        return [];
+      }
+      return [
+        {
+          durationSeconds: element.durationSeconds,
+          id: element.id,
+          startSecond: element.startSecond,
+          text,
+        },
+      ];
+    });
+  return [...segmentClips, ...timelineVoiceClips].sort((left, right) => left.startSecond - right.startSecond);
+};
+
 const createVoiceoverTrack = async (
   command: string,
   ttsCommand: string,
@@ -1580,56 +1638,30 @@ const createVoiceoverTrack = async (
   workdir: string,
   run: CommandRunner,
 ): Promise<string | undefined> => {
-  const enabledSegments = [...plan.segments]
-    .filter((segment) => segment.enabled)
-    .sort((left, right) => left.order - right.order);
-  if (enabledSegments.length === 0) {
-    return undefined;
-  }
-  const voiceLines = enabledSegments.map((segment) => segment.voiceover.trim()).filter(Boolean);
-  if (voiceLines.length === 0) {
+  const clips = voiceoverTimelineClips(plan);
+  if (clips.length === 0) {
     return undefined;
   }
 
-  const paddedPaths: string[] = [];
-  const timelineStarts = timelineSegmentStartSeconds(enabledSegments);
-  let cursor = 0;
-  for (const [index, segment] of enabledSegments.entries()) {
-    const voiceText = segment.voiceover.trim() || segment.subtitle.trim();
-    const start = timelineStarts.get(segment.id) ?? cursor;
-    const gapDuration = start - cursor;
-    if (gapDuration > 0.01) {
-      const gapPath = join(workdir, `voice-gap-${index + 1}.wav`);
-      await createSilenceAudioSegment(command, gapDuration, gapPath, run);
-      paddedPaths.push(gapPath);
-      cursor += gapDuration;
-    }
-    if (!voiceText) {
-      const silencePath = join(workdir, `voice-${index + 1}-silence.wav`);
-      await createSilenceAudioSegment(command, normalizeDuration(segment), silencePath, run);
-      paddedPaths.push(silencePath);
-      cursor = Math.max(cursor, start) + normalizeDuration(segment);
-      continue;
-    }
-    const rawVoicePath = join(workdir, `voice-${index + 1}.wav`);
-    const paddedVoicePath = join(workdir, `voice-${index + 1}-padded.wav`);
-    const voiceOffsetSeconds = normalizeInSegmentOffset(segment.voiceoverStartOffsetSeconds, segment);
-    const voiceOffsetMilliseconds = Math.round(voiceOffsetSeconds * 1000);
-    const voiceDurationSeconds = normalizeInSegmentClipDuration(
-      segment.voiceoverDurationSeconds,
-      segment.voiceoverStartOffsetSeconds,
-      segment,
-    );
-    const voiceFilter =
-      voiceOffsetMilliseconds > 0
-        ? `atrim=0:${voiceDurationSeconds},asetpts=PTS-STARTPTS,adelay=${voiceOffsetMilliseconds}:all=1,apad,atrim=0:${normalizeDuration(segment)}`
-        : `atrim=0:${voiceDurationSeconds},asetpts=PTS-STARTPTS,apad,atrim=0:${normalizeDuration(segment)}`;
+  const timelineDurationSeconds = globalTimelineDurationSeconds(plan);
+  const lanePaths: string[] = [];
+  for (const clip of clips) {
+    const token = safeFileToken(clip.id);
+    const rawVoicePath = join(workdir, `voice-${token}.wav`);
+    const lanePath = join(workdir, `voice-${token}-lane.wav`);
+    const voiceDelayMilliseconds = Math.max(0, Math.round(clip.startSecond * 1000));
+    const voiceFilter = [
+      `atrim=0:${clip.durationSeconds}`,
+      "asetpts=PTS-STARTPTS",
+      `adelay=${voiceDelayMilliseconds}:all=1`,
+      `apad,atrim=0:${timelineDurationSeconds}`,
+    ].join(",");
     await run(ttsCommand, [
       "-v",
       voiceForLanguage(plan.audio.targetLanguage),
       "-w",
       rawVoicePath,
-      voiceText,
+      clip.text,
     ]);
     await run(command, [
       "-y",
@@ -1639,31 +1671,24 @@ const createVoiceoverTrack = async (
       voiceFilter,
       "-c:a",
       "pcm_s16le",
-      paddedVoicePath,
+      lanePath,
     ]);
-    paddedPaths.push(paddedVoicePath);
-    cursor = Math.max(cursor, start) + normalizeDuration(segment);
+    lanePaths.push(lanePath);
   }
 
-  if (paddedPaths.length === 0) {
+  if (lanePaths.length === 0) {
     return undefined;
   }
 
-  const concatListPath = join(workdir, "smart-edit-voice.txt");
   const voiceTrackPath = join(workdir, "voiceover.wav");
-  await writeFile(
-    concatListPath,
-    paddedPaths.map((path) => `file '${escapeConcatPath(path)}'`).join("\n"),
-    "utf8",
-  );
+  const filterInputs = lanePaths.map((_, index) => `[${index}:a]`).join("");
   await run(command, [
     "-y",
-    "-f",
-    "concat",
-    "-safe",
-    "0",
-    "-i",
-    concatListPath,
+    ...lanePaths.flatMap((path) => ["-i", path]),
+    "-filter_complex",
+    `${filterInputs}amix=inputs=${lanePaths.length}:duration=longest,atrim=0:${timelineDurationSeconds}[aout]`,
+    "-map",
+    "[aout]",
     "-c:a",
     "pcm_s16le",
     voiceTrackPath,

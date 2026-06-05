@@ -722,6 +722,74 @@ describe("smart edit composer", () => {
     ).toBe(false);
   });
 
+  it("generates voiceover audio from unowned timeline voice elements", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        captionHidden: true,
+        durationSeconds: 4,
+        sourceAudioMuted: true,
+        voiceover: "",
+      },
+    ];
+    plan.targetDurationSeconds = 5;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 5,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "voiceover", kind: "audio", label: "Voice", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: false,
+          durationSeconds: 1.5,
+          hidden: false,
+          id: "free-voice",
+          kind: "audio",
+          label: "Timeline voice",
+          muted: false,
+          playbackRate: 1,
+          startSecond: 2,
+          text: "Timeline generated voice",
+          trackId: "voiceover",
+          trimStartSecond: 0,
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const ttsCommand = commands.find((entry) => entry.command === "espeak-test");
+    expect(ttsCommand?.args).toEqual(expect.arrayContaining(["Timeline generated voice"]));
+
+    const voiceLaneCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("voice-free-voice-lane.wav")),
+    );
+    expect(voiceLaneCommand).toBeTruthy();
+    expect(voiceLaneCommand!.args.join(" ")).toContain("atrim=0:1.5");
+    expect(voiceLaneCommand!.args.join(" ")).toContain("adelay=2000:all=1");
+    expect(voiceLaneCommand!.args.join(" ")).toContain("apad,atrim=0:5");
+
+    const finalMixCommand = commands.at(-1);
+    expect(finalMixCommand?.args.some((arg) => arg.endsWith("voiceover.wav"))).toBe(true);
+    expect(finalMixCommand?.args).toEqual(expect.arrayContaining(["-map", "1:a:0"]));
+  });
+
   it("mutes selected separated scene audio while preserving the source audio timeline", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
@@ -1523,10 +1591,12 @@ describe("smart edit composer", () => {
     });
 
     const voicePadCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("voice-1-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("voice-segment-video-lane.wav")),
     );
-    expect(voicePadCommand?.args.join(" ")).toContain("adelay=800:all=1");
-    expect(voicePadCommand?.args.join(" ")).toContain("atrim=0:4");
+    expect(voicePadCommand).toBeTruthy();
+    expect(voicePadCommand!.args.join(" ")).toContain("adelay=800:all=1");
+    expect(voicePadCommand!.args.join(" ")).toContain("atrim=0:4");
+    expect(voicePadCommand!.args.join(" ")).toContain("apad,atrim=0:4");
   });
 
   it("trims voiceover audio to the requested track duration before padding", async () => {
@@ -1553,11 +1623,12 @@ describe("smart edit composer", () => {
     });
 
     const voicePadCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("voice-1-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("voice-segment-video-lane.wav")),
     );
-    expect(voicePadCommand?.args.join(" ")).toContain("atrim=0:1.6");
-    expect(voicePadCommand?.args.join(" ")).toContain("adelay=500:all=1");
-    expect(voicePadCommand?.args.join(" ")).toContain("apad,atrim=0:4");
+    expect(voicePadCommand).toBeTruthy();
+    expect(voicePadCommand!.args.join(" ")).toContain("atrim=0:1.6");
+    expect(voicePadCommand!.args.join(" ")).toContain("adelay=500:all=1");
+    expect(voicePadCommand!.args.join(" ")).toContain("apad,atrim=0:4");
   });
 
   it("preserves manual timeline gaps across video, source audio, and voice tracks", async () => {
@@ -1604,9 +1675,10 @@ describe("smart edit composer", () => {
     );
     expect(sourceAudioGapCommand?.args).toEqual(expect.arrayContaining(["-t", "2"]));
 
-    const voiceGapCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("voice-gap-2.wav")),
+    const secondVoiceLaneCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("voice-segment-image-lane.wav")),
     );
-    expect(voiceGapCommand?.args).toEqual(expect.arrayContaining(["-t", "2"]));
+    expect(secondVoiceLaneCommand).toBeTruthy();
+    expect(secondVoiceLaneCommand!.args.join(" ")).toContain("adelay=6000:all=1");
   });
 });
