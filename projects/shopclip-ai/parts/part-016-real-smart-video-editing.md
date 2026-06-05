@@ -749,3 +749,24 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - The next OpenCut-level increment should persist independent timeline element records instead of deriving all command targets from segment-backed projections.
+
+## 2026-06-05 Persistent Timeline Element Bridge
+
+- Reference model:
+  - OpenCut treats timeline elements as first-class records with their own track, start time, trim, duration, text/audio metadata, and command targets.
+  - The current ShopClip editor still needs the existing segment-backed ffmpeg composer, so this increment adds a compatibility bridge instead of replacing the whole renderer in one step.
+- Fix:
+  - `SmartEditPlan.timeline.elements` is now preserved when present; front-end editing no longer blindly rebuilds persistent timeline elements into derived `segment-*` projections.
+  - Track-level caption/source-audio/voice movement updates the matching persistent element and then syncs the segment offset/duration/text fields as a compatibility bridge.
+  - The track stack continues to prefer persistent elements for display, while older plans without timeline elements still fall back to derived segment rows.
+  - The smart-edit composer now applies persistent timeline element overrides before ffmpeg composition, so persistent text elements drive subtitle text/timing and persistent source-audio elements drive independent source URL, trim, delay, and duration.
+  - Source-audio trim is handled as an audio-specific override so independent audio edits do not accidentally change the video clip's source trim.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "smart edit|timeline"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|track-level|edit modes|persistent"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "subtitle|source audio|persistent|timeline"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+- Remaining:
+  - Export is still bridged through `SmartEditSegment` rather than directly rendering arbitrary element stacks.
+  - Next increments should move duplicate/paste/split commands onto element records, then add visual snap guides, keyframes, masks, and richer OpenCut-style effect stacks.

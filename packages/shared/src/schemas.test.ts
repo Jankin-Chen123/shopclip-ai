@@ -681,6 +681,120 @@ describe("shared contract schemas", () => {
     }
   });
 
+  it("accepts persistent smart edit timeline elements with independent media timing", () => {
+    const plan = SmartEditPlanSchema.parse({
+      id: "plan-elements",
+      projectId: "project-elements",
+      strategy: "Keep independently edited timeline elements instead of rebuilding from segments.",
+      targetDurationSeconds: 10,
+      createdAt: "2026-06-05T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 0,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Default caption",
+          voiceover: "Default voice",
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipUrl: "https://cdn.example.test/scene.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+            sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+          },
+          assetTags: ["demo"],
+          rationale: "Use the generated scene clip.",
+        },
+      ],
+      timeline: {
+        scale: 1,
+        durationSeconds: 10,
+        tracks: [
+          {
+            id: "video-main",
+            kind: "video",
+            label: "Video",
+          },
+          {
+            id: "audio-source",
+            kind: "audio",
+            label: "Source audio",
+          },
+          {
+            id: "text-copy",
+            kind: "text",
+            label: "Text",
+          },
+        ],
+        elements: [
+          {
+            id: "clip-video-1",
+            trackId: "video-main",
+            kind: "video",
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            sourceUrl: "https://cdn.example.test/scene-video.mp4",
+            label: "Independent video",
+            startSecond: 1.2,
+            durationSeconds: 3.5,
+            trimStartSecond: 0.4,
+            trimEndSecond: 3.9,
+            playbackRate: 1.25,
+          },
+          {
+            id: "clip-audio-1",
+            trackId: "audio-source",
+            kind: "audio",
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            sourceUrl: "https://cdn.example.test/scene-audio.m4a",
+            label: "Independent audio",
+            startSecond: 0.5,
+            durationSeconds: 2.25,
+            trimStartSecond: 0.2,
+            muted: false,
+            detachedAudio: true,
+          },
+          {
+            id: "clip-text-1",
+            trackId: "text-copy",
+            kind: "text",
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            text: "Persistent caption",
+            label: "Persistent caption",
+            startSecond: 2.4,
+            durationSeconds: 1.4,
+            trimStartSecond: 0,
+            hidden: false,
+          },
+        ],
+      },
+    });
+
+    expect(plan.timeline?.elements.map((element) => [element.id, element.startSecond])).toEqual([
+      ["clip-video-1", 1.2],
+      ["clip-audio-1", 0.5],
+      ["clip-text-1", 2.4],
+    ]);
+    expect(plan.timeline?.elements.find((element) => element.kind === "text")?.text).toBe(
+      "Persistent caption",
+    );
+  });
+
   it("validates smart edit results and segment refresh requests with reusable segment outputs", () => {
     const plan = {
       id: "plan-1",

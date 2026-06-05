@@ -282,6 +282,122 @@ describe("smart edit composer", () => {
     expect(finalMixCommand?.args.join(" ")).toContain("[src][voice]amix=inputs=2");
   });
 
+  it("bridges persistent timeline elements into ffmpeg subtitle and source audio timing", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        durationSeconds: 4,
+        playbackRate: 1,
+        subtitle: "Segment caption",
+        voiceover: "",
+        source: {
+          endSecond: 4,
+          kind: "generated-scene-clip",
+          sceneClipAudioUrl: dataAudio,
+          sceneClipUrl: dataVideo,
+          sceneClipVideoOnlyUrl: dataVideo,
+          startSecond: 0,
+        },
+      },
+    ];
+    plan.targetDurationSeconds = 5;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 5,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "audio-source", kind: "audio", label: "Source audio", locked: false, muted: false },
+        { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: false,
+          durationSeconds: 4,
+          hidden: false,
+          id: "persisted-video",
+          kind: "video",
+          label: "Timeline video",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          segmentId: "segment-video",
+          sourceUrl: dataVideo,
+          startSecond: 0.5,
+          trackId: "video-main",
+          trimEndSecond: 4,
+          trimStartSecond: 0,
+        },
+        {
+          detachedAudio: true,
+          durationSeconds: 1.5,
+          hidden: false,
+          id: "persisted-source-audio",
+          kind: "audio",
+          label: "Timeline source audio",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          segmentId: "segment-video",
+          sourceUrl: dataAudio,
+          startSecond: 1.25,
+          trackId: "audio-source",
+          trimEndSecond: 2.5,
+          trimStartSecond: 1,
+        },
+        {
+          detachedAudio: false,
+          durationSeconds: 1.1,
+          hidden: false,
+          id: "persisted-caption",
+          kind: "text",
+          label: "Timeline caption",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          segmentId: "segment-video",
+          startSecond: 1.5,
+          text: "Timeline caption",
+          trackId: "text-copy",
+          trimStartSecond: 0,
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const subtitleCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.includes("ass=filename=")),
+    );
+    const subtitlePath = subtitleCommand?.args
+      .find((arg) => arg.includes("ass=filename="))
+      ?.match(/filename='([^']+)'/)?.[1]
+      ?.replace(/\\:/gu, ":");
+    expect(subtitlePath).toBeTruthy();
+    await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("Timeline caption");
+    await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("0:00:01.00,0:00:02.10");
+
+    const sourceAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+    );
+    expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=750:all=1");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
+  });
+
   it("mutes selected separated scene audio while preserving the source audio timeline", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

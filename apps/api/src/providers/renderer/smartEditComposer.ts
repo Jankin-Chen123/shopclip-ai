@@ -148,6 +148,123 @@ const normalizeInSegmentClipDuration = (
   return Math.max(0.1, Math.min(maxDuration, durationSeconds ?? maxDuration));
 };
 
+type SmartEditTimelineElement = NonNullable<SmartEditPlan["timeline"]>["elements"][number];
+
+const timelineElementTrackKind = (
+  element: Pick<SmartEditTimelineElement, "kind" | "trackId">,
+): "video" | "sourceAudio" | "caption" | "voice" | "bgm" =>
+  element.trackId === "audio-source"
+    ? "sourceAudio"
+    : element.trackId === "text-copy"
+      ? "caption"
+      : element.trackId === "video-main"
+        ? "video"
+        : element.trackId === "bgm-bed"
+          ? "bgm"
+          : element.kind === "audio"
+            ? "voice"
+            : element.kind === "text"
+              ? "caption"
+              : element.kind;
+
+const timelineElementOffsetWithinSegment = (
+  element: SmartEditTimelineElement,
+  baseStartSecond: number,
+  segment: SmartEditSegment,
+): number =>
+  normalizeInSegmentOffset(
+    Math.max(0, element.startSecond - baseStartSecond),
+    segment,
+  );
+
+const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartEditPlan => {
+  const elements = plan.timeline?.elements ?? [];
+  if (elements.length === 0) {
+    return plan;
+  }
+
+  return {
+    ...plan,
+    segments: plan.segments.map((segment) => {
+      const segmentElements = elements.filter((element) => element.segmentId === segment.id);
+      if (segmentElements.length === 0) {
+        return segment;
+      }
+      const videoElement = segmentElements.find(
+        (element) => timelineElementTrackKind(element) === "video",
+      );
+      const segmentDuration = videoElement
+        ? normalizeDuration({ ...segment, durationSeconds: videoElement.durationSeconds })
+        : normalizeDuration(segment);
+      const baseStartSecond = videoElement?.startSecond ?? normalizeTimelineStart(segment);
+      const sourceStartSecond = videoElement?.trimStartSecond ?? segment.source.startSecond;
+      const sourceEndSecond =
+        videoElement?.trimEndSecond ??
+        (sourceStartSecond === undefined
+          ? segment.source.endSecond
+          : sourceStartSecond + segmentDuration * normalizePlaybackRate(segment));
+      const sourceAudioElement = segmentElements.find(
+        (element) => timelineElementTrackKind(element) === "sourceAudio",
+      );
+      const captionElement = segmentElements.find(
+        (element) => timelineElementTrackKind(element) === "caption",
+      );
+      const voiceElement = segmentElements.find(
+        (element) => timelineElementTrackKind(element) === "voice",
+      );
+      const nextSegment: SmartEditSegment = {
+        ...segment,
+        durationSeconds: segmentDuration,
+        playbackRate: videoElement?.playbackRate ?? segment.playbackRate,
+        timelineStartSecond: baseStartSecond,
+        source: {
+          ...segment.source,
+          ...(videoElement?.sourceUrl ? { sceneClipVideoOnlyUrl: videoElement.sourceUrl } : {}),
+          ...(sourceStartSecond !== undefined ? { startSecond: sourceStartSecond } : {}),
+          ...(sourceEndSecond !== undefined ? { endSecond: sourceEndSecond } : {}),
+        },
+      };
+
+      if (sourceAudioElement) {
+        nextSegment.sourceAudioMuted = sourceAudioElement.muted;
+        nextSegment.sourceAudioStartOffsetSeconds = timelineElementOffsetWithinSegment(
+          sourceAudioElement,
+          baseStartSecond,
+          nextSegment,
+        );
+        nextSegment.sourceAudioDurationSeconds = sourceAudioElement.durationSeconds;
+        nextSegment.source = {
+          ...nextSegment.source,
+          ...(sourceAudioElement.sourceUrl ? { sceneClipAudioUrl: sourceAudioElement.sourceUrl } : {}),
+        };
+      }
+
+      if (captionElement) {
+        nextSegment.captionHidden = captionElement.hidden;
+        nextSegment.captionStartOffsetSeconds = timelineElementOffsetWithinSegment(
+          captionElement,
+          baseStartSecond,
+          nextSegment,
+        );
+        nextSegment.captionDurationSeconds = captionElement.durationSeconds;
+        nextSegment.subtitle = captionElement.text?.trim() || captionElement.label || segment.subtitle;
+      }
+
+      if (voiceElement) {
+        nextSegment.voiceoverStartOffsetSeconds = timelineElementOffsetWithinSegment(
+          voiceElement,
+          baseStartSecond,
+          nextSegment,
+        );
+        nextSegment.voiceoverDurationSeconds = voiceElement.durationSeconds;
+        nextSegment.voiceover = voiceElement.text?.trim() || voiceElement.label || segment.voiceover;
+      }
+
+      return nextSegment;
+    }),
+  };
+};
+
 const timelineSegmentStartSeconds = (segments: SmartEditSegment[]): Map<string, number> => {
   const starts = new Map<string, number>();
   const hasManualStarts = segments.some((segment) => normalizeTimelineStart(segment) > 0);
@@ -597,7 +714,14 @@ const createSourceAudioTrack = async (
       paddedPaths.push(gapPath);
       cursor += gapDuration;
     }
-    const sourceAudioUrl = segment.sourceAudioMuted ? undefined : segment.source.sceneClipAudioUrl;
+    const sourceAudioElement = plan.timeline?.elements.find(
+      (element) =>
+        element.segmentId === segment.id &&
+        timelineElementTrackKind(element) === "sourceAudio",
+    );
+    const sourceAudioUrl = segment.sourceAudioMuted
+      ? undefined
+      : sourceAudioElement?.sourceUrl ?? segment.source.sceneClipAudioUrl;
     if (!sourceAudioUrl) {
       await createSilenceAudioSegment(command, normalizeDuration(segment), paddedPath, run);
       paddedPaths.push(paddedPath);
@@ -609,18 +733,19 @@ const createSourceAudioTrack = async (
     const audioOffsetSeconds = normalizeInSegmentOffset(segment.sourceAudioStartOffsetSeconds, segment);
     const audioOffsetMilliseconds = Math.round(audioOffsetSeconds * 1000);
     const audioDurationSeconds = normalizeInSegmentClipDuration(
-      segment.sourceAudioDurationSeconds,
+      sourceAudioElement?.durationSeconds ?? segment.sourceAudioDurationSeconds,
       segment.sourceAudioStartOffsetSeconds,
       segment,
     );
-    const sourceAudioStart = segment.source.startSecond ?? 0;
+    const sourceAudioStart = sourceAudioElement?.trimStartSecond ?? segment.source.startSecond ?? 0;
     const trimEnd =
-      segment.source.endSecond === undefined
+      sourceAudioElement?.trimEndSecond ??
+      (segment.source.endSecond === undefined
         ? sourceAudioStart + audioDurationSeconds * normalizePlaybackRate(segment)
         : Math.min(
             segment.source.endSecond,
             sourceAudioStart + audioDurationSeconds * normalizePlaybackRate(segment),
-          );
+          ));
     const filters = [
       `atrim=${sourceAudioStart}:${trimEnd}`,
       "asetpts=PTS-STARTPTS",
@@ -1048,6 +1173,7 @@ export const composeSmartEditToStorage = async (
   assets: AssetMetadata[],
   options: ComposeSmartEditOptions,
 ): Promise<SmartEditLocalExport> => {
+  const executablePlan = planWithPersistentTimelineElementOverrides(plan);
   const command = options.command ?? commandFromEnv();
   const fetchImpl = options.fetchImpl ?? fetch;
   const run = options.runCommand ?? runCommand;
@@ -1058,7 +1184,7 @@ export const composeSmartEditToStorage = async (
   const workdir = join(smartEditExportDir(), projectId, "smart-edit", exportId);
   await mkdir(workdir, { recursive: true });
 
-  const enabledSegments = [...plan.segments]
+  const enabledSegments = [...executablePlan.segments]
     .filter((segment) => segment.enabled)
     .sort((left, right) => left.order - right.order);
   if (enabledSegments.length === 0) {
@@ -1105,10 +1231,10 @@ export const composeSmartEditToStorage = async (
     stitchedPath,
     run,
   );
-  const voiceoverTrackPath = await createVoiceoverTrack(command, ttsCommand, plan, workdir, run);
+  const voiceoverTrackPath = await createVoiceoverTrack(command, ttsCommand, executablePlan, workdir, run);
   const sourceAudioTrackPath = await createSourceAudioTrack(
     command,
-    plan,
+    executablePlan,
     workdir,
     fetchImpl,
     run,
@@ -1117,7 +1243,7 @@ export const composeSmartEditToStorage = async (
     command,
     stitchedPath,
     outputPath,
-    plan,
+    executablePlan,
     run,
     sourceAudioTrackPath,
     voiceoverTrackPath,

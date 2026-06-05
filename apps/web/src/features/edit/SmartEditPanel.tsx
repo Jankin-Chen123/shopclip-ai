@@ -357,6 +357,111 @@ type SmartEditTimelineInterval = {
   startSecond: number;
 };
 
+type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
+
+const smartEditTrackIdForTimelineTrack = (
+  track: Pick<SmartEditTimeline["tracks"][number], "id" | "kind">,
+): SmartEditTrackId =>
+  (track.id === "audio-source"
+    ? "sourceAudio"
+    : track.kind === "audio"
+      ? "voice"
+      : track.kind === "text"
+        ? "caption"
+        : track.kind) as SmartEditTrackId;
+
+const smartEditTrackIdForElement = (
+  element: Pick<SmartEditTimeline["elements"][number], "kind" | "trackId">,
+): SmartEditTrackId =>
+  element.trackId === "audio-source"
+    ? "sourceAudio"
+    : element.trackId === "text-copy"
+      ? "caption"
+      : element.trackId === "video-main"
+        ? "video"
+        : element.trackId === "bgm-bed"
+          ? "bgm"
+          : element.kind === "audio"
+            ? "voice"
+            : element.kind === "text"
+              ? "caption"
+              : element.kind;
+
+const timelineDurationForElements = (timeline: SmartEditTimeline | undefined): number | undefined => {
+  if (!timeline?.elements.length) {
+    return undefined;
+  }
+  return Math.min(
+    600,
+    Math.max(
+      1,
+      ...timeline.elements
+        .filter((element) => !element.hidden)
+        .map((element) => element.startSecond + element.durationSeconds),
+    ),
+  );
+};
+
+const isDerivedTimelineElement = (element: SmartEditTimeline["elements"][number]): boolean =>
+  element.id === "bgm-bed" ||
+  (!!element.segmentId &&
+    [
+      `${element.segmentId}-video`,
+      `${element.segmentId}-audio`,
+      `${element.segmentId}-text`,
+      `${element.segmentId}-voice`,
+    ].includes(element.id));
+
+const hasPersistentTimelineElements = (timeline: SmartEditTimeline | undefined): boolean =>
+  !!timeline?.elements.some((element) => !isDerivedTimelineElement(element));
+
+const mergePersistentTimelineWithDerivedSegments = (
+  plan: SmartEditPlan,
+  rebuiltTimeline: SmartEditTimeline,
+): SmartEditTimeline => {
+  if (!hasPersistentTimelineElements(plan.timeline)) {
+    return rebuiltTimeline;
+  }
+  const persistentElements = plan.timeline!.elements;
+  const persistentSegmentIds = new Set(
+    persistentElements.map((element) => element.segmentId).filter(Boolean),
+  );
+  const mergedElements = [
+    ...persistentElements,
+    ...rebuiltTimeline.elements.filter((element) =>
+      element.segmentId
+        ? !persistentSegmentIds.has(element.segmentId)
+        : !persistentElements.some((persistent) => persistent.id === element.id),
+    ),
+  ];
+  const mergedTrackIds = new Set(plan.timeline!.tracks.map((track) => track.id));
+  const mergedTracks = [
+    ...plan.timeline!.tracks,
+    ...rebuiltTimeline.tracks.filter((track) => !mergedTrackIds.has(track.id)),
+  ];
+  return {
+    durationSeconds:
+      timelineDurationForElements({
+        ...plan.timeline!,
+        elements: mergedElements,
+      }) ?? rebuiltTimeline.durationSeconds,
+    elements: mergedElements,
+    scale: plan.timeline!.scale,
+    tracks: mergedTracks,
+  };
+};
+
+const segmentTimelineBaseStart = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  fallbackStarts = timelineStartsForSegments(plan.segments),
+): number => {
+  const videoElement = plan.timeline?.elements.find(
+    (element) => element.segmentId === segmentId && smartEditTrackIdForElement(element) === "video",
+  );
+  return clampTimelineStart(videoElement?.startSecond ?? fallbackStarts.get(segmentId) ?? 0);
+};
+
 const isTextEditingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLInputElement ||
   target instanceof HTMLTextAreaElement ||
@@ -576,11 +681,14 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
   };
 };
 
-const withRebuiltTimeline = (plan: SmartEditPlan): SmartEditPlan => ({
-  ...plan,
-  targetDurationSeconds: planDurationSeconds(plan.segments),
-  timeline: buildSmartEditTimeline(plan),
-});
+const withRebuiltTimeline = (plan: SmartEditPlan): SmartEditPlan => {
+  const timeline = mergePersistentTimelineWithDerivedSegments(plan, buildSmartEditTimeline(plan));
+  return {
+    ...plan,
+    targetDurationSeconds: timelineDurationForElements(timeline) ?? planDurationSeconds(plan.segments),
+    timeline,
+  };
+};
 
 const timelineStartsForSegments = (segments: SmartEditSegment[]): Map<string, number> => {
   const sortedSegments = [...segments].sort((left, right) => left.order - right.order);
@@ -1188,8 +1296,6 @@ export const pasteSmartEditClipboardAtPlayhead = (
   });
 };
 
-type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
-
 export type SmartEditTimelineEditMode = "magnetic" | "insert" | "overwrite";
 
 type SmartEditTrackSegment = {
@@ -1331,6 +1437,75 @@ export const moveSmartEditTrackClipOnTimeline = (
       playheadSecond,
     );
   }
+  if (plan.timeline?.elements.length) {
+    const currentStarts = timelineStartsForSegments(plan.segments);
+    const targetElement = plan.timeline.elements.find(
+      (element) =>
+        element.segmentId === trackClip.segmentId &&
+        smartEditTrackIdForElement(element) === trackClip.trackId,
+    );
+    if (targetElement) {
+      const nextElementStart = clampTimelineStart(
+        snapTimelineSeconds(targetElement.startSecond + deltaSeconds),
+      );
+      const nextTimeline: SmartEditTimeline = {
+        ...plan.timeline,
+        durationSeconds: timelineDurationForElements({
+          ...plan.timeline,
+          elements: plan.timeline.elements.map((element) =>
+            element.id === targetElement.id ? { ...element, startSecond: nextElementStart } : element,
+          ),
+        }) ?? plan.timeline.durationSeconds,
+        elements: plan.timeline.elements.map((element) =>
+          element.id === targetElement.id ? { ...element, startSecond: nextElementStart } : element,
+        ),
+      };
+      const baseStart = segmentTimelineBaseStart(
+        { ...plan, timeline: nextTimeline },
+        trackClip.segmentId,
+        currentStarts,
+      );
+      const nextOffset = clampInSegmentOffset(
+        snapTimelineSeconds(nextElementStart - baseStart),
+        plan.segments.find((segment) => segment.id === trackClip.segmentId)?.durationSeconds ?? 0,
+      );
+      return withRebuiltTimeline({
+        ...plan,
+        segments: plan.segments.map((segment) => {
+          if (segment.id !== trackClip.segmentId) {
+            return segment;
+          }
+          if (trackClip.trackId === "sourceAudio") {
+            return {
+              ...segment,
+              sourceAudioDurationSeconds: targetElement.durationSeconds,
+              sourceAudioMuted: targetElement.muted,
+              sourceAudioStartOffsetSeconds: nextOffset,
+            };
+          }
+          if (trackClip.trackId === "caption") {
+            return {
+              ...segment,
+              captionDurationSeconds: targetElement.durationSeconds,
+              captionHidden: targetElement.hidden,
+              captionStartOffsetSeconds: nextOffset,
+              subtitle: targetElement.text?.trim() || targetElement.label || segment.subtitle,
+            };
+          }
+          if (trackClip.trackId === "voice") {
+            return {
+              ...segment,
+              voiceover: targetElement.text?.trim() || targetElement.label || segment.voiceover,
+              voiceoverDurationSeconds: targetElement.durationSeconds,
+              voiceoverStartOffsetSeconds: nextOffset,
+            };
+          }
+          return segment;
+        }),
+        timeline: nextTimeline,
+      });
+    }
+  }
   if (trackClip.trackId === "sourceAudio") {
     return replaceSegment(plan, trackClip.segmentId, (segment) => ({
       ...segment,
@@ -1368,13 +1543,7 @@ const timelineTrackSegments = (
 ): SmartEditTrack[] => {
   if (plan?.timeline?.elements?.length) {
     return plan.timeline.tracks.map((track) => ({
-      id: (track.id === "audio-source"
-        ? "sourceAudio"
-        : track.kind === "audio"
-          ? "voice"
-          : track.kind === "text"
-            ? "caption"
-            : track.kind) as SmartEditTrackId,
+      id: smartEditTrackIdForTimelineTrack(track),
       segments: plan.timeline!.elements
         .filter((element) => element.trackId === track.id)
         .map((element) => ({
@@ -1388,13 +1557,7 @@ const timelineTrackSegments = (
           range: timelineRangeLabel(element.startSecond, element.durationSeconds),
           segmentId: element.segmentId,
           startSecond: element.startSecond,
-          trackId: (track.id === "audio-source"
-            ? "sourceAudio"
-            : track.kind === "audio"
-              ? "voice"
-              : track.kind === "text"
-                ? "caption"
-                : track.kind) as SmartEditTrackId,
+          trackId: smartEditTrackIdForTimelineTrack(track),
           title: element.label,
         })),
     }));
