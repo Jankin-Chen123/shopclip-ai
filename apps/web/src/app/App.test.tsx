@@ -33,6 +33,7 @@ import {
 } from "../features/inspiration/InspirationPanel";
 import {
   SmartEditPanel,
+  addSmartEditTimelineVoiceElement,
   applySmartEditCommandHistoryRedo,
   applySmartEditCommandHistoryUndo,
   copySmartEditSegmentsToClipboard,
@@ -2897,6 +2898,104 @@ describe("App", () => {
     const redone = applySmartEditCommandHistoryRedo(undone!.history, secondPlan);
     expect(redone?.plan).toBe(thirdPlan);
     expect(redone?.history.undoLabel()).toBe("Undo Adjust visual transform");
+  });
+
+  it("adds an independent voice element to the smart edit timeline at the playhead", () => {
+    const plan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 0,
+          transition: "cut",
+          subtitle: "Hook",
+          voiceover: "",
+          source: {
+            assetId: "asset-video",
+            kind: "video-slice",
+            startSecond: 0,
+          },
+        },
+      ],
+      targetDurationSeconds: 4,
+    } satisfies SmartEditPlan;
+
+    const nextPlan = addSmartEditTimelineVoiceElement(plan, 3.24, "test");
+
+    expect(nextPlan.timeline?.tracks.some((track) => track.id === "voiceover")).toBe(true);
+    expect(nextPlan.timeline?.elements.some((element) => element.id === "segment-1-video")).toBe(true);
+    expect(nextPlan.timeline?.elements).toContainEqual(
+      expect.objectContaining({
+        durationSeconds: 2,
+        hidden: false,
+        id: "voice-test",
+        kind: "audio",
+        label: "New voiceover",
+        muted: false,
+        playbackRate: 1,
+        startSecond: 3.2,
+        text: "New voiceover",
+        trackId: "voiceover",
+        trimStartSecond: 0,
+      }),
+    );
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "voice-test")?.segmentId).toBeUndefined();
+    expect(nextPlan.timeline?.durationSeconds).toBe(5.2);
+    expect(nextPlan.targetDurationSeconds).toBe(5.2);
+  });
+
+  it("moves an independent voice element without requiring a storyboard segment", () => {
+    const plan = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        segments: [
+          {
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            timelineStartSecond: 0,
+            transition: "cut",
+            subtitle: "Hook",
+            voiceover: "",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 0,
+            },
+          },
+        ],
+        targetDurationSeconds: 4,
+      } satisfies SmartEditPlan,
+      1,
+      "move",
+    );
+
+    const nextPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "voice-move", trackId: "voice" },
+      1.25,
+    );
+
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "voice-move")).toMatchObject({
+      startSecond: 2.3,
+      trackId: "voiceover",
+    });
+    expect(nextPlan.timeline?.durationSeconds).toBe(4.3);
+    expect(nextPlan.targetDurationSeconds).toBe(4.3);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

@@ -21,6 +21,7 @@ import {
   Film,
   Loader2,
   Music2,
+  Plus,
   Eye,
   EyeOff,
   RefreshCw,
@@ -1651,6 +1652,13 @@ type SmartEditTrackSegment = {
   hidden?: boolean;
 };
 
+type SmartEditTimelineElementPatch = Partial<
+  Pick<
+    SmartEditTimelineElement,
+    "durationSeconds" | "hidden" | "label" | "muted" | "startSecond" | "text"
+  >
+>;
+
 type SmartEditTrack = {
   id: SmartEditTrackId;
   segments: SmartEditTrackSegment[];
@@ -1759,15 +1767,118 @@ const smartEditTimelineEditModes: SmartEditTimelineEditMode[] = [
   "overwrite",
 ];
 
+const ensureTimelineTrack = (
+  timeline: SmartEditTimeline,
+  track: SmartEditTimeline["tracks"][number],
+): SmartEditTimeline["tracks"] =>
+  timeline.tracks.some((existingTrack) => existingTrack.id === track.id)
+    ? timeline.tracks
+    : [...timeline.tracks, track];
+
+const withUpdatedTimelineElements = (
+  plan: SmartEditPlan,
+  elements: SmartEditTimeline["elements"],
+  tracks?: SmartEditTimeline["tracks"],
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const timeline: SmartEditTimeline = {
+    ...baseTimeline,
+    durationSeconds:
+      timelineDurationForElements({
+        ...baseTimeline,
+        elements,
+      }) ?? baseTimeline.durationSeconds,
+    elements,
+    tracks: tracks ?? baseTimeline.tracks,
+  };
+  return {
+    ...plan,
+    targetDurationSeconds: timeline.durationSeconds,
+    timeline,
+  };
+};
+
+export const addSmartEditTimelineVoiceElement = (
+  plan: SmartEditPlan,
+  playheadSecond: number,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const startSecond = clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const element: SmartEditTimelineElement = {
+    detachedAudio: false,
+    durationSeconds: 2,
+    hidden: false,
+    id: `voice-${token}`,
+    kind: "audio",
+    label: "New voiceover",
+    muted: false,
+    playbackRate: 1,
+    startSecond,
+    text: "New voiceover",
+    trackId: "voiceover",
+    trimStartSecond: 0,
+  };
+  return withUpdatedTimelineElements(
+    plan,
+    [...baseTimeline.elements, element],
+    ensureTimelineTrack(baseTimeline, {
+      hidden: false,
+      id: "voiceover",
+      kind: "audio",
+      label: "Voice",
+      locked: false,
+      muted: false,
+    }),
+  );
+};
+
+const updateSmartEditTimelineElement = (
+  plan: SmartEditPlan,
+  elementId: string,
+  patch: SmartEditTimelineElementPatch,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.map((element) =>
+      element.id === elementId
+        ? {
+            ...element,
+            ...patch,
+            durationSeconds:
+              patch.durationSeconds === undefined
+                ? element.durationSeconds
+                : clampSmartEditDuration(patch.durationSeconds),
+            startSecond:
+              patch.startSecond === undefined
+                ? element.startSecond
+                : clampTimelineStart(snapTimelineSeconds(patch.startSecond)),
+          }
+        : element,
+    ),
+    baseTimeline.tracks,
+  );
+};
+
 export const moveSmartEditTrackClipOnTimeline = (
   plan: SmartEditPlan,
-  trackClip: Pick<SmartEditTrackSegment, "segmentId" | "trackId">,
+  trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
   deltaSeconds: number,
   editMode: SmartEditTimelineEditMode = "magnetic",
   playheadSecond?: number,
 ): SmartEditPlan => {
   if (!trackClip.segmentId) {
-    return plan;
+    if (!plan.timeline?.elements.length) {
+      return plan;
+    }
+    const targetElement = plan.timeline.elements.find((element) => element.id === trackClip.id);
+    if (!targetElement) {
+      return plan;
+    }
+    return updateSmartEditTimelineElement(plan, targetElement.id, {
+      startSecond: targetElement.startSecond + deltaSeconds,
+    });
   }
   if (trackClip.trackId === "video") {
     return moveSmartEditSegmentOnTimelineWithMode(
@@ -2198,6 +2309,10 @@ export const SmartEditPanel = ({
         .find((trackClip) => trackClip.id === selectedTrackClipId),
     [selectedTrackClipId, trackSegments],
   );
+  const selectedTimelineElement = useMemo(
+    () => plan?.timeline?.elements.find((element) => element.id === selectedTrackClip?.id),
+    [plan, selectedTrackClip],
+  );
   const trackLabels = {
     bgm: copy.bgmTrack,
     caption: copy.captionTrack,
@@ -2216,6 +2331,19 @@ export const SmartEditPanel = ({
       );
     }
     onPlanChange(nextPlan);
+  };
+
+  const addVoiceElementAtPlayhead = () => {
+    if (!plan) {
+      return;
+    }
+    const nextPlan = addSmartEditTimelineVoiceElement(plan, boundedPlayheadSeconds);
+    const addedElement = nextPlan.timeline?.elements.at(-1);
+    commitPlanChange(nextPlan, { label: "Add voice clip" });
+    if (addedElement) {
+      setSelectedTrackClipId(addedElement.id);
+      setSelectedSegmentIds([]);
+    }
   };
 
   const undoPlanChange = () => {
@@ -2288,6 +2416,9 @@ export const SmartEditPanel = ({
     if (trackClip.segmentId) {
       setSelectedSegmentIds([trackClip.segmentId]);
       onSelectedSegmentChange(trackClip.segmentId);
+    } else {
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
     }
   };
 
@@ -2549,6 +2680,15 @@ export const SmartEditPanel = ({
     }
     commitPlanChange(replaceSegment(plan, trackClip.segmentId, update), {
       label: `Edit ${trackClip.trackId} material`,
+    });
+  };
+
+  const updateSelectedTimelineElement = (patch: SmartEditTimelineElementPatch) => {
+    if (!plan || !selectedTimelineElement) {
+      return;
+    }
+    commitPlanChange(updateSmartEditTimelineElement(plan, selectedTimelineElement.id, patch), {
+      label: `Edit ${selectedTrackClip?.trackId ?? "timeline"} material`,
     });
   };
 
@@ -3364,6 +3504,75 @@ export const SmartEditPanel = ({
                   </label>
                 </>
               ) : null}
+            </section>
+          ) : null}
+          {selectedTrackClip && !selectedTrackClip.segmentId && selectedTimelineElement && plan ? (
+            <section className="smart-edit-inspector-section track-clip-inspector">
+              <h4>{copy.trackClipInspector}</h4>
+              <div className="smart-edit-track-clip-summary">
+                <strong>{selectedTimelineElement.label}</strong>
+                <span>{trackLabels[selectedTrackClip.trackId]}</span>
+                <small>{selectedTrackClip.range}</small>
+              </div>
+              <label>
+                {selectedTrackClip.trackId === "voice" ? copy.voiceover : copy.subtitle}
+                <textarea
+                  rows={3}
+                  value={selectedTimelineElement.text ?? selectedTimelineElement.label}
+                  onChange={(event) =>
+                    updateSelectedTimelineElement({
+                      label: event.target.value || selectedTimelineElement.label,
+                      text: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                {copy.timelineElementStart}
+                <input
+                  min={0}
+                  step={0.1}
+                  type="number"
+                  value={selectedTimelineElement.startSecond}
+                  onChange={(event) =>
+                    updateSelectedTimelineElement({ startSecond: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <label>
+                {copy.timelineElementDuration}
+                <input
+                  min={MIN_SMART_EDIT_CLIP_SECONDS}
+                  step={0.1}
+                  type="number"
+                  value={selectedTimelineElement.durationSeconds}
+                  onChange={(event) =>
+                    updateSelectedTimelineElement({ durationSeconds: Number(event.target.value) })
+                  }
+                />
+              </label>
+              {selectedTimelineElement.kind === "audio" ? (
+                <label className="toggle-row">
+                  <input
+                    checked={selectedTimelineElement.muted ?? false}
+                    type="checkbox"
+                    onChange={(event) =>
+                      updateSelectedTimelineElement({ muted: event.target.checked })
+                    }
+                  />
+                  {selectedTimelineElement.muted ? copy.unmuteSelected : copy.muteSelected}
+                </label>
+              ) : null}
+              <label className="toggle-row">
+                <input
+                  checked={selectedTimelineElement.hidden ?? false}
+                  type="checkbox"
+                  onChange={(event) =>
+                    updateSelectedTimelineElement({ hidden: event.target.checked })
+                  }
+                />
+                {selectedTimelineElement.hidden ? copy.showTimelineElement : copy.hideTimelineElement}
+              </label>
             </section>
           ) : null}
           {selectedSegment && plan ? (
@@ -4270,6 +4479,13 @@ export const SmartEditPanel = ({
             onClick={splitAtPlayhead}
           >
             {copy.splitAtPlayhead}
+          </Button>
+          <Button
+            disabled={!plan}
+            icon={<Plus size={16} />}
+            onClick={addVoiceElementAtPlayhead}
+          >
+            {copy.addVoiceClip}
           </Button>
           <Button
             disabled={!smartEditClipboard}

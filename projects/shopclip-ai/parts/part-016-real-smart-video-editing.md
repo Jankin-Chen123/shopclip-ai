@@ -975,3 +975,24 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Frontend still needs richer direct creation/conversion controls for arbitrary timeline voice/text elements.
   - Voice lanes do not yet expose volume envelopes, fades, or waveform-level editing.
   - Full completion still requires live runtime evidence for render-to-material-to-smart-edit and broader OpenCut-style editor parity.
+
+## 2026-06-05 Frontend Independent Voice Timeline Controls
+
+- Reference model:
+  - OpenCut lets users add and move independent timeline audio items directly, instead of only editing audio attached to a scene-sized segment.
+- Fix:
+  - Added `addSmartEditTimelineVoiceElement` so the Smart Edit UI can create a persistent unowned `voiceover` timeline element at the current playhead.
+  - Added a timeline toolbar action for adding a voice clip and selecting the new timeline item immediately.
+  - Updated track-clip selection so unowned voice elements clear storyboard segment selection and open their own inspector state.
+  - Added inspector editing for unowned timeline elements: text/label, start time, duration, mute, and hidden state.
+  - Localized the new timeline action and independent-material inspector labels for English and Chinese workspaces.
+  - Updated track-clip movement so unowned timeline elements can move on the timeline without requiring a `segmentId`.
+- Verification:
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/web/src/app/App.test.tsx -t "adds an independent voice element"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/web/src/app/App.test.tsx -t "independent voice element"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|timeline|voice|persistent|track"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Direct text-copy creation controls and richer voice lane operations such as volume envelopes, fades, and waveform editing remain open.
+  - Full completion still requires live runtime evidence for render-to-material-to-smart-edit and broader OpenCut-style editor parity.
