@@ -639,6 +639,9 @@ describe("smart edit composer", () => {
           playbackRate: 1,
           startSecond: 2.25,
           text: "Timeline only caption",
+          textColor: "#ffcc00",
+          textFontSize: 48,
+          textPositionYPercent: 18,
           trackId: "text-copy",
           trimStartSecond: 0,
         },
@@ -677,8 +680,12 @@ describe("smart edit composer", () => {
     expect(globalSubtitlePath).toBeTruthy();
     await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain("Timeline only caption");
     await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain(
-      "Dialogue: 0,0:00:02.25,0:00:03.50",
+      "Dialogue: 0,0:00:02.25,0:00:03.50,Text1",
     );
+    await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain(
+      "Style: Text1,Noto Sans CJK SC,48,&H0000CCFF",
+    );
+    await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain(",2,48,48,230,0");
   });
 
   it("mixes overlapping global source-audio timeline elements as lanes", async () => {

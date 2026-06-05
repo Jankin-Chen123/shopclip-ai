@@ -1372,3 +1372,30 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.
+
+## 2026-06-06 Independent Text Material Styling
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds practical subtitle-card editing controls without enabling stickers, effects, masks, or other advanced visual features.
+- Fix:
+  - Added optional `textColor`, `textFontSize`, and `textPositionYPercent` fields to persistent smart-edit timeline elements.
+  - Added Smart Edit inspector controls for independent text materials so a user can change subtitle size, vertical placement, and color on the timeline clip.
+  - The frontend clamps text size to `[12,72]`, vertical placement to `[8,92]`, and keeps invalid colors out of the plan.
+  - The ffmpeg smart-edit composer now maps independent text timeline materials into per-caption ASS styles, preserving color, font size, and vertical placement in exported videos.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "text material style"` initially failed because text style values were not clamped or persisted.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "text material style"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts -t "bridges persistent timeline elements"`
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|SRT|source audio|text material style"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/api lint`
+- Remaining:
+  - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.

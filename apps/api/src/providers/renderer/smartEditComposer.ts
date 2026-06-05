@@ -857,12 +857,54 @@ const escapeAssText = (text: string): string =>
     .replace(/\}/gu, "\\}")
     .replace(/\r?\n/gu, "\\N");
 
+type TimelineSubtitleCaption = {
+  color?: string;
+  endSecond: number;
+  fontSize?: number;
+  positionYPercent?: number;
+  startSecond: number;
+  text: string;
+};
+
+const clampTimelineTextFontSize = (fontSize: number | undefined, fallback: number): number =>
+  Number.isFinite(fontSize ?? Number.NaN)
+    ? Math.max(12, Math.min(72, Math.round(fontSize!)))
+    : fallback;
+
+const clampTimelineTextPositionYPercent = (positionYPercent: number | undefined): number =>
+  Number.isFinite(positionYPercent ?? Number.NaN)
+    ? Math.max(8, Math.min(92, positionYPercent!))
+    : 12;
+
+const cssHexColorToAss = (color: string | undefined): string => {
+  const normalized = color?.trim().match(/^#([0-9a-fA-F]{6})$/u)?.[1];
+  if (!normalized) {
+    return "&H00FFFFFF";
+  }
+  const red = normalized.slice(0, 2);
+  const green = normalized.slice(2, 4);
+  const blue = normalized.slice(4, 6);
+  return `&H00${blue}${green}${red}`.toUpperCase();
+};
+
 const buildTimelineSubtitleAss = (
-  captions: Array<{ endSecond: number; startSecond: number; text: string }>,
+  captions: TimelineSubtitleCaption[],
   dimensions: OutputDimensions,
 ): string => {
   const fontSize = Math.max(24, Math.round(dimensions.height * (42 / 1280)));
   const marginV = Math.max(48, Math.round(dimensions.height * (96 / 1280)));
+  const captionStyles = captions.map((caption, index) => {
+    const styleName = `Text${index + 1}`;
+    const styleFontSize = clampTimelineTextFontSize(caption.fontSize, fontSize);
+    const styleMarginV = Math.max(
+      0,
+      Math.round(dimensions.height * (clampTimelineTextPositionYPercent(caption.positionYPercent) / 100)),
+    );
+    return {
+      line: `Style: ${styleName},Noto Sans CJK SC,${styleFontSize},${cssHexColorToAss(caption.color)},&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${styleMarginV},0`,
+      name: styleName,
+    };
+  });
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -873,12 +915,13 @@ const buildTimelineSubtitleAss = (
     "[V4+ Styles]",
     "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
     `Style: Default,Noto Sans CJK SC,${fontSize},&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},0`,
+    ...captionStyles.map((style) => style.line),
     "",
     "[Events]",
     "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
     ...captions.map(
-      (caption) =>
-        `Dialogue: 0,${formatAssTime(caption.startSecond)},${formatAssTime(caption.endSecond)},Default,,0,0,0,,${escapeAssText(caption.text)}`,
+      (caption, index) =>
+        `Dialogue: 0,${formatAssTime(caption.startSecond)},${formatAssTime(caption.endSecond)},${captionStyles[index]?.name ?? "Default"},,0,0,0,,${escapeAssText(caption.text)}`,
     ),
     "",
   ].join("\n");
@@ -886,7 +929,7 @@ const buildTimelineSubtitleAss = (
 
 const globalTextTimelineCaptions = (
   plan: SmartEditPlan,
-): Array<{ endSecond: number; startSecond: number; text: string }> =>
+): TimelineSubtitleCaption[] =>
   (plan.timeline?.elements ?? [])
     .filter(
       (element) =>
@@ -896,10 +939,13 @@ const globalTextTimelineCaptions = (
         (element.text?.trim() || element.label.trim()),
     )
     .map((element) => ({
+      color: element.textColor,
       endSecond: Math.min(
         globalTimelineDurationSeconds(plan),
         element.startSecond + element.durationSeconds,
       ),
+      fontSize: element.textFontSize,
+      positionYPercent: element.textPositionYPercent,
       startSecond: Math.max(0, element.startSecond),
       text: element.text?.trim() || element.label.trim(),
     }))

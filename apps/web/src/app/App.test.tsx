@@ -3684,6 +3684,52 @@ Second imported caption`,
     expect(nextPlan.targetDurationSeconds).toBe(4);
   });
 
+  it("updates independent text material style on the smart edit timeline", () => {
+    const plan = addSmartEditTimelineTextElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-05T00:00:00.000Z",
+        id: "plan-1",
+        projectId: "project-1",
+        segments: [
+          {
+            assetTags: [],
+            durationSeconds: 4,
+            enabled: true,
+            id: "segment-1",
+            order: 1,
+            sceneId: "scene-1",
+            source: { imageUrl: "https://cdn.example.test/image.png", kind: "image-asset" },
+            subtitle: "Base caption",
+            transition: "cut",
+            voiceover: "",
+          },
+        ],
+        strategy: "Use timeline text styling.",
+        targetDurationSeconds: 4,
+      } satisfies SmartEditPlan,
+      1,
+      "style",
+    );
+
+    const nextPlan = updateSmartEditTimelineElement(plan, "text-style", {
+      textColor: "#ffcc00",
+      textFontSize: 96,
+      textPositionYPercent: 4,
+    });
+
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "text-style")).toMatchObject({
+      textColor: "#ffcc00",
+      textFontSize: 72,
+      textPositionYPercent: 8,
+      trackId: "text-copy",
+    });
+  });
+
   it("splits an independent smart edit timeline element at the playhead", () => {
     const plan = addSmartEditTimelineVoiceElement(
       {

@@ -83,6 +83,17 @@ const clampSmartEditDuration = (durationSeconds: number): number =>
 const clampPlaybackRate = (playbackRate: number): number =>
   Math.max(0.25, Math.min(4, playbackRate || 1));
 
+const clampTextFontSize = (fontSize: number): number =>
+  Number.isFinite(fontSize) ? Math.max(12, Math.min(72, Math.round(fontSize))) : 42;
+
+const clampTextPositionYPercent = (positionPercent: number): number =>
+  Number.isFinite(positionPercent) ? Math.max(8, Math.min(92, positionPercent)) : 12;
+
+const normalizeTextColor = (color: string | undefined): string | undefined => {
+  const normalized = color?.trim();
+  return normalized && /^#[0-9a-fA-F]{6}$/u.test(normalized) ? normalized.toLowerCase() : undefined;
+};
+
 const clampInSegmentOffset = (offsetSeconds: number, durationSeconds: number): number =>
   Number.isFinite(offsetSeconds)
     ? Math.max(0, Math.min(Math.max(0, durationSeconds - 0.1), offsetSeconds))
@@ -1986,6 +1997,9 @@ type SmartEditTimelineElementPatch = Partial<
     | "playbackRate"
     | "startSecond"
     | "text"
+    | "textColor"
+    | "textFontSize"
+    | "textPositionYPercent"
   >
 >;
 
@@ -2413,6 +2427,18 @@ export const updateSmartEditTimelineElement = (
               patch.startSecond === undefined
                 ? element.startSecond
                 : clampTimelineStart(snapTimelineSeconds(patch.startSecond)),
+            textColor:
+              patch.textColor === undefined
+                ? element.textColor
+                : normalizeTextColor(patch.textColor) ?? element.textColor,
+            textFontSize:
+              patch.textFontSize === undefined
+                ? element.textFontSize
+                : clampTextFontSize(patch.textFontSize),
+            textPositionYPercent:
+              patch.textPositionYPercent === undefined
+                ? element.textPositionYPercent
+                : clampTextPositionYPercent(patch.textPositionYPercent),
           }
         : element,
     ),
@@ -4992,6 +5018,52 @@ export const SmartEditPanel = ({
                     {selectedTimelineElement.muted ? copy.unmuteSelected : copy.muteSelected}
                   </label>
                 </>
+              ) : null}
+              {selectedTimelineElement.kind === "text" ? (
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Text size
+                    <input
+                      min={12}
+                      max={72}
+                      step={1}
+                      type="number"
+                      value={selectedTimelineElement.textFontSize ?? 42}
+                      onChange={(event) =>
+                        updateSelectedTimelineElement({
+                          textFontSize: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Text position
+                    <input
+                      min={8}
+                      max={92}
+                      step={1}
+                      type="number"
+                      value={selectedTimelineElement.textPositionYPercent ?? 12}
+                      onChange={(event) =>
+                        updateSelectedTimelineElement({
+                          textPositionYPercent: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Text color
+                    <input
+                      type="color"
+                      value={selectedTimelineElement.textColor ?? "#ffffff"}
+                      onChange={(event) =>
+                        updateSelectedTimelineElement({
+                          textColor: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
               ) : null}
               <label className="toggle-row">
                 <input
