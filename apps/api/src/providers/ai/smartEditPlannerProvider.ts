@@ -534,7 +534,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualEffects: [{ id, type, enabled, params: { amount, radius } }], visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualEffects: [{ id, type, enabled, params: { amount, radius }, keyframes: [{ id, timeSecond, easing, param: \"amount\", value }] }], visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -666,9 +666,59 @@ const SMART_EDIT_VISUAL_EFFECT_TYPES = new Set<
   NonNullable<SmartEditPlan["segments"][number]["visualEffects"]>[number]["type"]
 >(["blur", "sharpen", "brightness", "contrast", "saturation", "vignette"]);
 
+type SmartEditVisualEffectType = NonNullable<
+  SmartEditPlan["segments"][number]["visualEffects"]
+>[number]["type"];
+
+const clampVisualEffectAmount = (type: SmartEditVisualEffectType, amount: number): number => {
+  if (type === "blur") {
+    return Math.max(0, Math.min(20, amount));
+  }
+  if (type === "sharpen") {
+    return Math.max(0, Math.min(2, amount));
+  }
+  if (type === "brightness") {
+    return Math.max(-1, Math.min(1, amount));
+  }
+  if (type === "contrast" || type === "saturation") {
+    return Math.max(0, Math.min(3, amount));
+  }
+  return Math.max(0, Math.min(1, amount));
+};
+
+const normalizeModelVisualEffectKeyframes = (
+  rawKeyframes: unknown,
+  effectType: SmartEditVisualEffectType,
+  segmentDurationSeconds: number,
+) => {
+  if (!Array.isArray(rawKeyframes)) {
+    return undefined;
+  }
+  const keyframes = rawKeyframes
+    .filter(isRecord)
+    .filter((keyframe) => getString(keyframe.param)?.toLowerCase() === "amount")
+    .slice(0, 40)
+    .map((keyframe, index) => ({
+      easing: enumStringOr(keyframe.easing, new Set<"linear" | "hold">(["linear", "hold"]), "linear"),
+      id: getString(keyframe.id) ?? `model_effect_amount_keyframe_${index + 1}`,
+      param: "amount" as const,
+      timeSecond:
+        typeof keyframe.timeSecond === "number"
+          ? Math.max(0, Math.min(segmentDurationSeconds, keyframe.timeSecond))
+          : 0,
+      value:
+        typeof keyframe.value === "number"
+          ? clampVisualEffectAmount(effectType, keyframe.value)
+          : clampVisualEffectAmount(effectType, 1),
+    }))
+    .sort((left, right) => left.timeSecond - right.timeSecond);
+  return keyframes.length > 0 ? keyframes : undefined;
+};
+
 const normalizeModelVisualEffects = (
   rawEffects: unknown,
   localEffects: SmartEditPlan["segments"][number]["visualEffects"],
+  segmentDurationSeconds: number,
 ): SmartEditPlan["segments"][number]["visualEffects"] | undefined => {
   if (!Array.isArray(rawEffects)) {
     return localEffects;
@@ -676,21 +726,29 @@ const normalizeModelVisualEffects = (
   return rawEffects
     .filter(isRecord)
     .slice(0, 20)
-    .map((effect, index) => ({
-      enabled: typeof effect.enabled === "boolean" ? effect.enabled : true,
-      id: getString(effect.id) ?? `model_visual_effect_${index + 1}`,
-      params: {
-        amount:
-          isRecord(effect.params) && typeof effect.params.amount === "number"
-            ? Math.max(-2, Math.min(20, effect.params.amount))
-            : 1,
-        radius:
-          isRecord(effect.params) && typeof effect.params.radius === "number"
-            ? Math.max(0, Math.min(20, effect.params.radius))
-            : 4,
-      },
-      type: enumStringOr(effect.type, SMART_EDIT_VISUAL_EFFECT_TYPES, "blur"),
-    }));
+    .map((effect, index) => {
+      const type = enumStringOr(effect.type, SMART_EDIT_VISUAL_EFFECT_TYPES, "blur");
+      return {
+        enabled: typeof effect.enabled === "boolean" ? effect.enabled : true,
+        id: getString(effect.id) ?? `model_visual_effect_${index + 1}`,
+        keyframes: normalizeModelVisualEffectKeyframes(
+          effect.keyframes,
+          type,
+          segmentDurationSeconds,
+        ),
+        params: {
+          amount:
+            isRecord(effect.params) && typeof effect.params.amount === "number"
+              ? clampVisualEffectAmount(type, effect.params.amount)
+              : 1,
+          radius:
+            isRecord(effect.params) && typeof effect.params.radius === "number"
+              ? Math.max(0, Math.min(20, effect.params.radius))
+              : 4,
+        },
+        type,
+      };
+    });
 };
 
 const normalizeModelVisualMask = (
@@ -819,7 +877,11 @@ const normalizeModelSegment = (
     source: normalizeModelSource(rawSegment.source, localSegment.source),
     transform: normalizeModelTransform(rawSegment.transform, localSegment.transform),
     effects: normalizeModelEffects(rawSegment.effects, localSegment.effects),
-    visualEffects: normalizeModelVisualEffects(rawSegment.visualEffects, localSegment.visualEffects),
+    visualEffects: normalizeModelVisualEffects(
+      rawSegment.visualEffects,
+      localSegment.visualEffects,
+      localSegment.durationSeconds,
+    ),
     visualMask: normalizeModelVisualMask(rawSegment.visualMask, localSegment.visualMask),
     visualKeyframes: normalizeModelVisualKeyframes(rawSegment.visualKeyframes, localSegment),
     assetTags: Array.isArray(rawSegment.assetTags)

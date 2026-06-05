@@ -2973,6 +2973,22 @@ describe("App", () => {
                     id: "effect-brightness",
                     type: "brightness",
                     enabled: true,
+                    keyframes: [
+                      {
+                        id: "effect-brightness-kf-start",
+                        easing: "linear",
+                        param: "amount",
+                        timeSecond: 0,
+                        value: 0,
+                      },
+                      {
+                        id: "effect-brightness-kf-peak",
+                        easing: "linear",
+                        param: "amount",
+                        timeSecond: 1.2,
+                        value: 0.35,
+                      },
+                    ],
                     params: {
                       amount: 0.15,
                       radius: 4,
@@ -3086,6 +3102,9 @@ describe("App", () => {
     expect(markup).toContain("Brightness");
     expect(markup).toContain("Vignette");
     expect(markup).toContain("Disabled");
+    expect(markup).toContain("Add amount keyframe");
+    expect(markup).toContain("Amount keyframes");
+    expect(markup).toContain("1.2s");
     expect(markup).toContain("Visual mask");
     expect(markup).toContain("Mask type");
     expect(markup).toContain("Invert mask");

@@ -328,6 +328,25 @@ const normalizedEffects = (segment: SmartEditSegment) => ({
   sharpen: Math.max(0, Math.min(2, segment.effects?.sharpen ?? 0)),
 });
 
+const clampVisualEffectAmount = (
+  type: NonNullable<SmartEditSegment["visualEffects"]>[number]["type"],
+  amount: number,
+): number => {
+  if (type === "blur") {
+    return Math.max(0, Math.min(20, amount));
+  }
+  if (type === "sharpen") {
+    return Math.max(0, Math.min(2, amount));
+  }
+  if (type === "brightness") {
+    return Math.max(-1, Math.min(1, amount));
+  }
+  if (type === "contrast" || type === "saturation") {
+    return Math.max(0, Math.min(3, amount));
+  }
+  return Math.max(0, Math.min(1, amount));
+};
+
 const normalizedVisualEffects = (segment: SmartEditSegment) =>
   (segment.visualEffects ?? [])
     .filter((effect) => effect.enabled !== false)
@@ -335,29 +354,106 @@ const normalizedVisualEffects = (segment: SmartEditSegment) =>
     .map((effect) => ({
       id: effect.id,
       type: effect.type,
-      amount: Number.isFinite(effect.params?.amount) ? effect.params.amount : 1,
+      amount: clampVisualEffectAmount(
+        effect.type,
+        Number.isFinite(effect.params?.amount) ? effect.params.amount : 1,
+      ),
+      keyframes: (effect.keyframes ?? [])
+        .filter((keyframe) => keyframe.param === "amount")
+        .slice(0, 40)
+        .map((keyframe) => ({
+          easing: keyframe.easing,
+          id: keyframe.id,
+          param: keyframe.param,
+          timeSecond: Math.max(0, Math.min(normalizeDuration(segment), keyframe.timeSecond)),
+          value: clampVisualEffectAmount(effect.type, keyframe.value),
+        }))
+        .sort((left, right) => left.timeSecond - right.timeSecond),
       radius: Number.isFinite(effect.params?.radius) ? effect.params.radius : 4,
     }));
 
+type TimedScalarKeyframe = {
+  easing?: "linear" | "hold";
+  timeSecond: number;
+};
+
+const escapedFfmpegExpression = (expression: string): string =>
+  expression.replace(/,/gu, "\\,");
+
+const linearKeyframeExpression = <TKeyframe extends TimedScalarKeyframe>(
+  keyframes: TKeyframe[],
+  valueAt: (keyframe: TKeyframe) => number,
+  fallback: number,
+): string => {
+  if (keyframes.length < 2) {
+    return fallback.toFixed(3);
+  }
+  const unique = keyframes.filter(
+    (keyframe, index) =>
+      index === 0 || Math.abs(keyframe.timeSecond - keyframes[index - 1]!.timeSecond) > 0.001,
+  );
+  if (unique.length < 2) {
+    return valueAt(unique[0]!).toFixed(3);
+  }
+  const first = unique[0]!;
+  const last = unique.at(-1)!;
+  let expression = valueAt(last).toFixed(3);
+  for (let index = unique.length - 2; index >= 0; index -= 1) {
+    const left = unique[index]!;
+    const right = unique[index + 1]!;
+    const leftTime = left.timeSecond.toFixed(3);
+    const rightTime = right.timeSecond.toFixed(3);
+    const leftValue = valueAt(left).toFixed(3);
+    const rightValue = valueAt(right).toFixed(3);
+    const span = Math.max(0.001, right.timeSecond - left.timeSecond).toFixed(3);
+    const interpolation =
+      right.easing === "hold"
+        ? leftValue
+        : `(${leftValue}+(${rightValue}-${leftValue})*(t-${leftTime})/${span})`;
+    expression = `if(lte(t,${leftTime}),${leftValue},if(gte(t,${rightTime}),${expression},${interpolation}))`;
+  }
+  return escapedFfmpegExpression(
+    `if(lte(t,${first.timeSecond.toFixed(3)}),${valueAt(first).toFixed(3)},${expression})`,
+  );
+};
+
+const visualEffectAmountExpression = (
+  effect: ReturnType<typeof normalizedVisualEffects>[number],
+): string => {
+  if (effect.keyframes.length < 2) {
+    return effect.amount.toFixed(2);
+  }
+  return `'${linearKeyframeExpression(effect.keyframes, (keyframe) => keyframe.value, effect.amount)}'`;
+};
+
 const buildVisualEffectStackFilters = (segment: SmartEditSegment): string[] =>
   normalizedVisualEffects(segment).flatMap((effect) => {
+    const amountExpression = visualEffectAmountExpression(effect);
     if (effect.type === "blur") {
-      return [`gblur=sigma=${Math.max(0, Math.min(20, effect.amount)).toFixed(2)}`];
+      return [`gblur=sigma=${amountExpression}`];
     }
     if (effect.type === "sharpen") {
-      return [`unsharp=5:5:${Math.max(0, Math.min(2, effect.amount)).toFixed(2)}:5:5:0.00`];
+      return [`unsharp=5:5:${amountExpression}:5:5:0.00`];
     }
     if (effect.type === "brightness") {
-      return [`eq=brightness=${Math.max(-1, Math.min(1, effect.amount)).toFixed(2)}`];
+      return [`eq=brightness=${amountExpression}`];
     }
     if (effect.type === "contrast") {
-      return [`eq=contrast=${Math.max(0, Math.min(3, effect.amount)).toFixed(2)}`];
+      return [`eq=contrast=${amountExpression}`];
     }
     if (effect.type === "saturation") {
-      return [`eq=saturation=${Math.max(0, Math.min(3, effect.amount)).toFixed(2)}`];
+      return [`eq=saturation=${amountExpression}`];
     }
     if (effect.type === "vignette") {
-      const angle = Math.max(0, Math.min(1, effect.amount));
+      if (effect.keyframes.length >= 2) {
+        const angleExpression = linearKeyframeExpression(
+          effect.keyframes,
+          (keyframe) => Math.PI / 8 + keyframe.value * (Math.PI / 4),
+          Math.PI / 8 + effect.amount * (Math.PI / 4),
+        );
+        return [`vignette=angle='${angleExpression}'`];
+      }
+      const angle = effect.amount;
       return [`vignette=angle=${(Math.PI / 8 + angle * (Math.PI / 4)).toFixed(4)}`];
     }
     return [];
@@ -394,9 +490,6 @@ const normalizedVisualKeyframes = (segment: SmartEditSegment) =>
     }))
     .sort((left, right) => left.timeSecond - right.timeSecond);
 
-const escapedFfmpegExpression = (expression: string): string =>
-  expression.replace(/,/gu, "\\,");
-
 const buildVisualMaskFilter = (
   segment: SmartEditSegment,
   dimensions: OutputDimensions,
@@ -424,43 +517,6 @@ const buildVisualMaskFilter = (
     `cb='${escapedFfmpegExpression(chromaExpression)}'`,
     `cr='${escapedFfmpegExpression(chromaExpression)}'`,
   ].join(":");
-};
-
-const linearKeyframeExpression = (
-  keyframes: ReturnType<typeof normalizedVisualKeyframes>,
-  valueAt: (keyframe: ReturnType<typeof normalizedVisualKeyframes>[number]) => number,
-  fallback: number,
-): string => {
-  if (keyframes.length < 2) {
-    return fallback.toFixed(3);
-  }
-  const unique = keyframes.filter(
-    (keyframe, index) =>
-      index === 0 || Math.abs(keyframe.timeSecond - keyframes[index - 1]!.timeSecond) > 0.001,
-  );
-  if (unique.length < 2) {
-    return valueAt(unique[0]!).toFixed(3);
-  }
-  const first = unique[0]!;
-  const last = unique.at(-1)!;
-  let expression = valueAt(last).toFixed(3);
-  for (let index = unique.length - 2; index >= 0; index -= 1) {
-    const left = unique[index]!;
-    const right = unique[index + 1]!;
-    const leftTime = left.timeSecond.toFixed(3);
-    const rightTime = right.timeSecond.toFixed(3);
-    const leftValue = valueAt(left).toFixed(3);
-    const rightValue = valueAt(right).toFixed(3);
-    const span = Math.max(0.001, right.timeSecond - left.timeSecond).toFixed(3);
-    const interpolation =
-      right.easing === "hold"
-        ? leftValue
-        : `(${leftValue}+(${rightValue}-${leftValue})*(t-${leftTime})/${span})`;
-    expression = `if(lte(t,${leftTime}),${leftValue},if(gte(t,${rightTime}),${expression},${interpolation}))`;
-  }
-  return escapedFfmpegExpression(
-    `if(lte(t,${first.timeSecond.toFixed(3)}),${valueAt(first).toFixed(3)},${expression})`,
-  );
 };
 
 const buildScaleFilter = (segment: SmartEditSegment, dimensions: OutputDimensions): string => {

@@ -218,6 +218,17 @@ const visualEffectsForSegment = (segment: SmartEditSegment): SmartEditVisualEffe
   (segment.visualEffects ?? []).slice(0, 20).map((effect) => ({
     enabled: effect.enabled ?? true,
     id: effect.id,
+    keyframes: (effect.keyframes ?? [])
+      .filter((keyframe) => keyframe.param === "amount")
+      .slice(0, 40)
+      .map((keyframe) => ({
+        easing: keyframe.easing ?? "linear",
+        id: keyframe.id,
+        param: "amount" as const,
+        timeSecond: clampVisualKeyframeTime(keyframe.timeSecond, segment.durationSeconds),
+        value: clampVisualEffectAmount(effect.type, keyframe.value),
+      }))
+      .sort((left, right) => left.timeSecond - right.timeSecond),
     params: {
       amount: clampVisualEffectAmount(effect.type, effect.params?.amount ?? defaultVisualEffectAmount(effect.type)),
       radius: Math.max(0, Math.min(20, effect.params?.radius ?? 4)),
@@ -227,6 +238,9 @@ const visualEffectsForSegment = (segment: SmartEditSegment): SmartEditVisualEffe
 
 const visualKeyframesForSegment = (segment: SmartEditSegment) =>
   [...(segment.visualKeyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
+
+const visualEffectKeyframes = (effect: SmartEditVisualEffect) =>
+  [...(effect.keyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
 
 const durationFromSourceRange = (
   startSecond: number | undefined,
@@ -2472,6 +2486,60 @@ export const SmartEditPanel = ({
     }), { label: "Reorder visual effects" });
   };
 
+  const addVisualEffectAmountKeyframe = (effectId: string) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    const selectedStart = segmentTimelineBaseStart(plan, selectedSegment.id);
+    const timeSecond = clampVisualKeyframeTime(
+      boundedPlayheadSeconds - selectedStart,
+      selectedSegment.durationSeconds,
+    );
+    const token = `${Date.now()}`;
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
+      ...segment,
+      visualEffects: visualEffectsForSegment(segment).map((effect) => {
+        if (effect.id !== effectId) {
+          return effect;
+        }
+        return {
+          ...effect,
+          keyframes: [
+            ...visualEffectKeyframes(effect).filter(
+              (keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05,
+            ),
+            {
+              easing: "linear" as const,
+              id: `${effect.id}-amount-kf-${token}`,
+              param: "amount" as const,
+              timeSecond,
+              value: effect.params.amount,
+            },
+          ].sort((left, right) => left.timeSecond - right.timeSecond),
+        };
+      }),
+    })), { label: "Add effect amount keyframe" });
+  };
+
+  const removeVisualEffectAmountKeyframe = (effectId: string, keyframeId: string) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
+      ...segment,
+      visualEffects: visualEffectsForSegment(segment).map((effect) =>
+        effect.id === effectId
+          ? {
+              ...effect,
+              keyframes: visualEffectKeyframes(effect).filter(
+                (keyframe) => keyframe.id !== keyframeId,
+              ),
+            }
+          : effect,
+      ),
+    })), { label: "Remove effect amount keyframe" });
+  };
+
   const updateTrackClipSegment = (
     trackClip: SmartEditTrackSegment | undefined,
     update: (segment: SmartEditSegment) => SmartEditSegment,
@@ -3831,6 +3899,34 @@ export const SmartEditPanel = ({
                             }
                           />
                         </label>
+                        <div className="smart-edit-effect-keyframes">
+                          <div className="smart-edit-section-header">
+                            <h6>Amount keyframes</h6>
+                            <Button onClick={() => addVisualEffectAmountKeyframe(effect.id)}>
+                              Add amount keyframe
+                            </Button>
+                          </div>
+                          {visualEffectKeyframes(effect).length > 0 ? (
+                            <div className="smart-edit-mini-keyframe-list">
+                              {visualEffectKeyframes(effect).map((keyframe) => (
+                                <article className="smart-edit-mini-keyframe-row" key={keyframe.id}>
+                                  <span>{keyframe.timeSecond.toFixed(1)}s</span>
+                                  <strong>{keyframe.value.toFixed(2)}</strong>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      removeVisualEffectAmountKeyframe(effect.id, keyframe.id)
+                                    }
+                                  >
+                                    Delete
+                                  </button>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <small>No amount keyframes.</small>
+                          )}
+                        </div>
                         <div className="smart-edit-row-actions">
                           <Button
                             disabled={index === 0}

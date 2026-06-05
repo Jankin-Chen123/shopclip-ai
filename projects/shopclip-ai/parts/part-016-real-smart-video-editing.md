@@ -875,3 +875,27 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Effect stack export is limited to the first stable ffmpeg-backed visual effects.
   - Effect param keyframes, richer OpenCut effect definitions, grouped element selection, and direct arbitrary element-stack export are still open.
+
+## 2026-06-05 Effect Parameter Keyframes
+
+- Reference model:
+  - OpenCut stores effect parameter animation against a specific effect id and parameter path, then command handlers upsert/remove keyframes on that path.
+  - This increment adapts that model to ShopClip's current `visualEffects` bridge by attaching `amount` keyframes directly to each visual effect instance.
+- Fix:
+  - Added `SmartEditVisualEffectParamKeyframeSchema` and `SmartEditVisualEffect.keyframes` for effect-level `amount` animation.
+  - Smart edit planner prompt and normalization now accept `visualEffects[].keyframes`, clamp time to the segment duration, and clamp values by effect type.
+  - Smart Edit inspector now shows per-effect Amount keyframes, can add an amount keyframe at the playhead, and can delete existing amount keyframes.
+  - The ffmpeg smart-edit composer now exports effect amount keyframes as time expressions for blur, sharpen, brightness, contrast, saturation, and vignette where the backing filter supports a scalar expression path.
+- Verification:
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run packages/shared/src/schemas.test.ts -t "smart edit|timeline"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "transform|keyframes|mask|effect|persistent|timeline|subtitle|source audio"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|editor workspace|persistent|duplicates|pastes|copies|clipboard|splits"`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Effect keyframes are still segment/effect-instance backed, not arbitrary element property-path animations.
+  - Curve editing, direct arbitrary element-stack export, grouped element selection, and fuller OpenCut effect definitions remain open.

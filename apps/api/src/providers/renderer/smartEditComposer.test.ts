@@ -614,6 +614,85 @@ describe("smart edit composer", () => {
     );
   });
 
+  it("exports visual effect amount keyframes as time-based ffmpeg expressions", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      durationSeconds: 4,
+      visualEffects: [
+        {
+          enabled: true,
+          id: "effect-brightness",
+          keyframes: [
+            {
+              easing: "linear",
+              id: "brightness-kf-start",
+              param: "amount",
+              timeSecond: 0,
+              value: -0.2,
+            },
+            {
+              easing: "linear",
+              id: "brightness-kf-end",
+              param: "amount",
+              timeSecond: 2,
+              value: 0.35,
+            },
+          ],
+          params: { amount: 0.1, radius: 4 },
+          type: "brightness",
+        },
+        {
+          enabled: true,
+          id: "effect-contrast",
+          keyframes: [
+            {
+              easing: "hold",
+              id: "contrast-kf-start",
+              param: "amount",
+              timeSecond: 0,
+              value: 0.85,
+            },
+            {
+              easing: "hold",
+              id: "contrast-kf-end",
+              param: "amount",
+              timeSecond: 2,
+              value: 1.5,
+            },
+          ],
+          params: { amount: 1, radius: 4 },
+          type: "contrast",
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    const videoFilter = firstRawCommand?.args[firstRawCommand.args.indexOf("-vf") + 1] ?? "";
+    expect(videoFilter).toContain("eq=brightness='if(lte(t\\,0.000)");
+    expect(videoFilter).toContain("0.350");
+    expect(videoFilter).toContain("eq=contrast='if(lte(t\\,0.000)");
+    expect(videoFilter).toContain("if(gte(t\\,2.000)");
+    expect(videoFilter).toContain("0.850");
+  });
+
   it("exports visual transform keyframes as time-based ffmpeg video expressions", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

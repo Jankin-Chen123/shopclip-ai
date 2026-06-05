@@ -211,6 +211,22 @@ describe("shared contract schemas", () => {
                 amount: 1.4,
                 radius: 4,
               },
+              keyframes: [
+                {
+                  id: "effect_saturation_kf_start",
+                  easing: "linear",
+                  param: "amount",
+                  timeSecond: 0,
+                  value: 0.9,
+                },
+                {
+                  id: "effect_saturation_kf_peak",
+                  easing: "hold",
+                  param: "amount",
+                  timeSecond: 2.4,
+                  value: 1.6,
+                },
+              ],
             },
           ],
           visualMask: {
@@ -273,6 +289,11 @@ describe("shared contract schemas", () => {
       "blur",
       "saturation",
     ]);
+    expect(
+      plan.success
+        ? plan.data.segments[0]?.visualEffects?.[1]?.keyframes?.map((keyframe) => keyframe.value)
+        : undefined,
+    ).toEqual([0.9, 1.6]);
     expect(plan.success ? plan.data.segments[0]?.visualMask?.type : undefined).toBe("ellipse");
     expect(plan.success ? plan.data.segments[0]?.visualMask?.widthPercent : undefined).toBe(72);
     expect(plan.success ? plan.data.segments[0]?.visualKeyframes?.map((keyframe) => keyframe.id) : undefined).toEqual([

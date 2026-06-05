@@ -382,6 +382,21 @@ describe("smart edit planner provider", () => {
                       amount: 4,
                       radius: -2,
                     },
+                    keyframes: [
+                      {
+                        id: "brightness_start",
+                        param: "amount",
+                        timeSecond: 0,
+                        value: -3,
+                      },
+                      {
+                        easing: "hold",
+                        id: "brightness_peak",
+                        param: "amount",
+                        timeSecond: 99,
+                        value: 2,
+                      },
+                    ],
                     type: "brightness",
                   },
                   {
@@ -485,9 +500,25 @@ describe("smart edit planner provider", () => {
         enabled: true,
         id: "model_brightness",
         params: {
-          amount: 4,
+          amount: 1,
           radius: 0,
         },
+        keyframes: [
+          {
+            easing: "linear",
+            id: "brightness_start",
+            param: "amount",
+            timeSecond: 0,
+            value: -1,
+          },
+          {
+            easing: "hold",
+            id: "brightness_peak",
+            param: "amount",
+            timeSecond: 4,
+            value: 1,
+          },
+        ],
         type: "brightness",
       },
       {

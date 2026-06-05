@@ -629,6 +629,14 @@ export const SmartEditTimelineTrackSchema = z.object({
   locked: z.boolean().default(false),
 });
 
+export const SmartEditVisualEffectParamKeyframeSchema = z.object({
+  id: z.string().trim().min(1),
+  timeSecond: z.number().min(0).max(120),
+  param: z.enum(["amount"]),
+  value: z.number().min(-2).max(20),
+  easing: z.enum(["linear", "hold"]).default("linear"),
+});
+
 export const SmartEditVisualEffectSchema = z.object({
   id: z.string().trim().min(1),
   type: z.enum(["blur", "sharpen", "brightness", "contrast", "saturation", "vignette"]),
@@ -639,6 +647,7 @@ export const SmartEditVisualEffectSchema = z.object({
       radius: z.number().min(0).max(20).default(4),
     })
     .default({ amount: 1, radius: 4 }),
+  keyframes: z.array(SmartEditVisualEffectParamKeyframeSchema).max(40).optional(),
 });
 
 export const SmartEditTimelineElementSchema = z
