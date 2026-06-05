@@ -1446,3 +1446,32 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - The task reached `running`; scene 1 completed and scene 2 started before SSH polling became intermittently unavailable.
 - Remaining:
   - Full objective completion still requires live runtime evidence for fresh model render completion, real ffmpeg video/audio/text materialization, and Smart Edit timeline/export consumption.
+
+## 2026-06-06 Fresh Scene Material Bridge For Smart Edit
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Fixes the live failure where the planner returned expired provider image/video URLs even though a fresh Seedance render had already produced stable video/audio/text materials.
+- Fix:
+  - Smart Edit now inspects the project's latest completed Seedance render tasks before ffmpeg composition.
+  - For every matching `sceneId` with ready material, the planner segment source is overwritten with stable `sceneClipVideoOnlyUrl`, `sceneClipAudioUrl`, waveform, and the fresh scene clip URL.
+  - The plan timeline is regenerated after this bridge, so the UI-visible timeline and composer both use the fresh material URLs rather than stale planner URLs.
+  - Source audio is unmuted when a fresh material audio URL exists, keeping generated clip audio available for the base editing demo.
+  - The same bridge is applied to smart-edit segment refresh.
+  - Added trace step `smart-edit-scene-materials-applied`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api run test src/smart-edit-flow.test.ts -t "latest materialized Seedance"` initially failed because the test helper was missing, then passed after adding the helper.
+  - `corepack pnpm --filter @shopclip/api run test src/smart-edit-flow.test.ts`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts -t "persistent timeline elements|generated scene video-only"`
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Live evidence before fix:
+  - Smart-edit task `5cd9fc77-1aab-4bab-8a08-a545c957cbd2` failed at `smart-edit-ffmpeg-compose-failed` because ffmpeg tried to download an expired Seedream URL and received HTTP 403.
+  - The failed plan had not consumed the fresh materialized task `6a028699-932d-4f3c-b2e5-a415d935d63d`.
+- Remaining:
+  - Redeploy and rerun Smart Edit against the fresh materialized task to confirm `smart-edit-ffmpeg-compose` completes on the live server.

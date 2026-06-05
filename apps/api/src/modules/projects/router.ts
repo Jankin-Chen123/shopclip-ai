@@ -10,6 +10,7 @@ import type {
   AssetUploadIntent,
   ExternalAssetResult,
   ReferenceVideo,
+  RenderTask,
   SmartEditPlan,
   SmartEditSegmentOutput,
   SmartEditTimeline,
@@ -1359,6 +1360,74 @@ const smartEditSegmentClipsForPlan = (plan: SmartEditPlan, videoUrl?: string): S
       videoUrl,
     }));
 
+const latestReadySceneMaterialsByScene = (renderTasks: RenderTask[]): Map<string, SceneRenderClip> => {
+  const sceneClipsByScene = new Map<string, SceneRenderClip>();
+  const completedSceneRenders = renderTasks
+    .filter(
+      (task) =>
+        task.provider === "volcengine-seedance" &&
+        task.status === "completed" &&
+        task.sceneClips?.some((clip) => clip.material?.status === "ready" && clip.material.videoOnlyUrl),
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+
+  for (const task of completedSceneRenders) {
+    for (const clip of task.sceneClips ?? []) {
+      if (
+        sceneClipsByScene.has(clip.sceneId) ||
+        clip.status !== "completed" ||
+        clip.material?.status !== "ready" ||
+        !clip.material.videoOnlyUrl
+      ) {
+        continue;
+      }
+      sceneClipsByScene.set(clip.sceneId, clip);
+    }
+  }
+
+  return sceneClipsByScene;
+};
+
+const applyLatestSceneMaterialsToSmartEditPlan = (
+  plan: SmartEditPlan,
+  renderTasks: RenderTask[],
+): { appliedCount: number; plan: SmartEditPlan } => {
+  const latestMaterials = latestReadySceneMaterialsByScene(renderTasks);
+  let appliedCount = 0;
+  const segments = plan.segments.map((segment) => {
+    const clip = latestMaterials.get(segment.sceneId);
+    const material = clip?.material;
+    if (!clip || material?.status !== "ready" || !material.videoOnlyUrl) {
+      return segment;
+    }
+
+    appliedCount += 1;
+    return {
+      ...segment,
+      sourceAudioDurationSeconds:
+        segment.sourceAudioDurationSeconds ?? material.audioWaveform?.durationSeconds,
+      sourceAudioMuted: material.audioUrl ? false : segment.sourceAudioMuted,
+      sourceAudioVolume: material.audioUrl ? (segment.sourceAudioVolume ?? 1) : segment.sourceAudioVolume,
+      source: {
+        ...segment.source,
+        kind: "generated-scene-clip" as const,
+        sceneClipAudioUrl: material.audioUrl,
+        sceneClipAudioWaveform: material.audioWaveform,
+        sceneClipUrl: clip.videoUrl ?? segment.source.sceneClipUrl,
+        sceneClipVideoOnlyUrl: material.videoOnlyUrl,
+      },
+    };
+  });
+
+  return {
+    appliedCount,
+    plan: {
+      ...plan,
+      segments,
+    },
+  };
+};
+
 const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
   const enabledSegments = [...plan.segments]
     .filter((segment) => segment.enabled)
@@ -1633,10 +1702,37 @@ const runSmartEditJob = async ({
     );
     return;
   }
+  const materializedPlan = applyLatestSceneMaterialsToSmartEditPlan(
+    plannerResult.plan,
+    project.renderTasks,
+  );
   plannerResult = {
     ...plannerResult,
-    plan: withSmartEditTimeline(plannerResult.plan),
+    plan: withSmartEditTimeline(materializedPlan.plan),
   };
+  const planningTraceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [
+    {
+      status: plannerResult.fallback.used ? "retrying" : "completed",
+      step: plannerResult.fallback.used ? "smart-edit-plan-fallback" : "smart-edit-plan-model",
+      message: plannerResult.fallback.used
+        ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+        : `Smart edit planned by ${plannerResult.fallback.provider}.`,
+    },
+    ...(materializedPlan.appliedCount > 0
+      ? [
+          {
+            status: "completed" as const,
+            step: "smart-edit-scene-materials-applied",
+            message: `Applied ${materializedPlan.appliedCount} fresh scene video/audio/text material sources before ffmpeg composition.`,
+          },
+        ]
+      : []),
+    {
+      status: "running",
+      step: "smart-edit-ffmpeg-compose-started",
+      message: "Planning is ready. ffmpeg is composing clips, transitions, subtitles, voiceover, and BGM.",
+    },
+  ];
 
   await store.updateRenderTask(
     renderTaskId,
@@ -1647,20 +1743,7 @@ const runSmartEditJob = async ({
       smartEditPlan: plannerResult.plan,
       status: "running",
     },
-    [
-      {
-        status: plannerResult.fallback.used ? "retrying" : "completed",
-        step: plannerResult.fallback.used ? "smart-edit-plan-fallback" : "smart-edit-plan-model",
-        message: plannerResult.fallback.used
-          ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
-          : `Smart edit planned by ${plannerResult.fallback.provider}.`,
-      },
-      {
-        status: "running",
-        step: "smart-edit-ffmpeg-compose-started",
-        message: "Planning is ready. ffmpeg is composing clips, transitions, subtitles, voiceover, and BGM.",
-      },
-    ],
+    planningTraceEvents,
   );
 
   let exportResult: Awaited<ReturnType<SmartEditComposer>>;
@@ -1829,7 +1912,36 @@ const runSmartEditSegmentRefreshJob = async ({
     );
     return;
   }
-  refreshPlan = withSmartEditTimeline(refreshPlan);
+  const materializedRefreshPlan = applyLatestSceneMaterialsToSmartEditPlan(
+    refreshPlan,
+    project.renderTasks,
+  );
+  refreshPlan = withSmartEditTimeline(materializedRefreshPlan.plan);
+  const refreshTraceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [
+    {
+      status: plannerResult.fallback.used ? "retrying" : "completed",
+      step: plannerResult.fallback.used
+        ? "smart-edit-segment-plan-fallback"
+        : "smart-edit-segment-plan-model",
+      message: plannerResult.fallback.used
+        ? `Segment refresh used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+        : `Segment refresh planned by ${plannerResult.fallback.provider}.`,
+    },
+    ...(materializedRefreshPlan.appliedCount > 0
+      ? [
+          {
+            status: "completed" as const,
+            step: "smart-edit-scene-materials-applied",
+            message: `Applied ${materializedRefreshPlan.appliedCount} fresh scene video/audio/text material sources before ffmpeg composition.`,
+          },
+        ]
+      : []),
+    {
+      status: "running",
+      step: "smart-edit-segment-refresh-compose-started",
+      message: "Reusing unchanged segment outputs and recomposing the final video with ffmpeg.",
+    },
+  ];
 
   await store.updateRenderTask(
     renderTaskId,
@@ -1840,22 +1952,7 @@ const runSmartEditSegmentRefreshJob = async ({
       smartEditPlan: refreshPlan,
       status: "running",
     },
-    [
-      {
-        status: plannerResult.fallback.used ? "retrying" : "completed",
-        step: plannerResult.fallback.used
-          ? "smart-edit-segment-plan-fallback"
-          : "smart-edit-segment-plan-model",
-        message: plannerResult.fallback.used
-          ? `Segment refresh used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
-          : `Segment refresh planned by ${plannerResult.fallback.provider}.`,
-      },
-      {
-        status: "running",
-        step: "smart-edit-segment-refresh-compose-started",
-        message: "Reusing unchanged segment outputs and recomposing the final video with ffmpeg.",
-      },
-    ],
+    refreshTraceEvents,
   );
 
   let exportResult: Awaited<ReturnType<SmartEditComposer>>;

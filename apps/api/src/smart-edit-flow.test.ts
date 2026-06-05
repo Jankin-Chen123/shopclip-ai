@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import type {
   AssetMetadata,
   RenderTask,
+  SceneRenderClip,
   SmartEditPlan,
   SmartEditSegmentOutput,
   StoryboardScene,
@@ -87,6 +88,21 @@ const waitForRenderTask = async (
   }
 
   throw new Error(`Render task ${renderTaskId} did not finish.`);
+};
+
+const makeScenesRenderable = async (
+  baseUrl: string,
+  scenes: Array<{ id: string }>,
+  durationSeconds = 4,
+) => {
+  await Promise.all(
+    scenes.map((scene) =>
+      request(baseUrl, `/api/scenes/${scene.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ durationSeconds }),
+      }),
+    ),
+  );
 };
 
 describe("smart edit API flow", () => {
@@ -288,5 +304,209 @@ describe("smart edit API flow", () => {
       refreshComposerPlan.segments.find((segment) => segment.sceneId === sceneToRefresh.id)?.source
         .kind,
     ).toBe("image-asset");
+  });
+
+  it("applies the latest materialized Seedance scene clips before smart edit composition", async () => {
+    vi.stubEnv("VIDEO_RENDER_PROVIDER_MODE", "seedance");
+    vi.stubEnv("AI_VIDEO_API_KEY", "video-key");
+    vi.stubEnv("AI_VIDEO_MODEL_ID", "ep-seedance-render");
+    vi.stubEnv("ARK_API_BASE_URL", "https://ark.example.test/api/v3");
+
+    const composedUrl = "https://storage.example.test/fresh-materials/export.mp4";
+    const renderExportPublisher = vi.fn(async () => composedUrl);
+    const sceneClipMaterializer = vi.fn(
+      async (
+        _projectId: string,
+        renderTaskId: string,
+        sceneClips: SceneRenderClip[] | undefined,
+      ) =>
+        sceneClips?.map((clip) => ({
+          ...clip,
+          material: {
+            audioUrl: `https://cdn.example.test/${renderTaskId}/scene-${clip.order}/audio.m4a`,
+            audioWaveform: {
+              bucketDurationSeconds: 0.5,
+              buckets: [{ durationSeconds: 0.5, index: 0, peak: 0.7, rms: 0.3, startSecond: 0 }],
+              durationSeconds: 4,
+              sampleRate: 8000,
+            },
+            materializedAt: "2026-06-06T00:00:00.000Z",
+            status: "ready" as const,
+            text: clip.subtitle,
+            videoOnlyUrl: `https://cdn.example.test/${renderTaskId}/scene-${clip.order}/video-only.mp4`,
+          },
+        })),
+    );
+    const composerPlans: SmartEditPlan[] = [];
+    const app = createApp({
+      renderExportPublisher,
+      sceneClipMaterializer,
+      smartEditPlanner: async ({ project, scenes }) => ({
+        fallback: {
+          provider: "test-smart-edit-planner",
+          used: false,
+        },
+        plan: {
+          id: "plan-with-expired-scene-urls",
+          audio: {
+            bgmTrack: "creator-pop",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          projectId: project.id,
+          segments: scenes.map((scene, index) => ({
+            id: `segment-${scene.id}`,
+            assetTags: [],
+            durationSeconds: 4,
+            enabled: true,
+            order: index + 1,
+            rationale: "Planner returned an expired provider URL.",
+            sceneId: scene.id,
+            sourceAudioMuted: true,
+            sourceAudioVolume: 0,
+            source: {
+              imageUrl: "https://cdn.example.test/stable-image.png",
+              kind: "generated-scene-clip" as const,
+              sceneClipUrl: `https://expired.example.test/scene-${index + 1}.mp4`,
+              startSecond: 0,
+              endSecond: 4,
+            },
+            subtitle: scene.subtitle,
+            transition: index === 0 ? "cut" : "fade",
+            voiceover: scene.voiceover,
+          })),
+          strategy: "Return expired URLs so the router must bridge fresh scene materials.",
+          targetDurationSeconds: scenes.length * 4,
+        },
+      }),
+      smartEditComposer: async (projectId, plan) => {
+        composerPlans.push(plan);
+        return {
+          exportId: "fresh-materials-export",
+          localUrl: `/api/render-exports/${projectId}/fresh-materials-export/export.mp4`,
+          objectKey: `projects/${projectId}/smart-edits/fresh-materials-export/export.mp4`,
+          outputPath: "/tmp/fresh-materials-export.mp4",
+          publicUrl: composedUrl,
+          segmentOutputs: plan.segments
+            .filter((segment) => segment.enabled)
+            .map((segment) => ({
+              objectKey: `projects/${projectId}/smart-edits/fresh-materials-export/segments/${segment.id}.mp4`,
+              outputPath: `/tmp/${segment.id}.mp4`,
+              publicUrl: `https://storage.example.test/${segment.id}.mp4`,
+              sceneId: segment.sceneId,
+              segmentId: segment.id,
+            })),
+        };
+      },
+    });
+
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server?.once("listening", () => resolve()));
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const originalFetch = globalThis.fetch;
+    let createTaskCount = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : String(url);
+      if (requestUrl.startsWith(baseUrl)) {
+        return originalFetch(url, init);
+      }
+      if (requestUrl.endsWith("/contents/generations/tasks")) {
+        createTaskCount += 1;
+        return Response.json({
+          id: `seedance-scene-task-${createTaskCount}`,
+          status: "queued",
+        });
+      }
+      const taskId = requestUrl.split("/").at(-1);
+      return Response.json({
+        content: {
+          video_url: `https://cdn.example.test/${taskId}.mp4`,
+        },
+        status: "succeeded",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Fresh material smart edit",
+        productName: "Cat Cup",
+        audience: "TikTok Shop cup lovers",
+        sellingPoints: ["cute print", "straw lid"],
+        tone: "energetic",
+        style: "fast demo",
+        targetDurationSeconds: 12,
+      }),
+    });
+    expect(created.status).toBe(201);
+
+    const generated = await request<{ script: { scenes: Array<{ id: string }> } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/generate-script`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+    expect(generated.status).toBe(201);
+    await makeScenesRenderable(baseUrl, generated.body.script.scenes, 4);
+
+    const render = await request<{ renderTask: { id: string } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/render`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+    expect(render.status).toBe(201);
+
+    const completedRender = await waitForRenderTask(baseUrl, render.body.renderTask.id);
+    expect(completedRender.renderTask.status).toBe("completed");
+    expect(completedRender.traceEvents.map((event) => event.step)).toContain(
+      "scene-clip-materialize",
+    );
+
+    const smartEdit = await request<RenderSnapshot>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/smart-edit`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+    expect(smartEdit.status).toBe(202);
+
+    const completedSmartEdit = await waitForRenderTask(baseUrl, smartEdit.body.renderTask.id);
+    expect(completedSmartEdit.renderTask.status).toBe("completed");
+    expect(completedSmartEdit.traceEvents.map((event) => event.step)).toContain(
+      "smart-edit-scene-materials-applied",
+    );
+    const composedPlan = composerPlans[0]!;
+    expect(
+      composedPlan.segments.every((segment) =>
+        segment.source.sceneClipVideoOnlyUrl?.includes(render.body.renderTask.id),
+      ),
+    ).toBe(true);
+    expect(
+      composedPlan.segments.every((segment) =>
+        segment.source.sceneClipAudioUrl?.includes(render.body.renderTask.id),
+      ),
+    ).toBe(true);
+    expect(composedPlan.segments.every((segment) => segment.sourceAudioMuted === false)).toBe(
+      true,
+    );
+    expect(
+      composedPlan.timeline?.elements
+        .filter((element) => element.trackId === "video-main")
+        .every((element) => element.sourceUrl?.includes("/video-only.mp4")),
+    ).toBe(true);
+    expect(
+      composedPlan.timeline?.elements.some((element) => element.trackId === "audio-source"),
+    ).toBe(true);
   });
 });
