@@ -1666,6 +1666,8 @@ describe("App", () => {
                 source: {
                   assetId: "asset-video",
                   kind: "video-slice",
+                  sceneClipAudioUrl: "https://cdn.example.test/scene-1-audio.m4a",
+                  sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-1-video.mp4",
                   sliceId: "slice-demo",
                   startSecond: 1.25,
                   endSecond: 3.25,
@@ -1691,12 +1693,16 @@ describe("App", () => {
 
     expect(markup).toContain("Track stack");
     expect(markup).toContain("Video track");
+    expect(markup).toContain("Source audio track");
     expect(markup).toContain("Caption track");
     expect(markup).toContain("Voice track");
     expect(markup).toContain("BGM track");
     expect(markup).toContain("00:00.0-00:04.0");
     expect(markup).toContain("source 00:01.3-00:03.3");
     expect(markup).toContain("Cup demo.mp4");
+    expect(markup).toContain("Scene 1 audio");
+    expect(markup).toContain("source audio material");
+    expect(markup).toContain("role=\"button\"");
     expect(markup).toContain("tech-pulse");
   });
 

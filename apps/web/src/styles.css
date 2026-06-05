@@ -4660,6 +4660,28 @@ textarea {
   font-size: 0.86rem;
 }
 
+.track-clip-inspector {
+  border-color: rgba(59, 130, 246, 0.28);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+  padding: 12px;
+}
+
+.smart-edit-track-clip-summary {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.smart-edit-track-clip-summary span,
+.smart-edit-track-clip-summary small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .smart-edit-trim-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4985,6 +5007,12 @@ textarea {
 
 .smart-edit-track-clip.selected:not(.active) {
   border-color: rgba(244, 114, 182, 0.58);
+}
+
+.smart-edit-track-clip.track-selected {
+  border-color: rgba(59, 130, 246, 0.8);
+  background: rgba(59, 130, 246, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.28);
 }
 
 .smart-edit-track-clip.muted,

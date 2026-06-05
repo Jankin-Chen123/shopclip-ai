@@ -620,3 +620,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Explicit overwrite/insert/ripple modes, independent audio/text track items, edge preview guides, transform/effect panels, and named command history remain open.
+
+## 2026-06-05 Track Material Inspector
+
+- Reference model:
+  - OpenCut treats media/text/audio entries as timeline elements with their own selection and editing surface, not only as passive rows under a scene.
+- Fix:
+  - Smart Edit track stack now includes source-audio material rows when rendered scene clips have separated audio assets.
+  - Track rows use resolved timeline starts instead of assuming sequential-only timing, so manual moved clips and gaps stay reflected in the track stack.
+  - Added track-material selection state. Clicking a video/audio/caption/voice/BGM row highlights that exact track material and opens a track-material inspector.
+  - The track-material inspector supports direct per-material operations for source audio mute/unmute, caption text/offset/show-hide, and voiceover text/offset.
+  - Existing segment selection stays synchronized with selected track materials so the current segment preview, batch selection, and export timeline stay coherent.
+- Verification:
+  - Updated `App.test.tsx` coverage for source-audio material rows in the track stack, including button semantics for selectable track materials.
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx -t "track stack"`
+- Remaining:
+  - True independent clip records for audio/text, drag handles on each track row, overwrite/insert/ripple modes, effect/transform panels, and visual snap guide overlays remain open.

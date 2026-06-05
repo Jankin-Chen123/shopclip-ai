@@ -836,6 +836,7 @@ type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
 type SmartEditTrackSegment = {
   id: string;
   segmentId?: string;
+  trackId: SmartEditTrackId;
   title: string;
   range: string;
   meta: string;
@@ -895,6 +896,13 @@ const timelineTrackSegments = (
           muted: element.muted,
           range: timelineRangeLabel(element.startSecond, element.durationSeconds),
           segmentId: element.segmentId,
+          trackId: (track.id === "audio-source"
+            ? "sourceAudio"
+            : track.kind === "audio"
+              ? "voice"
+              : track.kind === "text"
+                ? "caption"
+                : track.kind) as SmartEditTrackId,
           title: element.label,
         })),
     }));
@@ -925,6 +933,7 @@ const timelineTrackSegments = (
           id: `${clip.sceneId}-video`,
           meta: clip.material?.videoOnlyUrl ? "video-only material" : "generated clip",
           range: timelineRangeLabel(startSecond, duration),
+          trackId: "video",
           title: `Scene ${clip.order}`,
         })),
       },
@@ -937,6 +946,7 @@ const timelineTrackSegments = (
             id: `${clip.sceneId}-audio`,
             meta: "source audio material",
             range: timelineRangeLabel(startSecond, duration),
+            trackId: "sourceAudio",
             title: `Scene ${clip.order} audio`,
           })),
       },
@@ -947,6 +957,7 @@ const timelineTrackSegments = (
           id: `${clip.sceneId}-text`,
           meta: "storyboard text",
           range: timelineRangeLabel(startSecond, duration),
+          trackId: "caption",
           title: clip.material?.text || clip.subtitle,
         })),
       },
@@ -957,10 +968,9 @@ const timelineTrackSegments = (
     .filter((segment) => segment.enabled)
     .sort((left, right) => left.order - right.order);
 
-  let cursor = 0;
+  const currentStarts = timelineStartsForSegments(enabledSegments);
   const timedSegments = enabledSegments.map((segment) => {
-    const startSecond = cursor;
-    cursor += segment.durationSeconds;
+    const startSecond = currentStarts.get(segment.id) ?? 0;
     return { segment, startSecond };
   });
 
@@ -975,7 +985,20 @@ const timelineTrackSegments = (
     range: timelineRangeLabel(startSecond, segment.durationSeconds),
     meta: sourceRangeLabel(segment),
     durationSeconds: segment.durationSeconds,
+    trackId: "video" as const,
   }));
+  const sourceAudioSegments = timedSegments
+    .filter(({ segment }) => segment.source.sceneClipAudioUrl)
+    .map(({ segment, startSecond }) => ({
+      id: `${segment.id}-audio`,
+      segmentId: segment.id,
+      title: `Scene ${segment.order} audio`,
+      range: timelineRangeLabel(startSecond, segment.durationSeconds),
+      meta: segment.sourceAudioMuted ? "muted source audio" : "source audio material",
+      durationSeconds: segment.durationSeconds,
+      muted: segment.sourceAudioMuted ?? false,
+      trackId: "sourceAudio" as const,
+    }));
   const captionSegments = timedSegments
     .filter(({ segment }) => segment.subtitle.trim().length > 0)
     .map(({ segment, startSecond }) => ({
@@ -989,6 +1012,7 @@ const timelineTrackSegments = (
       meta: segment.transition,
       durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.captionStartOffsetSeconds ?? 0)),
       hidden: segment.captionHidden ?? false,
+      trackId: "caption" as const,
     }));
   const voiceSegments = timedSegments
     .filter(({ segment }) => segment.voiceover.trim().length > 0)
@@ -1002,23 +1026,27 @@ const timelineTrackSegments = (
       ),
       meta: plan.audio.voice,
       durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+      trackId: "voice" as const,
     }));
   const tracks: SmartEditTrack[] = [
     { id: "video", segments: videoSegments },
+    { id: "sourceAudio", segments: sourceAudioSegments },
     { id: "caption", segments: captionSegments },
     { id: "voice", segments: voiceSegments },
   ];
 
   if (plan.audio.bgmTrack !== "none") {
+    const durationSeconds = timelineDurationForSegments(plan.segments);
     tracks.push({
       id: "bgm",
       segments: [
         {
           id: "bgm-bed",
           title: plan.audio.bgmTrack,
-          range: timelineRangeLabel(0, cursor),
+          range: timelineRangeLabel(0, durationSeconds),
           meta: plan.audio.targetLanguage ?? "project audio",
-          durationSeconds: Math.max(1, cursor),
+          durationSeconds: Math.max(1, durationSeconds),
+          trackId: "bgm",
         },
       ],
     });
@@ -1056,6 +1084,7 @@ export const SmartEditPanel = ({
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
+  const [selectedTrackClipId, setSelectedTrackClipId] = useState<string | undefined>();
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
@@ -1069,6 +1098,7 @@ export const SmartEditPanel = ({
       setHistoryPlanId(plan?.id);
       setRedoStack([]);
       setSelectedSegmentIds([]);
+      setSelectedTrackClipId(undefined);
       setSmartEditClipboard(undefined);
       setUndoStack([]);
       setPlayheadSeconds(0);
@@ -1128,6 +1158,13 @@ export const SmartEditPanel = ({
     () => timelineTrackSegments(plan, assets, renderTask),
     [assets, plan, renderTask],
   );
+  const selectedTrackClip = useMemo(
+    () =>
+      trackSegments
+        .flatMap((track) => track.segments)
+        .find((trackClip) => trackClip.id === selectedTrackClipId),
+    [selectedTrackClipId, trackSegments],
+  );
   const trackLabels = {
     bgm: copy.bgmTrack,
     caption: copy.captionTrack,
@@ -1179,6 +1216,7 @@ export const SmartEditPanel = ({
         const [start, end] =
           anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
         setSelectedSegmentIds(sortedSegments.slice(start, end + 1).map((segment) => segment.id));
+        setSelectedTrackClipId(undefined);
         onSelectedSegmentChange(segmentId);
         return;
       }
@@ -1195,11 +1233,21 @@ export const SmartEditPanel = ({
           .map((segment) => segment.id)
           .filter((id) => currentSet.has(id));
       });
+      setSelectedTrackClipId(undefined);
       onSelectedSegmentChange(segmentId);
       return;
     }
     setSelectedSegmentIds([segmentId]);
+    setSelectedTrackClipId(undefined);
     onSelectedSegmentChange(segmentId);
+  };
+
+  const selectTrackClip = (trackClip: SmartEditTrackSegment) => {
+    setSelectedTrackClipId(trackClip.id);
+    if (trackClip.segmentId) {
+      setSelectedSegmentIds([trackClip.segmentId]);
+      onSelectedSegmentChange(trackClip.segmentId);
+    }
   };
 
   const selectAllSegments = () => {
@@ -1207,6 +1255,7 @@ export const SmartEditPanel = ({
       return;
     }
     setSelectedSegmentIds(sortedSegments.map((segment) => segment.id));
+    setSelectedTrackClipId(undefined);
     onSelectedSegmentChange(sortedSegments[0]?.id);
   };
 
@@ -1285,6 +1334,16 @@ export const SmartEditPanel = ({
       return;
     }
     commitPlanChange(replaceSegment(plan, selectedSegment.id, update));
+  };
+
+  const updateTrackClipSegment = (
+    trackClip: SmartEditTrackSegment | undefined,
+    update: (segment: SmartEditSegment) => SmartEditSegment,
+  ) => {
+    if (!plan || !trackClip?.segmentId) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, trackClip.segmentId, update));
   };
 
   const updateSelectedSegmentTimelineStart = (nextStartSecond: number) => {
@@ -1887,6 +1946,116 @@ export const SmartEditPanel = ({
 
         <div className="smart-edit-inspector">
           <h3>{copy.inspector}</h3>
+          {selectedTrackClip && selectedSegment && plan ? (
+            <section className="smart-edit-inspector-section track-clip-inspector">
+              <h4>{copy.trackClipInspector}</h4>
+              <div className="smart-edit-track-clip-summary">
+                <strong>{selectedTrackClip.title}</strong>
+                <span>{trackLabels[selectedTrackClip.trackId]}</span>
+                <small>{selectedTrackClip.range}</small>
+              </div>
+              {selectedTrackClip.trackId === "sourceAudio" ? (
+                <label className="toggle-row">
+                  <input
+                    checked={selectedSegment.sourceAudioMuted ?? false}
+                    type="checkbox"
+                    onChange={(event) =>
+                      updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                        ...segment,
+                        sourceAudioMuted: event.target.checked,
+                      }))
+                    }
+                  />
+                  {selectedSegment.sourceAudioMuted ? copy.unmuteSelected : copy.muteSelected}
+                </label>
+              ) : null}
+              {selectedTrackClip.trackId === "caption" ? (
+                <>
+                  <label>
+                    {copy.subtitle}
+                    <textarea
+                      rows={2}
+                      value={selectedSegment.subtitle}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          subtitle: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    {copy.captionStart}
+                    <input
+                      min={0}
+                      max={Math.max(0, selectedSegment.durationSeconds - 0.1)}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.captionStartOffsetSeconds ?? 0}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          captionStartOffsetSeconds: clampInSegmentOffset(
+                            Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="toggle-row">
+                    <input
+                      checked={!selectedSegment.captionHidden}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          captionHidden: !event.target.checked,
+                        }))
+                      }
+                    />
+                    {selectedSegment.captionHidden ? copy.showCaption : copy.hideCaption}
+                  </label>
+                </>
+              ) : null}
+              {selectedTrackClip.trackId === "voice" ? (
+                <>
+                  <label>
+                    {copy.voiceover}
+                    <textarea
+                      rows={2}
+                      value={selectedSegment.voiceover}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          voiceover: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    {copy.voiceoverStart}
+                    <input
+                      min={0}
+                      max={Math.max(0, selectedSegment.durationSeconds - 0.1)}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.voiceoverStartOffsetSeconds ?? 0}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          voiceoverStartOffsetSeconds: clampInSegmentOffset(
+                            Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                </>
+              ) : null}
+            </section>
+          ) : null}
           {selectedSegment && plan ? (
             <>
               <div className="segment-inspector-actions">
@@ -2538,20 +2707,20 @@ export const SmartEditPanel = ({
                       segment.segmentId === selectedSegment?.id ? "active" : ""
                     } ${
                       segment.segmentId && selectedSegmentIdSet.has(segment.segmentId) ? "selected" : ""
+                    } ${
+                      selectedTrackClipId === segment.id ? "track-selected" : ""
                     } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""}`.trim()}
                     key={segment.id}
-                    role={segment.segmentId ? "button" : undefined}
+                    role="button"
                     style={{ flexGrow: Math.max(1, segment.durationSeconds) }}
-                    tabIndex={segment.segmentId ? 0 : undefined}
+                    tabIndex={0}
                     onClick={() => {
-                      if (segment.segmentId) {
-                        selectTimelineSegment(segment.segmentId);
-                      }
+                      selectTrackClip(segment);
                     }}
                     onKeyDown={(event) => {
-                      if (segment.segmentId && (event.key === "Enter" || event.key === " ")) {
+                      if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        selectTimelineSegment(segment.segmentId);
+                        selectTrackClip(segment);
                       }
                     }}
                   >
