@@ -534,7 +534,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualEffects: [{ id, type, enabled, params: { amount, radius } }], visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -660,6 +660,37 @@ const normalizeModelEffects = (
         ? Math.max(0, Math.min(2, rawEffects.sharpen))
         : localEffects?.sharpen ?? 0,
   };
+};
+
+const SMART_EDIT_VISUAL_EFFECT_TYPES = new Set<
+  NonNullable<SmartEditPlan["segments"][number]["visualEffects"]>[number]["type"]
+>(["blur", "sharpen", "brightness", "contrast", "saturation", "vignette"]);
+
+const normalizeModelVisualEffects = (
+  rawEffects: unknown,
+  localEffects: SmartEditPlan["segments"][number]["visualEffects"],
+): SmartEditPlan["segments"][number]["visualEffects"] | undefined => {
+  if (!Array.isArray(rawEffects)) {
+    return localEffects;
+  }
+  return rawEffects
+    .filter(isRecord)
+    .slice(0, 20)
+    .map((effect, index) => ({
+      enabled: typeof effect.enabled === "boolean" ? effect.enabled : true,
+      id: getString(effect.id) ?? `model_visual_effect_${index + 1}`,
+      params: {
+        amount:
+          isRecord(effect.params) && typeof effect.params.amount === "number"
+            ? Math.max(-2, Math.min(20, effect.params.amount))
+            : 1,
+        radius:
+          isRecord(effect.params) && typeof effect.params.radius === "number"
+            ? Math.max(0, Math.min(20, effect.params.radius))
+            : 4,
+      },
+      type: enumStringOr(effect.type, SMART_EDIT_VISUAL_EFFECT_TYPES, "blur"),
+    }));
 };
 
 const normalizeModelVisualMask = (
@@ -788,6 +819,7 @@ const normalizeModelSegment = (
     source: normalizeModelSource(rawSegment.source, localSegment.source),
     transform: normalizeModelTransform(rawSegment.transform, localSegment.transform),
     effects: normalizeModelEffects(rawSegment.effects, localSegment.effects),
+    visualEffects: normalizeModelVisualEffects(rawSegment.visualEffects, localSegment.visualEffects),
     visualMask: normalizeModelVisualMask(rawSegment.visualMask, localSegment.visualMask),
     visualKeyframes: normalizeModelVisualKeyframes(rawSegment.visualKeyframes, localSegment),
     assetTags: Array.isArray(rawSegment.assetTags)

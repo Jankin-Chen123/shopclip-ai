@@ -629,6 +629,18 @@ export const SmartEditTimelineTrackSchema = z.object({
   locked: z.boolean().default(false),
 });
 
+export const SmartEditVisualEffectSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.enum(["blur", "sharpen", "brightness", "contrast", "saturation", "vignette"]),
+  enabled: z.boolean().default(true),
+  params: z
+    .object({
+      amount: z.number().min(-2).max(20).default(1),
+      radius: z.number().min(0).max(20).default(4),
+    })
+    .default({ amount: 1, radius: 4 }),
+});
+
 export const SmartEditTimelineElementSchema = z
   .object({
     id: z.string().trim().min(1),
@@ -649,6 +661,7 @@ export const SmartEditTimelineElementSchema = z
     muted: z.boolean().default(false),
     hidden: z.boolean().default(false),
     detachedAudio: z.boolean().default(false),
+    visualEffects: z.array(SmartEditVisualEffectSchema).max(20).optional(),
   })
   .superRefine((element, context) => {
     if (
@@ -756,6 +769,7 @@ export const SmartEditSegmentOverrideSchema = z.object({
   source: SmartEditSourceSchema.optional(),
   transform: SmartEditTransformSchema.optional(),
   effects: SmartEditEffectsSchema.optional(),
+  visualEffects: z.array(SmartEditVisualEffectSchema).max(20).optional(),
   visualMask: SmartEditVisualMaskSchema.optional(),
   visualKeyframes: z.array(SmartEditVisualKeyframeSchema).max(40).optional(),
 });
@@ -802,6 +816,7 @@ export const SmartEditSegmentSchema = z.object({
   source: SmartEditSourceSchema,
   transform: SmartEditTransformSchema.optional(),
   effects: SmartEditEffectsSchema.optional(),
+  visualEffects: z.array(SmartEditVisualEffectSchema).max(20).optional(),
   visualMask: SmartEditVisualMaskSchema.optional(),
   visualKeyframes: z.array(SmartEditVisualKeyframeSchema).max(40).optional(),
   assetTags: z.array(z.string().trim().min(1)).default([]),

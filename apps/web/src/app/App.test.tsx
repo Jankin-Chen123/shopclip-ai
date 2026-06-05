@@ -2968,6 +2968,26 @@ describe("App", () => {
                   fadeInSeconds: 0.2,
                   fadeOutSeconds: 0.4,
                 },
+                visualEffects: [
+                  {
+                    id: "effect-brightness",
+                    type: "brightness",
+                    enabled: true,
+                    params: {
+                      amount: 0.15,
+                      radius: 4,
+                    },
+                  },
+                  {
+                    id: "effect-vignette",
+                    type: "vignette",
+                    enabled: false,
+                    params: {
+                      amount: 0.65,
+                      radius: 4,
+                    },
+                  },
+                ],
                 visualMask: {
                   id: "mask-focus",
                   type: "ellipse",
@@ -3061,6 +3081,11 @@ describe("App", () => {
     expect(markup).toContain("Visual effects");
     expect(markup).toContain("Blur");
     expect(markup).toContain("Fade out");
+    expect(markup).toContain("Effect stack");
+    expect(markup).toContain("Add effect");
+    expect(markup).toContain("Brightness");
+    expect(markup).toContain("Vignette");
+    expect(markup).toContain("Disabled");
     expect(markup).toContain("Visual mask");
     expect(markup).toContain("Mask type");
     expect(markup).toContain("Invert mask");

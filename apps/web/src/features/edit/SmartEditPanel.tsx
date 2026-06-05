@@ -10,9 +10,12 @@ import type {
   SmartEditResult,
   SmartEditSegment,
   SmartEditTimeline,
+  SmartEditVisualEffect,
   TraceEvent,
 } from "@shopclip/shared";
 import {
+  ArrowDown,
+  ArrowUp,
   Clock3,
   Copy,
   Film,
@@ -165,6 +168,62 @@ const clampMaskPercentInput = (value: string, fallback: number, min: number) => 
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? Math.max(min, Math.min(100, parsedValue)) : fallback;
 };
+
+type SmartEditVisualEffectType = SmartEditVisualEffect["type"];
+
+const visualEffectOptions: Array<{ label: string; type: SmartEditVisualEffectType }> = [
+  { label: "Blur", type: "blur" },
+  { label: "Sharpen", type: "sharpen" },
+  { label: "Brightness", type: "brightness" },
+  { label: "Contrast", type: "contrast" },
+  { label: "Saturation", type: "saturation" },
+  { label: "Vignette", type: "vignette" },
+];
+
+const visualEffectLabel = (type: SmartEditVisualEffectType): string =>
+  visualEffectOptions.find((option) => option.type === type)?.label ?? type;
+
+const defaultVisualEffectAmount = (type: SmartEditVisualEffectType): number => {
+  if (type === "blur") {
+    return 4;
+  }
+  if (type === "sharpen") {
+    return 0.5;
+  }
+  if (type === "brightness") {
+    return 0.1;
+  }
+  return 1;
+};
+
+const clampVisualEffectAmount = (type: SmartEditVisualEffectType, amount: number): number => {
+  const fallback = defaultVisualEffectAmount(type);
+  const value = Number.isFinite(amount) ? amount : fallback;
+  if (type === "blur") {
+    return Math.max(0, Math.min(20, value));
+  }
+  if (type === "sharpen") {
+    return Math.max(0, Math.min(2, value));
+  }
+  if (type === "brightness") {
+    return Math.max(-1, Math.min(1, value));
+  }
+  if (type === "contrast" || type === "saturation") {
+    return Math.max(0, Math.min(3, value));
+  }
+  return Math.max(0, Math.min(1, value));
+};
+
+const visualEffectsForSegment = (segment: SmartEditSegment): SmartEditVisualEffect[] =>
+  (segment.visualEffects ?? []).slice(0, 20).map((effect) => ({
+    enabled: effect.enabled ?? true,
+    id: effect.id,
+    params: {
+      amount: clampVisualEffectAmount(effect.type, effect.params?.amount ?? defaultVisualEffectAmount(effect.type)),
+      radius: Math.max(0, Math.min(20, effect.params?.radius ?? 4)),
+    },
+    type: effect.type,
+  }));
 
 const visualKeyframesForSegment = (segment: SmartEditSegment) =>
   [...(segment.visualKeyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
@@ -2344,6 +2403,75 @@ export const SmartEditPanel = ({
     })), { label: "Remove visual keyframe" });
   };
 
+  const addVisualEffectToSelectedSegment = (type: SmartEditVisualEffectType) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    const token = `${Date.now()}`;
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
+      ...segment,
+      visualEffects: [
+        ...visualEffectsForSegment(segment),
+        {
+          enabled: true,
+          id: `${segment.id}-${type}-effect-${token}`,
+          params: {
+            amount: defaultVisualEffectAmount(type),
+            radius: 4,
+          },
+          type,
+        },
+      ].slice(0, 20),
+    })), { label: `Add ${visualEffectLabel(type)} effect` });
+  };
+
+  const updateVisualEffectOnSelectedSegment = (
+    effectId: string,
+    update: (effect: SmartEditVisualEffect) => SmartEditVisualEffect,
+    label: string,
+  ) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
+      ...segment,
+      visualEffects: visualEffectsForSegment(segment).map((effect) =>
+        effect.id === effectId ? update(effect) : effect,
+      ),
+    })), { label });
+  };
+
+  const removeVisualEffectFromSelectedSegment = (effectId: string) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
+      ...segment,
+      visualEffects: visualEffectsForSegment(segment).filter((effect) => effect.id !== effectId),
+    })), { label: "Remove visual effect" });
+  };
+
+  const moveVisualEffectOnSelectedSegment = (effectId: string, direction: -1 | 1) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
+      const effects = visualEffectsForSegment(segment);
+      const index = effects.findIndex((effect) => effect.id === effectId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= effects.length) {
+        return segment;
+      }
+      const nextEffects = [...effects];
+      const [moved] = nextEffects.splice(index, 1);
+      nextEffects.splice(nextIndex, 0, moved!);
+      return {
+        ...segment,
+        visualEffects: nextEffects,
+      };
+    }), { label: "Reorder visual effects" });
+  };
+
   const updateTrackClipSegment = (
     trackClip: SmartEditTrackSegment | undefined,
     update: (segment: SmartEditSegment) => SmartEditSegment,
@@ -3625,6 +3753,111 @@ export const SmartEditPanel = ({
                       }
                     />
                   </label>
+                </div>
+                <div className="smart-edit-section-header">
+                  <h5>Effect stack</h5>
+                  <label>
+                    Add effect
+                    <select
+                      value=""
+                      onChange={(event) => {
+                        if (!event.target.value) {
+                          return;
+                        }
+                        addVisualEffectToSelectedSegment(event.target.value as SmartEditVisualEffectType);
+                        event.currentTarget.value = "";
+                      }}
+                    >
+                      <option value="">Choose</option>
+                      {visualEffectOptions.map((option) => (
+                        <option key={option.type} value={option.type}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="smart-edit-keyframe-list">
+                  {visualEffectsForSegment(selectedSegment).length > 0 ? (
+                    visualEffectsForSegment(selectedSegment).map((effect, index, effects) => (
+                      <div className="smart-edit-keyframe-row" key={effect.id}>
+                        <div>
+                          <strong>{visualEffectLabel(effect.type)}</strong>
+                          <span>
+                            {effect.enabled ? "Enabled" : "Disabled"} · Amount{" "}
+                            {effect.params.amount.toFixed(2)}
+                          </span>
+                        </div>
+                        <label className="smart-edit-checkbox-label">
+                          <input
+                            checked={effect.enabled}
+                            type="checkbox"
+                            onChange={(event) =>
+                              updateVisualEffectOnSelectedSegment(
+                                effect.id,
+                                (currentEffect) => ({
+                                  ...currentEffect,
+                                  enabled: event.target.checked,
+                                }),
+                                event.target.checked ? "Enable visual effect" : "Disable visual effect",
+                              )
+                            }
+                          />
+                          On
+                        </label>
+                        <label>
+                          Amount
+                          <input
+                            max={effect.type === "blur" ? 20 : effect.type === "sharpen" ? 2 : effect.type === "brightness" ? 1 : effect.type === "vignette" ? 1 : 3}
+                            min={effect.type === "brightness" ? -1 : 0}
+                            step={0.05}
+                            type="number"
+                            value={effect.params.amount}
+                            onChange={(event) =>
+                              updateVisualEffectOnSelectedSegment(
+                                effect.id,
+                                (currentEffect) => ({
+                                  ...currentEffect,
+                                  params: {
+                                    ...currentEffect.params,
+                                    amount: clampVisualEffectAmount(
+                                      currentEffect.type,
+                                      Number(event.target.value),
+                                    ),
+                                  },
+                                }),
+                                "Update visual effect params",
+                              )
+                            }
+                          />
+                        </label>
+                        <div className="smart-edit-row-actions">
+                          <Button
+                            disabled={index === 0}
+                            icon={<ArrowUp size={14} />}
+                            onClick={() => moveVisualEffectOnSelectedSegment(effect.id, -1)}
+                          >
+                            Up
+                          </Button>
+                          <Button
+                            disabled={index === effects.length - 1}
+                            icon={<ArrowDown size={14} />}
+                            onClick={() => moveVisualEffectOnSelectedSegment(effect.id, 1)}
+                          >
+                            Down
+                          </Button>
+                          <Button
+                            icon={<Trash2 size={14} />}
+                            onClick={() => removeVisualEffectFromSelectedSegment(effect.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="empty-state">No stacked effects.</p>
+                  )}
                 </div>
               </section>
               <section className="smart-edit-inspector-section">

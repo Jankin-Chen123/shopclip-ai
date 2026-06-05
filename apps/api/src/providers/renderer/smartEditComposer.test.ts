@@ -561,6 +561,59 @@ describe("smart edit composer", () => {
     expect(videoFilter).toContain("fade=t=out:st=3.50:d=0.50");
   });
 
+  it("exports ordered visual effect stacks as ffmpeg filters", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      visualEffects: [
+        {
+          enabled: true,
+          id: "effect-brightness",
+          params: { amount: 0.2, radius: 4 },
+          type: "brightness",
+        },
+        {
+          enabled: false,
+          id: "effect-disabled-blur",
+          params: { amount: 9, radius: 4 },
+          type: "blur",
+        },
+        {
+          enabled: true,
+          id: "effect-saturation",
+          params: { amount: 1.35, radius: 4 },
+          type: "saturation",
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    const videoFilter = firstRawCommand?.args[firstRawCommand.args.indexOf("-vf") + 1] ?? "";
+    expect(videoFilter).toContain("eq=brightness=0.20");
+    expect(videoFilter).toContain("eq=saturation=1.35");
+    expect(videoFilter).not.toContain("gblur=sigma=9.00");
+    expect(videoFilter.indexOf("eq=brightness=0.20")).toBeLessThan(
+      videoFilter.indexOf("eq=saturation=1.35"),
+    );
+  });
+
   it("exports visual transform keyframes as time-based ffmpeg video expressions", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

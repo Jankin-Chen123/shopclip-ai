@@ -374,6 +374,25 @@ describe("smart edit planner provider", () => {
                 },
                 subtitle: "这只小猫水杯也太可爱了！",
                 transition: "quick push-in",
+                visualEffects: [
+                  {
+                    enabled: true,
+                    id: "model_brightness",
+                    params: {
+                      amount: 4,
+                      radius: -2,
+                    },
+                    type: "brightness",
+                  },
+                  {
+                    enabled: false,
+                    params: {
+                      amount: 99,
+                      radius: 99,
+                    },
+                    type: "unknown-effect",
+                  },
+                ],
                 visualMask: {
                   heightPercent: 140,
                   id: "model_focus_mask",
@@ -461,6 +480,26 @@ describe("smart edit planner provider", () => {
       xPercent: 100,
       yPercent: 0,
     });
+    expect(result.plan.segments[0]?.visualEffects).toEqual([
+      {
+        enabled: true,
+        id: "model_brightness",
+        params: {
+          amount: 4,
+          radius: 0,
+        },
+        type: "brightness",
+      },
+      {
+        enabled: false,
+        id: "model_visual_effect_2",
+        params: {
+          amount: 20,
+          radius: 20,
+        },
+        type: "blur",
+      },
+    ]);
     expect(result.plan.segments[0]?.visualKeyframes).toEqual([
       {
         easing: "linear",

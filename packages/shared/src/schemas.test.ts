@@ -193,6 +193,26 @@ describe("shared contract schemas", () => {
             fadeInSeconds: 0.25,
             fadeOutSeconds: 0.35,
           },
+          visualEffects: [
+            {
+              id: "effect_blur_stack",
+              type: "blur",
+              enabled: true,
+              params: {
+                amount: 4.5,
+                radius: 6,
+              },
+            },
+            {
+              id: "effect_saturation_stack",
+              type: "saturation",
+              enabled: false,
+              params: {
+                amount: 1.4,
+                radius: 4,
+              },
+            },
+          ],
           visualMask: {
             id: "mask_product_focus",
             type: "ellipse",
@@ -249,6 +269,10 @@ describe("shared contract schemas", () => {
     expect(plan.success).toBe(true);
     expect(plan.success ? plan.data.segments[0]?.transform?.scale : undefined).toBe(1.18);
     expect(plan.success ? plan.data.segments[0]?.effects?.blur : undefined).toBe(1.5);
+    expect(plan.success ? plan.data.segments[0]?.visualEffects?.map((effect) => effect.type) : undefined).toEqual([
+      "blur",
+      "saturation",
+    ]);
     expect(plan.success ? plan.data.segments[0]?.visualMask?.type : undefined).toBe("ellipse");
     expect(plan.success ? plan.data.segments[0]?.visualMask?.widthPercent : undefined).toBe(72);
     expect(plan.success ? plan.data.segments[0]?.visualKeyframes?.map((keyframe) => keyframe.id) : undefined).toEqual([
@@ -272,6 +296,17 @@ describe("shared contract schemas", () => {
           fadeInSeconds: 10,
           fadeOutSeconds: 10,
         },
+        visualEffects: [
+          {
+            id: "bad_effect",
+            type: "unknown",
+            enabled: true,
+            params: {
+              amount: 50,
+              radius: -1,
+            },
+          },
+        ],
         visualKeyframes: [
           {
             id: "bad_keyframe",

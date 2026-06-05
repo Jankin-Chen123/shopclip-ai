@@ -223,6 +223,7 @@ const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartE
           ...(sourceStartSecond !== undefined ? { startSecond: sourceStartSecond } : {}),
           ...(sourceEndSecond !== undefined ? { endSecond: sourceEndSecond } : {}),
         },
+        visualEffects: videoElement?.visualEffects ?? segment.visualEffects,
       };
 
       if (sourceAudioElement) {
@@ -326,6 +327,41 @@ const normalizedEffects = (segment: SmartEditSegment) => ({
   fadeOutSeconds: Math.max(0, Math.min(5, segment.effects?.fadeOutSeconds ?? 0)),
   sharpen: Math.max(0, Math.min(2, segment.effects?.sharpen ?? 0)),
 });
+
+const normalizedVisualEffects = (segment: SmartEditSegment) =>
+  (segment.visualEffects ?? [])
+    .filter((effect) => effect.enabled !== false)
+    .slice(0, 20)
+    .map((effect) => ({
+      id: effect.id,
+      type: effect.type,
+      amount: Number.isFinite(effect.params?.amount) ? effect.params.amount : 1,
+      radius: Number.isFinite(effect.params?.radius) ? effect.params.radius : 4,
+    }));
+
+const buildVisualEffectStackFilters = (segment: SmartEditSegment): string[] =>
+  normalizedVisualEffects(segment).flatMap((effect) => {
+    if (effect.type === "blur") {
+      return [`gblur=sigma=${Math.max(0, Math.min(20, effect.amount)).toFixed(2)}`];
+    }
+    if (effect.type === "sharpen") {
+      return [`unsharp=5:5:${Math.max(0, Math.min(2, effect.amount)).toFixed(2)}:5:5:0.00`];
+    }
+    if (effect.type === "brightness") {
+      return [`eq=brightness=${Math.max(-1, Math.min(1, effect.amount)).toFixed(2)}`];
+    }
+    if (effect.type === "contrast") {
+      return [`eq=contrast=${Math.max(0, Math.min(3, effect.amount)).toFixed(2)}`];
+    }
+    if (effect.type === "saturation") {
+      return [`eq=saturation=${Math.max(0, Math.min(3, effect.amount)).toFixed(2)}`];
+    }
+    if (effect.type === "vignette") {
+      const angle = Math.max(0, Math.min(1, effect.amount));
+      return [`vignette=angle=${(Math.PI / 8 + angle * (Math.PI / 4)).toFixed(4)}`];
+    }
+    return [];
+  });
 
 const normalizedVisualMask = (segment: SmartEditSegment) => {
   const mask = segment.visualMask;
@@ -523,6 +559,7 @@ const buildSegmentVideoFilter = (
   if (effects.sharpen > 0) {
     filters.push(`unsharp=5:5:${effects.sharpen.toFixed(2)}:5:5:0.00`);
   }
+  filters.push(...buildVisualEffectStackFilters(segment));
   const maskFilter = buildVisualMaskFilter(segment, dimensions);
   if (maskFilter) {
     filters.push(`geq=${maskFilter}`);

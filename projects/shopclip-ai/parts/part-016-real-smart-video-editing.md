@@ -849,3 +849,29 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Mask support is still segment-backed and limited to rectangle/ellipse export.
   - Freeform mask points, mask feathering, curve editing, richer effect stacks, grouped element selection, and direct arbitrary element-stack export are still open.
+
+## 2026-06-05 Visual Effect Stack
+
+- Reference model:
+  - OpenCut stores ordered effect instances on visual timeline elements and exposes command handlers for adding, removing, toggling, reordering, and updating effect params.
+  - This increment adapts that model to ShopClip's Smart Edit bridge by adding a reusable `visualEffects` array to both timeline elements and segments while keeping the current segment-backed exporter.
+- Fix:
+  - Added `SmartEditVisualEffectSchema` with id, type, enabled state, and effect params.
+  - Smart edit planner prompt and model normalization now accept `visualEffects`, clamp model-produced params, and keep malformed effect types from invalidating the plan.
+  - Persistent video timeline elements can carry `visualEffects`; the composer applies them to the segment compatibility layer before export.
+  - Smart Edit inspector now exposes an ordered Effect stack with add, enable/disable, amount editing, up/down reorder, and remove controls.
+  - The ffmpeg smart-edit composer now exports enabled effect-stack items in order for blur, sharpen, brightness, contrast, saturation, and vignette filters.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "validates real smart edit"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "visual effect stacks"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "editor workspace"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "smart edit|timeline"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "transform|keyframes|mask|effect|persistent|timeline|subtitle|source audio"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|editor workspace|persistent|duplicates|pastes|copies|clipboard|splits"`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Effect stack export is limited to the first stable ffmpeg-backed visual effects.
+  - Effect param keyframes, richer OpenCut effect definitions, grouped element selection, and direct arbitrary element-stack export are still open.
