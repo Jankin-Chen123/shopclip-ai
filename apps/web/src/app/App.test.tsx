@@ -33,7 +33,10 @@ import {
 } from "../features/inspiration/InspirationPanel";
 import {
   SmartEditPanel,
+  applySmartEditCommandHistoryRedo,
+  applySmartEditCommandHistoryUndo,
   copySmartEditSegmentsToClipboard,
+  createSmartEditCommandHistory,
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   moveSmartEditSegmentOnTimeline,
@@ -2357,6 +2360,63 @@ describe("App", () => {
     ]);
     expect(nextPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([2, 5, 12, 15]);
     expect(nextPlan.targetDurationSeconds).toBe(17);
+  });
+
+  it("tracks labeled smart edit commands for undo and redo UI", () => {
+    const firstPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 4,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 0,
+          transition: "cut",
+          subtitle: "Hook",
+          voiceover: "Hook",
+          source: {
+            assetId: "asset-video",
+            kind: "video-slice",
+          },
+          assetTags: ["demo"],
+          rationale: "Use the product demo.",
+        },
+      ],
+    } satisfies SmartEditPlan;
+    const secondPlan = {
+      ...firstPlan,
+      targetDurationSeconds: 5,
+      segments: [{ ...firstPlan.segments[0]!, durationSeconds: 5 }],
+    } satisfies SmartEditPlan;
+    const thirdPlan = {
+      ...secondPlan,
+      segments: [{ ...secondPlan.segments[0]!, transform: { scale: 1.2, rotateDegrees: 0, offsetXPercent: 0, offsetYPercent: 0, opacity: 1 } }],
+    } satisfies SmartEditPlan;
+
+    const history = createSmartEditCommandHistory()
+      .record(firstPlan, secondPlan, "Trim clip")
+      .record(secondPlan, thirdPlan, "Adjust visual transform");
+
+    expect(history.undoLabel()).toBe("Undo Adjust visual transform");
+    expect(history.redoLabel()).toBe("Redo");
+    const undone = applySmartEditCommandHistoryUndo(history, thirdPlan);
+    expect(undone?.plan).toBe(secondPlan);
+    expect(undone?.history.undoLabel()).toBe("Undo Trim clip");
+    expect(undone?.history.redoLabel()).toBe("Redo Adjust visual transform");
+    const redone = applySmartEditCommandHistoryRedo(undone!.history, secondPlan);
+    expect(redone?.plan).toBe(thirdPlan);
+    expect(redone?.history.undoLabel()).toBe("Undo Adjust visual transform");
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

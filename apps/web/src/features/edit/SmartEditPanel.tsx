@@ -1236,6 +1236,76 @@ export type SmartEditClipboard = {
   }>;
 };
 
+export type SmartEditCommandHistoryEntry = {
+  after: SmartEditPlan;
+  before: SmartEditPlan;
+  label: string;
+};
+
+export class SmartEditCommandHistory {
+  constructor(
+    readonly undoStack: SmartEditCommandHistoryEntry[] = [],
+    readonly redoStack: SmartEditCommandHistoryEntry[] = [],
+  ) {}
+
+  record(before: SmartEditPlan, after: SmartEditPlan, label: string): SmartEditCommandHistory {
+    if (before === after) {
+      return this;
+    }
+    return new SmartEditCommandHistory(
+      [...this.undoStack.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), { after, before, label }],
+      [],
+    );
+  }
+
+  undoLabel(): string {
+    const entry = this.undoStack.at(-1);
+    return entry ? `Undo ${entry.label}` : "Undo";
+  }
+
+  redoLabel(): string {
+    const entry = this.redoStack.at(-1);
+    return entry ? `Redo ${entry.label}` : "Redo";
+  }
+}
+
+export const createSmartEditCommandHistory = (): SmartEditCommandHistory =>
+  new SmartEditCommandHistory();
+
+export const applySmartEditCommandHistoryUndo = (
+  history: SmartEditCommandHistory,
+  currentPlan: SmartEditPlan,
+): { history: SmartEditCommandHistory; plan: SmartEditPlan } | undefined => {
+  const entry = history.undoStack.at(-1);
+  if (!entry) {
+    return undefined;
+  }
+  return {
+    history: new SmartEditCommandHistory(
+      history.undoStack.slice(0, -1),
+      [...history.redoStack.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), { ...entry, after: currentPlan }],
+    ),
+    plan: entry.before,
+  };
+};
+
+export const applySmartEditCommandHistoryRedo = (
+  history: SmartEditCommandHistory,
+  currentPlan: SmartEditPlan,
+): { history: SmartEditCommandHistory; plan: SmartEditPlan } | undefined => {
+  const entry = history.redoStack.at(-1);
+  if (!entry) {
+    return undefined;
+  }
+  return {
+    history: new SmartEditCommandHistory(
+      [...history.undoStack.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), { ...entry, before: currentPlan }],
+      history.redoStack.slice(0, -1),
+    ),
+    plan: entry.after,
+  };
+};
+
 const smartEditTimelineEditModes: SmartEditTimelineEditMode[] = [
   "magnetic",
   "insert",
@@ -1539,7 +1609,9 @@ export const SmartEditPanel = ({
   const suppressTrimClickRef = useRef(false);
   const suppressTimelineMoveClickRef = useRef(false);
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
-  const [redoStack, setRedoStack] = useState<SmartEditPlan[]>([]);
+  const [commandHistory, setCommandHistory] = useState<SmartEditCommandHistory>(() =>
+    createSmartEditCommandHistory(),
+  );
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [selectedTrackClipId, setSelectedTrackClipId] = useState<string | undefined>();
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
@@ -1547,7 +1619,6 @@ export const SmartEditPanel = ({
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [timelineEditMode, setTimelineEditMode] = useState<SmartEditTimelineEditMode>("magnetic");
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
-  const [undoStack, setUndoStack] = useState<SmartEditPlan[]>([]);
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [timelineZoom, setTimelineZoom] = useState(1);
   const plan = result?.plan;
@@ -1555,11 +1626,10 @@ export const SmartEditPanel = ({
   useEffect(() => {
     if (plan?.id !== historyPlanId) {
       setHistoryPlanId(plan?.id);
-      setRedoStack([]);
+      setCommandHistory(createSmartEditCommandHistory());
       setSelectedSegmentIds([]);
       setSelectedTrackClipId(undefined);
       setSmartEditClipboard(undefined);
-      setUndoStack([]);
       setPlayheadSeconds(0);
     }
   }, [historyPlanId, plan?.id]);
@@ -1632,34 +1702,42 @@ export const SmartEditPanel = ({
     voice: copy.voiceTrack,
   } as const;
 
-  const commitPlanChange = (nextPlan: SmartEditPlan, options: { recordHistory?: boolean } = {}) => {
+  const commitPlanChange = (
+    nextPlan: SmartEditPlan,
+    options: { label?: string; recordHistory?: boolean } = {},
+  ) => {
     if (options.recordHistory !== false && plan && nextPlan !== plan) {
-      setUndoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
-      setRedoStack([]);
+      setCommandHistory((current) =>
+        current.record(plan, nextPlan, options.label ?? "Edit timeline"),
+      );
     }
     onPlanChange(nextPlan);
   };
 
   const undoPlanChange = () => {
-    if (!plan || undoStack.length === 0) {
+    if (!plan) {
       return;
     }
-    const previousPlan = undoStack.at(-1)!;
-    setUndoStack((current) => current.slice(0, -1));
-    setRedoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
-    onPlanChange(previousPlan);
-    onSelectedSegmentChange(previousPlan.segments[0]?.id);
+    const result = applySmartEditCommandHistoryUndo(commandHistory, plan);
+    if (!result) {
+      return;
+    }
+    setCommandHistory(result.history);
+    onPlanChange(result.plan);
+    onSelectedSegmentChange(result.plan.segments[0]?.id);
   };
 
   const redoPlanChange = () => {
-    if (!plan || redoStack.length === 0) {
+    if (!plan) {
       return;
     }
-    const nextPlan = redoStack.at(-1)!;
-    setRedoStack((current) => current.slice(0, -1));
-    setUndoStack((current) => [...current.slice(-(MAX_PLAN_HISTORY_LENGTH - 1)), plan]);
-    onPlanChange(nextPlan);
-    onSelectedSegmentChange(nextPlan.segments[0]?.id);
+    const result = applySmartEditCommandHistoryRedo(commandHistory, plan);
+    if (!result) {
+      return;
+    }
+    setCommandHistory(result.history);
+    onPlanChange(result.plan);
+    onSelectedSegmentChange(result.plan.segments[0]?.id);
   };
 
   const selectTimelineSegment = (
@@ -1743,7 +1821,7 @@ export const SmartEditPanel = ({
     commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: nextSegments,
-    }));
+    }), { label: segmentIds.length > 1 ? "Remove selected clips" : "Remove clip" });
     const nextSelectedId = nextSegments[Math.min(selectedSegmentIndex - 1, nextSegments.length - 1)]?.id;
     onSelectedSegmentChange(nextSelectedId);
     setSelectedSegmentIds(nextSelectedId ? [nextSelectedId] : []);
@@ -1759,7 +1837,7 @@ export const SmartEditPanel = ({
     commitPlanChange(withRebuiltTimeline({
       ...plan,
       segments: plan.segments.map((segment) => (selectedIds.has(segment.id) ? update(segment) : segment)),
-    }));
+    }), { label: "Batch edit clips" });
   };
 
   const setSourceAudioTrackMuted = (muted: boolean) => {
@@ -1772,7 +1850,7 @@ export const SmartEditPanel = ({
         ...segment,
         sourceAudioMuted: muted,
       })),
-    }));
+    }), { label: muted ? "Mute source audio track" : "Unmute source audio track" });
   };
 
   const setCaptionTrackHidden = (hidden: boolean) => {
@@ -1785,14 +1863,14 @@ export const SmartEditPanel = ({
         ...segment,
         captionHidden: hidden,
       })),
-    }));
+    }), { label: hidden ? "Hide caption track" : "Show caption track" });
   };
 
   const updateSelectedSegment = (update: (segment: SmartEditSegment) => SmartEditSegment) => {
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, update));
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, update), { label: "Edit segment" });
   };
 
   const updateTrackClipSegment = (
@@ -1802,7 +1880,9 @@ export const SmartEditPanel = ({
     if (!plan || !trackClip?.segmentId) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, trackClip.segmentId, update));
+    commitPlanChange(replaceSegment(plan, trackClip.segmentId, update), {
+      label: `Edit ${trackClip.trackId} material`,
+    });
   };
 
   const updateSelectedSegmentTimelineStart = (nextStartSecond: number) => {
@@ -1821,7 +1901,7 @@ export const SmartEditPanel = ({
             ? clampTimelineStart(nextStartSecond)
             : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
       })),
-    }));
+    }), { label: "Move clip" });
   };
 
   const splitSelectedSegment = () => {
@@ -1882,7 +1962,7 @@ export const SmartEditPanel = ({
               ? selectedStart + firstDuration
               : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
       })),
-    }));
+    }), { label: "Split clip" });
     onSelectedSegmentChange(secondSegment.id);
   };
 
@@ -1951,7 +2031,7 @@ export const SmartEditPanel = ({
               ? targetStart + firstDuration
               : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
       })),
-    }));
+    }), { label: "Split clip at playhead" });
     return rightId;
   };
 
@@ -1987,7 +2067,7 @@ export const SmartEditPanel = ({
     }
     commitPlanChange(replaceSegment(plan, segmentId, (segment) =>
       trimSegmentSource(segment, edge, deltaSeconds),
-    ));
+    ), { label: edge === "in" ? "Trim clip in" : "Trim clip out" });
   };
 
   const startTrimDrag = (
@@ -2033,7 +2113,7 @@ export const SmartEditPanel = ({
     }, 0);
     commitPlanChange(replaceSegment(plan, trimDrag.segmentId, (segment) =>
       trimSegmentSource(segment, trimDrag.edge, sourceDeltaSeconds),
-    ));
+    ), { label: trimDrag.edge === "in" ? "Trim clip in" : "Trim clip out" });
   };
 
   const startTimelineMoveDrag = (
@@ -2070,7 +2150,7 @@ export const SmartEditPanel = ({
       deltaSeconds,
       timelineEditMode,
       boundedPlayheadSeconds,
-    ));
+    ), { label: `Move clip (${timelineEditMode})` });
   };
 
   const startTrackClipMoveDrag = (
@@ -2112,7 +2192,7 @@ export const SmartEditPanel = ({
       timelineEditMode,
       boundedPlayheadSeconds,
     );
-    commitPlanChange(nextPlan);
+    commitPlanChange(nextPlan, { label: `Move ${trackClipMoveDrag.trackClip.trackId} material` });
   };
 
   const removeSelectedSegment = () => {
@@ -2132,7 +2212,7 @@ export const SmartEditPanel = ({
       selectedSegment.id,
       duplicateToken,
     );
-    commitPlanChange(nextPlan);
+    commitPlanChange(nextPlan, { label: "Duplicate clip" });
     const duplicateSegment = nextPlan.segments.find(
       (segment) => segment.id === `${selectedSegment.id}-${duplicateToken}`,
     );
@@ -2161,7 +2241,7 @@ export const SmartEditPanel = ({
     const duplicateToken = `batch-${Date.now()}`;
     const selectedIds = selectedBatchSegments.map((segment) => segment.id);
     const nextPlan = duplicateSmartEditSegmentsOnTimeline(plan, selectedIds, duplicateToken);
-    commitPlanChange(nextPlan);
+    commitPlanChange(nextPlan, { label: "Duplicate selected clips" });
     const duplicateIds = nextPlan.segments
       .map((segment) => segment.id)
       .filter((id) => selectedIds.some((sourceId) => id.startsWith(`${sourceId}-${duplicateToken}-`)));
@@ -2184,7 +2264,7 @@ export const SmartEditPanel = ({
       duplicateToken,
       timelineEditMode,
     );
-    commitPlanChange(nextPlan);
+    commitPlanChange(nextPlan, { label: `Paste selected clips (${timelineEditMode})` });
     const pastedIds = nextPlan.segments
       .map((segment) => segment.id)
       .filter((id) => selectedIds.some((sourceId) => id.startsWith(`${sourceId}-${duplicateToken}-`)));
@@ -2206,7 +2286,7 @@ export const SmartEditPanel = ({
       duplicateToken,
       timelineEditMode,
     );
-    commitPlanChange(nextPlan);
+    commitPlanChange(nextPlan, { label: `Paste copied clips (${timelineEditMode})` });
     const sourceIds = smartEditClipboard.items.map((item) => item.segment.id);
     const pastedIds = nextPlan.segments
       .map((segment) => segment.id)
@@ -2668,7 +2748,9 @@ export const SmartEditPanel = ({
                 <Button
                   icon={<SkipBack size={16} />}
                   onClick={() =>
-                    commitPlanChange(reorderSegments(plan, selectedSegment.id, "earlier"))
+                    commitPlanChange(reorderSegments(plan, selectedSegment.id, "earlier"), {
+                      label: "Move clip earlier",
+                    })
                   }
                 >
                   {copy.moveEarlier}
@@ -2676,7 +2758,9 @@ export const SmartEditPanel = ({
                 <Button
                   icon={<SkipForward size={16} />}
                   onClick={() =>
-                    commitPlanChange(reorderSegments(plan, selectedSegment.id, "later"))
+                    commitPlanChange(reorderSegments(plan, selectedSegment.id, "later"), {
+                      label: "Move clip later",
+                    })
                   }
                 >
                   {copy.moveLater}
@@ -3230,18 +3314,18 @@ export const SmartEditPanel = ({
         </div>
         <div className="timeline-toolbar" aria-label={copy.timelineControls}>
           <Button
-            disabled={undoStack.length === 0}
+            disabled={commandHistory.undoStack.length === 0}
             icon={<RotateCcw size={16} />}
             onClick={undoPlanChange}
           >
-            {copy.undo}
+            {commandHistory.undoLabel()}
           </Button>
           <Button
-            disabled={redoStack.length === 0}
+            disabled={commandHistory.redoStack.length === 0}
             icon={<RotateCw size={16} />}
             onClick={redoPlanChange}
           >
-            {copy.redo}
+            {commandHistory.redoLabel()}
           </Button>
           <div className="timeline-edit-mode-toggle" aria-label={copy.editMode}>
             {smartEditTimelineEditModes.map((mode) => (

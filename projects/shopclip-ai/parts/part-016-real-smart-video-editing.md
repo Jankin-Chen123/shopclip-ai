@@ -733,3 +733,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - True independent timeline-element persistence, visual snap guide overlays, named command history, keyframes, masks, and richer OpenCut-style effect stacking are still open.
+
+## 2026-06-05 Labeled Timeline Command History
+
+- Reference model:
+  - OpenCut's `CommandManager` stores command entries with undo/redo behavior rather than anonymous state snapshots.
+  - The transferable pattern is keeping command history as a first-class editing surface so users can understand what Undo and Redo will do next.
+- Fix:
+  - Added a `SmartEditCommandHistory` model around Smart Edit plan changes.
+  - Each committed timeline operation now records a command label, such as `Trim clip in`, `Move clip (insert)`, `Duplicate selected clips`, `Paste copied clips (overwrite)`, `Split clip`, or `Edit video material`.
+  - The Smart Edit toolbar now shows the next command target directly in the Undo/Redo buttons, for example `Undo Adjust visual transform` and `Redo Paste copied clips (magnetic)`.
+  - Existing keyboard shortcuts keep using the same command history so Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, and Ctrl/Cmd+Y stay aligned with toolbar behavior.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "labeled smart edit commands|smart edit timeline controls|editor workspace"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - The next OpenCut-level increment should persist independent timeline element records instead of deriving all command targets from segment-backed projections.
