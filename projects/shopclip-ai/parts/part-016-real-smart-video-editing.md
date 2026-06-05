@@ -1485,3 +1485,31 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
     - Audio: `aac (LC)`, `44100 Hz`, `stereo`.
 - Remaining:
   - Base demo is ready for user experience review. Later upgrades can focus on targeted timeline UX improvements rather than stickers/effects/advanced OpenCut features.
+
+## 2026-06-06 Timeline Track State Controls
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds an OpenCut/CutCap-style track-level editing primitive without enabling stickers, effects, masks, or advanced visual controls.
+- Fix:
+  - Added `updateSmartEditTimelineTrack` to update timeline track `hidden`, `muted`, and `locked` state and mirror hidden/muted state to elements on that track.
+  - Track stack controls now support lock/unlock on every track, mute/unmute on audio-like tracks, and hide/show on video/caption tracks.
+  - Locked tracks no longer start drag moves or delete selected track clips from the UI.
+  - The ffmpeg smart-edit composer now respects timeline track state:
+    - hidden tracks do not contribute global duration.
+    - hidden video/text tracks are skipped.
+    - muted/hidden source-audio tracks are skipped.
+    - muted/hidden voice tracks are skipped.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "timeline track state"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts -t "muted and hidden timeline track"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts -t "persistent timeline elements|global source-audio|muted and hidden timeline track|generated scene video-only"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/api lint`
+- Remaining:
+  - Full OpenCut-level parity is still broader than the current base demo. The next practical upgrades should stay focused on video/audio/subtitle timeline ergonomics such as slip edit, linked selection, and better clip handles.

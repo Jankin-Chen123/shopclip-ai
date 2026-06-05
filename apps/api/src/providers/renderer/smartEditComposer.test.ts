@@ -688,6 +688,82 @@ describe("smart edit composer", () => {
     await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain(",2,48,48,230,0");
   });
 
+  it("honors muted and hidden timeline track states during composition", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        durationSeconds: 4,
+        sourceAudioMuted: true,
+        voiceover: "",
+      },
+    ];
+    plan.targetDurationSeconds = 6;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 6,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "audio-source", kind: "audio", label: "Source audio", locked: false, muted: true },
+        { hidden: true, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: true,
+          durationSeconds: 2,
+          hidden: false,
+          id: "muted-track-audio",
+          kind: "audio",
+          label: "Muted track audio",
+          muted: false,
+          playbackRate: 1,
+          sourceUrl: dataAudio,
+          startSecond: 1,
+          trackId: "audio-source",
+          trimStartSecond: 0,
+        },
+        {
+          detachedAudio: false,
+          durationSeconds: 2,
+          hidden: false,
+          id: "hidden-track-caption",
+          kind: "text",
+          label: "Hidden track caption",
+          muted: false,
+          playbackRate: 1,
+          startSecond: 2,
+          text: "This caption should not render",
+          trackId: "text-copy",
+          trimStartSecond: 0,
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    expect(
+      commands.some((entry) =>
+        entry.args.some((arg) => arg.includes("source-audio-muted-track-audio")),
+      ),
+    ).toBe(false);
+    expect(commands.some((entry) => entry.args.some((arg) => arg.includes("global-timeline-text.ass")))).toBe(
+      false,
+    );
+  });
+
   it("mixes overlapping global source-audio timeline elements as lanes", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

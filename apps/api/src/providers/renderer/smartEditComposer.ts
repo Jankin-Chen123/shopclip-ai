@@ -188,6 +188,21 @@ const timelineElementTrackKind = (
               ? "caption"
               : element.kind;
 
+const timelineTrackForElement = (
+  plan: SmartEditPlan,
+  element: Pick<SmartEditTimelineElement, "trackId">,
+) => plan.timeline?.tracks.find((track) => track.id === element.trackId);
+
+const isTimelineElementHiddenByTrack = (
+  plan: SmartEditPlan,
+  element: Pick<SmartEditTimelineElement, "trackId">,
+): boolean => timelineTrackForElement(plan, element)?.hidden ?? false;
+
+const isTimelineElementMutedByTrack = (
+  plan: SmartEditPlan,
+  element: Pick<SmartEditTimelineElement, "trackId">,
+): boolean => timelineTrackForElement(plan, element)?.muted ?? false;
+
 const timelineElementOffsetWithinSegment = (
   element: SmartEditTimelineElement,
   baseStartSecond: number,
@@ -215,6 +230,7 @@ const persistentVideoTimelineElements = (plan: SmartEditPlan): SmartEditTimeline
         timelineElementTrackKind(element) === "video" &&
         !isDerivedTimelineElement(element) &&
         !element.hidden &&
+        !isTimelineElementHiddenByTrack(plan, element) &&
         Boolean(element.segmentId || element.sceneId) &&
         Boolean(element.sourceUrl),
     )
@@ -936,6 +952,8 @@ const globalTextTimelineCaptions = (
         timelineElementTrackKind(element) === "caption" &&
         !element.segmentId &&
         !element.hidden &&
+        !isTimelineElementHiddenByTrack(plan, element) &&
+        !isTimelineElementMutedByTrack(plan, element) &&
         (element.text?.trim() || element.label.trim()),
     )
     .map((element) => ({
@@ -1309,7 +1327,7 @@ const globalTimelineDurationSeconds = (plan: SmartEditPlan): number =>
       .filter((segment) => segment.enabled)
       .map((segment) => normalizeTimelineStart(segment) + normalizeDuration(segment)),
     ...(plan.timeline?.elements ?? [])
-      .filter((element) => !element.hidden)
+      .filter((element) => !element.hidden && !isTimelineElementHiddenByTrack(plan, element))
       .map((element) => element.startSecond + element.durationSeconds),
     0.01,
   );
@@ -1325,7 +1343,12 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
         element.segmentId === segment.id &&
         timelineElementTrackKind(element) === "sourceAudio",
     );
-    const sourceAudioUrl = segment.sourceAudioMuted
+    const sourceAudioUrl = segment.sourceAudioMuted ||
+      (sourceAudioElement &&
+        (sourceAudioElement.muted ||
+          sourceAudioElement.hidden ||
+          isTimelineElementMutedByTrack(plan, sourceAudioElement) ||
+          isTimelineElementHiddenByTrack(plan, sourceAudioElement)))
       ? undefined
       : sourceAudioElement?.sourceUrl ?? segment.source.sceneClipAudioUrl;
     if (!sourceAudioUrl) {
@@ -1374,6 +1397,8 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
         !element.segmentId &&
         !element.hidden &&
         !element.muted &&
+        !isTimelineElementHiddenByTrack(plan, element) &&
+        !isTimelineElementMutedByTrack(plan, element) &&
         Boolean(element.sourceUrl),
     )
     .map((element): SourceAudioTimelineClip => {
@@ -1774,7 +1799,9 @@ const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] =>
           (timelineElementTrackKind(element) === "caption" && !element.segmentId)) &&
         !element.segmentId &&
         !element.hidden &&
-        !element.muted,
+        !element.muted &&
+        !isTimelineElementHiddenByTrack(plan, element) &&
+        !isTimelineElementMutedByTrack(plan, element),
     )
     .flatMap((element): VoiceoverTimelineClip[] => {
       const text = (element.text?.trim() || element.label.trim()).trim();

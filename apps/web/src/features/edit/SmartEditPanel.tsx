@@ -26,6 +26,7 @@ import {
   Plus,
   Eye,
   EyeOff,
+  Lock,
   RefreshCw,
   RotateCcw,
   RotateCw,
@@ -33,6 +34,7 @@ import {
   SkipBack,
   SkipForward,
   Trash2,
+  Unlock,
   Volume2,
   VolumeX,
   ZoomIn,
@@ -2003,6 +2005,10 @@ type SmartEditTimelineElementPatch = Partial<
   >
 >;
 
+type SmartEditTimelineTrackPatch = Partial<
+  Pick<SmartEditTimeline["tracks"][number], "hidden" | "locked" | "muted">
+>;
+
 type SmartEditTrack = {
   id: SmartEditTrackId;
   segments: SmartEditTrackSegment[];
@@ -2141,6 +2147,35 @@ const withUpdatedTimelineElements = (
     targetDurationSeconds: timeline.durationSeconds,
     timeline,
   };
+};
+
+export const updateSmartEditTimelineTrack = (
+  plan: SmartEditPlan,
+  trackId: string,
+  patch: SmartEditTimelineTrackPatch,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  if (!baseTimeline.tracks.some((track) => track.id === trackId)) {
+    return plan;
+  }
+  const tracks = baseTimeline.tracks.map((track) =>
+    track.id === trackId
+      ? {
+          ...track,
+          ...patch,
+        }
+      : track,
+  );
+  const elements = baseTimeline.elements.map((element) =>
+    element.trackId === trackId
+      ? {
+          ...element,
+          ...(patch.hidden !== undefined ? { hidden: patch.hidden } : {}),
+          ...(patch.muted !== undefined ? { muted: patch.muted } : {}),
+        }
+      : element,
+  );
+  return withUpdatedTimelineElements(plan, elements, tracks);
 };
 
 type SmartEditSrtCue = {
@@ -3213,6 +3248,22 @@ export const SmartEditPanel = ({
     video: copy.videoTrack,
     voice: copy.voiceTrack,
   } as const;
+  const timelineTrackIdForTrack = (trackId: SmartEditTrackId): string =>
+    trackId === "sourceAudio"
+      ? "audio-source"
+      : trackId === "caption"
+        ? "text-copy"
+        : trackId === "video"
+          ? "video-main"
+          : trackId === "bgm"
+            ? "bgm-bed"
+            : "voiceover";
+  const timelineTrackForTrack = (trackId: SmartEditTrackId) =>
+    (plan?.timeline ?? (plan ? buildSmartEditTimeline(plan) : undefined))?.tracks.find(
+      (track) => track.id === timelineTrackIdForTrack(trackId),
+    );
+  const isTimelineTrackLocked = (trackId: SmartEditTrackId): boolean =>
+    timelineTrackForTrack(trackId)?.locked ?? false;
 
   const commitPlanChange = (
     nextPlan: SmartEditPlan,
@@ -3444,30 +3495,19 @@ export const SmartEditPanel = ({
     }), { label: "Batch edit clips" });
   };
 
-  const setSourceAudioTrackMuted = (muted: boolean) => {
+  const updateTimelineTrackState = (
+    trackId: SmartEditTrackId,
+    patch: SmartEditTimelineTrackPatch,
+    label: string,
+  ) => {
     if (!plan) {
       return;
     }
-    commitPlanChange(withRebuiltTimeline({
-      ...plan,
-      segments: plan.segments.map((segment) => ({
-        ...segment,
-        sourceAudioMuted: muted,
-      })),
-    }), { label: muted ? "Mute source audio track" : "Unmute source audio track" });
-  };
-
-  const setCaptionTrackHidden = (hidden: boolean) => {
-    if (!plan) {
+    const nextPlan = updateSmartEditTimelineTrack(plan, timelineTrackIdForTrack(trackId), patch);
+    if (nextPlan === plan) {
       return;
     }
-    commitPlanChange(withRebuiltTimeline({
-      ...plan,
-      segments: plan.segments.map((segment) => ({
-        ...segment,
-        captionHidden: hidden,
-      })),
-    }), { label: hidden ? "Hide caption track" : "Show caption track" });
+    commitPlanChange(nextPlan, { label });
   };
 
   const updateSelectedSegment = (update: (segment: SmartEditSegment) => SmartEditSegment) => {
@@ -4131,7 +4171,7 @@ export const SmartEditPanel = ({
     event: ReactPointerEvent<HTMLElement>,
     trackClip: SmartEditTrackSegment,
   ) => {
-    if (trackClip.trackId === "bgm") {
+    if (trackClip.trackId === "bgm" || isTimelineTrackLocked(trackClip.trackId)) {
       selectTrackClip(trackClip);
       return;
     }
@@ -4178,6 +4218,9 @@ export const SmartEditPanel = ({
 
   const removeSelectedTrackClip = () => {
     if (!plan || !selectedTrackClip) {
+      return;
+    }
+    if (isTimelineTrackLocked(selectedTrackClip.trackId)) {
       return;
     }
     if (selectedTrackClip.trackId === "video" && selectedTrackClip.segmentId) {
@@ -6412,48 +6455,64 @@ export const SmartEditPanel = ({
             <h3>{copy.trackStack}</h3>
             <span>{copy.trackStackHint}</span>
           </div>
-          {trackSegments.map((track) => (
+          {trackSegments.map((track) => {
+            const timelineTrack = timelineTrackForTrack(track.id);
+            const trackMuted = timelineTrack?.muted ?? track.segments.every((segment) => segment.muted);
+            const trackHidden = timelineTrack?.hidden ?? track.segments.every((segment) => segment.hidden);
+            const trackLocked = timelineTrack?.locked ?? false;
+            const canMuteTrack = track.id === "sourceAudio" || track.id === "voice" || track.id === "bgm";
+            const canHideTrack = track.id === "video" || track.id === "caption";
+            return (
             <section className="smart-edit-track-row" key={track.id} aria-label={trackLabels[track.id]}>
               <div className="smart-edit-track-label">
                 <strong>{trackLabels[track.id]}</strong>
-                {track.id === "sourceAudio" && track.segments.length > 0 ? (
+                {canMuteTrack && track.segments.length > 0 ? (
                   <button
                     type="button"
                     onClick={() =>
-                      setSourceAudioTrackMuted(!track.segments.every((segment) => segment.muted))
+                      updateTimelineTrackState(track.id, { muted: !trackMuted }, trackMuted ? "Unmute track" : "Mute track")
                     }
                   >
-                    {track.segments.every((segment) => segment.muted) ? (
+                    {trackMuted ? (
                       <Volume2 size={14} />
                     ) : (
                       <VolumeX size={14} />
                     )}
                     <span>
-                      {track.segments.every((segment) => segment.muted)
-                        ? copy.unmuteTrack
-                        : copy.muteTrack}
+                      {trackMuted ? copy.unmuteTrack : copy.muteTrack}
                     </span>
                   </button>
                 ) : null}
-                {track.id === "caption" && track.segments.length > 0 ? (
+                {canHideTrack && track.segments.length > 0 ? (
                   <button
                     type="button"
                     onClick={() =>
-                      setCaptionTrackHidden(!track.segments.every((segment) => segment.hidden))
+                      updateTimelineTrackState(track.id, { hidden: !trackHidden }, trackHidden ? "Show track" : "Hide track")
                     }
                   >
-                    {track.segments.every((segment) => segment.hidden) ? (
+                    {trackHidden ? (
                       <Eye size={14} />
                     ) : (
                       <EyeOff size={14} />
                     )}
                     <span>
-                      {track.segments.every((segment) => segment.hidden)
-                        ? copy.showCaptionTrack
-                        : copy.hideCaptionTrack}
+                      {trackHidden ? copy.showCaptionTrack : copy.hideCaptionTrack}
                     </span>
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateTimelineTrackState(
+                      track.id,
+                      { locked: !trackLocked },
+                      trackLocked ? "Unlock track" : "Lock track",
+                    )
+                  }
+                >
+                  {trackLocked ? <Unlock size={14} /> : <Lock size={14} />}
+                  <span>{trackLocked ? "Unlock" : "Lock"}</span>
+                </button>
               </div>
               <div className="smart-edit-track-clips">
                 <div className="smart-edit-track-lane" style={{ width: timelineWidth }}>
@@ -6467,7 +6526,9 @@ export const SmartEditPanel = ({
                         selectedTrackClipId === segment.id ? "track-selected" : ""
                       } ${
                         trackClipMoveDrag?.trackClip.id === segment.id ? "moving" : ""
-                      } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""}`.trim()}
+                      } ${segment.muted ? "muted" : ""} ${segment.hidden ? "hidden" : ""} ${
+                        trackLocked ? "locked" : ""
+                      }`.trim()}
                       key={segment.id}
                       role="button"
                       style={{
@@ -6500,7 +6561,8 @@ export const SmartEditPanel = ({
                 </div>
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 

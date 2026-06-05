@@ -57,6 +57,7 @@ import {
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
   updateSmartEditTimelineElement,
+  updateSmartEditTimelineTrack,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
@@ -3786,6 +3787,69 @@ Second imported caption`,
       textPositionYPercent: 8,
       trackId: "text-copy",
     });
+  });
+
+  it("updates smart edit timeline track state and mirrors it to track elements", () => {
+    const plan = addSmartEditTimelineTextElement(
+      addSmartEditTimelineVoiceElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-track-state",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 4,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Track state demo.",
+              sceneId: "scene-1",
+              source: { imageUrl: "https://cdn.example.test/hero.png", kind: "image-asset" },
+              subtitle: "Hook",
+              timelineStartSecond: 0,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Use timeline tracks.",
+          targetDurationSeconds: 4,
+        } satisfies SmartEditPlan,
+        1,
+        "voice-track",
+      ),
+      2,
+      "text-track",
+    );
+
+    const hiddenTextTrack = updateSmartEditTimelineTrack(plan, "text-copy", { hidden: true });
+    expect(hiddenTextTrack.timeline?.tracks.find((track) => track.id === "text-copy")?.hidden).toBe(
+      true,
+    );
+    expect(
+      hiddenTextTrack.timeline?.elements
+        .filter((element) => element.trackId === "text-copy")
+        .every((element) => element.hidden),
+    ).toBe(true);
+
+    const mutedVoiceTrack = updateSmartEditTimelineTrack(hiddenTextTrack, "voiceover", {
+      locked: true,
+      muted: true,
+    });
+    expect(mutedVoiceTrack.timeline?.tracks.find((track) => track.id === "voiceover")).toMatchObject({
+      locked: true,
+      muted: true,
+    });
+    expect(
+      mutedVoiceTrack.timeline?.elements
+        .filter((element) => element.trackId === "voiceover")
+        .every((element) => element.muted),
+    ).toBe(true);
+    expect(updateSmartEditTimelineTrack(plan, "missing-track", { hidden: true })).toBe(plan);
   });
 
   it("splits an independent smart edit timeline element at the playhead", () => {
