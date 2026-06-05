@@ -633,6 +633,95 @@ describe("smart edit composer", () => {
     );
   });
 
+  it("mixes overlapping global source-audio timeline elements as lanes", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        captionHidden: true,
+        durationSeconds: 4,
+        sourceAudioMuted: true,
+        voiceover: "",
+      },
+    ];
+    plan.targetDurationSeconds = 4;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 4,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "audio-source", kind: "audio", label: "Source audio", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: true,
+          durationSeconds: 2,
+          hidden: false,
+          id: "audio-lane-a",
+          kind: "audio",
+          label: "Audio lane A",
+          muted: false,
+          playbackRate: 1,
+          sourceUrl: dataAudio,
+          startSecond: 0,
+          trackId: "audio-source",
+          trimEndSecond: 2,
+          trimStartSecond: 0,
+        },
+        {
+          detachedAudio: true,
+          durationSeconds: 2,
+          hidden: false,
+          id: "audio-lane-b",
+          kind: "audio",
+          label: "Audio lane B",
+          muted: false,
+          playbackRate: 1,
+          sourceUrl: dataAudio,
+          startSecond: 1,
+          trackId: "audio-source",
+          trimEndSecond: 3,
+          trimStartSecond: 1,
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const laneACommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-audio-lane-a-lane.wav")),
+    );
+    const laneBCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-audio-lane-b-lane.wav")),
+    );
+    expect(laneACommand).toBeTruthy();
+    expect(laneBCommand).toBeTruthy();
+    expect(laneACommand!.args.join(" ")).toContain("adelay=0:all=1");
+    expect(laneACommand!.args.join(" ")).toContain("apad,atrim=0:4");
+    expect(laneBCommand!.args.join(" ")).toContain("adelay=1000:all=1");
+    expect(laneBCommand!.args.join(" ")).toContain("apad,atrim=0:4");
+
+    const mixCommand = commands.find((entry) => entry.args.join(" ").includes("amix=inputs=2"));
+    expect(mixCommand?.args.join(" ")).toContain("amix=inputs=2:duration=longest");
+    expect(mixCommand?.args.join(" ")).toContain("atrim=0:4");
+    expect(
+      commands.some((entry) => entry.args.some((arg) => arg.includes("smart-edit-source-audio.txt"))),
+    ).toBe(false);
+  });
+
   it("mutes selected separated scene audio while preserving the source audio timeline", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

@@ -939,3 +939,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Source-audio element overlap is still serialized with gaps/concat rather than fully mixed as overlapping tracks.
   - Voiceover is still generated from segment text rather than arbitrary text/audio timeline elements.
   - Full direct rendering should next support overlapping audio lanes, arbitrary text style/keyframes, and final export from element stacks without segment compatibility fields.
+
+## 2026-06-05 Overlapping Source Audio Lane Mixing
+
+- Reference model:
+  - OpenCut-style timelines allow multiple audio elements to overlap on separate lanes; overlapping elements must be mixed, not serialized into a single concat list.
+- Fix:
+  - Added overlap detection for source-audio timeline clips before creating the final source audio track.
+  - Non-overlapping source audio keeps the existing gap/concat path so manual timeline gaps remain stable.
+  - Overlapping source-audio elements are now materialized as independent full-timeline WAV lanes: each lane trims its source span, applies playback-rate filters, delays to `startSecond + delaySeconds`, pads/trims to the global timeline duration, and then mixes with `amix=duration=longest`.
+  - Global unowned audio elements and segment-backed separated scene audio use the same overlap-aware path.
+- Verification:
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "mixes overlapping global source-audio"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "global source-audio|source audio|timeline gaps"`
+- Remaining:
+  - Voiceover is still generated from segment text rather than arbitrary timeline text/audio elements.
+  - Direct element-stack rendering still needs richer text styling/keyframes and fuller audio lane controls such as volume envelopes and clip-level fades.

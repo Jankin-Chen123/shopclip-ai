@@ -1247,6 +1247,75 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
   return [...segmentClips, ...globalElementClips].sort((left, right) => left.startSecond - right.startSecond);
 };
 
+const hasOverlappingSourceAudioClips = (clips: SourceAudioTimelineClip[]): boolean => {
+  let cursor = 0;
+  for (const clip of clips) {
+    if (clip.startSecond < cursor - 0.01) {
+      return true;
+    }
+    cursor = Math.max(cursor, clip.startSecond + clip.durationSeconds);
+  }
+  return false;
+};
+
+const createMixedSourceAudioTrack = async (
+  command: string,
+  clips: SourceAudioTimelineClip[],
+  timelineDurationSeconds: number,
+  workdir: string,
+  fetchImpl: typeof fetch,
+  run: CommandRunner,
+): Promise<string | undefined> => {
+  if (clips.length === 0) {
+    return undefined;
+  }
+
+  const lanePaths: string[] = [];
+  for (const clip of clips) {
+    const token = safeFileToken(clip.id);
+    const targetPath = join(workdir, `source-audio-${token}.m4a`);
+    const lanePath = join(workdir, `source-audio-${token}-lane.wav`);
+    const sourcePath = await materializeUrl(clip.sourceUrl, targetPath, fetchImpl);
+    const globalDelayMilliseconds = Math.max(
+      0,
+      Math.round((clip.startSecond + clip.delaySeconds) * 1000),
+    );
+    const filters = [
+      `atrim=${clip.trimStartSecond}:${clip.trimEndSecond}`,
+      "asetpts=PTS-STARTPTS",
+      atempoFilter(clip.playbackRate),
+      `adelay=${globalDelayMilliseconds}:all=1`,
+      `apad,atrim=0:${timelineDurationSeconds}`,
+    ].join(",");
+    await run(command, [
+      "-y",
+      "-i",
+      sourcePath,
+      "-af",
+      filters,
+      "-c:a",
+      "pcm_s16le",
+      lanePath,
+    ]);
+    lanePaths.push(lanePath);
+  }
+
+  const sourceAudioTrackPath = join(workdir, "source-audio.wav");
+  const filterInputs = lanePaths.map((_, index) => `[${index}:a]`).join("");
+  await run(command, [
+    "-y",
+    ...lanePaths.flatMap((path) => ["-i", path]),
+    "-filter_complex",
+    `${filterInputs}amix=inputs=${lanePaths.length}:duration=longest,atrim=0:${timelineDurationSeconds}[aout]`,
+    "-map",
+    "[aout]",
+    "-c:a",
+    "pcm_s16le",
+    sourceAudioTrackPath,
+  ]);
+  return sourceAudioTrackPath;
+};
+
 const createSourceAudioTrack = async (
   command: string,
   plan: SmartEditPlan,
@@ -1257,6 +1326,18 @@ const createSourceAudioTrack = async (
   const clips = sourceAudioTimelineClips(plan);
   if (clips.length === 0) {
     return undefined;
+  }
+
+  const timelineDurationSeconds = globalTimelineDurationSeconds(plan);
+  if (hasOverlappingSourceAudioClips(clips)) {
+    return createMixedSourceAudioTrack(
+      command,
+      clips,
+      timelineDurationSeconds,
+      workdir,
+      fetchImpl,
+      run,
+    );
   }
 
   const paddedPaths: string[] = [];
@@ -1297,7 +1378,7 @@ const createSourceAudioTrack = async (
     cursor = Math.max(cursor, start) + clip.durationSeconds;
   }
 
-  const tailDuration = globalTimelineDurationSeconds(plan) - cursor;
+  const tailDuration = timelineDurationSeconds - cursor;
   if (tailDuration > 0.01) {
     const gapPath = join(workdir, "source-audio-tail.wav");
     await createSilenceAudioSegment(command, tailDuration, gapPath, run);
