@@ -40,6 +40,7 @@ import {
   applySmartEditCommandHistoryUndo,
   copySmartEditSegmentsToClipboard,
   createSmartEditCommandHistory,
+  detachSmartEditSourceAudioToTimelineElement,
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   moveSmartEditSegmentOnTimeline,
@@ -3393,6 +3394,85 @@ describe("App", () => {
     expect(slowPlan.timeline?.elements.find((element) => element.id === "voice-speed")).toMatchObject({
       playbackRate: 0.25,
     });
+  });
+
+  it("detaches generated scene source audio into an independent timeline material", () => {
+    const plan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 1,
+          transition: "cut",
+          subtitle: "Hook subtitle",
+          voiceover: "",
+          playbackRate: 1.5,
+          sourceAudioStartOffsetSeconds: 0.5,
+          sourceAudioDurationSeconds: 2.5,
+          sourceAudioVolume: 0.7,
+          sourceAudioFadeInSeconds: 0.3,
+          sourceAudioFadeOutSeconds: 0.4,
+          sourceAudioVolumeKeyframes: [
+            { id: "volume-0", timeSecond: 0, volume: 0.5 },
+            { id: "volume-1", timeSecond: 1.2, volume: 0.9 },
+          ],
+          source: {
+            assetId: "asset-video",
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.com/scene-1-audio.m4a",
+            sceneClipAudioWaveform: {
+              bucketDurationSeconds: 0.25,
+              buckets: [
+                { index: 0, peak: 0.4, rms: 0.2 },
+                { index: 1, peak: 0.8, rms: 0.5 },
+              ],
+              durationSeconds: 3.8,
+            },
+            sceneClipUrl: "https://cdn.example.com/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.com/scene-1-video.mp4",
+            startSecond: 0.25,
+          },
+        },
+      ],
+      targetDurationSeconds: 5,
+    } satisfies SmartEditPlan;
+
+    const nextPlan = detachSmartEditSourceAudioToTimelineElement(plan, "segment-1", "test");
+    const updatedSegment = nextPlan.segments.find((segment) => segment.id === "segment-1");
+    const detachedAudio = nextPlan.timeline?.elements.find((element) => element.id === "source-audio-segment-1-test");
+
+    expect(updatedSegment?.sourceAudioMuted).toBe(true);
+    expect(detachedAudio).toMatchObject({
+      audioFadeInSeconds: 0.3,
+      audioFadeOutSeconds: 0.4,
+      audioVolume: 0.7,
+      detachedAudio: true,
+      durationSeconds: 2.5,
+      hidden: false,
+      id: "source-audio-segment-1-test",
+      kind: "audio",
+      muted: false,
+      playbackRate: 1.5,
+      sceneId: "scene-1",
+      sourceUrl: "https://cdn.example.com/scene-1-audio.m4a",
+      startSecond: 1.5,
+      trackId: "audio-source",
+      trimStartSecond: 0.25,
+    });
+    expect(detachedAudio?.segmentId).toBeUndefined();
+    expect(detachedAudio?.audioWaveform).toEqual(plan.segments[0].source.sceneClipAudioWaveform);
+    expect(detachedAudio?.audioVolumeKeyframes).toEqual([
+      { easing: "linear", id: "volume-0", timeSecond: 0, volume: 0.5 },
+      { easing: "linear", id: "volume-1", timeSecond: 1.2, volume: 0.9 },
+    ]);
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

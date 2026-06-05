@@ -2199,6 +2199,86 @@ export const addSmartEditTimelineTextElement = (
   );
 };
 
+export const detachSmartEditSourceAudioToTimelineElement = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const segment = plan.segments.find((candidate) => candidate.id === segmentId);
+  if (!segment?.source.sceneClipAudioUrl) {
+    return plan;
+  }
+
+  const segmentStartSecond = segmentTimelineBaseStart(plan, segment.id);
+  const sourceAudioOffsetSeconds = clampInSegmentOffset(
+    segment.sourceAudioStartOffsetSeconds ?? 0,
+    segment.durationSeconds,
+  );
+  const sourceAudioDurationSeconds = clipDurationWithinSegment(
+    segment.sourceAudioDurationSeconds,
+    sourceAudioOffsetSeconds,
+    segment.durationSeconds,
+  );
+  const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+  const sourceStart = segment.source.startSecond ?? 0;
+  const trimEndSecond =
+    segment.source.endSecond === undefined
+      ? sourceStart + sourceAudioDurationSeconds * playbackRate
+      : Math.min(segment.source.endSecond, sourceStart + sourceAudioDurationSeconds * playbackRate);
+  const detachedElement: SmartEditTimelineElement = {
+    audioFadeInSeconds: segment.sourceAudioFadeInSeconds ?? 0,
+    audioFadeOutSeconds: segment.sourceAudioFadeOutSeconds ?? 0,
+    audioVolume: segment.sourceAudioVolume ?? 1,
+    audioVolumeKeyframes: audioVolumeKeyframes(
+      segment.sourceAudioVolumeKeyframes,
+      sourceAudioDurationSeconds,
+    ),
+    audioWaveform: segment.source.sceneClipAudioWaveform,
+    detachedAudio: true,
+    durationSeconds: sourceAudioDurationSeconds,
+    hidden: false,
+    id: `source-audio-${segment.id}-${token}`,
+    kind: "audio",
+    label: `Scene ${segment.order} detached audio`,
+    muted: false,
+    playbackRate,
+    sceneId: segment.sceneId,
+    sourceDurationSeconds:
+      segment.source.endSecond !== undefined
+        ? Math.max(MIN_SMART_EDIT_CLIP_SECONDS, segment.source.endSecond - sourceStart)
+        : undefined,
+    sourceUrl: segment.source.sceneClipAudioUrl,
+    startSecond: snapTimelineSeconds(segmentStartSecond + sourceAudioOffsetSeconds),
+    trackId: "audio-source",
+    trimEndSecond,
+    trimStartSecond: sourceStart,
+  };
+  const mutedPlan = withRebuiltTimeline({
+    ...plan,
+    segments: plan.segments.map((candidate) =>
+      candidate.id === segment.id
+        ? {
+            ...candidate,
+            sourceAudioMuted: true,
+          }
+        : candidate,
+    ),
+  });
+  const baseTimeline = mutedPlan.timeline ?? buildSmartEditTimeline(mutedPlan);
+  return withUpdatedTimelineElements(
+    mutedPlan,
+    [...baseTimeline.elements, detachedElement],
+    ensureTimelineTrack(baseTimeline, {
+      hidden: false,
+      id: "audio-source",
+      kind: "audio",
+      label: "Source audio",
+      locked: false,
+      muted: false,
+    }),
+  );
+};
+
 export const updateSmartEditTimelineElement = (
   plan: SmartEditPlan,
   elementId: string,
@@ -2927,6 +3007,27 @@ export const SmartEditPanel = ({
     if (addedElement) {
       setSelectedTrackClipId(addedElement.id);
       setSelectedSegmentIds([]);
+    }
+  };
+
+  const detachSelectedSourceAudio = () => {
+    if (!plan || !selectedTrackClip?.segmentId || selectedTrackClip.trackId !== "sourceAudio") {
+      return;
+    }
+    const nextPlan = detachSmartEditSourceAudioToTimelineElement(
+      plan,
+      selectedTrackClip.segmentId,
+      `${Date.now()}`,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    const detachedElement = nextPlan.timeline?.elements.at(-1);
+    commitPlanChange(nextPlan, { label: "Detach source audio" });
+    if (detachedElement) {
+      setSelectedTrackClipId(detachedElement.id);
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
     }
   };
 
@@ -4272,6 +4373,11 @@ export const SmartEditPanel = ({
                       />
                     </label>
                   </div>
+                  {selectedSegment.source.sceneClipAudioUrl ? (
+                    <Button icon={<Volume2 size={16} />} onClick={detachSelectedSourceAudio}>
+                      Detach audio
+                    </Button>
+                  ) : null}
                   <div className="smart-edit-effect-keyframes">
                     <div className="smart-edit-section-header">
                       <h6>Audio volume keyframes</h6>

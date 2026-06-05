@@ -1274,3 +1274,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
 - Remaining:
   - Still need a live fresh render on `shopclip.site` that produces non-expired scene clip URLs, materializes them with real ffmpeg, and shows editable video/audio/subtitle tracks in Smart Edit.
+
+## 2026-06-05 Source Audio Detach Demo
+
+- Scope:
+  - Continues the narrowed base demo: video, audio, and subtitle editing only.
+  - Targets the user-trial gap where generated scene audio was visible as a segment-bound source-audio clip but could not yet be detached into an independently editable material.
+- Fix:
+  - Added `detachSmartEditSourceAudioToTimelineElement` to copy a generated scene clip's `sceneClipAudioUrl`, waveform, volume, fade, keyframe, playback-rate, trim, and timeline timing into a persistent `audio-source` timeline element.
+  - The source segment is marked `sourceAudioMuted=true` after detach so export does not double-mix the original source audio and the new independent audio material.
+  - Added a `Detach audio` action to the source-audio inspector. After detaching, the newly created independent audio material is selected and can reuse the existing move, split, trim, delete, volume, mute, and speed controls.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "detaches generated scene source audio"` initially failed because the helper was missing.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "detaches generated scene source audio"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|source audio"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - This is still not full objective completion. The open acceptance gap is live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.
