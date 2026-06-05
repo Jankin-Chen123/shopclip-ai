@@ -1202,3 +1202,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Deploy the follow-up default-audio/source-priority patch and re-run the live Studio Smart Edit browser pass.
   - Full completion still requires runtime evidence for a fresh render-to-material-to-smart-edit path using newly generated scene clips.
+
+## 2026-06-05 Stable Seedance Reference Image Selection
+
+- Runtime finding:
+  - A live browser run clicked `Start render` on `https://shopclip.site/#delivery` with `Generate audio` checked.
+  - The new render task `c085cac6-1e91-4243-ac7a-f94af8e9533a` failed immediately with `Seedance request failed with HTTP 400`.
+  - The provider error was `content[1].image_url ... resource download failed`, and the failed project still had storyboard scene images from short-lived Volcengine/TOS generated-image URLs.
+- Fix:
+  - Changed Seedance request construction to prefer the scene's bound project asset image URL first, then stable project image assets, and only use the storyboard generated image URL as a fallback.
+  - Updated the renderer regression test so stable asset-slot image URLs outrank storyboard scene image URLs.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/seedanceRenderer.test.ts -t "asset slot image|Seedance task"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/seedanceRenderer.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `git diff --check`
+- Remaining:
+  - Deploy this fix and re-trigger a fresh audio-enabled render task. The goal remains open until the fresh task produces materialized video/audio/text clips and the Smart Edit timeline shows editable source audio and captions.
