@@ -177,6 +177,130 @@ const timelineElementOffsetWithinSegment = (
     segment,
   );
 
+const isDerivedTimelineElement = (element: SmartEditTimelineElement): boolean =>
+  element.id === "bgm-bed" ||
+  (!!element.segmentId &&
+    [
+      `${element.segmentId}-video`,
+      `${element.segmentId}-audio`,
+      `${element.segmentId}-text`,
+      `${element.segmentId}-voice`,
+    ].includes(element.id));
+
+const persistentVideoTimelineElements = (plan: SmartEditPlan): SmartEditTimelineElement[] =>
+  (plan.timeline?.elements ?? [])
+    .filter(
+      (element) =>
+        timelineElementTrackKind(element) === "video" &&
+        !isDerivedTimelineElement(element) &&
+        !element.hidden &&
+        Boolean(element.segmentId || element.sceneId) &&
+        Boolean(element.sourceUrl),
+    )
+    .sort((left, right) => left.startSecond - right.startSecond);
+
+const timelineElementMidpoint = (element: SmartEditTimelineElement): number =>
+  element.startSecond + element.durationSeconds / 2;
+
+const owningVideoElementForTimelineElement = (
+  element: SmartEditTimelineElement,
+  videoElements: SmartEditTimelineElement[],
+): SmartEditTimelineElement | undefined => {
+  const midpoint = timelineElementMidpoint(element);
+  return (
+    videoElements.find((videoElement) => {
+      if (element.segmentId && videoElement.segmentId !== element.segmentId) {
+        return false;
+      }
+      return (
+        midpoint >= videoElement.startSecond - 0.001 &&
+        midpoint <= videoElement.startSecond + videoElement.durationSeconds + 0.001
+      );
+    }) ??
+    videoElements.find((videoElement) => element.segmentId && videoElement.segmentId === element.segmentId)
+  );
+};
+
+const planWithPersistentVideoElementSegments = (plan: SmartEditPlan): SmartEditPlan => {
+  const videoElements = persistentVideoTimelineElements(plan);
+  if (videoElements.length <= 1) {
+    return plan;
+  }
+
+  const segments = videoElements.flatMap((videoElement, index): SmartEditSegment[] => {
+    const baseSegment = plan.segments.find(
+      (segment) =>
+        segment.id === videoElement.segmentId ||
+        segment.sceneId === videoElement.sceneId,
+    );
+    if (!baseSegment) {
+      return [];
+    }
+    const trimStartSecond = videoElement.trimStartSecond ?? baseSegment.source.startSecond;
+    const trimEndSecond =
+      videoElement.trimEndSecond ??
+      (trimStartSecond === undefined
+        ? baseSegment.source.endSecond
+        : trimStartSecond + videoElement.durationSeconds * (videoElement.playbackRate ?? 1));
+    return [
+      {
+        ...baseSegment,
+        durationSeconds: videoElement.durationSeconds,
+        enabled: !videoElement.hidden,
+        id: videoElement.id,
+        order: index + 1,
+        playbackRate: videoElement.playbackRate ?? baseSegment.playbackRate,
+        sceneId: videoElement.sceneId ?? baseSegment.sceneId,
+        timelineStartSecond: videoElement.startSecond,
+        source: {
+          ...baseSegment.source,
+          ...(videoElement.sourceUrl
+            ? {
+                sceneClipVideoOnlyUrl: videoElement.sourceUrl,
+              }
+            : {}),
+          ...(trimStartSecond !== undefined ? { startSecond: trimStartSecond } : {}),
+          ...(trimEndSecond !== undefined ? { endSecond: trimEndSecond } : {}),
+        },
+        visualEffects: videoElement.visualEffects ?? baseSegment.visualEffects,
+      },
+    ];
+  });
+
+  if (segments.length === 0) {
+    return plan;
+  }
+
+  const elements = (plan.timeline?.elements ?? []).map((element) => {
+    const owningVideoElement =
+      timelineElementTrackKind(element) === "video"
+        ? videoElements.find((videoElement) => videoElement.id === element.id)
+        : owningVideoElementForTimelineElement(element, videoElements);
+    if (!owningVideoElement) {
+      return element;
+    }
+    return {
+      ...element,
+      sceneId: owningVideoElement.sceneId ?? element.sceneId,
+      segmentId: owningVideoElement.id,
+    };
+  });
+
+  return {
+    ...plan,
+    segments,
+    targetDurationSeconds:
+      plan.timeline?.durationSeconds ??
+      Math.max(...segments.map((segment) => normalizeTimelineStart(segment) + normalizeDuration(segment))),
+    timeline: plan.timeline
+      ? {
+          ...plan.timeline,
+          elements,
+        }
+      : plan.timeline,
+  };
+};
+
 const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartEditPlan => {
   const elements = plan.timeline?.elements ?? [];
   if (elements.length === 0) {
@@ -1411,7 +1535,9 @@ export const composeSmartEditToStorage = async (
   assets: AssetMetadata[],
   options: ComposeSmartEditOptions,
 ): Promise<SmartEditLocalExport> => {
-  const executablePlan = planWithPersistentTimelineElementOverrides(plan);
+  const executablePlan = planWithPersistentTimelineElementOverrides(
+    planWithPersistentVideoElementSegments(plan),
+  );
   const command = options.command ?? commandFromEnv();
   const fetchImpl = options.fetchImpl ?? fetch;
   const run = options.runCommand ?? runCommand;

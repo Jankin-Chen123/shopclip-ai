@@ -899,3 +899,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Effect keyframes are still segment/effect-instance backed, not arbitrary element property-path animations.
   - Curve editing, direct arbitrary element-stack export, grouped element selection, and fuller OpenCut effect definitions remain open.
+
+## 2026-06-05 Persistent Video Element Export Units
+
+- Reference model:
+  - OpenCut renders timeline elements as first-class edit records instead of collapsing all operations back into scene-sized segments.
+  - This increment starts replacing the compatibility bridge by compiling persistent video elements into independent executable export units.
+- Fix:
+  - Added a composer compile pass that detects multiple persistent video timeline elements and turns each visible video element into its own executable smart-edit segment.
+  - Each generated export unit keeps the element id, timeline start, duration, playback rate, trim in/out, source URL, scene id, and per-element visual effects.
+  - Non-video timeline elements are reassigned to the owning video element by segment id and timeline overlap so existing subtitle/source-audio/voice override logic can continue to operate on element-native video units.
+  - Segment uploads and `segmentOutputs` now use persistent video element ids for these compiled units, so repeated cuts from one original scene no longer collapse into one backend segment output.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "independent export units"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "independent export units|derived timeline"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "persistent|timeline|source audio|subtitle|effect|keyframes|mask|transition"`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+- Remaining:
+  - Audio/text elements are still rendered through the existing segment override path after being reassigned to owning video elements.
+  - The next step is direct arbitrary element-stack rendering for audio/text overlays without requiring segment-compatible fields.

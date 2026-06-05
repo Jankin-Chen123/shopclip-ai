@@ -398,6 +398,149 @@ describe("smart edit composer", () => {
     expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
   });
 
+  it("renders persistent video timeline elements as independent export units", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider, uploads } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        durationSeconds: 6,
+        playbackRate: 1,
+        source: {
+          endSecond: 6,
+          kind: "generated-scene-clip",
+          sceneClipAudioUrl: dataAudio,
+          sceneClipUrl: dataVideo,
+          sceneClipVideoOnlyUrl: dataVideo,
+          startSecond: 0,
+        },
+      },
+    ];
+    plan.targetDurationSeconds = 6;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 6,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: false,
+          durationSeconds: 2,
+          hidden: false,
+          id: "clip-a",
+          kind: "video",
+          label: "Clip A",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          segmentId: "segment-video",
+          sourceUrl: dataVideo,
+          startSecond: 0,
+          trackId: "video-main",
+          trimEndSecond: 2,
+          trimStartSecond: 0,
+        },
+        {
+          detachedAudio: false,
+          durationSeconds: 2,
+          hidden: false,
+          id: "clip-b",
+          kind: "video",
+          label: "Clip B",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          segmentId: "segment-video",
+          sourceUrl: dataVideo,
+          startSecond: 3,
+          trackId: "video-main",
+          trimEndSecond: 5,
+          trimStartSecond: 3,
+        },
+      ],
+    };
+
+    const result = await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    expect(result.segmentOutputs.map((output) => output.segmentId)).toEqual(["clip-a", "clip-b"]);
+    expect(uploads.map((upload) => upload.objectKey)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("/segments/clip-a.mp4"),
+        expect.stringContaining("/segments/clip-b.mp4"),
+      ]),
+    );
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("clip-a-raw.mp4")),
+    );
+    const secondRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("clip-b-raw.mp4")),
+    );
+    expect(firstRawCommand?.args).toEqual(expect.arrayContaining(["-ss", "0", "-t", "2"]));
+    expect(secondRawCommand?.args).toEqual(expect.arrayContaining(["-ss", "3", "-t", "2"]));
+    expect(
+      commands.some((entry) => entry.args.some((arg) => arg.endsWith("timeline-gap-2.mp4"))),
+    ).toBe(true);
+  });
+
+  it("keeps derived timeline video elements segment-backed", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const plan = createPlan();
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 8,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+      ],
+      elements: plan.segments.map((segment, index) => ({
+        detachedAudio: false,
+        durationSeconds: segment.durationSeconds,
+        hidden: false,
+        id: `${segment.id}-video`,
+        kind: "video" as const,
+        label: `Scene ${index + 1}`,
+        muted: false,
+        playbackRate: 1,
+        sceneId: segment.sceneId,
+        segmentId: segment.id,
+        sourceUrl: segment.source.sceneClipVideoOnlyUrl ?? segment.source.sceneClipUrl ?? segment.source.imageUrl ?? dataVideo,
+        startSecond: index * 4,
+        trackId: "video-main",
+        trimStartSecond: segment.source.startSecond ?? 0,
+      })),
+    };
+
+    const result = await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (_command, args) => {
+        await writeCommandOutput(args, "output");
+      },
+    });
+
+    expect(result.segmentOutputs.map((output) => output.segmentId)).toEqual([
+      "segment-video",
+      "segment-image",
+    ]);
+  });
+
   it("mutes selected separated scene audio while preserving the source audio timeline", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
