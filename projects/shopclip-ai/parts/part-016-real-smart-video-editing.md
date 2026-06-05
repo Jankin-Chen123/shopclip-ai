@@ -1106,3 +1106,25 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Split-left/right currently operate on the enabled segment under the playhead; direct retain-side operations on arbitrary unowned audio/text elements should be added next.
   - Full completion still requires broader OpenCut-style element-level editing and live runtime proof after deployment.
+
+## 2026-06-05 OpenCut Element-Level Split And Trim
+
+- Reference model:
+  - OpenCut applies `S`, `Q`, and `W` to selected timeline items first, so independent audio/text materials can be cut without forcing users back to scene-sized storyboard clips.
+- Fix:
+  - Added `splitSmartEditTimelineElementAtPlayhead` for splitting a selected persistent timeline element at an absolute playhead time.
+  - Added `trimSmartEditTimelineElementAtPlayhead` for keeping only the left or right side of a selected timeline element.
+  - Audio/video element trims preserve playback-rate-aware `trimStartSecond`/`trimEndSecond`; text elements preserve content while changing timeline duration and start.
+  - Smart Edit keyboard and toolbar actions now prefer the selected non-video track clip under the playhead, then fall back to the prior segment-level behavior.
+  - Independent voice/text elements remain unbound to a storyboard `segmentId` after split or trim, so they behave like standalone editor materials.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "independent smart edit timeline element"` initially failed because the new element-level functions were missing.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "independent smart edit timeline element"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Ripple delete/trim for following clips is still incomplete.
+  - Waveform editing is still display-first; direct waveform volume/keyframe manipulation remains open.
+  - Full completion still requires live runtime proof for the real model render -> ffmpeg materialization -> Smart Edit editing/export chain.

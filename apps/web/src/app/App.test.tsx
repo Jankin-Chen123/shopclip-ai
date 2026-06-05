@@ -47,7 +47,9 @@ import {
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
   splitSmartEditSegmentOnTimeline,
+  splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
+  trimSmartEditTimelineElementAtPlayhead,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
@@ -3218,6 +3220,125 @@ describe("App", () => {
     expect(nextPlan.timeline?.elements.find((element) => element.id === "text-caption")?.segmentId).toBeUndefined();
     expect(nextPlan.timeline?.durationSeconds).toBe(4);
     expect(nextPlan.targetDurationSeconds).toBe(4);
+  });
+
+  it("splits an independent smart edit timeline element at the playhead", () => {
+    const plan = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        segments: [
+          {
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            timelineStartSecond: 0,
+            transition: "cut",
+            subtitle: "Hook",
+            voiceover: "",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 0,
+            },
+          },
+        ],
+        targetDurationSeconds: 4,
+      } satisfies SmartEditPlan,
+      1,
+      "open-cut",
+    );
+
+    const split = splitSmartEditTimelineElementAtPlayhead(
+      plan,
+      "voice-open-cut",
+      1.8,
+      "knife",
+    );
+
+    const leftVoice = split?.timeline?.elements.find((element) => element.id === "voice-open-cut");
+    const rightVoice = split?.timeline?.elements.find((element) => element.id === "voice-open-cut-split-knife");
+    expect(leftVoice).toMatchObject({
+      durationSeconds: 0.8,
+      startSecond: 1,
+    });
+    expect(leftVoice?.segmentId).toBeUndefined();
+    expect(rightVoice).toMatchObject({
+      durationSeconds: 1.2,
+      label: "New voiceover (split)",
+      startSecond: 1.8,
+    });
+    expect(rightVoice?.segmentId).toBeUndefined();
+    expect(split?.timeline?.durationSeconds).toBe(4);
+    expect(split?.targetDurationSeconds).toBe(4);
+  });
+
+  it("trims an independent smart edit timeline element to the left or right of the playhead", () => {
+    const plan = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        segments: [
+          {
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            timelineStartSecond: 0,
+            transition: "cut",
+            subtitle: "Hook",
+            voiceover: "",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 0,
+            },
+          },
+        ],
+        targetDurationSeconds: 4,
+      } satisfies SmartEditPlan,
+      1,
+      "trim",
+    );
+
+    const keepRight = trimSmartEditTimelineElementAtPlayhead(
+      plan,
+      "voice-trim",
+      1.8,
+      "right",
+    );
+    const keepLeft = trimSmartEditTimelineElementAtPlayhead(
+      plan,
+      "voice-trim",
+      1.8,
+      "left",
+    );
+
+    const rightTrimmedVoice = keepRight?.timeline?.elements.find((element) => element.id === "voice-trim");
+    const leftTrimmedVoice = keepLeft?.timeline?.elements.find((element) => element.id === "voice-trim");
+    expect(rightTrimmedVoice).toMatchObject({
+      durationSeconds: 1.2,
+      startSecond: 1.8,
+      trimStartSecond: 0.8,
+    });
+    expect(rightTrimmedVoice?.segmentId).toBeUndefined();
+    expect(leftTrimmedVoice).toMatchObject({
+      durationSeconds: 0.8,
+      startSecond: 1,
+      trimStartSecond: 0,
+    });
+    expect(leftTrimmedVoice?.segmentId).toBeUndefined();
+    expect(keepRight?.targetDurationSeconds).toBe(4);
+    expect(keepLeft?.targetDurationSeconds).toBe(4);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

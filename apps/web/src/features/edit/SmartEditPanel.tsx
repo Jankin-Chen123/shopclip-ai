@@ -1031,7 +1031,7 @@ type SmartEditTimelineElement = SmartEditTimeline["elements"][number];
 const splitPersistentTimelineElement = (
   element: SmartEditTimelineElement,
   splitSecond: number,
-  rightSegmentId: string,
+  rightSegmentId: string | undefined,
   splitToken: string,
 ): SmartEditTimelineElement[] => {
   const elementStart = clampTimelineStart(element.startSecond);
@@ -2098,6 +2098,75 @@ const updateSmartEditTimelineElement = (
                 : clampTimelineStart(snapTimelineSeconds(patch.startSecond)),
           }
         : element,
+    ),
+    baseTimeline.tracks,
+  );
+};
+
+export const splitSmartEditTimelineElementAtPlayhead = (
+  plan: SmartEditPlan,
+  elementId: string,
+  playheadSecond: number,
+  splitToken = String(Date.now()),
+): SmartEditPlan | undefined => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (!targetElement) {
+    return undefined;
+  }
+  const splitSecond = snapTimelineSeconds(playheadSecond);
+  const elementStart = clampTimelineStart(targetElement.startSecond);
+  const elementEnd = snapTimelineSeconds(elementStart + targetElement.durationSeconds);
+  if (
+    splitSecond <= elementStart + MIN_SMART_EDIT_CLIP_SECONDS ||
+    splitSecond >= elementEnd - MIN_SMART_EDIT_CLIP_SECONDS
+  ) {
+    return undefined;
+  }
+  const splitElements = splitPersistentTimelineElement(
+    targetElement,
+    splitSecond,
+    targetElement.segmentId,
+    splitToken,
+  );
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.flatMap((element) =>
+      element.id === targetElement.id ? splitElements : [element],
+    ),
+    baseTimeline.tracks,
+  );
+};
+
+export const trimSmartEditTimelineElementAtPlayhead = (
+  plan: SmartEditPlan,
+  elementId: string,
+  playheadSecond: number,
+  side: "left" | "right",
+): SmartEditPlan | undefined => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (!targetElement) {
+    return undefined;
+  }
+  const splitSecond = snapTimelineSeconds(playheadSecond);
+  const elementStart = clampTimelineStart(targetElement.startSecond);
+  const elementEnd = snapTimelineSeconds(elementStart + targetElement.durationSeconds);
+  if (
+    splitSecond <= elementStart + MIN_SMART_EDIT_CLIP_SECONDS ||
+    splitSecond >= elementEnd - MIN_SMART_EDIT_CLIP_SECONDS
+  ) {
+    return undefined;
+  }
+  const retainedElements = trimPersistentTimelineElementAtSecond(
+    targetElement,
+    splitSecond,
+    side,
+  );
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.flatMap((element) =>
+      element.id === targetElement.id ? retainedElements : [element],
     ),
     baseTimeline.tracks,
   );
@@ -3246,6 +3315,41 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
+    if (
+      selectedTrackClip &&
+      boundedPlayheadSeconds > selectedTrackClip.startSecond &&
+      boundedPlayheadSeconds < selectedTrackClip.startSecond + selectedTrackClip.durationSeconds
+    ) {
+      if (selectedTrackClip.trackId !== "video") {
+        const splitToken = String(Date.now());
+        const nextPlan = splitSmartEditTimelineElementAtPlayhead(
+          plan,
+          selectedTrackClip.id,
+          boundedPlayheadSeconds,
+          splitToken,
+        );
+        if (nextPlan) {
+          const rightElementId = `${selectedTrackClip.id}-split-${splitToken}`;
+          commitPlanChange(nextPlan, { label: `Split ${selectedTrackClip.trackId} material` });
+          setSelectedTrackClipId(rightElementId);
+          setSelectedSegmentIds(selectedTrackClip.segmentId ? [selectedTrackClip.segmentId] : []);
+          return;
+        }
+      }
+      if (selectedTrackClip.segmentId) {
+        const targetSegment = plan.segments.find((segment) => segment.id === selectedTrackClip.segmentId);
+        if (targetSegment) {
+          const rightId = splitSegmentAtOffset(
+            targetSegment,
+            boundedPlayheadSeconds - selectedTrackClip.startSecond,
+          );
+          if (rightId) {
+            onSelectedSegmentChange(rightId);
+          }
+          return;
+        }
+      }
+    }
     const target = timedTimelineSegments.find(
       ({ segment, startSecond }) =>
         segment.enabled &&
@@ -3267,6 +3371,50 @@ export const SmartEditPanel = ({
   const trimAtPlayhead = (side: "left" | "right") => {
     if (!plan) {
       return;
+    }
+    if (
+      selectedTrackClip &&
+      boundedPlayheadSeconds > selectedTrackClip.startSecond &&
+      boundedPlayheadSeconds < selectedTrackClip.startSecond + selectedTrackClip.durationSeconds
+    ) {
+      if (selectedTrackClip.trackId !== "video") {
+        const nextPlan = trimSmartEditTimelineElementAtPlayhead(
+          plan,
+          selectedTrackClip.id,
+          boundedPlayheadSeconds,
+          side,
+        );
+        if (nextPlan) {
+          commitPlanChange(nextPlan, {
+            label:
+              side === "left"
+                ? `Trim ${selectedTrackClip.trackId} right at playhead`
+                : `Trim ${selectedTrackClip.trackId} left at playhead`,
+          });
+          setSelectedTrackClipId(selectedTrackClip.id);
+          setSelectedSegmentIds(selectedTrackClip.segmentId ? [selectedTrackClip.segmentId] : []);
+          return;
+        }
+      }
+      if (selectedTrackClip.segmentId) {
+        const targetSegment = plan.segments.find((segment) => segment.id === selectedTrackClip.segmentId);
+        if (targetSegment) {
+          const nextPlan = trimSmartEditSegmentAtPlayhead(
+            plan,
+            targetSegment.id,
+            boundedPlayheadSeconds - selectedTrackClip.startSecond,
+            side,
+          );
+          if (nextPlan) {
+            commitPlanChange(nextPlan, {
+              label: side === "left" ? "Trim right at playhead" : "Trim left at playhead",
+            });
+            onSelectedSegmentChange(targetSegment.id);
+            setSelectedSegmentIds([targetSegment.id]);
+            return;
+          }
+        }
+      }
     }
     const target = timedTimelineSegments.find(
       ({ segment, startSecond }) =>
