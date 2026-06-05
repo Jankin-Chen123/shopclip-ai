@@ -1309,5 +1309,11 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/api build`
   - `corepack pnpm --filter @shopclip/api lint`
+- Deployment evidence:
+  - Deployed commit `e3fc925` to `/www/wwwroot/shopclip-ai`; server health returned `{"service":"api","status":"ok","version":"0.1.0"}` and public `https://shopclip.site/` returned `200`.
+  - Re-triggered smart edit from materialized Seedance render `e01d667a-2288-4440-8911-889682aab179` in project `cmpq7vbgg0000wh6cn1qs9u69`.
+  - New smart-edit task `fcdca96f-02fe-48d4-8dcd-02cc52121517` reached `completed` with trace `smart-edit-ffmpeg-compose` and 3 segment outputs.
+  - Export URL: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmpq7vbgg0000wh6cn1qs9u69/smart-edits/a3adea18-6659-4764-a898-4c86b3208863/export.mp4`.
 - Remaining:
-  - Re-deploy and trigger a new live smart-edit task from the already materialized fresh Seedance render to confirm ffmpeg composition reaches completion.
+  - The ffmpeg composition blocker is fixed for the base video/audio/subtitle demo path.
+  - The live run used smart-edit planner fallback before composition; if strict model-planned editing is required for acceptance, planner response stability should be hardened separately.
