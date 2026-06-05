@@ -1317,3 +1317,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - The ffmpeg composition blocker is fixed for the base video/audio/subtitle demo path.
   - The live run used smart-edit planner fallback before composition; if strict model-planned editing is required for acceptance, planner response stability should be hardened separately.
+
+## 2026-06-05 SRT Caption Import For Text Track
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Uses the OpenCut Classic subtitle/timeline model as reference: imported subtitle cues become timeline text materials rather than a single global caption blob.
+- Fix:
+  - Added SRT parsing for standard `HH:MM:SS,mmm --> HH:MM:SS,mmm` and dot-millisecond timestamps.
+  - Added `importSmartEditSrtCaptionsToTimeline` to create independent `text-copy` timeline elements, preserving cue start time, duration, and multi-line text.
+  - Added a compact SRT import panel inside the Smart Edit timeline so users can paste subtitles and add them as editable text clips.
+  - Imported captions reuse the existing text-material controls: move, split, trim, hide/show, delete, and backend export as timeline text.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "imports SRT captions"` initially failed because the helper did not exist, then passed after implementation.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "SRT|smart edit|timeline|independent|source audio"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - This adds subtitle import/editing for the base demo. Fine-grained subtitle style editing can be added later if user testing calls for it.

@@ -36,6 +36,7 @@ import {
   SmartEditPanel,
   addSmartEditTimelineTextElement,
   addSmartEditTimelineVoiceElement,
+  importSmartEditSrtCaptionsToTimeline,
   applySmartEditCommandHistoryRedo,
   applySmartEditCommandHistoryUndo,
   copySmartEditSegmentsToClipboard,
@@ -1786,6 +1787,8 @@ describe("App", () => {
     expect(markup).toContain('max="120"');
     expect(markup).toContain("Hide caption in export");
     expect(markup).toContain("Hide track");
+    expect(markup).toContain("Import SRT captions");
+    expect(markup).toContain("Import captions");
     expect(markup).toContain("Selected segment live preview");
     expect(markup).toContain('src="https://cdn.example.test/cup.png"');
     expect(markup).toContain('alt="Cup hero.png"');
@@ -1906,6 +1909,66 @@ describe("App", () => {
     expect(markup).toContain("smart-edit-waveform-bar clipped");
     expect(markup).toContain("role=\"button\"");
     expect(markup).toContain("tech-pulse");
+  });
+
+  it("imports SRT captions as independent smart edit text timeline materials", () => {
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use a compact product edit.",
+      targetDurationSeconds: 4,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          transition: "cut",
+          subtitle: "Base caption",
+          voiceover: "Base caption",
+          source: {
+            assetId: "asset-image",
+            imageUrl: "https://cdn.example.test/cup.png",
+            kind: "image-asset",
+          },
+          assetTags: ["hero"],
+          rationale: "Use the hero image.",
+        },
+      ],
+    };
+
+    const nextPlan = importSmartEditSrtCaptionsToTimeline(
+      plan,
+      `1
+00:00:01,000 --> 00:00:02,500
+First imported caption
+
+2
+00:00:03.000 --> 00:00:05.250
+Second imported caption`,
+      "import-test",
+    );
+
+    const imported = nextPlan.timeline?.elements.filter((element) =>
+      element.id.startsWith("srt-import-test-"),
+    );
+    expect(imported).toHaveLength(2);
+    expect(imported?.map((element) => element.trackId)).toEqual(["text-copy", "text-copy"]);
+    expect(imported?.map((element) => element.startSecond)).toEqual([1, 3]);
+    expect(imported?.map((element) => element.durationSeconds)).toEqual([1.5, 2.25]);
+    expect(imported?.map((element) => element.text)).toEqual([
+      "First imported caption",
+      "Second imported caption",
+    ]);
+    expect(nextPlan.timeline?.durationSeconds).toBe(5.25);
+    expect(nextPlan.targetDurationSeconds).toBe(5.25);
   });
 
   it("moves a smart edit segment horizontally while snapping away from overlaps", () => {
