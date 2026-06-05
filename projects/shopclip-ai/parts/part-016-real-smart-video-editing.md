@@ -1152,3 +1152,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - The basic demo still needs a real browser pass on the deployed Studio timeline to confirm the visible workflow is smooth enough for user trial.
   - Waveform display exists, but direct drag editing of volume/keyframes can wait until after the base video/audio/subtitle demo is reviewed.
+
+## 2026-06-05 Basic Demo Track Material Delete
+
+- Scope:
+  - This continues the narrowed base demo scope: video, audio, and subtitle timeline editing only.
+- Fix:
+  - Added `removeSmartEditTimelineElementFromTimeline` for deleting a selected audio/subtitle timeline material directly.
+  - Delete now works on the selected track clip before falling back to deleting the selected video/storyboard segment.
+  - Independent material inspectors now expose a `Delete material` / `删除素材` action.
+  - In Ripple mode, deleting an independent audio/subtitle material shifts later timeline materials left by the removed material duration.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "deletes an independent smart edit timeline material"` initially failed because the delete function was missing.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "deletes an independent smart edit timeline material"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Need a deployed browser pass through the Studio Smart Edit timeline to validate the base demo ergonomics end to end.

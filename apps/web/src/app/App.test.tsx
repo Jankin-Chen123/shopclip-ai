@@ -47,6 +47,7 @@ import {
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
   removeSmartEditSegmentsFromTimeline,
+  removeSmartEditTimelineElementFromTimeline,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
@@ -3500,6 +3501,58 @@ describe("App", () => {
     expect(keepLeft?.segments.map((segment) => segment.durationSeconds)).toEqual([1.5, 2]);
     expect(keepLeft?.timeline?.elements.find((element) => element.id === "voice-tail")?.startSecond).toBe(3.5);
     expect(keepLeft?.targetDurationSeconds).toBe(5.5);
+  });
+
+  it("deletes an independent smart edit timeline material and ripples later clips", () => {
+    const planWithVoice = addSmartEditTimelineVoiceElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-02T00:00:00.000Z",
+        id: "plan-1",
+        projectId: "project-1",
+        segments: [
+          {
+            id: "segment-1",
+            sceneId: "scene-1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            timelineStartSecond: 0,
+            transition: "cut",
+            subtitle: "Hook",
+            voiceover: "",
+            source: {
+              assetId: "asset-video",
+              kind: "video-slice",
+              startSecond: 0,
+            },
+          },
+        ],
+        strategy: "Use timeline materials.",
+        targetDurationSeconds: 4,
+      } satisfies SmartEditPlan,
+      1,
+      "delete",
+    );
+    const planWithText = addSmartEditTimelineTextElement(planWithVoice, 3.5, "tail");
+
+    const nextPlan = removeSmartEditTimelineElementFromTimeline(
+      planWithText,
+      "voice-delete",
+      "ripple",
+    );
+
+    expect(nextPlan.timeline?.elements.some((element) => element.id === "voice-delete")).toBe(false);
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "text-tail")).toMatchObject({
+      startSecond: 1.5,
+      text: "New text",
+    });
+    expect(nextPlan.segments[0].timelineStartSecond).toBe(0);
+    expect(nextPlan.targetDurationSeconds).toBe(4);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

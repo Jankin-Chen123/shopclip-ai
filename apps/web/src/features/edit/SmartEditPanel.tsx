@@ -2335,6 +2335,39 @@ export const trimSmartEditTimelineElementAtPlayhead = (
   );
 };
 
+export const removeSmartEditTimelineElementFromTimeline = (
+  plan: SmartEditPlan,
+  elementId: string,
+  editMode: SmartEditTimelineEditMode = "magnetic",
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (!targetElement) {
+    return plan;
+  }
+  const retainedElements = baseTimeline.elements.filter((element) => element.id !== elementId);
+  const removedGap = {
+    endSecond: snapTimelineSeconds(targetElement.startSecond + targetElement.durationSeconds),
+    startSecond: targetElement.startSecond,
+  };
+  const nextElements =
+    editMode === "ripple"
+      ? shiftTimelineElementsByRippleGaps(retainedElements, [removedGap])
+      : retainedElements;
+  const nextSegments =
+    editMode === "ripple"
+      ? shiftSegmentsByRippleGaps(plan.segments, [removedGap])
+      : plan.segments;
+  return withUpdatedTimelineElements(
+    {
+      ...plan,
+      segments: nextSegments,
+    },
+    nextElements,
+    baseTimeline.tracks,
+  );
+};
+
 export const moveSmartEditTrackClipOnTimeline = (
   plan: SmartEditPlan,
   trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
@@ -3752,6 +3785,33 @@ export const SmartEditPanel = ({
     removeSegments(selectedBatchSegments.length > 1 ? selectedSegmentIds : [selectedSegment.id]);
   };
 
+  const removeSelectedTrackClip = () => {
+    if (!plan || !selectedTrackClip) {
+      return;
+    }
+    if (selectedTrackClip.trackId === "video" && selectedTrackClip.segmentId) {
+      removeSegments([selectedTrackClip.segmentId]);
+      return;
+    }
+    const nextPlan = removeSmartEditTimelineElementFromTimeline(
+      plan,
+      selectedTrackClip.id,
+      timelineEditMode,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: `Remove ${selectedTrackClip.trackId} material (${timelineEditMode})` });
+    setSelectedTrackClipId(undefined);
+    if (selectedTrackClip.segmentId) {
+      setSelectedSegmentIds([selectedTrackClip.segmentId]);
+      onSelectedSegmentChange(selectedTrackClip.segmentId);
+    } else {
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
+    }
+  };
+
   const duplicateSelectedSegment = () => {
     if (!plan || !selectedSegment) {
       return;
@@ -3919,6 +3979,11 @@ export const SmartEditPanel = ({
         if (event.key === "ArrowRight") {
           event.preventDefault();
           selectByOffset(1);
+        }
+        if (event.key === "Delete" && selectedTrackClip) {
+          event.preventDefault();
+          removeSelectedTrackClip();
+          return;
         }
         if (event.key === "Delete" && selectedSegment) {
           event.preventDefault();
@@ -4635,6 +4700,12 @@ export const SmartEditPanel = ({
                 />
                 {selectedTimelineElement.hidden ? copy.showTimelineElement : copy.hideTimelineElement}
               </label>
+              <Button
+                icon={<Trash2 size={16} />}
+                onClick={removeSelectedTrackClip}
+              >
+                {copy.deleteTimelineElement}
+              </Button>
             </section>
           ) : null}
           {selectedSegment && plan ? (
