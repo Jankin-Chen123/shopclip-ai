@@ -2388,6 +2388,67 @@ export const detachSmartEditSourceAudioToTimelineElement = (
   );
 };
 
+export const detachSmartEditSceneVideoToTimelineElement = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const segment = plan.segments.find((candidate) => candidate.id === segmentId);
+  const sourceUrl = segment?.source.sceneClipVideoOnlyUrl ?? segment?.source.sceneClipUrl;
+  if (!segment || !sourceUrl) {
+    return plan;
+  }
+
+  const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+  const sourceStart = segment.source.startSecond ?? 0;
+  const trimEndSecond =
+    segment.source.endSecond === undefined
+      ? sourceStart + segment.durationSeconds * playbackRate
+      : segment.source.endSecond;
+  const detachedElement: SmartEditTimelineElement = {
+    detachedAudio: false,
+    durationSeconds: segment.durationSeconds,
+    hidden: false,
+    id: `video-${segment.id}-${token}`,
+    kind: "video",
+    label: `Scene ${segment.order} detached video`,
+    muted: false,
+    playbackRate,
+    sceneId: segment.sceneId,
+    sourceDurationSeconds: Math.max(MIN_SMART_EDIT_CLIP_SECONDS, trimEndSecond - sourceStart),
+    sourceUrl,
+    startSecond: segmentTimelineBaseStart(plan, segment.id),
+    trackId: "video-main",
+    trimEndSecond,
+    trimStartSecond: sourceStart,
+    visualEffects: segment.visualEffects,
+  };
+  const disabledPlan = withRebuiltTimeline({
+    ...plan,
+    segments: plan.segments.map((candidate) =>
+      candidate.id === segment.id
+        ? {
+            ...candidate,
+            enabled: false,
+          }
+        : candidate,
+    ),
+  });
+  const baseTimeline = disabledPlan.timeline ?? buildSmartEditTimeline(disabledPlan);
+  return withUpdatedTimelineElements(
+    disabledPlan,
+    [...baseTimeline.elements, detachedElement],
+    ensureTimelineTrack(baseTimeline, {
+      hidden: false,
+      id: "video-main",
+      kind: "video",
+      label: "Video",
+      locked: false,
+      muted: false,
+    }),
+  );
+};
+
 export const updateSmartEditTimelineElement = (
   plan: SmartEditPlan,
   elementId: string,
@@ -3226,6 +3287,27 @@ export const SmartEditPanel = ({
     }
     const detachedElement = nextPlan.timeline?.elements.at(-1);
     commitPlanChange(nextPlan, { label: "Detach source audio" });
+    if (detachedElement) {
+      setSelectedTrackClipId(detachedElement.id);
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
+    }
+  };
+
+  const detachSelectedSceneVideo = () => {
+    if (!plan || !selectedTrackClip?.segmentId || selectedTrackClip.trackId !== "video") {
+      return;
+    }
+    const nextPlan = detachSmartEditSceneVideoToTimelineElement(
+      plan,
+      selectedTrackClip.segmentId,
+      `${Date.now()}`,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    const detachedElement = nextPlan.timeline?.elements.at(-1);
+    commitPlanChange(nextPlan, { label: "Detach scene video" });
     if (detachedElement) {
       setSelectedTrackClipId(detachedElement.id);
       setSelectedSegmentIds([]);
@@ -5125,6 +5207,12 @@ export const SmartEditPanel = ({
                 >
                   {copy.duplicateSegment}
                 </Button>
+                {selectedTrackClip?.trackId === "video" &&
+                (selectedSegment.source.sceneClipVideoOnlyUrl || selectedSegment.source.sceneClipUrl) ? (
+                  <Button icon={<Film size={16} />} onClick={detachSelectedSceneVideo}>
+                    Detach video
+                  </Button>
+                ) : null}
                 <Button
                   disabled={sortedSegments.length <= 1}
                   icon={<Trash2 size={16} />}

@@ -1399,3 +1399,24 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api lint`
 - Remaining:
   - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.
+
+## 2026-06-06 Scene Video Detach Demo
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Targets the remaining video-side material gap: generated scene video should be separable into a timeline clip just like generated source audio can be detached.
+- Fix:
+  - Added `detachSmartEditSceneVideoToTimelineElement` to copy a generated scene clip's `sceneClipVideoOnlyUrl` / `sceneClipUrl`, playback rate, source trim range, timeline start, scene id, and visual-effect metadata into a persistent `video-main` timeline element.
+  - The original storyboard segment is marked `enabled=false` after detaching so the export path does not duplicate the same generated picture material.
+  - Added a `Detach video` action when selecting a video track clip that has a generated scene video source. The newly created video material becomes the selected timeline clip and can reuse existing move, split, trim, speed, insert/overwrite, and export behavior.
+  - This stays inside the base demo scope; no stickers, effects, masks, or advanced visual controls were enabled.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "detaches generated scene video"` initially failed because the helper did not exist.
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "detaches generated scene video"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|source audio|detaches generated scene video"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts -t "persistent timeline elements|generated scene video-only"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.

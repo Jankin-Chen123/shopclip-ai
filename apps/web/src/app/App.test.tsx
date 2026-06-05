@@ -41,6 +41,7 @@ import {
   applySmartEditCommandHistoryUndo,
   copySmartEditSegmentsToClipboard,
   createSmartEditCommandHistory,
+  detachSmartEditSceneVideoToTimelineElement,
   detachSmartEditSourceAudioToTimelineElement,
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
@@ -3630,6 +3631,63 @@ Second imported caption`,
       { easing: "linear", id: "volume-0", timeSecond: 0, volume: 0.5 },
       { easing: "linear", id: "volume-1", timeSecond: 1.2, volume: 0.9 },
     ]);
+  });
+
+  it("detaches generated scene video into an independent timeline material", () => {
+    const plan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 1,
+          transition: "cut",
+          subtitle: "Hook subtitle",
+          voiceover: "",
+          playbackRate: 1.5,
+          source: {
+            assetId: "asset-video",
+            endSecond: 5.25,
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.com/scene-1-audio.m4a",
+            sceneClipUrl: "https://cdn.example.com/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.com/scene-1-video.mp4",
+            startSecond: 0.25,
+          },
+        },
+      ],
+      targetDurationSeconds: 5,
+    } satisfies SmartEditPlan;
+
+    const nextPlan = detachSmartEditSceneVideoToTimelineElement(plan, "segment-1", "test");
+    const updatedSegment = nextPlan.segments.find((segment) => segment.id === "segment-1");
+    const detachedVideo = nextPlan.timeline?.elements.find((element) => element.id === "video-segment-1-test");
+
+    expect(updatedSegment?.enabled).toBe(false);
+    expect(detachedVideo).toMatchObject({
+      durationSeconds: 4,
+      hidden: false,
+      id: "video-segment-1-test",
+      kind: "video",
+      label: "Scene 1 detached video",
+      muted: false,
+      playbackRate: 1.5,
+      sceneId: "scene-1",
+      sourceDurationSeconds: 5,
+      sourceUrl: "https://cdn.example.com/scene-1-video.mp4",
+      startSecond: 1,
+      trackId: "video-main",
+      trimEndSecond: 5.25,
+      trimStartSecond: 0.25,
+    });
+    expect(detachedVideo?.segmentId).toBeUndefined();
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {
