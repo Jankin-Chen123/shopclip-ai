@@ -919,3 +919,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Audio/text elements are still rendered through the existing segment override path after being reassigned to owning video elements.
   - The next step is direct arbitrary element-stack rendering for audio/text overlays without requiring segment-compatible fields.
+
+## 2026-06-05 Global Audio And Text Timeline Element Export
+
+- Reference model:
+  - OpenCut lets audio and text elements exist on the timeline independently from a source video element or scene segment.
+  - This increment moves ShopClip's export path closer to that model by rendering unowned source-audio and text elements directly from `SmartEditPlan.timeline.elements`.
+- Fix:
+  - Reworked source-audio export around timeline clip descriptors so both legacy segment audio and unowned `audio-source` elements are rendered into the final source-audio track by global `startSecond`.
+  - Preserved segment-level in-clip audio offsets as `adelay`, while unowned timeline audio elements are positioned with real silence gaps in the source-audio track.
+  - Added global timeline text overlay after video stitching and before audio mixing, so unowned text elements are burned into the final video by absolute timeline time.
+  - Hidden/muted timeline elements are skipped, and derived segment elements remain on the legacy segment-backed path.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "global source-audio"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "persistent|timeline|source audio|subtitle|effect|keyframes|mask|transition|global source-audio"`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+- Remaining:
+  - Source-audio element overlap is still serialized with gaps/concat rather than fully mixed as overlapping tracks.
+  - Voiceover is still generated from segment text rather than arbitrary text/audio timeline elements.
+  - Full direct rendering should next support overlapping audio lanes, arbitrary text style/keyframes, and final export from element stacks without segment compatibility fields.

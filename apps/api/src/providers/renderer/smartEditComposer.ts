@@ -814,6 +814,113 @@ export const subtitleTextForSegment = (segment: SmartEditSegment): string => {
   return "";
 };
 
+const formatAssTime = (seconds: number): string => {
+  const bounded = Math.max(0, seconds);
+  const hours = Math.floor(bounded / 3600);
+  const minutes = Math.floor((bounded % 3600) / 60);
+  const wholeSeconds = Math.floor(bounded % 60);
+  const centiseconds = Math.floor((bounded - Math.floor(bounded)) * 100);
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")}.${String(centiseconds).padStart(2, "0")}`;
+};
+
+const escapeAssText = (text: string): string =>
+  text
+    .replace(/\\/gu, "\\\\")
+    .replace(/\{/gu, "\\{")
+    .replace(/\}/gu, "\\}")
+    .replace(/\r?\n/gu, "\\N");
+
+const buildTimelineSubtitleAss = (
+  captions: Array<{ endSecond: number; startSecond: number; text: string }>,
+  dimensions: OutputDimensions,
+): string => {
+  const fontSize = Math.max(24, Math.round(dimensions.height * (42 / 1280)));
+  const marginV = Math.max(48, Math.round(dimensions.height * (96 / 1280)));
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "WrapStyle: 2",
+    `PlayResX: ${dimensions.width}`,
+    `PlayResY: ${dimensions.height}`,
+    "",
+    "[V4+ Styles]",
+    "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    `Style: Default,Noto Sans CJK SC,${fontSize},&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},0`,
+    "",
+    "[Events]",
+    "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    ...captions.map(
+      (caption) =>
+        `Dialogue: 0,${formatAssTime(caption.startSecond)},${formatAssTime(caption.endSecond)},Default,,0,0,0,,${escapeAssText(caption.text)}`,
+    ),
+    "",
+  ].join("\n");
+};
+
+const globalTextTimelineCaptions = (
+  plan: SmartEditPlan,
+): Array<{ endSecond: number; startSecond: number; text: string }> =>
+  (plan.timeline?.elements ?? [])
+    .filter(
+      (element) =>
+        timelineElementTrackKind(element) === "caption" &&
+        !element.segmentId &&
+        !element.hidden &&
+        (element.text?.trim() || element.label.trim()),
+    )
+    .map((element) => ({
+      endSecond: Math.min(
+        globalTimelineDurationSeconds(plan),
+        element.startSecond + element.durationSeconds,
+      ),
+      startSecond: Math.max(0, element.startSecond),
+      text: element.text?.trim() || element.label.trim(),
+    }))
+    .filter((caption) => caption.endSecond > caption.startSecond + 0.01)
+    .sort((left, right) => left.startSecond - right.startSecond);
+
+const applyGlobalTimelineTextOverlay = async (
+  command: string,
+  inputPath: string,
+  outputPath: string,
+  plan: SmartEditPlan,
+  dimensions: OutputDimensions,
+  workdir: string,
+  run: CommandRunner,
+): Promise<string> => {
+  const captions = globalTextTimelineCaptions(plan);
+  if (captions.length === 0) {
+    return inputPath;
+  }
+  const subtitleAssPath = join(workdir, "global-timeline-text.ass");
+  await writeFile(subtitleAssPath, buildTimelineSubtitleAss(captions, dimensions), "utf8");
+  await run(command, [
+    "-y",
+    "-i",
+    inputPath,
+    "-vf",
+    buildSubtitleFilter(subtitleAssPath),
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a?",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "23",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "copy",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ]);
+  return outputPath;
+};
+
 const voiceForLanguage = (language: string | undefined): string => {
   const normalized = language?.trim().toLowerCase();
   if (!normalized) {
@@ -1044,38 +1151,38 @@ const createSilenceAudioSegment = async (
   ]);
 };
 
-const createSourceAudioTrack = async (
-  command: string,
-  plan: SmartEditPlan,
-  workdir: string,
-  fetchImpl: typeof fetch,
-  run: CommandRunner,
-): Promise<string | undefined> => {
+type SourceAudioTimelineClip = {
+  delaySeconds: number;
+  durationSeconds: number;
+  id: string;
+  playbackRate: number;
+  sourceUrl: string;
+  startSecond: number;
+  trimEndSecond: number;
+  trimStartSecond: number;
+};
+
+const safeFileToken = (value: string): string =>
+  value.replace(/[^a-zA-Z0-9_-]+/gu, "-").replace(/^-+|-+$/gu, "") || "clip";
+
+const globalTimelineDurationSeconds = (plan: SmartEditPlan): number =>
+  Math.max(
+    plan.timeline?.durationSeconds ?? 0,
+    ...plan.segments
+      .filter((segment) => segment.enabled)
+      .map((segment) => normalizeTimelineStart(segment) + normalizeDuration(segment)),
+    ...(plan.timeline?.elements ?? [])
+      .filter((element) => !element.hidden)
+      .map((element) => element.startSecond + element.durationSeconds),
+    0.01,
+  );
+
+const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[] => {
   const enabledSegments = [...plan.segments]
     .filter((segment) => segment.enabled)
     .sort((left, right) => left.order - right.order);
-  if (
-    !enabledSegments.some(
-      (segment) => segment.source.sceneClipAudioUrl && !segment.sourceAudioMuted,
-    )
-  ) {
-    return undefined;
-  }
-
-  const paddedPaths: string[] = [];
   const timelineStarts = timelineSegmentStartSeconds(enabledSegments);
-  let cursor = 0;
-  for (const [index, segment] of enabledSegments.entries()) {
-    const targetPath = join(workdir, `source-audio-${index + 1}.m4a`);
-    const paddedPath = join(workdir, `source-audio-${index + 1}-padded.wav`);
-    const start = timelineStarts.get(segment.id) ?? cursor;
-    const gapDuration = start - cursor;
-    if (gapDuration > 0.01) {
-      const gapPath = join(workdir, `source-audio-gap-${index + 1}.wav`);
-      await createSilenceAudioSegment(command, gapDuration, gapPath, run);
-      paddedPaths.push(gapPath);
-      cursor += gapDuration;
-    }
+  const segmentClips = enabledSegments.flatMap((segment): SourceAudioTimelineClip[] => {
     const sourceAudioElement = plan.timeline?.elements.find(
       (element) =>
         element.segmentId === segment.id &&
@@ -1085,15 +1192,9 @@ const createSourceAudioTrack = async (
       ? undefined
       : sourceAudioElement?.sourceUrl ?? segment.source.sceneClipAudioUrl;
     if (!sourceAudioUrl) {
-      await createSilenceAudioSegment(command, normalizeDuration(segment), paddedPath, run);
-      paddedPaths.push(paddedPath);
-      cursor = Math.max(cursor, start) + normalizeDuration(segment);
-      continue;
+      return [];
     }
-
-    const sourcePath = await materializeUrl(sourceAudioUrl, targetPath, fetchImpl);
     const audioOffsetSeconds = normalizeInSegmentOffset(segment.sourceAudioStartOffsetSeconds, segment);
-    const audioOffsetMilliseconds = Math.round(audioOffsetSeconds * 1000);
     const audioDurationSeconds = normalizeInSegmentClipDuration(
       sourceAudioElement?.durationSeconds ?? segment.sourceAudioDurationSeconds,
       segment.sourceAudioStartOffsetSeconds,
@@ -1108,12 +1209,79 @@ const createSourceAudioTrack = async (
             segment.source.endSecond,
             sourceAudioStart + audioDurationSeconds * normalizePlaybackRate(segment),
           ));
+    return [
+      {
+        delaySeconds: audioOffsetSeconds,
+        durationSeconds: normalizeDuration(segment),
+        id: segment.id,
+        playbackRate: normalizePlaybackRate(segment),
+        sourceUrl: sourceAudioUrl,
+        startSecond: timelineStarts.get(segment.id) ?? 0,
+        trimEndSecond: trimEnd,
+        trimStartSecond: sourceAudioStart,
+      },
+    ];
+  });
+  const globalElementClips = (plan.timeline?.elements ?? [])
+    .filter(
+      (element) =>
+        timelineElementTrackKind(element) === "sourceAudio" &&
+        !element.segmentId &&
+        !element.hidden &&
+        !element.muted &&
+        Boolean(element.sourceUrl),
+    )
+    .map((element): SourceAudioTimelineClip => {
+      const trimStartSecond = element.trimStartSecond ?? 0;
+      return {
+        delaySeconds: 0,
+        durationSeconds: element.durationSeconds,
+        id: element.id,
+        playbackRate: element.playbackRate ?? 1,
+        sourceUrl: element.sourceUrl!,
+        startSecond: element.startSecond,
+        trimEndSecond: element.trimEndSecond ?? trimStartSecond + element.durationSeconds * (element.playbackRate ?? 1),
+        trimStartSecond,
+      };
+    });
+  return [...segmentClips, ...globalElementClips].sort((left, right) => left.startSecond - right.startSecond);
+};
+
+const createSourceAudioTrack = async (
+  command: string,
+  plan: SmartEditPlan,
+  workdir: string,
+  fetchImpl: typeof fetch,
+  run: CommandRunner,
+): Promise<string | undefined> => {
+  const clips = sourceAudioTimelineClips(plan);
+  if (clips.length === 0) {
+    return undefined;
+  }
+
+  const paddedPaths: string[] = [];
+  let cursor = 0;
+  for (const [index, clip] of clips.entries()) {
+    const token = safeFileToken(clip.id);
+    const targetPath = join(workdir, `source-audio-${token}.m4a`);
+    const paddedPath = join(workdir, `source-audio-${token}-padded.wav`);
+    const start = clip.startSecond;
+    const gapDuration = start - cursor;
+    if (gapDuration > 0.01) {
+      const gapPath = join(workdir, `source-audio-gap-${index + 1}.wav`);
+      await createSilenceAudioSegment(command, gapDuration, gapPath, run);
+      paddedPaths.push(gapPath);
+      cursor += gapDuration;
+    }
+
+    const sourcePath = await materializeUrl(clip.sourceUrl, targetPath, fetchImpl);
+    const audioOffsetMilliseconds = Math.max(0, Math.round(clip.delaySeconds * 1000));
     const filters = [
-      `atrim=${sourceAudioStart}:${trimEnd}`,
+      `atrim=${clip.trimStartSecond}:${clip.trimEndSecond}`,
       "asetpts=PTS-STARTPTS",
-      atempoFilter(normalizePlaybackRate(segment)),
+      atempoFilter(clip.playbackRate),
       ...(audioOffsetMilliseconds > 0 ? [`adelay=${audioOffsetMilliseconds}:all=1`] : []),
-      `apad,atrim=0:${normalizeDuration(segment)}`,
+      `apad,atrim=0:${clip.durationSeconds}`,
     ].join(",");
     await run(command, [
       "-y",
@@ -1126,7 +1294,14 @@ const createSourceAudioTrack = async (
       paddedPath,
     ]);
     paddedPaths.push(paddedPath);
-    cursor = Math.max(cursor, start) + normalizeDuration(segment);
+    cursor = Math.max(cursor, start) + clip.durationSeconds;
+  }
+
+  const tailDuration = globalTimelineDurationSeconds(plan) - cursor;
+  if (tailDuration > 0.01) {
+    const gapPath = join(workdir, "source-audio-tail.wav");
+    await createSilenceAudioSegment(command, tailDuration, gapPath, run);
+    paddedPaths.push(gapPath);
   }
 
   if (paddedPaths.length === 0) {
@@ -1595,6 +1770,15 @@ export const composeSmartEditToStorage = async (
     stitchedPath,
     run,
   );
+  const textOverlayPath = await applyGlobalTimelineTextOverlay(
+    command,
+    stitchedPath,
+    join(workdir, "stitched-with-global-text.mp4"),
+    executablePlan,
+    dimensions,
+    workdir,
+    run,
+  );
   const voiceoverTrackPath = await createVoiceoverTrack(command, ttsCommand, executablePlan, workdir, run);
   const sourceAudioTrackPath = await createSourceAudioTrack(
     command,
@@ -1605,7 +1789,7 @@ export const composeSmartEditToStorage = async (
   );
   await addAudioTracks(
     command,
-    stitchedPath,
+    textOverlayPath,
     outputPath,
     executablePlan,
     run,

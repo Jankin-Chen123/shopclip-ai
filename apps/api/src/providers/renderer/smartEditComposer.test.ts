@@ -268,7 +268,7 @@ describe("smart edit composer", () => {
     });
 
     const sourceAudioCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("source-audio-segment-video-padded.wav")),
     );
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=0:8");
     expect(sourceAudioCommand?.args.join(" ")).toContain("atempo=2.0000");
@@ -391,7 +391,7 @@ describe("smart edit composer", () => {
     await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("0:00:01.00,0:00:02.10");
 
     const sourceAudioCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("source-audio-segment-video-padded.wav")),
     );
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
     expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=750:all=1");
@@ -541,6 +541,98 @@ describe("smart edit composer", () => {
     ]);
   });
 
+  it("renders global source-audio and text timeline elements without segment ownership", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        captionHidden: true,
+        durationSeconds: 4,
+        sourceAudioMuted: true,
+        voiceover: "",
+      },
+    ];
+    plan.targetDurationSeconds = 4;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 4,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "audio-source", kind: "audio", label: "Source audio", locked: false, muted: false },
+        { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: true,
+          durationSeconds: 1.5,
+          hidden: false,
+          id: "free-audio",
+          kind: "audio",
+          label: "Free audio",
+          muted: false,
+          playbackRate: 1,
+          sourceUrl: dataAudio,
+          startSecond: 1,
+          trackId: "audio-source",
+          trimEndSecond: 2.5,
+          trimStartSecond: 1,
+        },
+        {
+          detachedAudio: false,
+          durationSeconds: 1.25,
+          hidden: false,
+          id: "free-caption",
+          kind: "text",
+          label: "Floating caption",
+          muted: false,
+          playbackRate: 1,
+          startSecond: 2.25,
+          text: "Timeline only caption",
+          trackId: "text-copy",
+          trimStartSecond: 0,
+        },
+      ],
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const freeAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-free-audio-padded.wav")),
+    );
+    expect(freeAudioCommand).toBeTruthy();
+    expect(freeAudioCommand!.args.join(" ")).toContain("atrim=1:2.5");
+    expect(freeAudioCommand!.args.join(" ")).toContain("apad,atrim=0:1.5");
+    expect(
+      commands.some((entry) => entry.args.some((arg) => arg.endsWith("source-audio-gap-1.wav"))),
+    ).toBe(true);
+
+    const globalSubtitleCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.includes("global-timeline-text.ass")),
+    );
+    const globalSubtitlePath = globalSubtitleCommand?.args
+      .find((arg) => arg.includes("global-timeline-text.ass"))
+      ?.match(/filename='([^']+)'/)?.[1]
+      ?.replace(/\\:/gu, ":");
+    expect(globalSubtitlePath).toBeTruthy();
+    await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain("Timeline only caption");
+    await expect(readFile(globalSubtitlePath!, "utf8")).resolves.toContain(
+      "Dialogue: 0,0:00:02.25,0:00:03.50",
+    );
+  });
+
   it("mutes selected separated scene audio while preserving the source audio timeline", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
@@ -573,15 +665,15 @@ describe("smart edit composer", () => {
       },
     });
 
-    const mutedAudioCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+    const mutedGapCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-gap-1.wav")),
     );
-    expect(mutedAudioCommand?.args).toEqual(expect.arrayContaining(["-f", "lavfi"]));
-    expect(mutedAudioCommand?.args.join(" ")).toContain("anullsrc=channel_layout=stereo");
-    expect(mutedAudioCommand?.args).toEqual(expect.arrayContaining(["-t", "2.5"]));
+    expect(mutedGapCommand?.args).toEqual(expect.arrayContaining(["-f", "lavfi"]));
+    expect(mutedGapCommand?.args.join(" ")).toContain("anullsrc=channel_layout=stereo");
+    expect(mutedGapCommand?.args).toEqual(expect.arrayContaining(["-t", "2.5"]));
 
     const liveAudioCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("source-audio-2-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("source-audio-segment-image-padded.wav")),
     );
     expect(liveAudioCommand?.args.join(" ")).toContain("atrim=0:1.5");
 
@@ -1312,7 +1404,7 @@ describe("smart edit composer", () => {
     });
 
     const sourceAudioCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("source-audio-segment-video-padded.wav")),
     );
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
     expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=700:all=1");
