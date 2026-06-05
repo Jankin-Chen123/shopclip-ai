@@ -1354,3 +1354,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.
+
+## 2026-06-06 Independent Material Insert And Overwrite
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Extends the OpenCut-style edit-mode behavior from storyboard/video clips to standalone timeline materials.
+- Fix:
+  - Moving an independent audio/text material in Insert mode now shifts later overlapping materials on the same concrete track to the right by the moved clip duration.
+  - Moving an independent audio/text material in Overwrite mode now removes same-track independent materials overlapped by the moved clip.
+  - Magnetic mode continues to clamp, snap, and avoid same-track overlap; direct non-magnetic nudge remains available through other modes where no insert/overwrite semantics are requested.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "applies insert and overwrite modes when moving independent"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|SRT|source audio|insert|overwrite"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.

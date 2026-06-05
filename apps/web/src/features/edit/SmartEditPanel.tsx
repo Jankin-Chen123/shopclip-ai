@@ -2588,6 +2588,38 @@ export const moveSmartEditTrackClipOnTimeline = (
         startSecond: nextStart,
       });
     }
+    if (editMode === "insert") {
+      const nextStart = clampTimelineStart(snapTimelineSeconds(targetElement.startSecond + deltaSeconds));
+      const nextElements = baseTimeline.elements.map((element) => {
+        if (element.id === targetElement.id) {
+          return { ...element, startSecond: nextStart };
+        }
+        if (
+          element.trackId === targetElement.trackId &&
+          element.startSecond + element.durationSeconds > nextStart + 0.001
+        ) {
+          return {
+            ...element,
+            startSecond: snapTimelineSeconds(element.startSecond + targetElement.durationSeconds),
+          };
+        }
+        return element;
+      });
+      return withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks);
+    }
+    if (editMode === "overwrite") {
+      const nextStart = clampTimelineStart(snapTimelineSeconds(targetElement.startSecond + deltaSeconds));
+      const nextEnd = snapTimelineSeconds(nextStart + targetElement.durationSeconds);
+      const nextElements = baseTimeline.elements
+        .filter(
+          (element) =>
+            element.id === targetElement.id ||
+            element.trackId !== targetElement.trackId ||
+            !intervalsOverlap(nextStart, nextEnd, element.startSecond, element.startSecond + element.durationSeconds),
+        )
+        .map((element) => (element.id === targetElement.id ? { ...element, startSecond: nextStart } : element));
+      return withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks);
+    }
     return updateSmartEditTimelineElement(plan, targetElement.id, {
       startSecond: targetElement.startSecond + deltaSeconds,
     });

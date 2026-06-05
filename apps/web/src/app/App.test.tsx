@@ -3461,6 +3461,51 @@ Second imported caption`,
     });
   });
 
+  it("applies insert and overwrite modes when moving independent smart edit text materials", () => {
+    const basePlan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [],
+      targetDurationSeconds: 0,
+    } satisfies SmartEditPlan;
+    const planWithFirstCaption = addSmartEditTimelineTextElement(basePlan, 1, "first");
+    const planWithSecondCaption = addSmartEditTimelineTextElement(planWithFirstCaption, 4, "second");
+    const plan = addSmartEditTimelineTextElement(planWithSecondCaption, 7, "third");
+
+    const insertPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "text-third", trackId: "caption" },
+      -5.5,
+      "insert",
+    );
+
+    expect(insertPlan.timeline?.elements.find((element) => element.id === "text-third")).toMatchObject({
+      startSecond: 1.5,
+    });
+    expect(insertPlan.timeline?.elements.find((element) => element.id === "text-first")).toMatchObject({
+      startSecond: 3,
+    });
+    expect(insertPlan.timeline?.elements.find((element) => element.id === "text-second")).toMatchObject({
+      startSecond: 6,
+    });
+
+    const overwritePlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "text-third", trackId: "caption" },
+      -3.5,
+      "overwrite",
+    );
+
+    expect(overwritePlan.timeline?.elements.find((element) => element.id === "text-third")).toMatchObject({
+      startSecond: 3.5,
+    });
+    expect(overwritePlan.timeline?.elements.some((element) => element.id === "text-second")).toBe(false);
+    expect(overwritePlan.timeline?.elements.some((element) => element.id === "text-first")).toBe(true);
+  });
+
   it("updates independent audio material speed on the smart edit timeline", () => {
     const plan = addSmartEditTimelineVoiceElement(
       {
