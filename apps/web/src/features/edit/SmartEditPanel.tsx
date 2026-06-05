@@ -102,6 +102,42 @@ const clampClipDurationWithinSegment = (
 const clampTimelineStart = (startSecond: number): number =>
   Number.isFinite(startSecond) ? Math.max(0, Math.min(600, startSecond)) : 0;
 
+const clampTransformScale = (scale: number): number =>
+  Number.isFinite(scale) ? Math.max(0.1, Math.min(4, scale)) : 1;
+
+const clampRotationDegrees = (degrees: number): number =>
+  Number.isFinite(degrees) ? Math.max(-180, Math.min(180, degrees)) : 0;
+
+const clampPercentOffset = (percent: number): number =>
+  Number.isFinite(percent) ? Math.max(-100, Math.min(100, percent)) : 0;
+
+const clampOpacity = (opacity: number): number =>
+  Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
+
+const clampBlur = (blur: number): number =>
+  Number.isFinite(blur) ? Math.max(0, Math.min(20, blur)) : 0;
+
+const clampSharpen = (sharpen: number): number =>
+  Number.isFinite(sharpen) ? Math.max(0, Math.min(2, sharpen)) : 0;
+
+const clampEffectFade = (seconds: number): number =>
+  Number.isFinite(seconds) ? Math.max(0, Math.min(5, seconds)) : 0;
+
+const transformForSegment = (segment: SmartEditSegment) => ({
+  offsetXPercent: clampPercentOffset(segment.transform?.offsetXPercent ?? 0),
+  offsetYPercent: clampPercentOffset(segment.transform?.offsetYPercent ?? 0),
+  opacity: clampOpacity(segment.transform?.opacity ?? 1),
+  rotateDegrees: clampRotationDegrees(segment.transform?.rotateDegrees ?? 0),
+  scale: clampTransformScale(segment.transform?.scale ?? 1),
+});
+
+const effectsForSegment = (segment: SmartEditSegment) => ({
+  blur: clampBlur(segment.effects?.blur ?? 0),
+  fadeInSeconds: clampEffectFade(segment.effects?.fadeInSeconds ?? 0),
+  fadeOutSeconds: clampEffectFade(segment.effects?.fadeOutSeconds ?? 0),
+  sharpen: clampSharpen(segment.effects?.sharpen ?? 0),
+});
+
 const durationFromSourceRange = (
   startSecond: number | undefined,
   endSecond: number | undefined,
@@ -2897,6 +2933,187 @@ export const SmartEditPanel = ({
                   </select>
                 </label>
                 ) : null}
+              </section>
+              <section className="smart-edit-inspector-section">
+                <h4>Visual transform</h4>
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Scale
+                    <input
+                      max={4}
+                      min={0.1}
+                      step={0.05}
+                      type="number"
+                      value={selectedSegment.transform?.scale ?? 1}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          transform: {
+                            ...transformForSegment(segment),
+                            scale: clampTransformScale(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Rotation
+                    <input
+                      max={180}
+                      min={-180}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.transform?.rotateDegrees ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          transform: {
+                            ...transformForSegment(segment),
+                            rotateDegrees: clampRotationDegrees(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Offset X
+                    <input
+                      max={100}
+                      min={-100}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.transform?.offsetXPercent ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          transform: {
+                            ...transformForSegment(segment),
+                            offsetXPercent: clampPercentOffset(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Offset Y
+                    <input
+                      max={100}
+                      min={-100}
+                      step={1}
+                      type="number"
+                      value={selectedSegment.transform?.offsetYPercent ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          transform: {
+                            ...transformForSegment(segment),
+                            offsetYPercent: clampPercentOffset(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <label>
+                  Opacity
+                  <input
+                    max={1}
+                    min={0}
+                    step={0.05}
+                    type="number"
+                    value={selectedSegment.transform?.opacity ?? 1}
+                    onChange={(event) =>
+                      updateSelectedSegment((segment) => ({
+                        ...segment,
+                        transform: {
+                          ...transformForSegment(segment),
+                          opacity: clampOpacity(Number(event.target.value)),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              </section>
+              <section className="smart-edit-inspector-section">
+                <h4>Visual effects</h4>
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Blur
+                    <input
+                      max={20}
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.effects?.blur ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          effects: {
+                            ...effectsForSegment(segment),
+                            blur: clampBlur(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Sharpen
+                    <input
+                      max={2}
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.effects?.sharpen ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          effects: {
+                            ...effectsForSegment(segment),
+                            sharpen: clampSharpen(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Fade in
+                    <input
+                      max={5}
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.effects?.fadeInSeconds ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          effects: {
+                            ...effectsForSegment(segment),
+                            fadeInSeconds: clampEffectFade(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Fade out
+                    <input
+                      max={5}
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.effects?.fadeOutSeconds ?? 0}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          effects: {
+                            ...effectsForSegment(segment),
+                            fadeOutSeconds: clampEffectFade(Number(event.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
               </section>
               <section className="smart-edit-inspector-section">
                 <h4>{copy.copyAndVoice}</h4>

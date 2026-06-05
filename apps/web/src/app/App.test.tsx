@@ -2415,6 +2415,19 @@ describe("App", () => {
                   startSecond: 1,
                   endSecond: 5,
                 },
+                transform: {
+                  scale: 1.1,
+                  rotateDegrees: -2,
+                  offsetXPercent: 6,
+                  offsetYPercent: -4,
+                  opacity: 0.9,
+                },
+                effects: {
+                  blur: 0.8,
+                  sharpen: 0.3,
+                  fadeInSeconds: 0.2,
+                  fadeOutSeconds: 0.4,
+                },
                 assetTags: ["demo"],
                 rationale: "Use the product pour slice.",
               },
@@ -2461,6 +2474,12 @@ describe("App", () => {
     expect(markup).toContain("tech-pulse");
     expect(markup).toContain("Edit settings");
     expect(markup).toContain("Timing and source");
+    expect(markup).toContain("Visual transform");
+    expect(markup).toContain("Scale");
+    expect(markup).toContain("Rotation");
+    expect(markup).toContain("Visual effects");
+    expect(markup).toContain("Blur");
+    expect(markup).toContain("Fade out");
     expect(markup).toContain("Copy and voice");
     expect(markup).toContain("Segment state");
     expect(markup).toContain("Selected");

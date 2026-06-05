@@ -180,6 +180,19 @@ describe("shared contract schemas", () => {
             endSecond: 6,
             kind: "video-slice",
           },
+          transform: {
+            scale: 1.18,
+            rotateDegrees: -3,
+            offsetXPercent: 8,
+            offsetYPercent: -6,
+            opacity: 0.82,
+          },
+          effects: {
+            blur: 1.5,
+            sharpen: 0.4,
+            fadeInSeconds: 0.25,
+            fadeOutSeconds: 0.35,
+          },
           assetTags: ["demo", "closeup"],
           rationale: "The selected slice shows the lid action clearly.",
         },
@@ -193,6 +206,27 @@ describe("shared contract schemas", () => {
     });
 
     expect(plan.success).toBe(true);
+    expect(plan.success ? plan.data.segments[0]?.transform?.scale : undefined).toBe(1.18);
+    expect(plan.success ? plan.data.segments[0]?.effects?.blur : undefined).toBe(1.5);
+
+    expect(
+      SmartEditSegmentSchema.safeParse({
+        ...(plan.success ? plan.data.segments[0] : {}),
+        transform: {
+          scale: 0,
+          rotateDegrees: 361,
+          offsetXPercent: 250,
+          offsetYPercent: -250,
+          opacity: 1.4,
+        },
+        effects: {
+          blur: 50,
+          sharpen: 4,
+          fadeInSeconds: 10,
+          fadeOutSeconds: 10,
+        },
+      }).success,
+    ).toBe(false);
 
     expect(
       SmartEditResultSchema.safeParse({
@@ -423,7 +457,7 @@ describe("shared contract schemas", () => {
     );
   });
 
-  it("limits smart edit segment durations to the Seedance 1.5 Pro supported 4-12 second range", () => {
+  it("allows timeline edit segment durations while rejecting impossible clip lengths", () => {
     const segment = {
       id: "segment-1",
       sceneId: "scene-1",
@@ -444,10 +478,16 @@ describe("shared contract schemas", () => {
 
     expect(SmartEditSegmentSchema.safeParse(segment).success).toBe(true);
     expect(
-      SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 3.5 }).success,
+      SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 0.1 }).success,
     ).toBe(false);
+    expect(SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 0.25 }).success).toBe(
+      true,
+    );
+    expect(SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 3.5 }).success).toBe(
+      true,
+    );
     expect(
-      SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 12.5 }).success,
+      SmartEditSegmentSchema.safeParse({ ...segment, durationSeconds: 120.5 }).success,
     ).toBe(false);
   });
 

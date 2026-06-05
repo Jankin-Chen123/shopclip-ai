@@ -195,8 +195,41 @@ export const smartEditOutputDimensions = (
   };
 };
 
-const buildScaleFilter = (dimensions: OutputDimensions) =>
-  `scale=${dimensions.width}:${dimensions.height}:force_original_aspect_ratio=increase,crop=${dimensions.width}:${dimensions.height},fps=30,format=yuv420p`;
+const normalizedTransform = (segment: SmartEditSegment) => ({
+  offsetXPercent: Math.max(-100, Math.min(100, segment.transform?.offsetXPercent ?? 0)),
+  offsetYPercent: Math.max(-100, Math.min(100, segment.transform?.offsetYPercent ?? 0)),
+  opacity: Math.max(0, Math.min(1, segment.transform?.opacity ?? 1)),
+  rotateDegrees: Math.max(-180, Math.min(180, segment.transform?.rotateDegrees ?? 0)),
+  scale: Math.max(0.1, Math.min(4, segment.transform?.scale ?? 1)),
+});
+
+const normalizedEffects = (segment: SmartEditSegment) => ({
+  blur: Math.max(0, Math.min(20, segment.effects?.blur ?? 0)),
+  fadeInSeconds: Math.max(0, Math.min(5, segment.effects?.fadeInSeconds ?? 0)),
+  fadeOutSeconds: Math.max(0, Math.min(5, segment.effects?.fadeOutSeconds ?? 0)),
+  sharpen: Math.max(0, Math.min(2, segment.effects?.sharpen ?? 0)),
+});
+
+const buildScaleFilter = (segment: SmartEditSegment, dimensions: OutputDimensions): string => {
+  const transform = normalizedTransform(segment);
+  const scaledWidth = Math.max(2, Math.round((dimensions.width * transform.scale) / 2) * 2);
+  const scaledHeight = Math.max(2, Math.round((dimensions.height * transform.scale) / 2) * 2);
+  const offsetX = Math.round((dimensions.width * transform.offsetXPercent) / 100);
+  const offsetY = Math.round((dimensions.height * transform.offsetYPercent) / 100);
+  if (
+    transform.scale === 1 &&
+    offsetX === 0 &&
+    offsetY === 0
+  ) {
+    return `scale=${dimensions.width}:${dimensions.height}:force_original_aspect_ratio=increase,crop=${dimensions.width}:${dimensions.height},fps=30,format=yuv420p`;
+  }
+  return [
+    `scale=${scaledWidth}:${scaledHeight}:force_original_aspect_ratio=increase`,
+    `crop=${dimensions.width}:${dimensions.height}:x='(in_w-${dimensions.width})/2${offsetX >= 0 ? "+" : ""}${offsetX}':y='(in_h-${dimensions.height})/2${offsetY >= 0 ? "+" : ""}${offsetY}'`,
+    "fps=30",
+    "format=yuv420p",
+  ].join(",");
+};
 
 const transitionDurationSeconds = (segment: SmartEditSegment): number => {
   if (segment.transition === "cut") {
@@ -216,16 +249,42 @@ const buildSegmentVideoFilter = (
   segment: SmartEditSegment,
   dimensions: OutputDimensions,
 ): string => {
-  const filters = [buildScaleFilter(dimensions)];
+  const transform = normalizedTransform(segment);
+  const effects = normalizedEffects(segment);
+  const filters = [buildScaleFilter(segment, dimensions)];
+  if (transform.rotateDegrees !== 0) {
+    filters.push(`rotate=${((transform.rotateDegrees * Math.PI) / 180).toFixed(4)}:fillcolor=black`);
+  }
+  if (transform.opacity < 1) {
+    filters.push("format=yuva420p");
+    filters.push(`colorchannelmixer=aa=${transform.opacity.toFixed(3)}`);
+  }
+  if (effects.blur > 0) {
+    filters.push(`gblur=sigma=${effects.blur.toFixed(2)}`);
+  }
+  if (effects.sharpen > 0) {
+    filters.push(`unsharp=5:5:${effects.sharpen.toFixed(2)}:5:5:0.00`);
+  }
   const playbackRate = normalizePlaybackRate(segment);
   if (playbackRate !== 1) {
     filters.push(`setpts=${(1 / playbackRate).toFixed(4)}*PTS`);
   }
   const duration = normalizeDuration(segment);
+  if (effects.fadeInSeconds > 0 && duration > effects.fadeInSeconds) {
+    filters.push(`fade=t=in:st=0:d=${effects.fadeInSeconds.toFixed(2)}`);
+  }
+  if (effects.fadeOutSeconds > 0 && duration > effects.fadeOutSeconds) {
+    filters.push(
+      `fade=t=out:st=${Math.max(0, duration - effects.fadeOutSeconds).toFixed(2)}:d=${effects.fadeOutSeconds.toFixed(2)}`,
+    );
+  }
   const fadeDuration = transitionDurationSeconds(segment);
   if (segment.transition === "fade" && fadeDuration > 0 && duration > fadeDuration * 2) {
     filters.push(`fade=t=in:st=0:d=${fadeDuration.toFixed(2)}`);
     filters.push(`fade=t=out:st=${(duration - fadeDuration).toFixed(2)}:d=${fadeDuration.toFixed(2)}`);
+  }
+  if (transform.opacity < 1) {
+    filters.push("format=yuv420p");
   }
   return filters.join(",");
 };

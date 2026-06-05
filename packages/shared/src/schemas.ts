@@ -703,10 +703,25 @@ export const SmartEditSourceSchema = z
     }
   });
 
+export const SmartEditTransformSchema = z.object({
+  scale: z.number().min(0.1).max(4).default(1),
+  rotateDegrees: z.number().min(-180).max(180).default(0),
+  offsetXPercent: z.number().min(-100).max(100).default(0),
+  offsetYPercent: z.number().min(-100).max(100).default(0),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+export const SmartEditEffectsSchema = z.object({
+  blur: z.number().min(0).max(20).default(0),
+  sharpen: z.number().min(0).max(2).default(0),
+  fadeInSeconds: z.number().min(0).max(5).default(0),
+  fadeOutSeconds: z.number().min(0).max(5).default(0),
+});
+
 export const SmartEditSegmentOverrideSchema = z.object({
   sceneId: z.string().trim().min(1),
   enabled: z.boolean().default(true),
-  durationSeconds: z.number().positive().max(120).optional(),
+  durationSeconds: z.number().min(0.25).max(120).optional(),
   timelineStartSecond: z.number().min(0).max(600).optional(),
   playbackRate: z.number().min(0.25).max(4).default(1),
   sourceAudioMuted: z.boolean().default(false),
@@ -721,6 +736,8 @@ export const SmartEditSegmentOverrideSchema = z.object({
   subtitle: z.string().trim().min(1).optional(),
   voiceover: z.string().trim().min(1).optional(),
   source: SmartEditSourceSchema.optional(),
+  transform: SmartEditTransformSchema.optional(),
+  effects: SmartEditEffectsSchema.optional(),
 });
 
 export const SmartEditRequestSchema = z.object({
@@ -748,7 +765,7 @@ export const SmartEditSegmentSchema = z.object({
   sceneId: z.string().trim().min(1),
   order: z.number().int().min(1),
   enabled: z.boolean().default(true),
-  durationSeconds: z.number().positive().max(120),
+  durationSeconds: z.number().min(0.25).max(120),
   timelineStartSecond: z.number().min(0).max(600).default(0),
   playbackRate: z.number().min(0.25).max(4).default(1),
   sourceAudioMuted: z.boolean().default(false),
@@ -763,6 +780,8 @@ export const SmartEditSegmentSchema = z.object({
   subtitle: z.string().trim().min(1),
   voiceover: z.string().trim().min(1),
   source: SmartEditSourceSchema,
+  transform: SmartEditTransformSchema.optional(),
+  effects: SmartEditEffectsSchema.optional(),
   assetTags: z.array(z.string().trim().min(1)).default([]),
   rationale: z.string().trim().min(1),
 });

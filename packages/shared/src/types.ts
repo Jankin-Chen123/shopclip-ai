@@ -57,6 +57,7 @@ import type {
   SmartEditPlanSchema,
   SmartEditRequestSchema,
   SmartEditResultSchema,
+  SmartEditEffectsSchema,
   SmartEditSegmentOutputSchema,
   SmartEditSegmentOverrideSchema,
   SmartEditSegmentRefreshRequestSchema,
@@ -65,6 +66,7 @@ import type {
   SmartEditTimelineElementSchema,
   SmartEditTimelineSchema,
   SmartEditTimelineTrackSchema,
+  SmartEditTransformSchema,
   SmartEditTransitionSchema,
   StoryboardSceneSchema,
   ReferenceVideoAnalysisSchema,
@@ -136,6 +138,8 @@ export type VideoGenerationSettings = z.infer<typeof VideoGenerationSettingsSche
 export type RenderRequest = z.infer<typeof RenderRequestSchema>;
 export type SmartEditTransition = z.infer<typeof SmartEditTransitionSchema>;
 export type SmartEditSource = z.infer<typeof SmartEditSourceSchema>;
+export type SmartEditTransform = z.infer<typeof SmartEditTransformSchema>;
+export type SmartEditEffects = z.infer<typeof SmartEditEffectsSchema>;
 export type SmartEditTimelineTrack = z.infer<typeof SmartEditTimelineTrackSchema>;
 export type SmartEditTimelineElement = z.infer<typeof SmartEditTimelineElementSchema>;
 export type SmartEditTimeline = z.infer<typeof SmartEditTimelineSchema>;

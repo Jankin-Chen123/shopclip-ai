@@ -713,3 +713,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - True timeline-element persistence, transform/effect panels, visual snap guides, and named command history are still open.
+
+## 2026-06-05 Segment Transform And Effects Inspector
+
+- Reference model:
+  - Read `Jankin-Chen123/opencut-classic` command/effects modules in a temporary checkout under `C:\tmp\opencut-classic`.
+  - The reusable pattern is that visual timeline elements own editable transform/effect state, and update/effect commands patch element properties instead of only reordering clips.
+- Fix:
+  - Added `SmartEditTransformSchema` and `SmartEditEffectsSchema` to the shared smart-edit segment contracts.
+  - Smart Edit segment plans can now persist scale, rotation, X/Y offset, opacity, blur, sharpen, fade-in, and fade-out controls.
+  - The segment inspector now exposes Visual transform and Visual effects sections, so users can edit those properties on the selected video segment.
+  - The ffmpeg smart-edit composer now converts those properties into real video filters: scaled crop/pan, rotation, alpha channel adjustment, blur, sharpen, and independent fade-in/fade-out.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run packages/shared/src/schemas.test.ts -t "validates real smart edit"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/api/src/providers/renderer/smartEditComposer.test.ts -t "transform and effect"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "editor workspace"`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - True independent timeline-element persistence, visual snap guide overlays, named command history, keyframes, masks, and richer OpenCut-style effect stacking are still open.

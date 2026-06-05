@@ -396,6 +396,55 @@ describe("smart edit composer", () => {
     expect(subtitleAss).toContain("PlayResY: 480");
   });
 
+  it("applies segment transform and effect controls to ffmpeg video filters", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      durationSeconds: 4,
+      transform: {
+        offsetXPercent: 12,
+        offsetYPercent: -8,
+        opacity: 0.72,
+        rotateDegrees: -4,
+        scale: 1.25,
+      },
+      effects: {
+        blur: 1.6,
+        fadeInSeconds: 0.4,
+        fadeOutSeconds: 0.5,
+        sharpen: 0.7,
+      },
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const firstRawCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    const videoFilter = firstRawCommand?.args[firstRawCommand.args.indexOf("-vf") + 1] ?? "";
+    expect(videoFilter).toContain("scale=900:1600");
+    expect(videoFilter).toContain("crop=720:1280:x='(in_w-720)/2+86'");
+    expect(videoFilter).toContain("rotate=-0.0698");
+    expect(videoFilter).toContain("format=yuva420p,colorchannelmixer=aa=0.720");
+    expect(videoFilter).toContain("gblur=sigma=1.60");
+    expect(videoFilter).toContain("unsharp=5:5:0.70:5:5:0.00");
+    expect(videoFilter).toContain("fade=t=in:st=0:d=0.40");
+    expect(videoFilter).toContain("fade=t=out:st=3.50:d=0.50");
+  });
+
   it("uses real ffmpeg fade and xfade filters for requested visual transitions", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
