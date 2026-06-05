@@ -11,6 +11,7 @@ import {
   InspirationGenerateResponseSchema,
   ProjectBriefSchema,
   ProjectSummarySchema,
+  RenderRequestSchema,
   RenderTaskSchema,
   ScriptGenerationRequestSchema,
   ScriptResultSchema,
@@ -119,6 +120,59 @@ describe("shared contract schemas", () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.sceneClips).toHaveLength(1);
+  });
+
+  it("defaults generated videos to include audio across render and smart edit requests", () => {
+    const renderRequest = RenderRequestSchema.parse({});
+    expect(renderRequest.videoSettings.generateAudio).toBe(true);
+
+    const smartEditRequest = SmartEditRequestSchema.parse({});
+    expect(smartEditRequest.videoSettings.generateAudio).toBe(true);
+
+    const smartEditRefreshRequest = SmartEditSegmentRefreshRequestSchema.safeParse({
+      currentPlan: {
+        id: "edit_plan_1",
+        projectId: "project_demo",
+        strategy: "Use generated materials.",
+        targetDurationSeconds: 4,
+        segments: [
+          {
+            id: "segment_1",
+            sceneId: "scene_1",
+            order: 1,
+            enabled: true,
+            durationSeconds: 4,
+            transition: "cut",
+            subtitle: "Show the product.",
+            voiceover: "Show the product.",
+            source: {
+              sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+              startSecond: 0,
+              endSecond: 4,
+              kind: "generated-scene-clip",
+            },
+            assetTags: [],
+            rationale: "Use the generated scene material.",
+          },
+        ],
+        audio: {
+          bgmTrack: "creator-pop",
+          voice: "clear-host",
+        },
+        createdAt: "2026-05-21T00:00:00.000Z",
+      },
+      segmentOutputs: [
+        {
+          segmentId: "segment_1",
+          sceneId: "scene_1",
+          objectKey: "renders/demo/scene-1.mp4",
+          videoUrl: "https://cdn.example.test/scene-1.mp4",
+        },
+      ],
+    });
+
+    expect(smartEditRefreshRequest.success).toBe(true);
+    expect(smartEditRefreshRequest.data?.videoSettings.generateAudio).toBe(true);
   });
 
   it("validates real smart edit requests, plans, and results", () => {

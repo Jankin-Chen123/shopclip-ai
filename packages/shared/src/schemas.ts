@@ -597,7 +597,7 @@ export const MediaSettingsSchema = z.object({
 export const VideoGenerationSettingsSchema = z.object({
   ratio: z.enum(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9"]).default("9:16"),
   resolution: z.enum(["480p", "720p", "1080p"]).default("720p"),
-  generateAudio: z.boolean().default(false),
+  generateAudio: z.boolean().default(true),
   watermark: z.boolean().default(false),
   seed: z.number().int().min(-1).max(2_147_483_647).optional(),
 });
@@ -612,7 +612,7 @@ export const RenderRequestSchema = z.object({
   videoSettings: VideoGenerationSettingsSchema.default({
     ratio: "9:16",
     resolution: "720p",
-    generateAudio: false,
+    generateAudio: true,
     watermark: false,
   }),
   simulateFailure: z.boolean().default(false),
@@ -835,7 +835,7 @@ export const SmartEditRequestSchema = z.object({
   videoSettings: VideoGenerationSettingsSchema.default({
     ratio: "9:16",
     resolution: "720p",
-    generateAudio: false,
+    generateAudio: true,
     watermark: false,
   }),
   segments: z.array(SmartEditSegmentOverrideSchema).max(40).default([]),
@@ -944,7 +944,7 @@ export const SmartEditSegmentRefreshRequestSchema = z.object({
   videoSettings: VideoGenerationSettingsSchema.default({
     ratio: "9:16",
     resolution: "720p",
-    generateAudio: false,
+    generateAudio: true,
     watermark: false,
   }),
   instructions: z.string().trim().max(2000).optional(),

@@ -1420,3 +1420,29 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.
+
+## 2026-06-06 Default Generated Audio
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Aligns request contracts with the product expectation that generated scene videos include source audio by default before ffmpeg materialization.
+- Fix:
+  - Changed `VideoGenerationSettingsSchema.generateAudio` default from `false` to `true`.
+  - Updated default `videoSettings` for render, smart-edit, and smart-edit segment refresh requests so callers that omit the field still request audio.
+  - Added a shared schema regression test covering all three request paths.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|source audio|detaches generated scene video"`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts -t "persistent timeline elements|generated scene video-only"`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/api lint`
+- Live evidence in progress:
+  - Fresh Seedance render task `6a028699-932d-4f3c-b2e5-a415d935d63d` was created for project `cmpq7vbgg0000wh6cn1qs9u69` with `generateAudio: true`.
+  - The task reached `running`; scene 1 completed and scene 2 started before SSH polling became intermittently unavailable.
+- Remaining:
+  - Full objective completion still requires live runtime evidence for fresh model render completion, real ffmpeg video/audio/text materialization, and Smart Edit timeline/export consumption.
