@@ -439,9 +439,13 @@ const createLocalPlan = (
         order: index + 1,
         playbackRate: override?.playbackRate ?? 1,
         sourceAudioMuted: override?.sourceAudioMuted ?? false,
+        sourceAudioStartOffsetSeconds: override?.sourceAudioStartOffsetSeconds ?? 0,
+        sourceAudioDurationSeconds: override?.sourceAudioDurationSeconds,
         captionHidden: override?.captionHidden ?? false,
         captionStartOffsetSeconds: override?.captionStartOffsetSeconds ?? 0,
+        captionDurationSeconds: override?.captionDurationSeconds,
         voiceoverStartOffsetSeconds: override?.voiceoverStartOffsetSeconds ?? 0,
+        voiceoverDurationSeconds: override?.voiceoverDurationSeconds,
         rationale:
           linkedAsset || scene.imageUrl
             ? "Selected the closest structured asset or generated scene visual for this storyboard scene."
@@ -633,6 +637,14 @@ const normalizeModelSegment = (
       typeof rawSegment.sourceAudioMuted === "boolean"
         ? rawSegment.sourceAudioMuted
         : localSegment.sourceAudioMuted,
+    sourceAudioStartOffsetSeconds:
+      typeof rawSegment.sourceAudioStartOffsetSeconds === "number"
+        ? Math.max(0, Math.min(localSegment.durationSeconds, rawSegment.sourceAudioStartOffsetSeconds))
+        : localSegment.sourceAudioStartOffsetSeconds,
+    sourceAudioDurationSeconds:
+      typeof rawSegment.sourceAudioDurationSeconds === "number"
+        ? Math.max(0.1, Math.min(localSegment.durationSeconds, rawSegment.sourceAudioDurationSeconds))
+        : localSegment.sourceAudioDurationSeconds,
     captionHidden:
       typeof rawSegment.captionHidden === "boolean"
         ? rawSegment.captionHidden
@@ -641,10 +653,18 @@ const normalizeModelSegment = (
       typeof rawSegment.captionStartOffsetSeconds === "number"
         ? Math.max(0, Math.min(localSegment.durationSeconds, rawSegment.captionStartOffsetSeconds))
         : localSegment.captionStartOffsetSeconds,
+    captionDurationSeconds:
+      typeof rawSegment.captionDurationSeconds === "number"
+        ? Math.max(0.1, Math.min(localSegment.durationSeconds, rawSegment.captionDurationSeconds))
+        : localSegment.captionDurationSeconds,
     voiceoverStartOffsetSeconds:
       typeof rawSegment.voiceoverStartOffsetSeconds === "number"
         ? Math.max(0, Math.min(localSegment.durationSeconds, rawSegment.voiceoverStartOffsetSeconds))
         : localSegment.voiceoverStartOffsetSeconds,
+    voiceoverDurationSeconds:
+      typeof rawSegment.voiceoverDurationSeconds === "number"
+        ? Math.max(0.1, Math.min(localSegment.durationSeconds, rawSegment.voiceoverDurationSeconds))
+        : localSegment.voiceoverDurationSeconds,
     transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
     voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,

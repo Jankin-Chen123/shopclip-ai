@@ -655,3 +655,25 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Separate persistent clip records for video/audio/text, ripple/overwrite/insert edit modes, clip transform/effect panels, visual snap guides, and full OpenCut-style command history are still needed before claiming CapCut/OpenCut-level parity.
+
+## 2026-06-05 Independent Track Clip Durations
+
+- Reference model:
+  - OpenCut media/text/audio elements can have independent timeline duration, even when they originate from the same scene or source asset.
+- Fix:
+  - Extended `SmartEditSegment` with independent `sourceAudioStartOffsetSeconds`, `sourceAudioDurationSeconds`, `captionDurationSeconds`, and `voiceoverDurationSeconds`.
+  - Smart Edit track stack now renders source audio, caption, and voice rows using their own start and duration instead of always stretching to the end of the scene.
+  - Track-material inspector now exposes duration controls for source audio, captions, and voiceover.
+  - Source-audio track dragging now offsets the detached audio material within the scene instead of moving the video segment.
+  - API smart-edit composer now uses ffmpeg filters to trim separated source audio, caption ASS timing, and generated voiceover audio to the requested track material duration before padding/mixing.
+  - Planner fallback and refresh request paths preserve the new track timing fields.
+- Verification:
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx -t "track-level"`
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx`
+  - `.\\node_modules\\.bin\\vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`
+  - `.\\node_modules\\.bin\\vitest.CMD run src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+- Remaining:
+  - Fully separate persistent timeline element records, ripple/overwrite/insert modes, transform/effect panels, visual snap guides, and OpenCut-style command labels/history are still open.

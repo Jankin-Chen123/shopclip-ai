@@ -1413,6 +1413,15 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
         ]
       : []),
   ];
+  const clipDurationWithinSegment = (
+    durationSeconds: number | undefined,
+    offsetSeconds: number | undefined,
+    segmentDurationSeconds: number,
+  ): number => {
+    const offset = Math.max(0, Math.min(Math.max(0, segmentDurationSeconds - 0.1), offsetSeconds ?? 0));
+    const maxDuration = Math.max(0.1, segmentDurationSeconds - offset);
+    return Math.max(0.1, Math.min(maxDuration, durationSeconds ?? maxDuration));
+  };
   const elements: SmartEditTimeline["elements"] = enabledSegments.flatMap((segment) => {
     const startSecond = hasManualTimelineStarts
       ? Math.max(0, Math.min(600, segment.timelineStartSecond ?? 0))
@@ -1421,6 +1430,24 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
     cursor = Math.max(cursor, startSecond + durationSeconds);
     const sourceStart = segment.source.startSecond ?? 0;
     const sourceEnd = segment.source.endSecond;
+    const sourceAudioOffsetSeconds = segment.sourceAudioStartOffsetSeconds ?? 0;
+    const sourceAudioDurationSeconds = clipDurationWithinSegment(
+      segment.sourceAudioDurationSeconds,
+      sourceAudioOffsetSeconds,
+      durationSeconds,
+    );
+    const captionOffsetSeconds = segment.captionStartOffsetSeconds ?? 0;
+    const captionDurationSeconds = clipDurationWithinSegment(
+      segment.captionDurationSeconds,
+      captionOffsetSeconds,
+      durationSeconds,
+    );
+    const voiceoverOffsetSeconds = segment.voiceoverStartOffsetSeconds ?? 0;
+    const voiceoverDurationSeconds = clipDurationWithinSegment(
+      segment.voiceoverDurationSeconds,
+      voiceoverOffsetSeconds,
+      durationSeconds,
+    );
     return [
       {
         detachedAudio: false,
@@ -1445,7 +1472,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
         ? [
             {
               detachedAudio: true,
-              durationSeconds,
+              durationSeconds: sourceAudioDurationSeconds,
               hidden: false,
               id: `${segment.id}-audio`,
               kind: "audio" as const,
@@ -1455,16 +1482,22 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
               sceneId: segment.sceneId,
               segmentId: segment.id,
               sourceUrl: segment.source.sceneClipAudioUrl,
-              startSecond,
+              startSecond: startSecond + sourceAudioOffsetSeconds,
               trackId: "audio-source",
-              trimEndSecond: sourceEnd,
+              trimEndSecond:
+                sourceEnd === undefined
+                  ? sourceStart + sourceAudioDurationSeconds * (segment.playbackRate ?? 1)
+                  : Math.min(
+                      sourceEnd,
+                      sourceStart + sourceAudioDurationSeconds * (segment.playbackRate ?? 1),
+                    ),
               trimStartSecond: sourceStart,
             },
           ]
         : []),
       {
         detachedAudio: false,
-        durationSeconds,
+        durationSeconds: captionDurationSeconds,
         hidden: segment.captionHidden ?? false,
         id: `${segment.id}-text`,
         kind: "text" as const,
@@ -1473,7 +1506,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
         playbackRate: 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
-        startSecond: startSecond + (segment.captionStartOffsetSeconds ?? 0),
+        startSecond: startSecond + captionOffsetSeconds,
         text: segment.subtitle,
         trackId: "text-copy",
         trimStartSecond: 0,
@@ -1482,7 +1515,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
         ? [
             {
               detachedAudio: false,
-              durationSeconds: Math.max(0.1, durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+              durationSeconds: voiceoverDurationSeconds,
               hidden: false,
               id: `${segment.id}-voice`,
               kind: "audio" as const,
@@ -1491,7 +1524,7 @@ const withSmartEditTimeline = (plan: SmartEditPlan): SmartEditPlan => {
               playbackRate: 1,
               sceneId: segment.sceneId,
               segmentId: segment.id,
-              startSecond: startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
+              startSecond: startSecond + voiceoverOffsetSeconds,
               text: segment.voiceover,
               trackId: "voiceover",
               trimStartSecond: 0,

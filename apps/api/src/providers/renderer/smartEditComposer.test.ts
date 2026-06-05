@@ -695,6 +695,82 @@ describe("smart edit composer", () => {
     expect(subtitleAss).toContain("Dialogue: 0,0:00:01.20,0:00:04.00");
   });
 
+  it("burns segment captions only for the requested track duration", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      captionDurationSeconds: 1.4,
+      captionStartOffsetSeconds: 0.8,
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const subtitleCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.includes("segment-video.ass")),
+    );
+    const subtitlePath = subtitleCommand?.args
+      .find((arg) => arg.includes("segment-video.ass"))
+      ?.match(/filename='([^']+)'/)?.[1]
+      ?.replace(/\\:/gu, ":");
+    expect(subtitlePath).toBeTruthy();
+    const subtitleAss = await readFile(subtitlePath!, "utf8");
+    expect(subtitleAss).toContain("Dialogue: 0,0:00:00.80,0:00:02.20");
+  });
+
+  it("trims separated source audio by its independent offset and duration", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = plan.segments.map((segment, index) => ({
+      ...segment,
+      durationSeconds: 4,
+      source: {
+        endSecond: 6,
+        kind: "generated-scene-clip",
+        sceneClipAudioUrl: dataAudio,
+        sceneClipUrl: dataVideo,
+        sceneClipVideoOnlyUrl: dataVideo,
+        startSecond: 1,
+      },
+      sourceAudioDurationSeconds: index === 0 ? 1.5 : undefined,
+      sourceAudioStartOffsetSeconds: index === 0 ? 0.7 : 0,
+      transition: "cut",
+    }));
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const sourceAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-1-padded.wav")),
+    );
+    expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=700:all=1");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
+  });
+
   it("delays in-segment voiceover before concatenating the voice track", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;
@@ -722,6 +798,37 @@ describe("smart edit composer", () => {
     );
     expect(voicePadCommand?.args.join(" ")).toContain("adelay=800:all=1");
     expect(voicePadCommand?.args.join(" ")).toContain("atrim=0:4");
+  });
+
+  it("trims voiceover audio to the requested track duration before padding", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments[0] = {
+      ...plan.segments[0]!,
+      voiceoverDurationSeconds: 1.6,
+      voiceoverStartOffsetSeconds: 0.5,
+    };
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const voicePadCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("voice-1-padded.wav")),
+    );
+    expect(voicePadCommand?.args.join(" ")).toContain("atrim=0:1.6");
+    expect(voicePadCommand?.args.join(" ")).toContain("adelay=500:all=1");
+    expect(voicePadCommand?.args.join(" ")).toContain("apad,atrim=0:4");
   });
 
   it("preserves manual timeline gaps across video, source audio, and voice tracks", async () => {

@@ -138,6 +138,16 @@ const normalizeTimelineStart = (segment: SmartEditSegment): number =>
 const normalizeInSegmentOffset = (offsetSeconds: number | undefined, segment: SmartEditSegment): number =>
   Math.max(0, Math.min(normalizeDuration(segment) - 0.01, offsetSeconds ?? 0));
 
+const normalizeInSegmentClipDuration = (
+  durationSeconds: number | undefined,
+  offsetSeconds: number | undefined,
+  segment: SmartEditSegment,
+): number => {
+  const startOffset = normalizeInSegmentOffset(offsetSeconds, segment);
+  const maxDuration = Math.max(0.1, normalizeDuration(segment) - startOffset);
+  return Math.max(0.1, Math.min(maxDuration, durationSeconds ?? maxDuration));
+};
+
 const timelineSegmentStartSeconds = (segments: SmartEditSegment[]): Map<string, number> => {
   const starts = new Map<string, number>();
   const hasManualStarts = segments.some((segment) => normalizeTimelineStart(segment) > 0);
@@ -415,14 +425,20 @@ const createSegmentVideo = async ({
 
   const subtitleAssPath = join(workdir, `${segment.id}.ass`);
   const captionedOutputPath = join(workdir, `${segment.id}-captioned.mp4`);
+  const captionStartSecond = normalizeInSegmentOffset(segment.captionStartOffsetSeconds, segment);
+  const captionDurationSeconds = normalizeInSegmentClipDuration(
+    segment.captionDurationSeconds,
+    segment.captionStartOffsetSeconds,
+    segment,
+  );
   await writeFile(
     subtitleAssPath,
     buildSubtitleAss(subtitleText, {
-      endSecond: normalizeDuration(segment),
+      endSecond: Math.min(normalizeDuration(segment), captionStartSecond + captionDurationSeconds),
       fontSize: Math.max(24, Math.round(dimensions.height * (42 / 1280))),
       height: dimensions.height,
       marginV: Math.max(48, Math.round(dimensions.height * (96 / 1280))),
-      startSecond: normalizeInSegmentOffset(segment.captionStartOffsetSeconds, segment),
+      startSecond: captionStartSecond,
       width: dimensions.width,
     }),
     "utf8",
@@ -531,14 +547,26 @@ const createSourceAudioTrack = async (
     }
 
     const sourcePath = await materializeUrl(sourceAudioUrl, targetPath, fetchImpl);
+    const audioOffsetSeconds = normalizeInSegmentOffset(segment.sourceAudioStartOffsetSeconds, segment);
+    const audioOffsetMilliseconds = Math.round(audioOffsetSeconds * 1000);
+    const audioDurationSeconds = normalizeInSegmentClipDuration(
+      segment.sourceAudioDurationSeconds,
+      segment.sourceAudioStartOffsetSeconds,
+      segment,
+    );
+    const sourceAudioStart = segment.source.startSecond ?? 0;
     const trimEnd =
-      segment.source.endSecond ??
-      (segment.source.startSecond ?? 0) +
-        normalizeDuration(segment) * normalizePlaybackRate(segment);
+      segment.source.endSecond === undefined
+        ? sourceAudioStart + audioDurationSeconds * normalizePlaybackRate(segment)
+        : Math.min(
+            segment.source.endSecond,
+            sourceAudioStart + audioDurationSeconds * normalizePlaybackRate(segment),
+          );
     const filters = [
-      `atrim=${segment.source.startSecond ?? 0}:${trimEnd}`,
+      `atrim=${sourceAudioStart}:${trimEnd}`,
       "asetpts=PTS-STARTPTS",
       atempoFilter(normalizePlaybackRate(segment)),
+      ...(audioOffsetMilliseconds > 0 ? [`adelay=${audioOffsetMilliseconds}:all=1`] : []),
       `apad,atrim=0:${normalizeDuration(segment)}`,
     ].join(",");
     await run(command, [
@@ -785,10 +813,15 @@ const createVoiceoverTrack = async (
     const paddedVoicePath = join(workdir, `voice-${index + 1}-padded.wav`);
     const voiceOffsetSeconds = normalizeInSegmentOffset(segment.voiceoverStartOffsetSeconds, segment);
     const voiceOffsetMilliseconds = Math.round(voiceOffsetSeconds * 1000);
+    const voiceDurationSeconds = normalizeInSegmentClipDuration(
+      segment.voiceoverDurationSeconds,
+      segment.voiceoverStartOffsetSeconds,
+      segment,
+    );
     const voiceFilter =
       voiceOffsetMilliseconds > 0
-        ? `adelay=${voiceOffsetMilliseconds}:all=1,apad,atrim=0:${normalizeDuration(segment)}`
-        : `apad,atrim=0:${normalizeDuration(segment)}`;
+        ? `atrim=0:${voiceDurationSeconds},asetpts=PTS-STARTPTS,adelay=${voiceOffsetMilliseconds}:all=1,apad,atrim=0:${normalizeDuration(segment)}`
+        : `atrim=0:${voiceDurationSeconds},asetpts=PTS-STARTPTS,apad,atrim=0:${normalizeDuration(segment)}`;
     await run(ttsCommand, [
       "-v",
       voiceForLanguage(plan.audio.targetLanguage),

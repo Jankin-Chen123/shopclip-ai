@@ -81,6 +81,24 @@ const clampInSegmentOffset = (offsetSeconds: number, durationSeconds: number): n
     ? Math.max(0, Math.min(Math.max(0, durationSeconds - 0.1), offsetSeconds))
     : 0;
 
+const clipDurationWithinSegment = (
+  durationSeconds: number | undefined,
+  startOffsetSeconds: number | undefined,
+  segmentDurationSeconds: number,
+): number => {
+  const offsetSeconds = clampInSegmentOffset(startOffsetSeconds ?? 0, segmentDurationSeconds);
+  const maxDuration = Math.max(MIN_SMART_EDIT_CLIP_SECONDS, segmentDurationSeconds - offsetSeconds);
+  return Number.isFinite(durationSeconds ?? Number.NaN)
+    ? Math.max(MIN_SMART_EDIT_CLIP_SECONDS, Math.min(maxDuration, durationSeconds!))
+    : maxDuration;
+};
+
+const clampClipDurationWithinSegment = (
+  durationSeconds: number,
+  startOffsetSeconds: number | undefined,
+  segmentDurationSeconds: number,
+): number => clipDurationWithinSegment(durationSeconds, startOffsetSeconds, segmentDurationSeconds);
+
 const clampTimelineStart = (startSecond: number): number =>
   Number.isFinite(startSecond) ? Math.max(0, Math.min(600, startSecond)) : 0;
 
@@ -417,9 +435,18 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
       trimStartSecond: sourceStart,
     });
     if (segment.source.sceneClipAudioUrl) {
+      const sourceAudioOffsetSeconds = clampInSegmentOffset(
+        segment.sourceAudioStartOffsetSeconds ?? 0,
+        durationSeconds,
+      );
+      const sourceAudioDurationSeconds = clipDurationWithinSegment(
+        segment.sourceAudioDurationSeconds,
+        sourceAudioOffsetSeconds,
+        durationSeconds,
+      );
       elements.push({
         detachedAudio: true,
-        durationSeconds,
+        durationSeconds: sourceAudioDurationSeconds,
         hidden: false,
         id: `${segment.id}-audio`,
         kind: "audio",
@@ -429,15 +456,24 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         sceneId: segment.sceneId,
         segmentId: segment.id,
         sourceUrl: segment.source.sceneClipAudioUrl,
-        startSecond,
+        startSecond: startSecond + sourceAudioOffsetSeconds,
         trackId: "audio-source",
-        trimEndSecond: sourceEnd,
+        trimEndSecond:
+          sourceEnd === undefined
+            ? sourceStart + sourceAudioDurationSeconds * (segment.playbackRate ?? 1)
+            : Math.min(sourceEnd, sourceStart + sourceAudioDurationSeconds * (segment.playbackRate ?? 1)),
         trimStartSecond: sourceStart,
       });
     }
+    const captionOffsetSeconds = clampInSegmentOffset(segment.captionStartOffsetSeconds ?? 0, durationSeconds);
+    const captionDurationSeconds = clipDurationWithinSegment(
+      segment.captionDurationSeconds,
+      captionOffsetSeconds,
+      durationSeconds,
+    );
     elements.push({
       detachedAudio: false,
-      durationSeconds,
+      durationSeconds: captionDurationSeconds,
       hidden: segment.captionHidden ?? false,
       id: `${segment.id}-text`,
       kind: "text",
@@ -446,15 +482,24 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
       playbackRate: 1,
       sceneId: segment.sceneId,
       segmentId: segment.id,
-      startSecond: startSecond + (segment.captionStartOffsetSeconds ?? 0),
+      startSecond: startSecond + captionOffsetSeconds,
       text: segment.subtitle,
       trackId: "text-copy",
       trimStartSecond: 0,
     });
     if (segment.voiceover.trim()) {
+      const voiceoverOffsetSeconds = clampInSegmentOffset(
+        segment.voiceoverStartOffsetSeconds ?? 0,
+        durationSeconds,
+      );
+      const voiceoverDurationSeconds = clipDurationWithinSegment(
+        segment.voiceoverDurationSeconds,
+        voiceoverOffsetSeconds,
+        durationSeconds,
+      );
       elements.push({
         detachedAudio: false,
-        durationSeconds: Math.max(0.1, durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
+        durationSeconds: voiceoverDurationSeconds,
         hidden: false,
         id: `${segment.id}-voice`,
         kind: "audio",
@@ -463,7 +508,7 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         playbackRate: 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
-        startSecond: startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
+        startSecond: startSecond + voiceoverOffsetSeconds,
         text: segment.voiceover,
         trackId: "voiceover",
         trimStartSecond: 0,
@@ -886,8 +931,17 @@ export const moveSmartEditTrackClipOnTimeline = (
   if (!trackClip.segmentId) {
     return plan;
   }
-  if (trackClip.trackId === "video" || trackClip.trackId === "sourceAudio") {
+  if (trackClip.trackId === "video") {
     return moveSmartEditSegmentOnTimeline(plan, trackClip.segmentId, deltaSeconds, playheadSecond);
+  }
+  if (trackClip.trackId === "sourceAudio") {
+    return replaceSegment(plan, trackClip.segmentId, (segment) => ({
+      ...segment,
+      sourceAudioStartOffsetSeconds: clampInSegmentOffset(
+        snapTimelineSeconds((segment.sourceAudioStartOffsetSeconds ?? 0) + deltaSeconds),
+        segment.durationSeconds,
+      ),
+    }));
   }
   if (trackClip.trackId === "caption") {
     return replaceSegment(plan, trackClip.segmentId, (segment) => ({
@@ -1034,48 +1088,75 @@ const timelineTrackSegments = (
   }));
   const sourceAudioSegments = timedSegments
     .filter(({ segment }) => segment.source.sceneClipAudioUrl)
-    .map(({ segment, startSecond }) => ({
-      id: `${segment.id}-audio`,
-      segmentId: segment.id,
-      title: `Scene ${segment.order} audio`,
-      range: timelineRangeLabel(startSecond, segment.durationSeconds),
-      meta: segment.sourceAudioMuted ? "muted source audio" : "source audio material",
-      durationSeconds: segment.durationSeconds,
-      startSecond,
-      muted: segment.sourceAudioMuted ?? false,
-      trackId: "sourceAudio" as const,
-    }));
+    .map(({ segment, startSecond }) => {
+      const sourceAudioOffsetSeconds = clampInSegmentOffset(
+        segment.sourceAudioStartOffsetSeconds ?? 0,
+        segment.durationSeconds,
+      );
+      const sourceAudioDurationSeconds = clipDurationWithinSegment(
+        segment.sourceAudioDurationSeconds,
+        sourceAudioOffsetSeconds,
+        segment.durationSeconds,
+      );
+      return {
+        id: `${segment.id}-audio`,
+        segmentId: segment.id,
+        title: `Scene ${segment.order} audio`,
+        range: timelineRangeLabel(startSecond + sourceAudioOffsetSeconds, sourceAudioDurationSeconds),
+        meta: segment.sourceAudioMuted ? "muted source audio" : "source audio material",
+        durationSeconds: sourceAudioDurationSeconds,
+        startSecond: startSecond + sourceAudioOffsetSeconds,
+        muted: segment.sourceAudioMuted ?? false,
+        trackId: "sourceAudio" as const,
+      };
+    });
   const captionSegments = timedSegments
     .filter(({ segment }) => segment.subtitle.trim().length > 0)
-    .map(({ segment, startSecond }) => ({
-      id: `${segment.id}-caption`,
-      segmentId: segment.id,
-      title: segment.subtitle,
-      range: timelineRangeLabel(
-        startSecond + (segment.captionStartOffsetSeconds ?? 0),
-        Math.max(0.1, segment.durationSeconds - (segment.captionStartOffsetSeconds ?? 0)),
-      ),
-      meta: segment.transition,
-      durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.captionStartOffsetSeconds ?? 0)),
-      startSecond: startSecond + (segment.captionStartOffsetSeconds ?? 0),
-      hidden: segment.captionHidden ?? false,
-      trackId: "caption" as const,
-    }));
+    .map(({ segment, startSecond }) => {
+      const captionOffsetSeconds = clampInSegmentOffset(
+        segment.captionStartOffsetSeconds ?? 0,
+        segment.durationSeconds,
+      );
+      const captionDurationSeconds = clipDurationWithinSegment(
+        segment.captionDurationSeconds,
+        captionOffsetSeconds,
+        segment.durationSeconds,
+      );
+      return {
+        id: `${segment.id}-caption`,
+        segmentId: segment.id,
+        title: segment.subtitle,
+        range: timelineRangeLabel(startSecond + captionOffsetSeconds, captionDurationSeconds),
+        meta: segment.transition,
+        durationSeconds: captionDurationSeconds,
+        startSecond: startSecond + captionOffsetSeconds,
+        hidden: segment.captionHidden ?? false,
+        trackId: "caption" as const,
+      };
+    });
   const voiceSegments = timedSegments
     .filter(({ segment }) => segment.voiceover.trim().length > 0)
-    .map(({ segment, startSecond }) => ({
-      id: `${segment.id}-voice`,
-      segmentId: segment.id,
-      title: segment.voiceover,
-      range: timelineRangeLabel(
-        startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
-        Math.max(0.1, segment.durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
-      ),
-      meta: plan.audio.voice,
-      durationSeconds: Math.max(0.1, segment.durationSeconds - (segment.voiceoverStartOffsetSeconds ?? 0)),
-      startSecond: startSecond + (segment.voiceoverStartOffsetSeconds ?? 0),
-      trackId: "voice" as const,
-    }));
+    .map(({ segment, startSecond }) => {
+      const voiceoverOffsetSeconds = clampInSegmentOffset(
+        segment.voiceoverStartOffsetSeconds ?? 0,
+        segment.durationSeconds,
+      );
+      const voiceoverDurationSeconds = clipDurationWithinSegment(
+        segment.voiceoverDurationSeconds,
+        voiceoverOffsetSeconds,
+        segment.durationSeconds,
+      );
+      return {
+        id: `${segment.id}-voice`,
+        segmentId: segment.id,
+        title: segment.voiceover,
+        range: timelineRangeLabel(startSecond + voiceoverOffsetSeconds, voiceoverDurationSeconds),
+        meta: plan.audio.voice,
+        durationSeconds: voiceoverDurationSeconds,
+        startSecond: startSecond + voiceoverOffsetSeconds,
+        trackId: "voice" as const,
+      };
+    });
   const tracks: SmartEditTrack[] = [
     { id: "video", segments: videoSegments },
     { id: "sourceAudio", segments: sourceAudioSegments },
@@ -2046,19 +2127,67 @@ export const SmartEditPanel = ({
                 <small>{selectedTrackClip.range}</small>
               </div>
               {selectedTrackClip.trackId === "sourceAudio" ? (
-                <label className="toggle-row">
-                  <input
-                    checked={selectedSegment.sourceAudioMuted ?? false}
-                    type="checkbox"
-                    onChange={(event) =>
-                      updateTrackClipSegment(selectedTrackClip, (segment) => ({
-                        ...segment,
-                        sourceAudioMuted: event.target.checked,
-                      }))
-                    }
-                  />
-                  {selectedSegment.sourceAudioMuted ? copy.unmuteSelected : copy.muteSelected}
-                </label>
+                <>
+                  <label>
+                    Audio start
+                    <input
+                      min={0}
+                      max={Math.max(0, selectedSegment.durationSeconds - 0.1)}
+                      step={0.1}
+                      type="number"
+                      value={selectedSegment.sourceAudioStartOffsetSeconds ?? 0}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          sourceAudioStartOffsetSeconds: clampInSegmentOffset(
+                            Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Audio duration
+                    <input
+                      min={MIN_SMART_EDIT_CLIP_SECONDS}
+                      max={Math.max(
+                        MIN_SMART_EDIT_CLIP_SECONDS,
+                        selectedSegment.durationSeconds - (selectedSegment.sourceAudioStartOffsetSeconds ?? 0),
+                      )}
+                      step={0.1}
+                      type="number"
+                      value={clipDurationWithinSegment(
+                        selectedSegment.sourceAudioDurationSeconds,
+                        selectedSegment.sourceAudioStartOffsetSeconds,
+                        selectedSegment.durationSeconds,
+                      )}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          sourceAudioDurationSeconds: clampClipDurationWithinSegment(
+                            Number(event.target.value),
+                            segment.sourceAudioStartOffsetSeconds,
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="toggle-row">
+                    <input
+                      checked={selectedSegment.sourceAudioMuted ?? false}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          sourceAudioMuted: event.target.checked,
+                        }))
+                      }
+                    />
+                    {selectedSegment.sourceAudioMuted ? copy.unmuteSelected : copy.muteSelected}
+                  </label>
+                </>
               ) : null}
               {selectedTrackClip.trackId === "caption" ? (
                 <>
@@ -2088,6 +2217,33 @@ export const SmartEditPanel = ({
                           ...segment,
                           captionStartOffsetSeconds: clampInSegmentOffset(
                             Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Caption duration
+                    <input
+                      min={MIN_SMART_EDIT_CLIP_SECONDS}
+                      max={Math.max(
+                        MIN_SMART_EDIT_CLIP_SECONDS,
+                        selectedSegment.durationSeconds - (selectedSegment.captionStartOffsetSeconds ?? 0),
+                      )}
+                      step={0.1}
+                      type="number"
+                      value={clipDurationWithinSegment(
+                        selectedSegment.captionDurationSeconds,
+                        selectedSegment.captionStartOffsetSeconds,
+                        selectedSegment.durationSeconds,
+                      )}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          captionDurationSeconds: clampClipDurationWithinSegment(
+                            Number(event.target.value),
+                            segment.captionStartOffsetSeconds,
                             segment.durationSeconds,
                           ),
                         }))
@@ -2137,6 +2293,33 @@ export const SmartEditPanel = ({
                           ...segment,
                           voiceoverStartOffsetSeconds: clampInSegmentOffset(
                             Number(event.target.value),
+                            segment.durationSeconds,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Voice duration
+                    <input
+                      min={MIN_SMART_EDIT_CLIP_SECONDS}
+                      max={Math.max(
+                        MIN_SMART_EDIT_CLIP_SECONDS,
+                        selectedSegment.durationSeconds - (selectedSegment.voiceoverStartOffsetSeconds ?? 0),
+                      )}
+                      step={0.1}
+                      type="number"
+                      value={clipDurationWithinSegment(
+                        selectedSegment.voiceoverDurationSeconds,
+                        selectedSegment.voiceoverStartOffsetSeconds,
+                        selectedSegment.durationSeconds,
+                      )}
+                      onChange={(event) =>
+                        updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                          ...segment,
+                          voiceoverDurationSeconds: clampClipDurationWithinSegment(
+                            Number(event.target.value),
+                            segment.voiceoverStartOffsetSeconds,
                             segment.durationSeconds,
                           ),
                         }))

@@ -1856,13 +1856,14 @@ describe("App", () => {
       2,
     );
 
-    expect(movedSourceAudioPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 6]);
+    expect(movedSourceAudioPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 4]);
+    expect(movedSourceAudioPlan.segments[1]?.sourceAudioStartOffsetSeconds).toBe(2);
     expect(
       movedSourceAudioPlan.timeline?.elements.find((element) => element.id === "segment-2-audio")?.startSecond,
     ).toBe(6);
     expect(
       movedSourceAudioPlan.timeline?.elements.find((element) => element.id === "segment-2-video")?.startSecond,
-    ).toBe(6);
+    ).toBe(4);
 
     const movedCaptionPlan = moveSmartEditTrackClipOnTimeline(
       plan,
@@ -1875,6 +1876,25 @@ describe("App", () => {
     expect(
       movedCaptionPlan.timeline?.elements.find((element) => element.id === "segment-1-text")?.startSecond,
     ).toBe(0.9);
+
+    const trimmedCaptionPlan = moveSmartEditTrackClipOnTimeline(
+      {
+        ...plan,
+        segments: [
+          {
+            ...plan.segments[0]!,
+            captionDurationSeconds: 1.5,
+          },
+          plan.segments[1]!,
+        ],
+      },
+      { segmentId: "segment-1", trackId: "caption" },
+      0.4,
+    );
+
+    expect(
+      trimmedCaptionPlan.timeline?.elements.find((element) => element.id === "segment-1-text")?.durationSeconds,
+    ).toBe(1.5);
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {
