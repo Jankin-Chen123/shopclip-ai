@@ -695,3 +695,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Partial-clip split-on-insert, true timeline-element persistence, transform/effect panels, visual snap guides, and named command history are still open.
+
+## 2026-06-05 Split-On-Insert Timeline Editing
+
+- Reference model:
+  - OpenCut insert edits can place a block inside an occupied range by splitting the existing timeline element and rippling the right-hand side forward.
+- Fix:
+  - Insert mode no longer snaps mid-clip drops to the occupied clip's end.
+  - Added insert helpers that detect the containing enabled timeline interval, split that segment into left/right segment-backed clips, and place the moved or pasted block between them.
+  - The right-hand split receives a stable generated id, keeps the original source media metadata, and starts after the inserted block.
+  - Later enabled clips ripple forward by the inserted block duration.
+  - Move-insert and paste-insert now share the same split/ripple semantics, while overwrite mode remains a disable-overlapped-clips operation.
+- Verification:
+  - Updated `App.test.tsx` edit-mode coverage to assert that inserting into the middle of a clip creates a split right-hand segment.
+  - Updated selected paste insert coverage to assert split original, pasted block, split right-hand segment, and rippled later clips.
+  - `.\\node_modules\\.bin\\vitest.CMD run src/app/App.test.tsx -t "edit modes|pasting selected"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - True timeline-element persistence, transform/effect panels, visual snap guides, and named command history are still open.

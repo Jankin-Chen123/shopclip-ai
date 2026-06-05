@@ -1846,12 +1846,19 @@ describe("App", () => {
     const insertPlan = moveSmartEditSegmentOnTimelineWithMode(
       plan,
       "segment-3",
-      -3,
+      -4,
       "insert",
     );
 
-    expect(insertPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 6, 3]);
-    expect(insertPlan.segments.map((segment) => segment.enabled)).toEqual([true, true, true]);
+    expect(insertPlan.segments.map((segment) => segment.id)).toEqual([
+      "segment-1",
+      "segment-3",
+      "segment-1-insert-split-move-segment-3",
+      "segment-2",
+    ]);
+    expect(insertPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 2, 5, 6]);
+    expect(insertPlan.segments.map((segment) => segment.durationSeconds)).toEqual([2, 3, 1, 3]);
+    expect(insertPlan.segments.map((segment) => segment.enabled)).toEqual([true, true, true, true]);
     expect(insertPlan.timeline?.durationSeconds).toBe(9);
 
     const overwritePlan = moveSmartEditSegmentOnTimelineWithMode(
@@ -2258,13 +2265,21 @@ describe("App", () => {
     const insertPlan = pasteSmartEditSegmentsAtPlayhead(
       plan,
       ["segment-1"],
-      2,
+      1,
       "insert-1",
       "insert",
     );
 
-    expect(insertPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 4, 6, 2]);
-    expect(insertPlan.segments.map((segment) => segment.enabled)).toEqual([true, true, true, true]);
+    expect(insertPlan.segments.map((segment) => segment.id)).toEqual([
+      "segment-1",
+      "segment-1-insert-1-1",
+      "segment-1-insert-split-insert-1",
+      "segment-2",
+      "segment-3",
+    ]);
+    expect(insertPlan.segments.map((segment) => segment.timelineStartSecond)).toEqual([0, 1, 3, 4, 6]);
+    expect(insertPlan.segments.map((segment) => segment.durationSeconds)).toEqual([1, 2, 1, 2, 2]);
+    expect(insertPlan.segments.map((segment) => segment.enabled)).toEqual([true, true, true, true, true]);
 
     const overwritePlan = pasteSmartEditSegmentsAtPlayhead(
       plan,

@@ -637,17 +637,130 @@ const resolveTimelineBlockStart = (
   return candidates.find((candidate) => !hasCollision(candidate)) ?? snappedDesired;
 };
 
-const resolveInsertTimelineStart = (
+const containingTimelineInterval = (
   intervals: SmartEditTimelineInterval[],
   desiredStart: number,
-): number => {
+): SmartEditTimelineInterval | undefined => {
   const snappedDesired = clampTimelineStart(snapTimelineSeconds(desiredStart));
-  const containingInterval = intervals.find(
+  return intervals.find(
     (interval) =>
-      snappedDesired > interval.startSecond + 0.001 &&
-      snappedDesired < interval.endSecond - 0.001,
+      snappedDesired > interval.startSecond + MIN_SMART_EDIT_CLIP_SECONDS &&
+      snappedDesired < interval.endSecond - MIN_SMART_EDIT_CLIP_SECONDS,
   );
-  return containingInterval ? containingInterval.endSecond : snappedDesired;
+};
+
+const splitSmartEditSegmentForInsert = (
+  segment: SmartEditSegment,
+  offsetSeconds: number,
+  rightId: string,
+): { left: SmartEditSegment; right: SmartEditSegment } | undefined => {
+  if (
+    offsetSeconds < MIN_SMART_EDIT_CLIP_SECONDS ||
+    segment.durationSeconds - offsetSeconds < MIN_SMART_EDIT_CLIP_SECONDS
+  ) {
+    return undefined;
+  }
+  const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+  const firstDuration = clampSmartEditDuration(offsetSeconds);
+  const secondDuration = clampSmartEditDuration(segment.durationSeconds - offsetSeconds);
+  const sourceStart = segment.source.startSecond ?? 0;
+  const sourceEnd = segment.source.endSecond ?? sourceStart + segment.durationSeconds * playbackRate;
+  const sourceMid = Math.min(sourceEnd, sourceStart + firstDuration * playbackRate);
+  return {
+    left: {
+      ...segment,
+      durationSeconds: firstDuration,
+      source: {
+        ...segment.source,
+        endSecond: sourceMid,
+        startSecond: sourceStart,
+      },
+    },
+    right: {
+      ...segment,
+      durationSeconds: secondDuration,
+      id: rightId,
+      source: {
+        ...segment.source,
+        endSecond: sourceEnd,
+        startSecond: sourceMid,
+      },
+      subtitle: `${segment.subtitle} (split)`,
+    },
+  };
+};
+
+const buildInsertMoveSegments = ({
+  blockDurationSeconds,
+  currentStarts,
+  desiredStart,
+  duplicateToken,
+  insertedSegments,
+  plan,
+  replacedSegmentIds,
+}: {
+  blockDurationSeconds: number;
+  currentStarts: Map<string, number>;
+  desiredStart: number;
+  duplicateToken: string;
+  insertedSegments: SmartEditSegment[];
+  plan: SmartEditPlan;
+  replacedSegmentIds: Set<string>;
+}): SmartEditSegment[] => {
+  const intervals = timelineIntervalsForSegments(plan.segments, currentStarts, replacedSegmentIds);
+  const containingInterval = containingTimelineInterval(intervals, desiredStart);
+  const containingSegment = containingInterval
+    ? plan.segments.find((segment) => segment.id === containingInterval.id)
+    : undefined;
+  const splitOffset =
+    containingInterval && containingSegment ? desiredStart - containingInterval.startSecond : undefined;
+  const splitSegment =
+    containingSegment && splitOffset !== undefined
+      ? splitSmartEditSegmentForInsert(
+          containingSegment,
+          splitOffset,
+          `${containingSegment.id}-insert-split-${duplicateToken}`,
+        )
+      : undefined;
+  const nextSegments: SmartEditSegment[] = [];
+
+  for (const segment of [...plan.segments].sort((left, right) => left.order - right.order)) {
+    if (replacedSegmentIds.has(segment.id)) {
+      continue;
+    }
+    const startSecond = clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0);
+    if (splitSegment && segment.id === containingSegment?.id && containingInterval) {
+      nextSegments.push({
+        ...splitSegment.left,
+        timelineStartSecond: containingInterval.startSecond,
+      });
+      nextSegments.push(...insertedSegments);
+      nextSegments.push({
+        ...splitSegment.right,
+        timelineStartSecond: clampTimelineStart(desiredStart + blockDurationSeconds),
+      });
+      continue;
+    }
+    if (!splitSegment && startSecond >= desiredStart - 0.001 && nextSegments.every((item) => item.id !== insertedSegments[0]?.id)) {
+      nextSegments.push(...insertedSegments);
+    }
+    nextSegments.push({
+      ...segment,
+      timelineStartSecond:
+        segment.enabled && startSecond >= desiredStart - 0.001
+          ? clampTimelineStart(startSecond + blockDurationSeconds)
+          : startSecond,
+    });
+  }
+
+  if (nextSegments.every((segment) => segment.id !== insertedSegments[0]?.id)) {
+    nextSegments.push(...insertedSegments);
+  }
+
+  return nextSegments.map((segment, index) => ({
+    ...segment,
+    order: index + 1,
+  }));
 };
 
 export const moveSmartEditSegmentOnTimeline = (
@@ -686,9 +799,29 @@ export const moveSmartEditSegmentOnTimelineWithMode = (
     );
     const desiredStart =
       editMode === "insert"
-        ? resolveInsertTimelineStart(existingIntervals, currentStart + deltaSeconds)
+        ? clampTimelineStart(snapTimelineSeconds(currentStart + deltaSeconds))
         : clampTimelineStart(snapTimelineSeconds(currentStart + deltaSeconds));
     const desiredEnd = snapTimelineSeconds(desiredStart + targetSegment.durationSeconds);
+    if (editMode === "insert") {
+      return withRebuiltTimeline({
+        ...plan,
+        segments: buildInsertMoveSegments({
+          blockDurationSeconds: targetSegment.durationSeconds,
+          currentStarts,
+          desiredStart,
+          duplicateToken: `move-${segmentId}`,
+          insertedSegments: [
+            {
+              ...targetSegment,
+              enabled: true,
+              timelineStartSecond: desiredStart,
+            },
+          ],
+          plan,
+          replacedSegmentIds: new Set([segmentId]),
+        }),
+      });
+    }
     return withRebuiltTimeline({
       ...plan,
       segments: plan.segments.map((segment) => {
@@ -713,12 +846,6 @@ export const moveSmartEditSegmentOnTimelineWithMode = (
             ...segment,
             enabled: false,
             timelineStartSecond: startSecond,
-          };
-        }
-        if (editMode === "insert" && segment.enabled && startSecond >= desiredStart - 0.001) {
-          return {
-            ...segment,
-            timelineStartSecond: clampTimelineStart(startSecond + targetSegment.durationSeconds),
           };
         }
         return {
@@ -868,9 +995,7 @@ export const pasteSmartEditSegmentsAtPlayhead = (
           playheadSecond,
           [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
         )
-      : editMode === "insert"
-        ? resolveInsertTimelineStart(intervals, playheadSecond)
-        : clampTimelineStart(snapTimelineSeconds(playheadSecond));
+      : clampTimelineStart(snapTimelineSeconds(playheadSecond));
   const blockEnd = Math.max(
     ...blockItems.map((item) => targetStart + item.offsetSecond + item.durationSeconds),
   );
@@ -890,6 +1015,21 @@ export const pasteSmartEditSegmentsAtPlayhead = (
     pastedSegments.map((segment) => [segment.id, segment.timelineStartSecond ?? 0]),
   );
 
+  if (editMode === "insert") {
+    return withRebuiltTimeline({
+      ...plan,
+      segments: buildInsertMoveSegments({
+        blockDurationSeconds: blockDuration,
+        currentStarts,
+        desiredStart: targetStart,
+        duplicateToken,
+        insertedSegments: pastedSegments,
+        plan,
+        replacedSegmentIds: new Set(),
+      }),
+    });
+  }
+
   return withRebuiltTimeline({
     ...plan,
     segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
@@ -908,14 +1048,7 @@ export const pasteSmartEditSegmentsAtPlayhead = (
           : segment.enabled,
       timelineStartSecond: pastedStarts.has(segment.id)
         ? pastedStarts.get(segment.id)!
-        : editMode === "insert" &&
-            segment.enabled &&
-            clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) >=
-              targetStart - 0.001
-          ? clampTimelineStart(
-              (currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) + blockDuration,
-            )
-          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
 };
@@ -965,9 +1098,7 @@ export const pasteSmartEditClipboardAtPlayhead = (
           playheadSecond,
           [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
         )
-      : editMode === "insert"
-        ? resolveInsertTimelineStart(intervals, playheadSecond)
-        : clampTimelineStart(snapTimelineSeconds(playheadSecond));
+      : clampTimelineStart(snapTimelineSeconds(playheadSecond));
   const blockEnd = Math.max(
     ...blockItems.map((item) => targetStart + item.offsetSecond + item.durationSeconds),
   );
@@ -982,6 +1113,21 @@ export const pasteSmartEditClipboardAtPlayhead = (
   const pastedStarts = new Map(
     pastedSegments.map((segment) => [segment.id, segment.timelineStartSecond ?? 0]),
   );
+
+  if (editMode === "insert") {
+    return withRebuiltTimeline({
+      ...plan,
+      segments: buildInsertMoveSegments({
+        blockDurationSeconds: blockDuration,
+        currentStarts,
+        desiredStart: targetStart,
+        duplicateToken,
+        insertedSegments: pastedSegments,
+        plan,
+        replacedSegmentIds: new Set(),
+      }),
+    });
+  }
 
   return withRebuiltTimeline({
     ...plan,
@@ -1001,14 +1147,7 @@ export const pasteSmartEditClipboardAtPlayhead = (
           : segment.enabled,
       timelineStartSecond: pastedStarts.has(segment.id)
         ? pastedStarts.get(segment.id)!
-        : editMode === "insert" &&
-            segment.enabled &&
-            clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) >=
-              targetStart - 0.001
-          ? clampTimelineStart(
-              (currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0) + blockDuration,
-            )
-          : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+        : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
     })),
   });
 };
