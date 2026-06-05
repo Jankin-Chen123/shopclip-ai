@@ -124,6 +124,26 @@ const sourceUrlForSegment = (segment: SmartEditSegment, assets: AssetMetadata[])
   );
 };
 
+const isImageSourceForSegment = (
+  segment: SmartEditSegment,
+  asset: AssetMetadata | undefined,
+  sourceUrl: string,
+): boolean => {
+  if (segment.source.sceneClipVideoOnlyUrl && sourceUrl === segment.source.sceneClipVideoOnlyUrl) {
+    return false;
+  }
+  if (segment.source.sceneClipUrl && sourceUrl === segment.source.sceneClipUrl) {
+    return false;
+  }
+  if (segment.source.imageUrl && sourceUrl === segment.source.imageUrl) {
+    return true;
+  }
+  if (segment.source.kind === "image-asset" || segment.source.kind === "fallback-still") {
+    return true;
+  }
+  return asset?.url === sourceUrl && asset.type === "image";
+};
+
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
 const normalizeDuration = (segment: SmartEditSegment): number =>
@@ -995,10 +1015,7 @@ const createSegmentVideo = async ({
   }
 
   const asset = assetForSegment(segment, assets);
-  const isImage =
-    segment.source.kind === "image-asset" ||
-    segment.source.kind === "fallback-still" ||
-    asset?.type === "image";
+  const isImage = isImageSourceForSegment(segment, asset, sourceUrl);
   const sourcePath = await materializeUrl(
     sourceUrl,
     join(workdir, `${segment.id}-source${extensionForUrl(sourceUrl, isImage ? ".png" : ".mp4")}`),

@@ -282,6 +282,48 @@ describe("smart edit composer", () => {
     expect(finalMixCommand?.args.join(" ")).toContain("[src][voice]amix=inputs=2");
   });
 
+  it("treats generated scene video-only material as video even when the source keeps an image asset id", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        durationSeconds: 4,
+        playbackRate: 1,
+        source: {
+          assetId: "asset-image",
+          endSecond: 4,
+          kind: "generated-scene-clip",
+          sceneClipAudioUrl: dataAudio,
+          sceneClipUrl: dataVideo,
+          sceneClipVideoOnlyUrl: dataVideo,
+          startSecond: 0,
+        },
+      },
+    ];
+    plan.targetDurationSeconds = 4;
+
+    await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    const sceneVideoCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("segment-video-raw.mp4")),
+    );
+    expect(sceneVideoCommand?.args).not.toEqual(expect.arrayContaining(["-loop", "1"]));
+    expect(sceneVideoCommand?.args).toEqual(expect.arrayContaining(["-i"]));
+  });
+
   it("bridges persistent timeline elements into ffmpeg subtitle and source audio timing", async () => {
     const exportRoot = await makeWorkdir();
     process.env.RENDER_EXPORT_DIR = exportRoot;

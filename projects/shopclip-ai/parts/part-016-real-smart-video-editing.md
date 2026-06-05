@@ -1293,3 +1293,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - This is still not full objective completion. The open acceptance gap is live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.
+
+## 2026-06-05 Generated Scene Video Material Compose Fix
+
+- Runtime finding:
+  - A live smart-edit task consumed materialized Seedance scene clips correctly and produced a timeline with video, source-audio, and text elements.
+  - The task failed during ffmpeg composition with `Option loop not found` because a generated scene `sceneClipVideoOnlyUrl` was still treated as an image input when the segment also retained an image asset id.
+- Fix:
+  - Changed smart-edit source classification so the actual selected source URL decides the media kind.
+  - `sceneClipVideoOnlyUrl` and `sceneClipUrl` are now always treated as video inputs, while `imageUrl`, image assets, and fallback stills keep the image-to-video `-loop 1` path.
+  - Added a regression test for generated scene video-only material that still carries an image asset id.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts -t "treats generated scene video-only material"`
+  - `corepack pnpm --filter @shopclip/api exec vitest run src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/api lint`
+- Remaining:
+  - Re-deploy and trigger a new live smart-edit task from the already materialized fresh Seedance render to confirm ffmpeg composition reaches completion.
