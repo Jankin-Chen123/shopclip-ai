@@ -534,7 +534,7 @@ const buildPrompt = (input: SmartEditPlannerInput): string =>
     "Structured slices:",
     JSON.stringify(input.assetSlices, null, 2),
     "",
-    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualEffects: [{ id, type, enabled, params: { amount, radius }, keyframes: [{ id, timeSecond, easing, param: \"amount\", value }] }], visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
+    "Return JSON matching this shape: { id, projectId, strategy, targetDurationSeconds, audio: { bgmTrack, targetLanguage, voice }, createdAt, segments: [{ id, sceneId, order, enabled, durationSeconds, timelineStartSecond, playbackRate, sourceAudioMuted, sourceAudioVolume, sourceAudioVolumeKeyframes: [{ id, timeSecond, easing, volume }], captionHidden, captionStartOffsetSeconds, voiceoverStartOffsetSeconds, voiceoverVolume, voiceoverVolumeKeyframes: [{ id, timeSecond, easing, volume }], transition, subtitle, voiceover, source: { assetId, sliceId, sceneClipUrl, sceneClipVideoOnlyUrl, sceneClipAudioUrl, imageUrl, startSecond, endSecond, kind }, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds }, visualEffects: [{ id, type, enabled, params: { amount, radius }, keyframes: [{ id, timeSecond, easing, param: \"amount\", value }] }], visualMask: { id, type, inverted, xPercent, yPercent, widthPercent, heightPercent }, visualKeyframes: [{ id, timeSecond, easing, transform: { scale, rotateDegrees, offsetXPercent, offsetYPercent, opacity }, effects: { blur, sharpen, fadeInSeconds, fadeOutSeconds } }], assetTags, rationale }] }",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -812,6 +812,33 @@ const normalizeModelVisualKeyframes = (
     .sort((left, right) => left.timeSecond - right.timeSecond);
 };
 
+const normalizeAudioVolume = (volume: unknown, fallback = 1): number =>
+  typeof volume === "number" ? Math.max(0, Math.min(4, volume)) : fallback;
+
+const normalizeModelAudioVolumeKeyframes = (
+  rawKeyframes: unknown,
+  localKeyframes: SmartEditPlan["segments"][number]["sourceAudioVolumeKeyframes"],
+  durationSeconds: number,
+  fallbackVolume = 1,
+) => {
+  if (!Array.isArray(rawKeyframes)) {
+    return localKeyframes ?? [];
+  }
+  return rawKeyframes
+    .filter(isRecord)
+    .slice(0, 40)
+    .map((keyframe, index) => ({
+      easing: enumStringOr(keyframe.easing, new Set<"linear" | "hold">(["linear", "hold"]), "linear"),
+      id: getString(keyframe.id) ?? `audio_volume_keyframe_${index + 1}`,
+      timeSecond:
+        typeof keyframe.timeSecond === "number"
+          ? Math.max(0, Math.min(durationSeconds, keyframe.timeSecond))
+          : 0,
+      volume: normalizeAudioVolume(keyframe.volume, fallbackVolume),
+    }))
+    .sort((left, right) => left.timeSecond - right.timeSecond);
+};
+
 const normalizeModelSegment = (
   rawSegment: unknown,
   localSegment: SmartEditPlan["segments"][number],
@@ -851,6 +878,13 @@ const normalizeModelSegment = (
       typeof rawSegment.sourceAudioDurationSeconds === "number"
         ? Math.max(0.1, Math.min(localSegment.durationSeconds, rawSegment.sourceAudioDurationSeconds))
         : localSegment.sourceAudioDurationSeconds,
+    sourceAudioVolume: normalizeAudioVolume(rawSegment.sourceAudioVolume, localSegment.sourceAudioVolume ?? 1),
+    sourceAudioVolumeKeyframes: normalizeModelAudioVolumeKeyframes(
+      rawSegment.sourceAudioVolumeKeyframes,
+      localSegment.sourceAudioVolumeKeyframes,
+      localSegment.sourceAudioDurationSeconds ?? localSegment.durationSeconds,
+      localSegment.sourceAudioVolume ?? 1,
+    ),
     captionHidden:
       typeof rawSegment.captionHidden === "boolean"
         ? rawSegment.captionHidden
@@ -871,6 +905,13 @@ const normalizeModelSegment = (
       typeof rawSegment.voiceoverDurationSeconds === "number"
         ? Math.max(0.1, Math.min(localSegment.durationSeconds, rawSegment.voiceoverDurationSeconds))
         : localSegment.voiceoverDurationSeconds,
+    voiceoverVolume: normalizeAudioVolume(rawSegment.voiceoverVolume, localSegment.voiceoverVolume ?? 1),
+    voiceoverVolumeKeyframes: normalizeModelAudioVolumeKeyframes(
+      rawSegment.voiceoverVolumeKeyframes,
+      localSegment.voiceoverVolumeKeyframes,
+      localSegment.voiceoverDurationSeconds ?? localSegment.durationSeconds,
+      localSegment.voiceoverVolume ?? 1,
+    ),
     transition: enumStringOr(rawSegment.transition, SMART_EDIT_TRANSITIONS, localSegment.transition),
     subtitle: getString(rawSegment.subtitle) ?? localSegment.subtitle,
     voiceover: getString(rawSegment.voiceover) ?? localSegment.voiceover,

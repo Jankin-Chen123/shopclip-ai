@@ -6,6 +6,7 @@ import type {
   AssetSlice,
   MediaSettings,
   RenderTask,
+  SmartEditAudioVolumeKeyframe,
   SmartEditPlan,
   SmartEditResult,
   SmartEditSegment,
@@ -130,6 +131,9 @@ const clampEffectFade = (seconds: number): number =>
 const clampAudioFade = (seconds: number): number =>
   Number.isFinite(seconds) ? Number(Math.max(0, Math.min(10, seconds)).toFixed(2)) : 0;
 
+const clampAudioVolume = (volume: number): number =>
+  Number.isFinite(volume) ? Number(Math.max(0, Math.min(4, volume)).toFixed(2)) : 1;
+
 const clampVisualKeyframeTime = (seconds: number, durationSeconds: number): number =>
   Number.isFinite(seconds)
     ? Math.max(0, Math.min(Math.max(0, durationSeconds), Number(seconds.toFixed(3))))
@@ -245,6 +249,20 @@ const visualKeyframesForSegment = (segment: SmartEditSegment) =>
 
 const visualEffectKeyframes = (effect: SmartEditVisualEffect) =>
   [...(effect.keyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
+
+const audioVolumeKeyframes = (
+  keyframes: SmartEditAudioVolumeKeyframe[] | undefined,
+  durationSeconds: number,
+): SmartEditAudioVolumeKeyframe[] =>
+  (keyframes ?? [])
+    .slice(0, 40)
+    .map((keyframe) => ({
+      easing: keyframe.easing ?? "linear",
+      id: keyframe.id,
+      timeSecond: clampVisualKeyframeTime(keyframe.timeSecond, durationSeconds),
+      volume: clampAudioVolume(keyframe.volume),
+    }))
+    .sort((left, right) => left.timeSecond - right.timeSecond);
 
 const durationFromSourceRange = (
   startSecond: number | undefined,
@@ -754,6 +772,11 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         muted: segment.sourceAudioMuted ?? false,
         audioFadeInSeconds: segment.sourceAudioFadeInSeconds ?? 0,
         audioFadeOutSeconds: segment.sourceAudioFadeOutSeconds ?? 0,
+        audioVolume: segment.sourceAudioVolume ?? 1,
+        audioVolumeKeyframes: audioVolumeKeyframes(
+          segment.sourceAudioVolumeKeyframes,
+          sourceAudioDurationSeconds,
+        ),
         playbackRate: segment.playbackRate ?? 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
@@ -809,6 +832,11 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
         muted: false,
         audioFadeInSeconds: segment.voiceoverFadeInSeconds ?? 0,
         audioFadeOutSeconds: segment.voiceoverFadeOutSeconds ?? 0,
+        audioVolume: segment.voiceoverVolume ?? 1,
+        audioVolumeKeyframes: audioVolumeKeyframes(
+          segment.voiceoverVolumeKeyframes,
+          voiceoverDurationSeconds,
+        ),
         playbackRate: 1,
         sceneId: segment.sceneId,
         segmentId: segment.id,
@@ -1664,6 +1692,8 @@ type SmartEditTimelineElementPatch = Partial<
     SmartEditTimelineElement,
     | "audioFadeInSeconds"
     | "audioFadeOutSeconds"
+    | "audioVolume"
+    | "audioVolumeKeyframes"
     | "durationSeconds"
     | "hidden"
     | "label"
@@ -1903,6 +1933,12 @@ const updateSmartEditTimelineElement = (
               patch.audioFadeOutSeconds === undefined
                 ? element.audioFadeOutSeconds
                 : clampAudioFade(patch.audioFadeOutSeconds),
+            audioVolume:
+              patch.audioVolume === undefined ? element.audioVolume : clampAudioVolume(patch.audioVolume),
+            audioVolumeKeyframes:
+              patch.audioVolumeKeyframes === undefined
+                ? element.audioVolumeKeyframes
+                : audioVolumeKeyframes(patch.audioVolumeKeyframes, element.durationSeconds),
             durationSeconds:
               patch.durationSeconds === undefined
                 ? element.durationSeconds
@@ -1992,6 +2028,8 @@ export const moveSmartEditTrackClipOnTimeline = (
               sourceAudioFadeOutSeconds: targetElement.audioFadeOutSeconds ?? 0,
               sourceAudioMuted: targetElement.muted,
               sourceAudioStartOffsetSeconds: nextOffset,
+              sourceAudioVolume: targetElement.audioVolume ?? 1,
+              sourceAudioVolumeKeyframes: targetElement.audioVolumeKeyframes,
             };
           }
           if (trackClip.trackId === "caption") {
@@ -2011,6 +2049,8 @@ export const moveSmartEditTrackClipOnTimeline = (
               voiceoverFadeInSeconds: targetElement.audioFadeInSeconds ?? 0,
               voiceoverFadeOutSeconds: targetElement.audioFadeOutSeconds ?? 0,
               voiceoverStartOffsetSeconds: nextOffset,
+              voiceoverVolume: targetElement.audioVolume ?? 1,
+              voiceoverVolumeKeyframes: targetElement.audioVolumeKeyframes,
             };
           }
           return segment;
@@ -2745,6 +2785,136 @@ export const SmartEditPanel = ({
     })), { label: "Remove effect amount keyframe" });
   };
 
+  const addSegmentAudioVolumeKeyframeAtPlayhead = (trackId: "sourceAudio" | "voice") => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    const selectedStart = segmentTimelineBaseStart(plan, selectedSegment.id);
+    const clipStartSecond =
+      selectedTrackClip?.startSecond ??
+      selectedStart +
+        (trackId === "sourceAudio"
+          ? selectedSegment.sourceAudioStartOffsetSeconds ?? 0
+          : selectedSegment.voiceoverStartOffsetSeconds ?? 0);
+    const clipDurationSeconds =
+      trackId === "sourceAudio"
+        ? clipDurationWithinSegment(
+            selectedSegment.sourceAudioDurationSeconds,
+            selectedSegment.sourceAudioStartOffsetSeconds,
+            selectedSegment.durationSeconds,
+          )
+        : clipDurationWithinSegment(
+            selectedSegment.voiceoverDurationSeconds,
+            selectedSegment.voiceoverStartOffsetSeconds,
+            selectedSegment.durationSeconds,
+          );
+    const timeSecond = clampVisualKeyframeTime(
+      boundedPlayheadSeconds - clipStartSecond,
+      clipDurationSeconds,
+    );
+    const token = `${Date.now()}`;
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
+      if (trackId === "sourceAudio") {
+        const keyframes = audioVolumeKeyframes(
+          segment.sourceAudioVolumeKeyframes,
+          clipDurationSeconds,
+        ).filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05);
+        return {
+          ...segment,
+          sourceAudioVolumeKeyframes: [
+            ...keyframes,
+            {
+              easing: "linear" as const,
+              id: `${segment.id}-source-volume-kf-${token}`,
+              timeSecond,
+              volume: clampAudioVolume(segment.sourceAudioVolume ?? 1),
+            },
+          ].sort((left, right) => left.timeSecond - right.timeSecond),
+        };
+      }
+      const keyframes = audioVolumeKeyframes(
+        segment.voiceoverVolumeKeyframes,
+        clipDurationSeconds,
+      ).filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05);
+      return {
+        ...segment,
+        voiceoverVolumeKeyframes: [
+          ...keyframes,
+          {
+            easing: "linear" as const,
+            id: `${segment.id}-voice-volume-kf-${token}`,
+            timeSecond,
+            volume: clampAudioVolume(segment.voiceoverVolume ?? 1),
+          },
+        ].sort((left, right) => left.timeSecond - right.timeSecond),
+      };
+    }), { label: "Add audio volume keyframe" });
+  };
+
+  const removeSegmentAudioVolumeKeyframe = (
+    trackId: "sourceAudio" | "voice",
+    keyframeId: string,
+  ) => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) =>
+      trackId === "sourceAudio"
+        ? {
+            ...segment,
+            sourceAudioVolumeKeyframes: audioVolumeKeyframes(
+              segment.sourceAudioVolumeKeyframes,
+              segment.durationSeconds,
+            ).filter((keyframe) => keyframe.id !== keyframeId),
+          }
+        : {
+            ...segment,
+            voiceoverVolumeKeyframes: audioVolumeKeyframes(
+              segment.voiceoverVolumeKeyframes,
+              segment.durationSeconds,
+            ).filter((keyframe) => keyframe.id !== keyframeId),
+          },
+    ), { label: "Remove audio volume keyframe" });
+  };
+
+  const addTimelineElementAudioVolumeKeyframeAtPlayhead = () => {
+    if (!selectedTimelineElement) {
+      return;
+    }
+    const timeSecond = clampVisualKeyframeTime(
+      boundedPlayheadSeconds - selectedTimelineElement.startSecond,
+      selectedTimelineElement.durationSeconds,
+    );
+    const token = `${Date.now()}`;
+    const keyframes = audioVolumeKeyframes(
+      selectedTimelineElement.audioVolumeKeyframes,
+      selectedTimelineElement.durationSeconds,
+    ).filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05);
+    updateSelectedTimelineElement({
+      audioVolumeKeyframes: [
+        ...keyframes,
+        {
+          easing: "linear" as const,
+          id: `${selectedTimelineElement.id}-volume-kf-${token}`,
+          timeSecond,
+          volume: clampAudioVolume(selectedTimelineElement.audioVolume ?? 1),
+        },
+      ].sort((left, right) => left.timeSecond - right.timeSecond),
+    });
+  };
+
+  const removeTimelineElementAudioVolumeKeyframe = (keyframeId: string) => {
+    if (!selectedTimelineElement) {
+      return;
+    }
+    updateSelectedTimelineElement({
+      audioVolumeKeyframes: audioVolumeKeyframes(
+        selectedTimelineElement.audioVolumeKeyframes,
+        selectedTimelineElement.durationSeconds,
+      ).filter((keyframe) => keyframe.id !== keyframeId),
+    });
+  };
+
   const updateTrackClipSegment = (
     trackClip: SmartEditTrackSegment | undefined,
     update: (segment: SmartEditSegment) => SmartEditSegment,
@@ -3426,6 +3596,22 @@ export const SmartEditPanel = ({
                   </label>
                   <div className="smart-edit-trim-grid">
                     <label>
+                      Audio volume
+                      <input
+                        min={0}
+                        max={4}
+                        step={0.05}
+                        type="number"
+                        value={selectedSegment.sourceAudioVolume ?? 1}
+                        onChange={(event) =>
+                          updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                            ...segment,
+                            sourceAudioVolume: clampAudioVolume(Number(event.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
                       Audio fade in
                       <input
                         min={0}
@@ -3457,6 +3643,46 @@ export const SmartEditPanel = ({
                         }
                       />
                     </label>
+                  </div>
+                  <div className="smart-edit-effect-keyframes">
+                    <div className="smart-edit-section-header">
+                      <h6>Audio volume keyframes</h6>
+                      <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("sourceAudio")}>
+                        Add volume keyframe
+                      </Button>
+                    </div>
+                    {audioVolumeKeyframes(
+                      selectedSegment.sourceAudioVolumeKeyframes,
+                      clipDurationWithinSegment(
+                        selectedSegment.sourceAudioDurationSeconds,
+                        selectedSegment.sourceAudioStartOffsetSeconds,
+                        selectedSegment.durationSeconds,
+                      ),
+                    ).length > 0 ? (
+                      <div className="smart-edit-mini-keyframe-list">
+                        {audioVolumeKeyframes(
+                          selectedSegment.sourceAudioVolumeKeyframes,
+                          clipDurationWithinSegment(
+                            selectedSegment.sourceAudioDurationSeconds,
+                            selectedSegment.sourceAudioStartOffsetSeconds,
+                            selectedSegment.durationSeconds,
+                          ),
+                        ).map((keyframe) => (
+                          <article className="smart-edit-mini-keyframe-row" key={keyframe.id}>
+                            <span>{keyframe.timeSecond.toFixed(1)}s</span>
+                            <strong>{keyframe.volume.toFixed(2)}</strong>
+                            <button
+                              type="button"
+                              onClick={() => removeSegmentAudioVolumeKeyframe("sourceAudio", keyframe.id)}
+                            >
+                              Delete
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <small>No audio volume keyframes.</small>
+                    )}
                   </div>
                   <label className="toggle-row">
                     <input
@@ -3612,6 +3838,22 @@ export const SmartEditPanel = ({
                   </label>
                   <div className="smart-edit-trim-grid">
                     <label>
+                      Voice volume
+                      <input
+                        min={0}
+                        max={4}
+                        step={0.05}
+                        type="number"
+                        value={selectedSegment.voiceoverVolume ?? 1}
+                        onChange={(event) =>
+                          updateTrackClipSegment(selectedTrackClip, (segment) => ({
+                            ...segment,
+                            voiceoverVolume: clampAudioVolume(Number(event.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
                       Voice fade in
                       <input
                         min={0}
@@ -3643,6 +3885,46 @@ export const SmartEditPanel = ({
                         }
                       />
                     </label>
+                  </div>
+                  <div className="smart-edit-effect-keyframes">
+                    <div className="smart-edit-section-header">
+                      <h6>Voice volume keyframes</h6>
+                      <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("voice")}>
+                        Add volume keyframe
+                      </Button>
+                    </div>
+                    {audioVolumeKeyframes(
+                      selectedSegment.voiceoverVolumeKeyframes,
+                      clipDurationWithinSegment(
+                        selectedSegment.voiceoverDurationSeconds,
+                        selectedSegment.voiceoverStartOffsetSeconds,
+                        selectedSegment.durationSeconds,
+                      ),
+                    ).length > 0 ? (
+                      <div className="smart-edit-mini-keyframe-list">
+                        {audioVolumeKeyframes(
+                          selectedSegment.voiceoverVolumeKeyframes,
+                          clipDurationWithinSegment(
+                            selectedSegment.voiceoverDurationSeconds,
+                            selectedSegment.voiceoverStartOffsetSeconds,
+                            selectedSegment.durationSeconds,
+                          ),
+                        ).map((keyframe) => (
+                          <article className="smart-edit-mini-keyframe-row" key={keyframe.id}>
+                            <span>{keyframe.timeSecond.toFixed(1)}s</span>
+                            <strong>{keyframe.volume.toFixed(2)}</strong>
+                            <button
+                              type="button"
+                              onClick={() => removeSegmentAudioVolumeKeyframe("voice", keyframe.id)}
+                            >
+                              Delete
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <small>No voice volume keyframes.</small>
+                    )}
                   </div>
                 </>
               ) : null}
@@ -3697,6 +3979,21 @@ export const SmartEditPanel = ({
                 <>
                   <div className="smart-edit-trim-grid">
                     <label>
+                      Audio volume
+                      <input
+                        min={0}
+                        max={4}
+                        step={0.05}
+                        type="number"
+                        value={selectedTimelineElement.audioVolume ?? 1}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            audioVolume: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
                       Audio fade in
                       <input
                         min={0}
@@ -3726,6 +4023,38 @@ export const SmartEditPanel = ({
                         }
                       />
                     </label>
+                  </div>
+                  <div className="smart-edit-effect-keyframes">
+                    <div className="smart-edit-section-header">
+                      <h6>Audio volume keyframes</h6>
+                      <Button onClick={addTimelineElementAudioVolumeKeyframeAtPlayhead}>
+                        Add volume keyframe
+                      </Button>
+                    </div>
+                    {audioVolumeKeyframes(
+                      selectedTimelineElement.audioVolumeKeyframes,
+                      selectedTimelineElement.durationSeconds,
+                    ).length > 0 ? (
+                      <div className="smart-edit-mini-keyframe-list">
+                        {audioVolumeKeyframes(
+                          selectedTimelineElement.audioVolumeKeyframes,
+                          selectedTimelineElement.durationSeconds,
+                        ).map((keyframe) => (
+                          <article className="smart-edit-mini-keyframe-row" key={keyframe.id}>
+                            <span>{keyframe.timeSecond.toFixed(1)}s</span>
+                            <strong>{keyframe.volume.toFixed(2)}</strong>
+                            <button
+                              type="button"
+                              onClick={() => removeTimelineElementAudioVolumeKeyframe(keyframe.id)}
+                            >
+                              Delete
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <small>No audio volume keyframes.</small>
+                    )}
                   </div>
                   <label className="toggle-row">
                     <input
@@ -4487,6 +4816,109 @@ export const SmartEditPanel = ({
                     ))
                   ) : (
                     <p className="empty-state">No visual keyframes.</p>
+                  )}
+                </div>
+              </section>
+              <section className="smart-edit-inspector-section">
+                <div className="smart-edit-section-header">
+                  <h4>Audio volume envelopes</h4>
+                </div>
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Source audio volume
+                    <input
+                      min={0}
+                      max={4}
+                      step={0.05}
+                      type="number"
+                      value={selectedSegment.sourceAudioVolume ?? 1}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          sourceAudioVolume: clampAudioVolume(Number(event.target.value)),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Voice volume
+                    <input
+                      min={0}
+                      max={4}
+                      step={0.05}
+                      type="number"
+                      value={selectedSegment.voiceoverVolume ?? 1}
+                      onChange={(event) =>
+                        updateSelectedSegment((segment) => ({
+                          ...segment,
+                          voiceoverVolume: clampAudioVolume(Number(event.target.value)),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="smart-edit-effect-keyframes">
+                  <div className="smart-edit-section-header">
+                    <h6>Source audio volume keyframes</h6>
+                    <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("sourceAudio")}>
+                      Add volume keyframe
+                    </Button>
+                  </div>
+                  {audioVolumeKeyframes(
+                    selectedSegment.sourceAudioVolumeKeyframes,
+                    selectedSegment.sourceAudioDurationSeconds ?? selectedSegment.durationSeconds,
+                  ).length > 0 ? (
+                    <div className="smart-edit-mini-keyframe-list">
+                      {audioVolumeKeyframes(
+                        selectedSegment.sourceAudioVolumeKeyframes,
+                        selectedSegment.sourceAudioDurationSeconds ?? selectedSegment.durationSeconds,
+                      ).map((keyframe) => (
+                        <article className="smart-edit-mini-keyframe-row" key={keyframe.id}>
+                          <span>{keyframe.timeSecond.toFixed(1)}s</span>
+                          <strong>{keyframe.volume.toFixed(2)}</strong>
+                          <button
+                            type="button"
+                            onClick={() => removeSegmentAudioVolumeKeyframe("sourceAudio", keyframe.id)}
+                          >
+                            Delete
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <small>No source audio volume keyframes.</small>
+                  )}
+                </div>
+                <div className="smart-edit-effect-keyframes">
+                  <div className="smart-edit-section-header">
+                    <h6>Voice volume keyframes</h6>
+                    <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("voice")}>
+                      Add volume keyframe
+                    </Button>
+                  </div>
+                  {audioVolumeKeyframes(
+                    selectedSegment.voiceoverVolumeKeyframes,
+                    selectedSegment.voiceoverDurationSeconds ?? selectedSegment.durationSeconds,
+                  ).length > 0 ? (
+                    <div className="smart-edit-mini-keyframe-list">
+                      {audioVolumeKeyframes(
+                        selectedSegment.voiceoverVolumeKeyframes,
+                        selectedSegment.voiceoverDurationSeconds ?? selectedSegment.durationSeconds,
+                      ).map((keyframe) => (
+                        <article className="smart-edit-mini-keyframe-row" key={keyframe.id}>
+                          <span>{keyframe.timeSecond.toFixed(1)}s</span>
+                          <strong>{keyframe.volume.toFixed(2)}</strong>
+                          <button
+                            type="button"
+                            onClick={() => removeSegmentAudioVolumeKeyframe("voice", keyframe.id)}
+                          >
+                            Delete
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <small>No voice volume keyframes.</small>
                   )}
                 </div>
               </section>

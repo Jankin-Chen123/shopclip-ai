@@ -149,6 +149,7 @@ const normalizeInSegmentClipDuration = (
 };
 
 type SmartEditTimelineElement = NonNullable<SmartEditPlan["timeline"]>["elements"][number];
+type SmartEditAudioVolumeKeyframe = NonNullable<SmartEditSegment["sourceAudioVolumeKeyframes"]>[number];
 
 const timelineElementTrackKind = (
   element: Pick<SmartEditTimelineElement, "kind" | "trackId">,
@@ -358,6 +359,9 @@ const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartE
           nextSegment,
         );
         nextSegment.sourceAudioDurationSeconds = sourceAudioElement.durationSeconds;
+        nextSegment.sourceAudioVolume = sourceAudioElement.audioVolume ?? segment.sourceAudioVolume;
+        nextSegment.sourceAudioVolumeKeyframes =
+          sourceAudioElement.audioVolumeKeyframes ?? segment.sourceAudioVolumeKeyframes;
         nextSegment.source = {
           ...nextSegment.source,
           ...(sourceAudioElement.sourceUrl ? { sceneClipAudioUrl: sourceAudioElement.sourceUrl } : {}),
@@ -382,6 +386,9 @@ const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartE
           nextSegment,
         );
         nextSegment.voiceoverDurationSeconds = voiceElement.durationSeconds;
+        nextSegment.voiceoverVolume = voiceElement.audioVolume ?? segment.voiceoverVolume;
+        nextSegment.voiceoverVolumeKeyframes =
+          voiceElement.audioVolumeKeyframes ?? segment.voiceoverVolumeKeyframes;
         nextSegment.voiceover = voiceElement.text?.trim() || voiceElement.label || segment.voiceover;
       }
 
@@ -1155,6 +1162,44 @@ const audioFadeFilters = (
   ];
 };
 
+const normalizeAudioVolume = (volume: number | undefined): number =>
+  Number.isFinite(volume) ? Math.max(0, Math.min(4, volume!)) : 1;
+
+const audioVolumeKeyframes = (
+  keyframes: SmartEditAudioVolumeKeyframe[] | undefined,
+  durationSeconds: number,
+): SmartEditAudioVolumeKeyframe[] =>
+  (keyframes ?? [])
+    .slice(0, 40)
+    .map((keyframe) => ({
+      easing: keyframe.easing ?? "linear",
+      id: keyframe.id,
+      timeSecond: Math.max(0, Math.min(durationSeconds, keyframe.timeSecond)),
+      volume: normalizeAudioVolume(keyframe.volume),
+    }))
+    .sort((left, right) => left.timeSecond - right.timeSecond);
+
+const audioVolumeFilter = (
+  volume: number | undefined,
+  keyframes: SmartEditAudioVolumeKeyframe[] | undefined,
+  durationSeconds: number,
+): string[] => {
+  const normalizedVolume = normalizeAudioVolume(volume);
+  const normalizedKeyframes = audioVolumeKeyframes(keyframes, durationSeconds);
+  if (normalizedKeyframes.length >= 2) {
+    const expression = linearKeyframeExpression(
+      normalizedKeyframes,
+      (keyframe) => keyframe.volume,
+      normalizedVolume,
+    );
+    return [`volume='${expression}':eval=frame`];
+  }
+  if (Math.abs(normalizedVolume - 1) > 0.001) {
+    return [`volume=${normalizedVolume.toFixed(3)}`];
+  }
+  return [];
+};
+
 const createSilenceAudioSegment = async (
   command: string,
   durationSeconds: number,
@@ -1187,6 +1232,8 @@ type SourceAudioTimelineClip = {
   startSecond: number;
   trimEndSecond: number;
   trimStartSecond: number;
+  volume: number;
+  volumeKeyframes: SmartEditAudioVolumeKeyframe[];
 };
 
 const safeFileToken = (value: string): string =>
@@ -1249,6 +1296,11 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
         startSecond: timelineStarts.get(segment.id) ?? 0,
         trimEndSecond: trimEnd,
         trimStartSecond: sourceAudioStart,
+        volume: normalizeAudioVolume(sourceAudioElement?.audioVolume ?? segment.sourceAudioVolume),
+        volumeKeyframes: audioVolumeKeyframes(
+          sourceAudioElement?.audioVolumeKeyframes ?? segment.sourceAudioVolumeKeyframes,
+          audioDurationSeconds,
+        ),
       },
     ];
   });
@@ -1275,6 +1327,8 @@ const sourceAudioTimelineClips = (plan: SmartEditPlan): SourceAudioTimelineClip[
         startSecond: element.startSecond,
         trimEndSecond: element.trimEndSecond ?? trimStartSecond + element.durationSeconds * (element.playbackRate ?? 1),
         trimStartSecond,
+        volume: normalizeAudioVolume(element.audioVolume),
+        volumeKeyframes: audioVolumeKeyframes(element.audioVolumeKeyframes, element.durationSeconds),
       };
     });
   return [...segmentClips, ...globalElementClips].sort((left, right) => left.startSecond - right.startSecond);
@@ -1318,6 +1372,7 @@ const createMixedSourceAudioTrack = async (
       "asetpts=PTS-STARTPTS",
       atempoFilter(clip.playbackRate),
       ...audioFadeFilters(clip.mediaDurationSeconds, clip.fadeInSeconds, clip.fadeOutSeconds),
+      ...audioVolumeFilter(clip.volume, clip.volumeKeyframes, clip.mediaDurationSeconds),
       `adelay=${globalDelayMilliseconds}:all=1`,
       `apad,atrim=0:${timelineDurationSeconds}`,
     ].join(",");
@@ -1396,6 +1451,7 @@ const createSourceAudioTrack = async (
       "asetpts=PTS-STARTPTS",
       atempoFilter(clip.playbackRate),
       ...audioFadeFilters(clip.mediaDurationSeconds, clip.fadeInSeconds, clip.fadeOutSeconds),
+      ...audioVolumeFilter(clip.volume, clip.volumeKeyframes, clip.mediaDurationSeconds),
       ...(audioOffsetMilliseconds > 0 ? [`adelay=${audioOffsetMilliseconds}:all=1`] : []),
       `apad,atrim=0:${clip.durationSeconds}`,
     ].join(",");
@@ -1615,6 +1671,8 @@ type VoiceoverTimelineClip = {
   id: string;
   startSecond: number;
   text: string;
+  volume: number;
+  volumeKeyframes: SmartEditAudioVolumeKeyframe[];
 };
 
 const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] => {
@@ -1641,6 +1699,8 @@ const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] =>
         id: segment.id,
         startSecond: (timelineStarts.get(segment.id) ?? 0) + voiceOffsetSeconds,
         text: voiceText,
+        volume: normalizeAudioVolume(segment.voiceoverVolume),
+        volumeKeyframes: audioVolumeKeyframes(segment.voiceoverVolumeKeyframes, voiceDurationSeconds),
       },
     ];
   });
@@ -1666,6 +1726,8 @@ const voiceoverTimelineClips = (plan: SmartEditPlan): VoiceoverTimelineClip[] =>
           id: element.id,
           startSecond: element.startSecond,
           text,
+          volume: normalizeAudioVolume(element.audioVolume),
+          volumeKeyframes: audioVolumeKeyframes(element.audioVolumeKeyframes, element.durationSeconds),
         },
       ];
     });
@@ -1695,6 +1757,7 @@ const createVoiceoverTrack = async (
       `atrim=0:${clip.durationSeconds}`,
       "asetpts=PTS-STARTPTS",
       ...audioFadeFilters(clip.durationSeconds, clip.fadeInSeconds, clip.fadeOutSeconds),
+      ...audioVolumeFilter(clip.volume, clip.volumeKeyframes, clip.durationSeconds),
       `adelay=${voiceDelayMilliseconds}:all=1`,
       `apad,atrim=0:${timelineDurationSeconds}`,
     ].join(",");

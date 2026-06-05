@@ -3101,6 +3101,16 @@ describe("App", () => {
                 transition: "cut",
                 subtitle: "Hook with the pour",
                 voiceover: "Hook with the pour",
+                sourceAudioVolume: 0.72,
+                sourceAudioVolumeKeyframes: [
+                  { id: "source-volume-start", timeSecond: 0, volume: 0.42 },
+                  { id: "source-volume-peak", timeSecond: 1.4, volume: 0.95 },
+                ],
+                voiceoverVolume: 1.2,
+                voiceoverVolumeKeyframes: [
+                  { id: "voice-volume-start", timeSecond: 0.2, volume: 0.8 },
+                  { id: "voice-volume-peak", timeSecond: 1.1, volume: 1.35 },
+                ],
                 source: {
                   assetId: "asset-video",
                   kind: "video-slice",
@@ -3262,6 +3272,14 @@ describe("App", () => {
     expect(markup).toContain("Invert mask");
     expect(markup).toContain("Visual keyframes");
     expect(markup).toContain("Add keyframe");
+    expect(markup).toContain("Audio volume envelopes");
+    expect(markup).toContain("Source audio volume");
+    expect(markup).toContain("Voice volume");
+    expect(markup).toContain("Source audio volume keyframes");
+    expect(markup).toContain("Voice volume keyframes");
+    expect(markup).toContain("Add volume keyframe");
+    expect(markup).toContain("1.4s");
+    expect(markup).toContain("1.35");
     expect(markup).toContain("Add voice");
     expect(markup).toContain("Add text");
     expect(markup).toContain("0.8s");

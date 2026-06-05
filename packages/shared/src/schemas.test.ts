@@ -829,11 +829,21 @@ describe("shared contract schemas", () => {
           timelineStartSecond: 0,
           playbackRate: 1,
           sourceAudioMuted: false,
+          sourceAudioVolume: 0.72,
+          sourceAudioVolumeKeyframes: [
+            { id: "source-volume-low", timeSecond: 0, volume: 0.4 },
+            { id: "source-volume-peak", timeSecond: 1.2, volume: 0.9 },
+          ],
           sourceAudioFadeInSeconds: 0.25,
           sourceAudioFadeOutSeconds: 0.35,
           captionHidden: false,
           captionStartOffsetSeconds: 0,
           voiceoverStartOffsetSeconds: 0,
+          voiceoverVolume: 1.2,
+          voiceoverVolumeKeyframes: [
+            { id: "voice-volume-low", timeSecond: 0.2, volume: 0.8 },
+            { id: "voice-volume-high", timeSecond: 1.5, volume: 1.4 },
+          ],
           voiceoverFadeInSeconds: 0.2,
           voiceoverFadeOutSeconds: 0.3,
           transition: "cut",
@@ -897,6 +907,11 @@ describe("shared contract schemas", () => {
             trimStartSecond: 0.2,
             audioFadeInSeconds: 0.3,
             audioFadeOutSeconds: 0.4,
+            audioVolume: 0.65,
+            audioVolumeKeyframes: [
+              { id: "element-volume-start", timeSecond: 0, volume: 0.5 },
+              { id: "element-volume-end", timeSecond: 1.1, volume: 0.85 },
+            ],
             muted: false,
             detachedAudio: true,
           },
@@ -928,12 +943,19 @@ describe("shared contract schemas", () => {
     expect(plan.timeline?.elements.find((element) => element.id === "clip-audio-1")).toMatchObject({
       audioFadeInSeconds: 0.3,
       audioFadeOutSeconds: 0.4,
+      audioVolume: 0.65,
+      audioVolumeKeyframes: [
+        expect.objectContaining({ id: "element-volume-start", volume: 0.5 }),
+        expect.objectContaining({ id: "element-volume-end", volume: 0.85 }),
+      ],
     });
     expect(plan.segments[0]).toMatchObject({
       sourceAudioFadeInSeconds: 0.25,
       sourceAudioFadeOutSeconds: 0.35,
+      sourceAudioVolume: 0.72,
       voiceoverFadeInSeconds: 0.2,
       voiceoverFadeOutSeconds: 0.3,
+      voiceoverVolume: 1.2,
     });
   });
 

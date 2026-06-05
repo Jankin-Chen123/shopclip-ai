@@ -650,6 +650,13 @@ export const SmartEditVisualEffectSchema = z.object({
   keyframes: z.array(SmartEditVisualEffectParamKeyframeSchema).max(40).optional(),
 });
 
+export const SmartEditAudioVolumeKeyframeSchema = z.object({
+  easing: z.enum(["linear", "hold"]).default("linear"),
+  id: z.string().trim().min(1),
+  timeSecond: z.number().min(0).max(120),
+  volume: z.number().min(0).max(4),
+});
+
 export const SmartEditTimelineElementSchema = z
   .object({
     id: z.string().trim().min(1),
@@ -667,6 +674,8 @@ export const SmartEditTimelineElementSchema = z
     trimEndSecond: z.number().min(0).optional(),
     sourceDurationSeconds: z.number().positive().optional(),
     playbackRate: z.number().min(0.25).max(4).default(1),
+    audioVolume: z.number().min(0).max(4).optional(),
+    audioVolumeKeyframes: z.array(SmartEditAudioVolumeKeyframeSchema).max(40).optional(),
     audioFadeInSeconds: z.number().min(0).max(10).optional(),
     audioFadeOutSeconds: z.number().min(0).max(10).optional(),
     muted: z.boolean().default(false),
@@ -769,6 +778,8 @@ export const SmartEditSegmentOverrideSchema = z.object({
   sourceAudioMuted: z.boolean().default(false),
   sourceAudioStartOffsetSeconds: z.number().min(0).max(120).default(0),
   sourceAudioDurationSeconds: z.number().positive().max(120).optional(),
+  sourceAudioVolume: z.number().min(0).max(4).optional(),
+  sourceAudioVolumeKeyframes: z.array(SmartEditAudioVolumeKeyframeSchema).max(40).optional(),
   sourceAudioFadeInSeconds: z.number().min(0).max(10).optional(),
   sourceAudioFadeOutSeconds: z.number().min(0).max(10).optional(),
   captionHidden: z.boolean().default(false),
@@ -776,6 +787,8 @@ export const SmartEditSegmentOverrideSchema = z.object({
   captionDurationSeconds: z.number().positive().max(120).optional(),
   voiceoverStartOffsetSeconds: z.number().min(0).max(120).default(0),
   voiceoverDurationSeconds: z.number().positive().max(120).optional(),
+  voiceoverVolume: z.number().min(0).max(4).optional(),
+  voiceoverVolumeKeyframes: z.array(SmartEditAudioVolumeKeyframeSchema).max(40).optional(),
   voiceoverFadeInSeconds: z.number().min(0).max(10).optional(),
   voiceoverFadeOutSeconds: z.number().min(0).max(10).optional(),
   transition: SmartEditTransitionSchema.default("cut"),
@@ -820,6 +833,8 @@ export const SmartEditSegmentSchema = z.object({
   sourceAudioMuted: z.boolean().default(false),
   sourceAudioStartOffsetSeconds: z.number().min(0).max(120).default(0),
   sourceAudioDurationSeconds: z.number().positive().max(120).optional(),
+  sourceAudioVolume: z.number().min(0).max(4).optional(),
+  sourceAudioVolumeKeyframes: z.array(SmartEditAudioVolumeKeyframeSchema).max(40).optional(),
   sourceAudioFadeInSeconds: z.number().min(0).max(10).optional(),
   sourceAudioFadeOutSeconds: z.number().min(0).max(10).optional(),
   captionHidden: z.boolean().default(false),
@@ -827,6 +842,8 @@ export const SmartEditSegmentSchema = z.object({
   captionDurationSeconds: z.number().positive().max(120).optional(),
   voiceoverStartOffsetSeconds: z.number().min(0).max(120).default(0),
   voiceoverDurationSeconds: z.number().positive().max(120).optional(),
+  voiceoverVolume: z.number().min(0).max(4).optional(),
+  voiceoverVolumeKeyframes: z.array(SmartEditAudioVolumeKeyframeSchema).max(40).optional(),
   voiceoverFadeInSeconds: z.number().min(0).max(10).optional(),
   voiceoverFadeOutSeconds: z.number().min(0).max(10).optional(),
   transition: SmartEditTransitionSchema.default("cut"),

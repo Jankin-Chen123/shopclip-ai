@@ -1038,3 +1038,29 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Independent text elements still use the base text overlay model; richer text styling, animation/keyframes, and direct text template controls remain open.
   - Voice lanes still need volume envelopes, fades, and waveform-level editing.
   - Full completion still requires live runtime evidence for render-to-material-to-smart-edit and broader OpenCut-style editor parity.
+
+## 2026-06-05 Audio Volume Envelopes
+
+- Reference model:
+  - OpenCut stores animated scalar parameters as keyframes on timeline elements. This increment adapts that model to ShopClip audio material by supporting static volume plus time-based volume keyframes for source-audio clips, voiceover clips, and independent audio timeline elements.
+- Fix:
+  - Added `SmartEditAudioVolumeKeyframeSchema` and optional audio volume fields to smart-edit timeline elements, segment overrides, and segments.
+  - The smart-edit planner prompt and model normalization now accept `sourceAudioVolume`, `sourceAudioVolumeKeyframes`, `voiceoverVolume`, and `voiceoverVolumeKeyframes`.
+  - App request serialization, backend timeline metadata, and composer persistent-element bridging preserve volume fields across plan edits, refreshes, render-task history, and derived timeline elements.
+  - The ffmpeg smart-edit composer exports static volume as `volume=<value>` and two-or-more keyframes as a frame-evaluated `volume='if(...)':eval=frame` expression before delay/pad/mix.
+  - The Smart Edit inspector exposes source-audio volume, voice volume, independent audio volume, and add/delete volume keyframe controls at the current playhead.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/renderer/smartEditComposer.test.ts`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/api run test src/providers/ai/smartEditPlannerProvider.test.ts`
+  - `corepack pnpm --filter @shopclip/api build`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/api lint`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Volume keyframes are still numeric list controls; waveform display, drag handles on the waveform, curve handles, and richer multitrack audio bus controls remain open.
+  - Full completion still requires live runtime evidence after deployment for render-to-material-to-smart-edit using real generated scene clips.

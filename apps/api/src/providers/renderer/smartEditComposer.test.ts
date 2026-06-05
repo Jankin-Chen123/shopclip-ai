@@ -1559,6 +1559,14 @@ describe("smart edit composer", () => {
       sourceAudioFadeInSeconds: index === 0 ? 0.2 : 0,
       sourceAudioFadeOutSeconds: index === 0 ? 0.3 : 0,
       sourceAudioStartOffsetSeconds: index === 0 ? 0.7 : 0,
+      sourceAudioVolume: index === 0 ? 0.8 : 1,
+      sourceAudioVolumeKeyframes:
+        index === 0
+          ? [
+              { id: "source-volume-low", timeSecond: 0, volume: 0.4 },
+              { id: "source-volume-high", timeSecond: 1.5, volume: 1.1 },
+            ]
+          : [],
       transition: "cut",
     }));
 
@@ -1578,6 +1586,8 @@ describe("smart edit composer", () => {
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
     expect(sourceAudioCommand?.args.join(" ")).toContain("afade=t=in:st=0:d=0.20");
     expect(sourceAudioCommand?.args.join(" ")).toContain("afade=t=out:st=1.20:d=0.30");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("volume='if(lte(t\\,0.000)");
+    expect(sourceAudioCommand?.args.join(" ")).toContain(":eval=frame");
     expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=700:all=1");
     expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
   });
@@ -1626,6 +1636,7 @@ describe("smart edit composer", () => {
       voiceoverFadeOutSeconds: 0.4,
       voiceoverDurationSeconds: 1.6,
       voiceoverStartOffsetSeconds: 0.5,
+      voiceoverVolume: 0.55,
     };
 
     await composeSmartEditToStorage("project-smart-edit", plan, assets, {
@@ -1645,6 +1656,7 @@ describe("smart edit composer", () => {
     expect(voicePadCommand!.args.join(" ")).toContain("atrim=0:1.6");
     expect(voicePadCommand!.args.join(" ")).toContain("afade=t=in:st=0:d=0.20");
     expect(voicePadCommand!.args.join(" ")).toContain("afade=t=out:st=1.20:d=0.40");
+    expect(voicePadCommand!.args.join(" ")).toContain("volume=0.550");
     expect(voicePadCommand!.args.join(" ")).toContain("adelay=500:all=1");
     expect(voicePadCommand!.args.join(" ")).toContain("apad,atrim=0:4");
   });
