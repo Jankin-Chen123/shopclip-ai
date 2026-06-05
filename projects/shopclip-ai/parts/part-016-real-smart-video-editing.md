@@ -1336,3 +1336,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - This adds subtitle import/editing for the base demo. Fine-grained subtitle style editing can be added later if user testing calls for it.
+
+## 2026-06-06 Independent Material Magnetic Move
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Targets OpenCut-style timeline placement for standalone audio/text materials after they are added or imported onto the Smart Edit timeline.
+- Fix:
+  - Independent timeline materials without a storyboard `segmentId` now use the same magnetic placement resolver as video/storyboard segment moves.
+  - Moving a standalone audio or subtitle clip clamps to timeline start, snaps to nearby playhead and clip edges, and avoids overlapping clips on the same concrete timeline track.
+  - Non-magnetic movement modes keep their prior direct nudge behavior for now; ripple/insert/overwrite element-level move semantics can be expanded after the base demo is reviewed.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps and prevents overlap"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|SRT|source audio"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Full objective completion still requires live runtime evidence for a fresh model render -> real ffmpeg video/audio/text materialization -> Smart Edit timeline editing/export on `shopclip.site`.

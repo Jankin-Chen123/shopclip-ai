@@ -2557,12 +2557,36 @@ export const moveSmartEditTrackClipOnTimeline = (
   playheadSecond?: number,
 ): SmartEditPlan => {
   if (!trackClip.segmentId) {
-    if (!plan.timeline?.elements.length) {
+    const baseTimeline = plan.timeline;
+    if (!baseTimeline?.elements.length) {
       return plan;
     }
-    const targetElement = plan.timeline.elements.find((element) => element.id === trackClip.id);
+    const targetElement = baseTimeline.elements.find((element) => element.id === trackClip.id);
     if (!targetElement) {
       return plan;
+    }
+    if (editMode === "magnetic") {
+      const intervals = baseTimeline.elements
+        .filter((element) => element.id !== targetElement.id && element.trackId === targetElement.trackId)
+        .map((element) => ({
+          endSecond: snapTimelineSeconds(element.startSecond + element.durationSeconds),
+          id: element.id,
+          startSecond: clampTimelineStart(element.startSecond),
+        }))
+        .sort((left, right) => left.startSecond - right.startSecond);
+      const snapPoints = [
+        ...(playheadSecond === undefined ? [] : [playheadSecond]),
+        ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond]),
+      ];
+      const nextStart = resolveTimelineBlockStart(
+        intervals,
+        [{ durationSeconds: targetElement.durationSeconds, offsetSecond: 0 }],
+        targetElement.startSecond + deltaSeconds,
+        snapPoints,
+      );
+      return updateSmartEditTimelineElement(plan, targetElement.id, {
+        startSecond: nextStart,
+      });
     }
     return updateSmartEditTimelineElement(plan, targetElement.id, {
       startSecond: targetElement.startSecond + deltaSeconds,

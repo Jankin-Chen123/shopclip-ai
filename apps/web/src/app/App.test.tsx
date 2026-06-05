@@ -3412,6 +3412,55 @@ Second imported caption`,
     expect(nextPlan.targetDurationSeconds).toBe(4.3);
   });
 
+  it("snaps and prevents overlap when moving independent smart edit text materials", () => {
+    const basePlan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [],
+      targetDurationSeconds: 0,
+    } satisfies SmartEditPlan;
+    const planWithFirstCaption = addSmartEditTimelineTextElement(basePlan, 1, "first");
+    const plan = addSmartEditTimelineTextElement(planWithFirstCaption, 4, "second");
+
+    const snappedPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "text-second", trackId: "caption" },
+      -1.15,
+      "magnetic",
+      2.95,
+    );
+
+    expect(snappedPlan.timeline?.elements.find((element) => element.id === "text-second")).toMatchObject({
+      startSecond: 3,
+      trackId: "text-copy",
+    });
+
+    const nonOverlappingPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "text-second", trackId: "caption" },
+      -2.4,
+      "magnetic",
+    );
+
+    expect(nonOverlappingPlan.timeline?.elements.find((element) => element.id === "text-second")).toMatchObject({
+      startSecond: 3,
+    });
+
+    const clampedPlan = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "text-first", trackId: "caption" },
+      -5,
+      "magnetic",
+    );
+
+    expect(clampedPlan.timeline?.elements.find((element) => element.id === "text-first")).toMatchObject({
+      startSecond: 0,
+    });
+  });
+
   it("updates independent audio material speed on the smart edit timeline", () => {
     const plan = addSmartEditTimelineVoiceElement(
       {
