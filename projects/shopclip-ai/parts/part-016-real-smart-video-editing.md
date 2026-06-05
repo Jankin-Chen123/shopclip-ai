@@ -1474,4 +1474,14 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Smart-edit task `5cd9fc77-1aab-4bab-8a08-a545c957cbd2` failed at `smart-edit-ffmpeg-compose-failed` because ffmpeg tried to download an expired Seedream URL and received HTTP 403.
   - The failed plan had not consumed the fresh materialized task `6a028699-932d-4f3c-b2e5-a415d935d63d`.
 - Remaining:
-  - Redeploy and rerun Smart Edit against the fresh materialized task to confirm `smart-edit-ffmpeg-compose` completes on the live server.
+  - Redeployed commit `a16aaff` to `/www/wwwroot/shopclip-ai`; server health returned `{"service":"api","status":"ok","version":"0.1.0"}`, PM2 showed `shopclip-ai-api` online, and public `https://shopclip.site/` returned `200`.
+  - Re-ran Smart Edit against project `cmpq7vbgg0000wh6cn1qs9u69` after fresh render task `6a028699-932d-4f3c-b2e5-a415d935d63d` had materialized scene video/audio/text assets.
+  - New Smart Edit task `8324a78c-8d1f-4569-805e-c2b9c123ffc6` reached `completed`.
+  - Trace included `smart-edit-scene-materials-applied` with message `Applied 3 fresh scene video/audio/text material sources before ffmpeg composition.` and then `smart-edit-ffmpeg-compose`.
+  - Export URL: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmpq7vbgg0000wh6cn1qs9u69/smart-edits/86a01150-0120-4d76-884c-4a73de2510b6/export.mp4`.
+  - The exported file returned HTTP 200 with `Content-Type: video/mp4`.
+  - `ffmpeg -i` on the downloaded export confirmed both streams:
+    - Video: `h264`, `720x1280`, `30 fps`.
+    - Audio: `aac (LC)`, `44100 Hz`, `stereo`.
+- Remaining:
+  - Base demo is ready for user experience review. Later upgrades can focus on targeted timeline UX improvements rather than stickers/effects/advanced OpenCut features.
