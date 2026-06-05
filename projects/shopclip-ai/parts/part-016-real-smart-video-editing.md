@@ -788,3 +788,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Split-at-playhead still splits segment-backed clips first; the next OpenCut parity step is element-native split for video/audio/text rows.
   - Keyframes, masks, richer effect stacks, and direct element-native export are still open.
+
+## 2026-06-05 Element-Level Split At Playhead
+
+- Reference model:
+  - OpenCut's `SplitElementsCommand` splits each selected timeline element at the playhead, keeps the left element id, creates a right-side element id, and adjusts source trim spans once at the split point.
+- Fix:
+  - Added `splitSmartEditSegmentOnTimeline` as the shared pure path for playback-head segment splitting.
+  - When a plan contains persistent `timeline.elements`, splitting a segment now also splits persistent video/audio/text elements whose own time range crosses the split point.
+  - Video and audio elements preserve source URL, muted/hidden/detached state, playback rate, and trim metadata; the left side gets a shortened `trimEndSecond`, and the right side gets a new id plus adjusted `trimStartSecond`.
+  - Text elements split by timeline timing and preserve text/label metadata; elements entirely to the right of the cut are reassigned to the new right-hand segment.
+  - The Smart Edit toolbar's playhead split button now uses this same pure helper instead of maintaining a separate component-local segment-only implementation.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "splits persistent smart edit timeline elements"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|track-level|edit modes|persistent|duplicates|pastes|copies|clipboard|splits"`
+- Remaining:
+  - Export is still bridged through `SmartEditSegment`; direct arbitrary element-stack rendering is still open.
+  - Keyframes, masks, richer effect stacks, grouped element selection, and OpenCut-level timeline UI polish are still open.

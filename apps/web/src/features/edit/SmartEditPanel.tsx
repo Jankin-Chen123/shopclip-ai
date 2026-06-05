@@ -885,6 +885,143 @@ const splitSmartEditSegmentForInsert = (
   };
 };
 
+type SmartEditTimelineElement = SmartEditTimeline["elements"][number];
+
+const splitPersistentTimelineElement = (
+  element: SmartEditTimelineElement,
+  splitSecond: number,
+  rightSegmentId: string,
+  splitToken: string,
+): SmartEditTimelineElement[] => {
+  const elementStart = clampTimelineStart(element.startSecond);
+  const elementEnd = snapTimelineSeconds(elementStart + element.durationSeconds);
+  if (splitSecond <= elementStart + 0.001) {
+    return [{ ...element, segmentId: rightSegmentId }];
+  }
+  if (splitSecond >= elementEnd - 0.001) {
+    return [element];
+  }
+
+  const leftDuration = Math.max(0, snapTimelineSeconds(splitSecond - elementStart));
+  const rightDuration = Math.max(0, snapTimelineSeconds(elementEnd - splitSecond));
+  if (leftDuration <= 0.001) {
+    return [{ ...element, segmentId: rightSegmentId }];
+  }
+  if (rightDuration <= 0.001) {
+    return [element];
+  }
+
+  const playbackRate = clampPlaybackRate(element.playbackRate ?? 1);
+  const trimStart = element.trimStartSecond ?? 0;
+  const originalTrimEnd =
+    element.trimEndSecond ?? trimStart + element.durationSeconds * playbackRate;
+  const splitTrim = Math.min(
+    originalTrimEnd,
+    trimStart + leftDuration * playbackRate,
+  );
+  const usesSourceTrim = element.kind === "video" || element.kind === "audio";
+  const leftElement: SmartEditTimelineElement = {
+    ...element,
+    durationSeconds: leftDuration,
+    ...(usesSourceTrim ? { trimEndSecond: splitTrim } : {}),
+  };
+  const rightElement: SmartEditTimelineElement = {
+    ...element,
+    durationSeconds: rightDuration,
+    id: `${element.id}-split-${splitToken}`,
+    label: `${element.label} (split)`,
+    segmentId: rightSegmentId,
+    startSecond: splitSecond,
+    ...(usesSourceTrim
+      ? {
+          trimEndSecond: originalTrimEnd,
+          trimStartSecond: splitTrim,
+        }
+      : {}),
+  };
+  return [leftElement, rightElement];
+};
+
+const splitPersistentTimelineElementsForSegment = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  splitSecond: number,
+  rightSegmentId: string,
+  splitToken: string,
+): SmartEditTimeline["elements"] | undefined => {
+  if (!plan.timeline || !hasPersistentTimelineElements(plan.timeline)) {
+    return undefined;
+  }
+  return plan.timeline.elements.flatMap((element) => {
+    if (element.segmentId !== segmentId) {
+      return [element];
+    }
+    if (isDerivedTimelineElement(element)) {
+      return [];
+    }
+    return splitPersistentTimelineElement(
+      element,
+      splitSecond,
+      rightSegmentId,
+      splitToken,
+    );
+  });
+};
+
+export const splitSmartEditSegmentOnTimeline = (
+  plan: SmartEditPlan,
+  segmentId: string,
+  offsetSeconds: number,
+  splitToken = String(Date.now()),
+): SmartEditPlan | undefined => {
+  const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
+  const index = sorted.findIndex((segment) => segment.id === segmentId);
+  const targetSegment = sorted[index];
+  if (!targetSegment) {
+    return undefined;
+  }
+  const rightId = `${targetSegment.id}-split-${splitToken}`;
+  const splitSegment = splitSmartEditSegmentForInsert(targetSegment, offsetSeconds, rightId);
+  if (!splitSegment) {
+    return undefined;
+  }
+
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const targetStart = segmentTimelineBaseStart(plan, targetSegment.id, currentStarts);
+  const firstDuration = splitSegment.left.durationSeconds;
+  const splitSecond = snapTimelineSeconds(targetStart + firstDuration);
+  const splitElements = splitPersistentTimelineElementsForSegment(
+    plan,
+    targetSegment.id,
+    splitSecond,
+    rightId,
+    splitToken,
+  );
+  sorted.splice(index, 1, splitSegment.left, splitSegment.right);
+
+  return withRebuiltTimeline({
+    ...(splitElements && plan.timeline
+      ? {
+          ...plan,
+          timeline: {
+            ...plan.timeline,
+            elements: splitElements,
+          },
+        }
+      : plan),
+    segments: sorted.map((segment, segmentIndex) => ({
+      ...segment,
+      order: segmentIndex + 1,
+      timelineStartSecond:
+        segment.id === targetSegment.id
+          ? targetStart
+          : segment.id === rightId
+            ? clampTimelineStart(targetStart + firstDuration)
+            : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
+    })),
+  });
+};
+
 const buildInsertMoveSegments = ({
   blockDurationSeconds,
   currentStarts,
@@ -2240,61 +2377,18 @@ export const SmartEditPanel = ({
     ) {
       return undefined;
     }
-    const sorted = [...plan.segments].sort((left, right) => left.order - right.order);
-    const index = sorted.findIndex((segment) => segment.id === targetSegment.id);
-    if (index < 0) {
+    const splitToken = String(Date.now());
+    const rightId = `${targetSegment.id}-split-${splitToken}`;
+    const splitPlan = splitSmartEditSegmentOnTimeline(
+      plan,
+      targetSegment.id,
+      offsetSeconds,
+      splitToken,
+    );
+    if (!splitPlan) {
       return undefined;
     }
-    const playbackRate = clampPlaybackRate(targetSegment.playbackRate ?? 1);
-    const firstDuration = clampSmartEditDuration(offsetSeconds);
-    const secondDuration = clampSmartEditDuration(targetSegment.durationSeconds - offsetSeconds);
-    const sourceStart = targetSegment.source.startSecond ?? 0;
-    const sourceEnd =
-      targetSegment.source.endSecond ?? sourceStart + targetSegment.durationSeconds * playbackRate;
-    const sourceMid = Math.min(sourceEnd, sourceStart + firstDuration * playbackRate);
-    const rightId = `${targetSegment.id}-split-${Date.now()}`;
-    sorted.splice(
-      index,
-      1,
-      {
-        ...targetSegment,
-        durationSeconds: firstDuration,
-        source: {
-          ...targetSegment.source,
-          endSecond: sourceMid,
-          startSecond: sourceStart,
-        },
-      },
-      {
-        ...targetSegment,
-        durationSeconds: secondDuration,
-        id: rightId,
-        timelineStartSecond: clampTimelineStart(targetSegment.timelineStartSecond ?? 0) + firstDuration,
-        source: {
-          ...targetSegment.source,
-          endSecond: sourceEnd,
-          startSecond: sourceMid,
-        },
-        subtitle: `${targetSegment.subtitle} (split)`,
-      },
-    );
-    const currentStarts = new Map(
-      timedTimelineSegments.map(({ segment, startSecond }) => [segment.id, startSecond]),
-    );
-    const targetStart = clampTimelineStart(currentStarts.get(targetSegment.id) ?? 0);
-    commitPlanChange(withRebuiltTimeline({
-      ...plan,
-      segments: sorted.map((segment, segmentIndex) => ({
-        ...segment,
-        order: segmentIndex + 1,
-        timelineStartSecond:
-          segment.id === targetSegment.id
-            ? targetStart
-            : segment.id === rightId
-              ? targetStart + firstDuration
-              : clampTimelineStart(currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0),
-      })),
-    }), { label: "Split clip at playhead" });
+    commitPlanChange(splitPlan, { label: "Split clip at playhead" });
     return rightId;
   };
 
