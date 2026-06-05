@@ -770,3 +770,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Export is still bridged through `SmartEditSegment` rather than directly rendering arbitrary element stacks.
   - Next increments should move duplicate/paste/split commands onto element records, then add visual snap guides, keyframes, masks, and richer OpenCut-style effect stacks.
+
+## 2026-06-05 Element-Level Duplicate And Clipboard Paste
+
+- Reference model:
+  - OpenCut's `DuplicateElementsCommand` clones selected timeline elements directly, keeps their media/edit metadata, creates new element ids, and returns the duplicated element selection.
+  - This ShopClip increment adapts that model to the existing `SmartEditPlan.timeline.elements` bridge while preserving the segment compatibility layer needed by current ffmpeg export.
+- Fix:
+  - Duplicating a smart-edit segment now also clones any persistent timeline elements attached to that segment, preserving track id, source URL, trim, duration, text, hidden/muted state, playback rate, and relative in-segment offsets.
+  - Copying selected clips now stores a local clipboard snapshot of persistent timeline elements alongside the segment snapshot.
+  - Pasting from the local clipboard at the playhead now recreates persistent video/text/audio elements with stable copied ids and playhead-aligned relative timing, instead of falling back to derived `segment-*` rows.
+  - Older plans without persistent timeline elements still use the derived segment timeline path.
+- Verification:
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "duplicates persistent|copies and pastes persistent"`
+  - `.\\node_modules\\.pnpm\\node_modules\\.bin\\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|track-level|edit modes|persistent|duplicates|pastes|copies|clipboard"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Split-at-playhead still splits segment-backed clips first; the next OpenCut parity step is element-native split for video/audio/text rows.
+  - Keyframes, masks, richer effect stacks, and direct element-native export are still open.

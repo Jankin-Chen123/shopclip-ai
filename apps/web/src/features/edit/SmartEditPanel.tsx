@@ -415,6 +415,57 @@ const isDerivedTimelineElement = (element: SmartEditTimeline["elements"][number]
 const hasPersistentTimelineElements = (timeline: SmartEditTimeline | undefined): boolean =>
   !!timeline?.elements.some((element) => !isDerivedTimelineElement(element));
 
+const persistentTimelineElementsForSegment = (
+  plan: SmartEditPlan,
+  segmentId: string,
+): SmartEditTimeline["elements"] =>
+  (plan.timeline?.elements ?? []).filter(
+    (element) => element.segmentId === segmentId && !isDerivedTimelineElement(element),
+  );
+
+const clonePersistentTimelineElementsForSegmentCopies = (
+  plan: SmartEditPlan,
+  copies: Array<{
+    duplicateSegmentId: string;
+    duplicateStart: number;
+    elementToken: string;
+    sourceSegmentId: string;
+    sourceStart: number;
+  }>,
+): SmartEditTimeline["elements"] =>
+  copies.flatMap((copy) =>
+    persistentTimelineElementsForSegment(plan, copy.sourceSegmentId).map((element) => ({
+      ...element,
+      id: `${element.id}-${copy.elementToken}`,
+      label: `${element.label} (copy)`,
+      segmentId: copy.duplicateSegmentId,
+      startSecond: clampTimelineStart(
+        snapTimelineSeconds(copy.duplicateStart + element.startSecond - copy.sourceStart),
+      ),
+    })),
+  );
+
+const withPersistentTimelineCopies = (
+  plan: SmartEditPlan,
+  copiedElements: SmartEditTimeline["elements"],
+): SmartEditPlan => {
+  if (!copiedElements.length || !plan.timeline) {
+    return plan;
+  }
+  return {
+    ...plan,
+    timeline: {
+      ...plan.timeline,
+      durationSeconds:
+        timelineDurationForElements({
+          ...plan.timeline,
+          elements: [...plan.timeline.elements, ...copiedElements],
+        }) ?? plan.timeline.durationSeconds,
+      elements: [...plan.timeline.elements, ...copiedElements],
+    },
+  };
+};
+
 const mergePersistentTimelineWithDerivedSegments = (
   plan: SmartEditPlan,
   rebuiltTimeline: SmartEditTimeline,
@@ -1046,6 +1097,8 @@ export const duplicateSmartEditSegmentsOnTimeline = (
   const sourceCopies: Array<{
     duplicateId: string;
     durationSeconds: number;
+    elementToken: string;
+    sourceSegmentId: string;
     sourceStart: number;
   }> = [];
   let duplicateIndex = 0;
@@ -1063,6 +1116,8 @@ export const duplicateSmartEditSegmentsOnTimeline = (
     sourceCopies.push({
       duplicateId,
       durationSeconds: segment.durationSeconds,
+      elementToken: segmentIds.length === 1 ? duplicateToken : `${duplicateToken}-${duplicateIndex}`,
+      sourceSegmentId: segment.id,
       sourceStart,
     });
     nextSegments.push({
@@ -1095,7 +1150,19 @@ export const duplicateSmartEditSegmentsOnTimeline = (
   }
 
   return withRebuiltTimeline({
-    ...plan,
+    ...withPersistentTimelineCopies(
+      plan,
+      clonePersistentTimelineElementsForSegmentCopies(
+        plan,
+        sourceCopies.map((copy) => ({
+          duplicateSegmentId: copy.duplicateId,
+          duplicateStart: duplicateStarts.get(copy.duplicateId) ?? 0,
+          elementToken: copy.elementToken,
+          sourceSegmentId: copy.sourceSegmentId,
+          sourceStart: copy.sourceStart,
+        })),
+      ),
+    ),
     segments: nextSegments.map((segment, index) => ({
       ...segment,
       order: index + 1,
@@ -1158,10 +1225,24 @@ export const pasteSmartEditSegmentsAtPlayhead = (
   const pastedStarts = new Map(
     pastedSegments.map((segment) => [segment.id, segment.timelineStartSecond ?? 0]),
   );
+  const pastedPersistentElements = clonePersistentTimelineElementsForSegmentCopies(
+    plan,
+    sourceSegments.map((segment, index) => {
+      const sourceStart = currentStarts.get(segment.id) ?? 0;
+      const duplicateSegmentId = `${segment.id}-${duplicateToken}-${index + 1}`;
+      return {
+        duplicateSegmentId,
+        duplicateStart: pastedStarts.get(duplicateSegmentId) ?? 0,
+        elementToken: `${duplicateToken}-${index + 1}`,
+        sourceSegmentId: segment.id,
+        sourceStart,
+      };
+    }),
+  );
 
   if (editMode === "insert") {
     return withRebuiltTimeline({
-      ...plan,
+      ...withPersistentTimelineCopies(plan, pastedPersistentElements),
       segments: buildInsertMoveSegments({
         blockDurationSeconds: blockDuration,
         currentStarts,
@@ -1175,7 +1256,7 @@ export const pasteSmartEditSegmentsAtPlayhead = (
   }
 
   return withRebuiltTimeline({
-    ...plan,
+    ...withPersistentTimelineCopies(plan, pastedPersistentElements),
     segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
       ...segment,
       order: index + 1,
@@ -1210,6 +1291,7 @@ export const copySmartEditSegmentsToClipboard = (
     .sort((left, right) => left.order - right.order)
     .filter((segment) => selectedIds.has(segment.id))
     .map((segment) => ({
+      elements: persistentTimelineElementsForSegment(plan, segment.id).map((element) => ({ ...element })),
       segment: { ...segment },
       startSecond: currentStarts.get(segment.id) ?? 0,
     }));
@@ -1257,10 +1339,27 @@ export const pasteSmartEditClipboardAtPlayhead = (
   const pastedStarts = new Map(
     pastedSegments.map((segment) => [segment.id, segment.timelineStartSecond ?? 0]),
   );
+  const pastedPersistentElements = clipboard.items.flatMap((item, index) => {
+    const duplicateSegmentId = `${item.segment.id}-${duplicateToken}-${index + 1}`;
+    const duplicateStart = pastedStarts.get(duplicateSegmentId) ?? 0;
+    const elements =
+      item.elements && item.elements.length > 0
+        ? item.elements
+        : persistentTimelineElementsForSegment(plan, item.segment.id);
+    return elements.map((element) => ({
+      ...element,
+      id: `${element.id}-${duplicateToken}-${index + 1}`,
+      label: `${element.label} (copy)`,
+      segmentId: duplicateSegmentId,
+      startSecond: clampTimelineStart(
+        snapTimelineSeconds(duplicateStart + element.startSecond - item.startSecond),
+      ),
+    }));
+  });
 
   if (editMode === "insert") {
     return withRebuiltTimeline({
-      ...plan,
+      ...withPersistentTimelineCopies(plan, pastedPersistentElements),
       segments: buildInsertMoveSegments({
         blockDurationSeconds: blockDuration,
         currentStarts,
@@ -1274,7 +1373,7 @@ export const pasteSmartEditClipboardAtPlayhead = (
   }
 
   return withRebuiltTimeline({
-    ...plan,
+    ...withPersistentTimelineCopies(plan, pastedPersistentElements),
     segments: [...sortedSegments, ...pastedSegments].map((segment, index) => ({
       ...segment,
       order: index + 1,
@@ -1337,6 +1436,7 @@ type TrackClipMoveDragState = {
 
 export type SmartEditClipboard = {
   items: Array<{
+    elements?: SmartEditTimeline["elements"];
     segment: SmartEditSegment;
     startSecond: number;
   }>;

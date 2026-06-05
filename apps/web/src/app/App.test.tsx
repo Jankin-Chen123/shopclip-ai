@@ -2097,6 +2097,216 @@ describe("App", () => {
     expect(moved.segments[0]?.captionStartOffsetSeconds).toBe(1.5);
   });
 
+  it("duplicates persistent smart edit timeline elements with their segment clip", () => {
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use independently edited timeline elements.",
+      targetDurationSeconds: 7,
+      createdAt: "2026-06-05T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 1,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Segment caption",
+          voiceover: "Segment voice",
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.test/scene-1.m4a",
+            sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 0,
+            endSecond: 4,
+          },
+          assetTags: ["hero"],
+          rationale: "Use the rendered scene clip.",
+        },
+      ],
+      timeline: {
+        scale: 1,
+        durationSeconds: 7,
+        tracks: [
+          { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+          { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+        ],
+        elements: [
+          {
+            detachedAudio: false,
+            durationSeconds: 4,
+            hidden: false,
+            id: "persisted-video",
+            kind: "video",
+            label: "Persisted video",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            sourceUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 1,
+            trackId: "video-main",
+            trimStartSecond: 0,
+          },
+          {
+            detachedAudio: false,
+            durationSeconds: 1.5,
+            hidden: false,
+            id: "persisted-caption",
+            kind: "text",
+            label: "Edited caption",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            startSecond: 2,
+            text: "Edited caption",
+            trackId: "text-copy",
+            trimStartSecond: 0,
+          },
+        ],
+      },
+    };
+
+    const duplicated = duplicateSmartEditSegmentOnTimeline(plan, "segment-1", "copy-1");
+
+    expect(duplicated.segments.map((segment) => segment.id)).toEqual([
+      "segment-1",
+      "segment-1-copy-1",
+    ]);
+    expect(duplicated.timeline?.elements.map((element) => element.id)).toEqual([
+      "persisted-video",
+      "persisted-caption",
+      "persisted-video-copy-1",
+      "persisted-caption-copy-1",
+    ]);
+    expect(duplicated.timeline?.elements.find((element) => element.id === "persisted-video-copy-1")).toMatchObject({
+      label: "Persisted video (copy)",
+      segmentId: "segment-1-copy-1",
+      startSecond: 5,
+      trackId: "video-main",
+    });
+    expect(duplicated.timeline?.elements.find((element) => element.id === "persisted-caption-copy-1")).toMatchObject({
+      durationSeconds: 1.5,
+      segmentId: "segment-1-copy-1",
+      startSecond: 6,
+      text: "Edited caption",
+    });
+  });
+
+  it("copies and pastes persistent smart edit timeline elements at the playhead", () => {
+    const plan: SmartEditPlan = {
+      id: "plan-1",
+      projectId: "project-1",
+      strategy: "Use independently edited timeline elements.",
+      targetDurationSeconds: 5,
+      createdAt: "2026-06-05T00:00:00.000Z",
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 3,
+          timelineStartSecond: 1,
+          playbackRate: 1,
+          sourceAudioMuted: false,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          transition: "cut",
+          subtitle: "Segment caption",
+          voiceover: "Segment voice",
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.test/scene-1.m4a",
+            sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 0,
+            endSecond: 3,
+          },
+          assetTags: ["hero"],
+          rationale: "Use the rendered scene clip.",
+        },
+      ],
+      timeline: {
+        scale: 1,
+        durationSeconds: 5,
+        tracks: [
+          { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+          { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+        ],
+        elements: [
+          {
+            detachedAudio: false,
+            durationSeconds: 3,
+            hidden: false,
+            id: "persisted-video",
+            kind: "video",
+            label: "Persisted video",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            sourceUrl: "https://cdn.example.test/scene-1-video.mp4",
+            startSecond: 1,
+            trackId: "video-main",
+            trimStartSecond: 0,
+          },
+          {
+            detachedAudio: false,
+            durationSeconds: 1,
+            hidden: false,
+            id: "persisted-caption",
+            kind: "text",
+            label: "Edited caption",
+            muted: false,
+            playbackRate: 1,
+            sceneId: "scene-1",
+            segmentId: "segment-1",
+            startSecond: 2,
+            text: "Edited caption",
+            trackId: "text-copy",
+            trimStartSecond: 0,
+          },
+        ],
+      },
+    };
+    const clipboard = copySmartEditSegmentsToClipboard(plan, ["segment-1"]);
+
+    const pasted = pasteSmartEditClipboardAtPlayhead(plan, clipboard, 8, "paste-1");
+
+    expect(pasted.timeline?.elements.find((element) => element.id === "persisted-video-paste-1-1")).toMatchObject({
+      label: "Persisted video (copy)",
+      segmentId: "segment-1-paste-1-1",
+      startSecond: 8,
+    });
+    expect(pasted.timeline?.elements.find((element) => element.id === "persisted-caption-paste-1-1")).toMatchObject({
+      durationSeconds: 1,
+      segmentId: "segment-1-paste-1-1",
+      startSecond: 9,
+      text: "Edited caption",
+    });
+  });
+
   it("duplicates a smart edit segment into an editable timeline clip", () => {
     const plan: SmartEditPlan = {
       id: "plan-1",
