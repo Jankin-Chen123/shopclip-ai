@@ -996,3 +996,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - Direct text-copy creation controls and richer voice lane operations such as volume envelopes, fades, and waveform editing remain open.
   - Full completion still requires live runtime evidence for render-to-material-to-smart-edit and broader OpenCut-style editor parity.
+
+## 2026-06-05 Frontend Independent Text Timeline Controls
+
+- Reference model:
+  - The render-to-edit material chain separates every generated scene into picture, audio, and text. OpenCut-style editing requires each material type to be placeable directly on the timeline.
+- Fix:
+  - Added `addSmartEditTimelineTextElement` so Smart Edit can create a persistent unowned `text-copy` timeline element at the current playhead.
+  - Added a toolbar action for adding text material next to the independent voice action.
+  - Reused the unowned timeline-element inspector so text material can edit text/label, start time, duration, and visibility without binding to a storyboard segment.
+  - Localized the new text action for English and Chinese workspaces.
+- Verification:
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/web/src/app/App.test.tsx -t "adds an independent text element"`
+  - `.\node_modules\.pnpm\node_modules\.bin\vitest.CMD run apps/web/src/app/App.test.tsx -t "smart edit|timeline|voice|text|persistent|track"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Independent text elements still use the base text overlay model; richer text styling, animation/keyframes, and direct text template controls remain open.
+  - Voice lanes still need volume envelopes, fades, and waveform-level editing.
+  - Full completion still requires live runtime evidence for render-to-material-to-smart-edit and broader OpenCut-style editor parity.

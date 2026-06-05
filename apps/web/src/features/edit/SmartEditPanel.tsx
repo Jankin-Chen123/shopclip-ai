@@ -1833,6 +1833,41 @@ export const addSmartEditTimelineVoiceElement = (
   );
 };
 
+export const addSmartEditTimelineTextElement = (
+  plan: SmartEditPlan,
+  playheadSecond: number,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const startSecond = clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const element: SmartEditTimelineElement = {
+    detachedAudio: false,
+    durationSeconds: 2,
+    hidden: false,
+    id: `text-${token}`,
+    kind: "text",
+    label: "New text",
+    muted: false,
+    playbackRate: 1,
+    startSecond,
+    text: "New text",
+    trackId: "text-copy",
+    trimStartSecond: 0,
+  };
+  return withUpdatedTimelineElements(
+    plan,
+    [...baseTimeline.elements, element],
+    ensureTimelineTrack(baseTimeline, {
+      hidden: false,
+      id: "text-copy",
+      kind: "text",
+      label: "Text",
+      locked: false,
+      muted: false,
+    }),
+  );
+};
+
 const updateSmartEditTimelineElement = (
   plan: SmartEditPlan,
   elementId: string,
@@ -2340,6 +2375,19 @@ export const SmartEditPanel = ({
     const nextPlan = addSmartEditTimelineVoiceElement(plan, boundedPlayheadSeconds);
     const addedElement = nextPlan.timeline?.elements.at(-1);
     commitPlanChange(nextPlan, { label: "Add voice clip" });
+    if (addedElement) {
+      setSelectedTrackClipId(addedElement.id);
+      setSelectedSegmentIds([]);
+    }
+  };
+
+  const addTextElementAtPlayhead = () => {
+    if (!plan) {
+      return;
+    }
+    const nextPlan = addSmartEditTimelineTextElement(plan, boundedPlayheadSeconds);
+    const addedElement = nextPlan.timeline?.elements.at(-1);
+    commitPlanChange(nextPlan, { label: "Add text clip" });
     if (addedElement) {
       setSelectedTrackClipId(addedElement.id);
       setSelectedSegmentIds([]);
@@ -4486,6 +4534,13 @@ export const SmartEditPanel = ({
             onClick={addVoiceElementAtPlayhead}
           >
             {copy.addVoiceClip}
+          </Button>
+          <Button
+            disabled={!plan}
+            icon={<Plus size={16} />}
+            onClick={addTextElementAtPlayhead}
+          >
+            {copy.addTextClip}
           </Button>
           <Button
             disabled={!smartEditClipboard}

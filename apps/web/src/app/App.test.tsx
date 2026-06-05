@@ -33,6 +33,7 @@ import {
 } from "../features/inspiration/InspirationPanel";
 import {
   SmartEditPanel,
+  addSmartEditTimelineTextElement,
   addSmartEditTimelineVoiceElement,
   applySmartEditCommandHistoryRedo,
   applySmartEditCommandHistoryUndo,
@@ -2998,6 +2999,58 @@ describe("App", () => {
     expect(nextPlan.targetDurationSeconds).toBe(4.3);
   });
 
+  it("adds an independent text element to the smart edit timeline at the playhead", () => {
+    const plan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 0,
+          transition: "cut",
+          subtitle: "Hook",
+          voiceover: "",
+          source: {
+            assetId: "asset-video",
+            kind: "video-slice",
+            startSecond: 0,
+          },
+        },
+      ],
+      targetDurationSeconds: 4,
+    } satisfies SmartEditPlan;
+
+    const nextPlan = addSmartEditTimelineTextElement(plan, 1.86, "caption");
+
+    expect(nextPlan.timeline?.tracks.some((track) => track.id === "text-copy")).toBe(true);
+    expect(nextPlan.timeline?.elements.some((element) => element.id === "segment-1-video")).toBe(true);
+    expect(nextPlan.timeline?.elements).toContainEqual(
+      expect.objectContaining({
+        durationSeconds: 2,
+        hidden: false,
+        id: "text-caption",
+        kind: "text",
+        label: "New text",
+        muted: false,
+        playbackRate: 1,
+        startSecond: 1.9,
+        text: "New text",
+        trackId: "text-copy",
+        trimStartSecond: 0,
+      }),
+    );
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "text-caption")?.segmentId).toBeUndefined();
+    expect(nextPlan.timeline?.durationSeconds).toBe(4);
+    expect(nextPlan.targetDurationSeconds).toBe(4);
+  });
+
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {
     const markup = renderToStaticMarkup(
       <SmartEditPanel
@@ -3209,6 +3262,8 @@ describe("App", () => {
     expect(markup).toContain("Invert mask");
     expect(markup).toContain("Visual keyframes");
     expect(markup).toContain("Add keyframe");
+    expect(markup).toContain("Add voice");
+    expect(markup).toContain("Add text");
     expect(markup).toContain("0.8s");
     expect(markup).toContain("Scale 1.35");
     expect(markup).toContain("Copy and voice");
