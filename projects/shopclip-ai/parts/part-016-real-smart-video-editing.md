@@ -1221,3 +1221,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `git diff --check`
 - Remaining:
   - Deploy this fix and re-trigger a fresh audio-enabled render task. The goal remains open until the fresh task produces materialized video/audio/text clips and the Smart Edit timeline shows editable source audio and captions.
+
+## 2026-06-05 Basic Demo Scope Lock
+
+- Scope decision:
+  - The current user-trial demo intentionally supports only video, audio, and subtitle editing.
+  - Fine-grained OpenCut-style visual work such as stickers, visual effects, masks, and visual keyframes is deferred until after the base demo is reviewed.
+- Fix:
+  - Hid the Smart Edit inspector sections for visual effects, visual mask, and visual keyframes behind a disabled feature flag.
+  - Kept existing shared contracts and backend compatibility fields intact so old smart-edit plans can still round-trip and future upgrades can re-enable the advanced visual controls without a data migration.
+  - Updated the editor workspace regression test to assert that the base demo still exposes video transform, audio volume envelopes, independent voice/text material actions, copy/voice, and segment state, while not showing advanced visual controls.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|ripples|independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Deploy this scope lock and let the user experience the simplified Studio Smart Edit demo before adding advanced visual editing features.

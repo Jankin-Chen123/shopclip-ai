@@ -73,6 +73,7 @@ const TRIM_NUDGE_SECONDS = 0.1;
 const MAX_PLAN_HISTORY_LENGTH = 40;
 const TIMELINE_SNAP_SECONDS = 0.1;
 const TIMELINE_EDGE_SNAP_SECONDS = 0.2;
+const ENABLE_ADVANCED_VISUAL_CONTROLS = false;
 
 const clampSmartEditDuration = (durationSeconds: number): number =>
   Number.isFinite(durationSeconds)
@@ -5084,6 +5085,8 @@ export const SmartEditPanel = ({
                   />
                 </label>
               </section>
+              {ENABLE_ADVANCED_VISUAL_CONTROLS ? (
+                <>
               <section className="smart-edit-inspector-section">
                 <h4>Visual effects</h4>
                 <div className="smart-edit-trim-grid">
@@ -5447,6 +5450,8 @@ export const SmartEditPanel = ({
                   )}
                 </div>
               </section>
+                </>
+              ) : null}
               <section className="smart-edit-inspector-section">
                 <div className="smart-edit-section-header">
                   <h4>Audio volume envelopes</h4>
