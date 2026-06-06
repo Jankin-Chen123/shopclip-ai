@@ -59,6 +59,7 @@ import {
   resizeSmartEditTrackClipEdge,
   relinkSmartEditTimelineElementWithSceneMate,
   relinkSmartEditTimelineElements,
+  slipSmartEditTimelineElementSource,
   unlinkSmartEditTimelineElementGroup,
   updateSmartEditTimelineElement,
   updateSmartEditTimelineTrack,
@@ -3873,6 +3874,82 @@ Second imported caption`,
     expect(
       relinkSmartEditTimelineElements(movedUnlinked, ["video-segment-1-unlink"], "too-small"),
     ).toBe(movedUnlinked);
+  });
+
+  it("slips linked video and audio source ranges without moving timeline clips", () => {
+    const plan = detachSmartEditSceneVideoToTimelineElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        id: "plan-slip",
+        projectId: "project-1",
+        segments: [
+          {
+            assetTags: [],
+            durationSeconds: 3,
+            enabled: true,
+            id: "segment-1",
+            order: 1,
+            rationale: "Use a longer generated clip for source slip.",
+            sceneId: "scene-1",
+            source: {
+              endSecond: 8,
+              kind: "generated-scene-clip",
+              sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+              sceneClipUrl: "https://cdn.example.test/scene.mp4",
+              sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+              startSecond: 2,
+            },
+            subtitle: "Hook",
+            timelineStartSecond: 1,
+            transition: "cut",
+            voiceover: "",
+          },
+        ],
+        strategy: "Slip generated scene materials.",
+        targetDurationSeconds: 6,
+      } satisfies SmartEditPlan,
+      "segment-1",
+      "slip",
+    );
+
+    const slipped = slipSmartEditTimelineElementSource(
+      plan,
+      "video-segment-1-slip",
+      1.4,
+    );
+    expect(slipped.timeline?.elements.find((element) => element.id === "video-segment-1-slip")).toMatchObject({
+      durationSeconds: 3,
+      startSecond: 1,
+      trimEndSecond: 6.4,
+      trimStartSecond: 3.4,
+    });
+    expect(slipped.timeline?.elements.find((element) => element.id === "source-audio-segment-1-slip")).toMatchObject({
+      durationSeconds: 3,
+      startSecond: 1,
+      trimEndSecond: 6.4,
+      trimStartSecond: 3.4,
+    });
+
+    const clamped = slipSmartEditTimelineElementSource(
+      slipped,
+      "source-audio-segment-1-slip",
+      10,
+    );
+    expect(clamped.timeline?.elements.find((element) => element.id === "video-segment-1-slip")).toMatchObject({
+      durationSeconds: 3,
+      startSecond: 1,
+      trimEndSecond: 8,
+      trimStartSecond: 5,
+    });
+    expect(clamped.timeline?.elements.find((element) => element.id === "source-audio-segment-1-slip")).toMatchObject({
+      trimEndSecond: 8,
+      trimStartSecond: 5,
+    });
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

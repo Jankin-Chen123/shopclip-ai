@@ -2004,6 +2004,8 @@ type SmartEditTimelineElementPatch = Partial<
     | "textColor"
     | "textFontSize"
     | "textPositionYPercent"
+    | "trimEndSecond"
+    | "trimStartSecond"
   >
 >;
 
@@ -2836,6 +2838,74 @@ const linkedTimelineElementIds = (
     timeline.elements
       .filter((candidate) => candidate.linkedGroupId === element.linkedGroupId)
       .map((candidate) => candidate.id),
+  );
+};
+
+const slipPersistentTimelineElementSource = (
+  element: SmartEditTimelineElement,
+  deltaSeconds: number,
+): SmartEditTimelineElement | undefined => {
+  if (element.kind !== "video" && element.kind !== "audio") {
+    return undefined;
+  }
+  const playbackRate = clampPlaybackRate(element.playbackRate ?? 1);
+  const sourceSpanSeconds = snapTimelineSeconds(
+    Math.max(MIN_SMART_EDIT_CLIP_SECONDS, element.durationSeconds) * playbackRate,
+  );
+  const trimStart = element.trimStartSecond ?? 0;
+  const trimEnd = element.trimEndSecond ?? trimStart + sourceSpanSeconds;
+  const sourceEndLimit = Math.max(
+    sourceSpanSeconds,
+    trimEnd,
+    element.sourceDurationSeconds ?? 0,
+  );
+  const latestTrimStart = Math.max(0, sourceEndLimit - sourceSpanSeconds);
+  const nextTrimStart = Math.min(
+    latestTrimStart,
+    Math.max(0, snapTimelineSeconds(trimStart + deltaSeconds)),
+  );
+  if (Math.abs(nextTrimStart - trimStart) < 0.001) {
+    return undefined;
+  }
+  return {
+    ...element,
+    sourceDurationSeconds: sourceEndLimit,
+    trimEndSecond: snapTimelineSeconds(nextTrimStart + sourceSpanSeconds),
+    trimStartSecond: nextTrimStart,
+  };
+};
+
+export const slipSmartEditTimelineElementSource = (
+  plan: SmartEditPlan,
+  elementId: string,
+  deltaSeconds: number,
+): SmartEditPlan => {
+  const snappedDelta = snapTimelineSeconds(deltaSeconds);
+  if (Math.abs(snappedDelta) < 0.001) {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (!targetElement || (targetElement.kind !== "video" && targetElement.kind !== "audio")) {
+    return plan;
+  }
+  const slippedTarget = slipPersistentTimelineElementSource(targetElement, snappedDelta);
+  if (!slippedTarget) {
+    return plan;
+  }
+  const linkedIds = linkedTimelineElementIds(baseTimeline, targetElement);
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.map((element) => {
+      if (element.id === targetElement.id) {
+        return slippedTarget;
+      }
+      if (!linkedIds.has(element.id)) {
+        return element;
+      }
+      return slipPersistentTimelineElementSource(element, snappedDelta) ?? element;
+    }),
+    baseTimeline.tracks,
   );
 };
 
@@ -4272,6 +4342,23 @@ export const SmartEditPanel = ({
     });
   };
 
+  const slipSelectedTimelineElementSource = (deltaSeconds: number) => {
+    if (!plan || !selectedTimelineElement) {
+      return;
+    }
+    const nextPlan = slipSmartEditTimelineElementSource(
+      plan,
+      selectedTimelineElement.id,
+      deltaSeconds,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, {
+      label: `Slip ${selectedTrackClip?.trackId ?? "timeline"} source`,
+    });
+  };
+
   const unlinkSelectedTimelineElementGroup = () => {
     if (!plan || !selectedTimelineElement?.linkedGroupId) {
       return;
@@ -5592,6 +5679,51 @@ export const SmartEditPanel = ({
                   }
                 />
               </label>
+              {selectedTimelineElement.kind === "video" || selectedTimelineElement.kind === "audio" ? (
+                <div className="smart-edit-trim-grid">
+                  <label>
+                    Source in
+                    <input
+                      min={0}
+                      step={0.1}
+                      type="number"
+                      value={selectedTimelineElement.trimStartSecond ?? 0}
+                      onChange={(event) =>
+                        slipSelectedTimelineElementSource(
+                          Number(event.target.value) - (selectedTimelineElement.trimStartSecond ?? 0),
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Source out
+                    <input
+                      readOnly
+                      type="number"
+                      value={
+                        selectedTimelineElement.trimEndSecond ??
+                        (selectedTimelineElement.trimStartSecond ?? 0) +
+                          selectedTimelineElement.durationSeconds *
+                            clampPlaybackRate(selectedTimelineElement.playbackRate ?? 1)
+                      }
+                    />
+                  </label>
+                  <div className="smart-edit-linked-actions">
+                    <Button
+                      icon={<SkipBack size={16} />}
+                      onClick={() => slipSelectedTimelineElementSource(-TRIM_NUDGE_SECONDS)}
+                    >
+                      -0.1s
+                    </Button>
+                    <Button
+                      icon={<SkipForward size={16} />}
+                      onClick={() => slipSelectedTimelineElementSource(TRIM_NUDGE_SECONDS)}
+                    >
+                      +0.1s
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {selectedTimelineElement.kind === "audio" ? (
                 <>
                   <div className="smart-edit-trim-grid">

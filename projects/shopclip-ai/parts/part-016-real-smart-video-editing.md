@@ -1578,3 +1578,23 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - The next interaction gap is multi-select box selection or slip edit. Unlink/relink is now available as a base demo control.
+
+## 2026-06-06 Timeline Source Slip Controls
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds source-range slip editing for generated video/audio materials without introducing stickers, effects, masks, or other advanced OpenCut extras.
+- Fix:
+  - Added `slipSmartEditTimelineElementSource` to shift video/audio `trimStartSecond` and `trimEndSecond` while preserving timeline `startSecond` and `durationSeconds`.
+  - Linked generated scene video/audio materials now slip together until the user explicitly unlinks them.
+  - Slip edits clamp to the available source range so controls cannot push the selected span beyond the generated clip.
+  - The independent material inspector now exposes source in/out readout plus `-0.1s` and `+0.1s` nudge controls for selected video/audio timeline clips.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "slips linked"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize|linked|unlink|slip"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - The base demo now covers practical video/audio/subtitle editing primitives: split, trim, delete, move, resize, track state, linked A/V unlink/relink, source slip, subtitles, and audio volume/fade/keyframes.
+  - Later upgrades should target timeline selection ergonomics, drag previews, and denser multi-track workflows.
