@@ -1997,3 +1997,13 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "clamps synced track stack scroll|renders smart edit as an editor workspace|maps timeline pointer|splits multiple selected|trims multiple selected|pastes selected smart edit segments|copies and pastes independent|previews track clip trim|snaps track clip drag previews"`
 - Remaining:
   - Browser-level validation should confirm synchronized scroll stays smooth on long real render timelines.
+
+## 2026-06-06 Track Lane Empty-Click Playhead
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+- Fix:
+  - Clicking an empty area of a multi-track material lane now moves the shared playhead to that timeline position.
+  - Dragging farther than the existing box-select threshold still performs multi-material marquee selection.
+- Verification:
+  - No local tests run for this small low-risk interaction change per updated user preference.

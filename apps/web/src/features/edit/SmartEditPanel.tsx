@@ -6362,6 +6362,7 @@ export const SmartEditPanel = ({
     const endX = Math.max(trackBoxSelectDrag.startLaneX, trackBoxSelectDrag.currentLaneX);
     setTrackBoxSelectDrag(undefined);
     if (endX - startX < 8) {
+      setPlayheadSeconds(playheadSecondsForPointerEvent(event));
       return;
     }
     const startSecond = snapTimelineSeconds(startX / timelinePixelsPerSecond);
