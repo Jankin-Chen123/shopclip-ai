@@ -4764,6 +4764,23 @@ export const SmartEditPanel = ({
     () => timelineTrackSegments(plan, assets, renderTask),
     [assets, plan, renderTask],
   );
+  const trackEditPoints = useMemo(
+    () =>
+      [
+        0,
+        timelineDurationSeconds,
+        ...trackSegments
+          .flatMap((track) => track.segments)
+          .flatMap((segment) => [
+            segment.startSecond,
+            snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+          ]),
+      ]
+        .map((point) => Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(point))))
+        .filter((point, index, points) => points.indexOf(point) === index)
+        .sort((left, right) => left - right),
+    [timelineDurationSeconds, trackSegments],
+  );
   const selectedTrackClip = useMemo(
     () =>
       trackSegments
@@ -5994,6 +6011,15 @@ export const SmartEditPanel = ({
 
   const updatePlayheadFromPointer = (event: ReactPointerEvent<HTMLElement>) => {
     setPlayheadSeconds(playheadSecondsForPointerEvent(event));
+  };
+
+  const jumpPlayheadToEditPoint = (direction: "previous" | "next") => {
+    const threshold = boundedPlayheadSeconds + (direction === "next" ? 0.05 : -0.05);
+    const nextPoint =
+      direction === "next"
+        ? trackEditPoints.find((point) => point > threshold)
+        : [...trackEditPoints].reverse().find((point) => point < threshold);
+    setPlayheadSeconds(nextPoint ?? (direction === "next" ? timelineDurationSeconds : 0));
   };
 
   const setTrackScrollRef = (index: number) => (element: HTMLDivElement | null) => {
@@ -8682,6 +8708,20 @@ export const SmartEditPanel = ({
             />
           </label>
           <strong>{formatTimelineTime(boundedPlayheadSeconds)}</strong>
+          <Button
+            disabled={!plan}
+            icon={<SkipBack size={16} />}
+            onClick={() => jumpPlayheadToEditPoint("previous")}
+          >
+            {copy.previousEditPoint}
+          </Button>
+          <Button
+            disabled={!plan}
+            icon={<SkipForward size={16} />}
+            onClick={() => jumpPlayheadToEditPoint("next")}
+          >
+            {copy.nextEditPoint}
+          </Button>
           <Button
             disabled={!plan}
             icon={<Scissors size={16} />}

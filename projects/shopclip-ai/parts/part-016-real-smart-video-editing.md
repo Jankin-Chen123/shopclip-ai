@@ -2007,3 +2007,13 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Dragging farther than the existing box-select threshold still performs multi-material marquee selection.
 - Verification:
   - No local tests run for this small low-risk interaction change per updated user preference.
+
+## 2026-06-06 Track Edit Point Navigation
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+- Fix:
+  - Added previous/next edit point buttons in the Smart Edit timeline toolbar.
+  - Edit points are derived from multi-track material starts and ends, so navigation follows video, audio, subtitle, voice, and BGM clip boundaries.
+- Verification:
+  - No local tests run for this small low-risk interaction change per updated user preference.
