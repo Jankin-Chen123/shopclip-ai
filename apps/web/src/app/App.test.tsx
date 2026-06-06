@@ -54,6 +54,7 @@ import {
   moveSmartEditTrackClipOnTimeline,
   moveSmartEditTimelineElementsOnTimeline,
   previewSmartEditTrackClipDrag,
+  previewSmartEditTrackClipTrimDrag,
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditTimelineClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
@@ -5079,6 +5080,64 @@ Second imported caption`,
         trackId: "video",
       },
     ]);
+  });
+
+  it("previews track clip trim positions with minimum duration and edge snapping", () => {
+    const clip = {
+      durationSeconds: 4,
+      id: "video-a",
+      meta: "Video",
+      range: "2.0s - 6.0s",
+      startSecond: 2,
+      title: "Video A",
+      trackId: "video" as const,
+    };
+
+    expect(
+      previewSmartEditTrackClipTrimDrag({
+        currentClientX: 150,
+        edge: "in",
+        pixelsPerSecond: 50,
+        startClientX: 100,
+        trackClip: clip,
+      }),
+    ).toEqual({
+      durationSeconds: 3,
+      id: "video-a",
+      startSecond: 3,
+      trackId: "video",
+    });
+
+    expect(
+      previewSmartEditTrackClipTrimDrag({
+        currentClientX: 145,
+        edge: "out",
+        pixelsPerSecond: 50,
+        snapPoints: [7],
+        startClientX: 100,
+        trackClip: clip,
+      }),
+    ).toEqual({
+      durationSeconds: 5,
+      id: "video-a",
+      startSecond: 2,
+      trackId: "video",
+    });
+
+    expect(
+      previewSmartEditTrackClipTrimDrag({
+        currentClientX: 400,
+        edge: "in",
+        pixelsPerSecond: 50,
+        startClientX: 100,
+        trackClip: clip,
+      }),
+    ).toEqual({
+      durationSeconds: 0.25,
+      id: "video-a",
+      startSecond: 5.75,
+      trackId: "video",
+    });
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

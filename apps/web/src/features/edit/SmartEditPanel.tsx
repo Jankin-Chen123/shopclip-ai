@@ -2215,6 +2215,7 @@ type TrackClipMoveDragState = {
 };
 
 type TrackClipTrimDragState = {
+  currentClientX: number;
   edge: "in" | "out";
   pointerId: number;
   startClientX: number;
@@ -4028,6 +4029,98 @@ export const previewSmartEditTrackClipDrag = ({
   }));
 };
 
+const snapSmartEditTrackClipTrimDelta = ({
+  deltaSeconds,
+  edge,
+  snapPoints,
+  trackClips,
+}: {
+  deltaSeconds: number;
+  edge: "in" | "out";
+  snapPoints: number[];
+  trackClips: Array<Pick<SmartEditTrackSegment, "durationSeconds" | "startSecond">>;
+}): number =>
+  snapPoints
+    .flatMap((point) =>
+      trackClips.map((candidate) => {
+        const currentEdge =
+          edge === "in"
+            ? candidate.startSecond
+            : snapTimelineSeconds(candidate.startSecond + candidate.durationSeconds);
+        const desiredEdge = snapTimelineSeconds(currentEdge + deltaSeconds);
+        return {
+          delta: snapTimelineSeconds(point - currentEdge),
+          distance: Math.abs(point - desiredEdge),
+        };
+      }),
+    )
+    .filter((candidate) => candidate.distance <= TIMELINE_EDGE_SNAP_SECONDS)
+    .sort((left, right) => left.distance - right.distance)[0]?.delta ?? deltaSeconds;
+
+const resizeSmartEditTrackClipPreview = (
+  trackClip: Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">,
+  edge: "in" | "out",
+  deltaSeconds: number,
+): Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId"> => {
+  const startSecond = clampTimelineStart(trackClip.startSecond);
+  const durationSeconds = Math.max(MIN_SMART_EDIT_CLIP_SECONDS, trackClip.durationSeconds);
+  if (edge === "in") {
+    const endSecond = snapTimelineSeconds(startSecond + durationSeconds);
+    const latestStart = Math.max(0, endSecond - MIN_SMART_EDIT_CLIP_SECONDS);
+    const nextStart = Math.min(
+      latestStart,
+      Math.max(0, snapTimelineSeconds(startSecond + deltaSeconds)),
+    );
+    const actualDelta = snapTimelineSeconds(nextStart - startSecond);
+    return {
+      durationSeconds: Math.max(
+        MIN_SMART_EDIT_CLIP_SECONDS,
+        snapTimelineSeconds(durationSeconds - actualDelta),
+      ),
+      id: trackClip.id,
+      startSecond: nextStart,
+      trackId: trackClip.trackId,
+    };
+  }
+  return {
+    durationSeconds: Math.max(
+      MIN_SMART_EDIT_CLIP_SECONDS,
+      snapTimelineSeconds(durationSeconds + deltaSeconds),
+    ),
+    id: trackClip.id,
+    startSecond,
+    trackId: trackClip.trackId,
+  };
+};
+
+export const previewSmartEditTrackClipTrimDrag = ({
+  currentClientX,
+  edge,
+  pixelsPerSecond,
+  snapPoints = [],
+  startClientX,
+  trackClip,
+}: {
+  currentClientX: number;
+  edge: "in" | "out";
+  pixelsPerSecond: number;
+  snapPoints?: number[];
+  startClientX: number;
+  trackClip: Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">;
+}): Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId"> | undefined => {
+  if (pixelsPerSecond <= 0) {
+    return undefined;
+  }
+  const rawDeltaSeconds = snapTimelineSeconds((currentClientX - startClientX) / pixelsPerSecond);
+  const snappedDeltaSeconds = snapSmartEditTrackClipTrimDelta({
+    deltaSeconds: rawDeltaSeconds,
+    edge,
+    snapPoints,
+    trackClips: [trackClip],
+  });
+  return resizeSmartEditTrackClipPreview(trackClip, edge, snappedDeltaSeconds);
+};
+
 export const moveSmartEditTrackClipOnTimeline = (
   plan: SmartEditPlan,
   trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
@@ -4668,6 +4761,53 @@ export const SmartEditPanel = ({
         : [],
     [boundedPlayheadSeconds, selectedTrackClipIdSet, selectedTrackClipIds, timelinePixelsPerSecond, trackClipMoveDrag, trackSegments],
   );
+  const trackClipTrimPreview = useMemo(() => {
+    if (!trackClipTrimDrag || timelinePixelsPerSecond <= 0) {
+      return [];
+    }
+    const selectedResizeIds =
+      selectedTrackClipIds.length > 1 && selectedTrackClipIdSet.has(trackClipTrimDrag.trackClip.id)
+        ? selectedTrackClipIds
+        : [];
+    const sourceClips =
+      selectedResizeIds.length > 1 &&
+      selectedBatchTrackClips.every(
+        (selectedClip) => !selectedClip.segmentId && selectedClip.trackId !== "bgm",
+      )
+        ? selectedBatchTrackClips
+        : [trackClipTrimDrag.trackClip];
+    const snapPoints = [
+      boundedPlayheadSeconds,
+      ...trackSegments
+        .flatMap((track) => track.segments)
+        .filter((segment) => !sourceClips.some((sourceClip) => sourceClip.id === segment.id))
+        .flatMap((segment) => [
+          segment.startSecond,
+          snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+        ]),
+    ];
+    const rawDeltaSeconds = snapTimelineSeconds(
+      (trackClipTrimDrag.currentClientX - trackClipTrimDrag.startClientX) /
+        timelinePixelsPerSecond,
+    );
+    const snappedDeltaSeconds = snapSmartEditTrackClipTrimDelta({
+      deltaSeconds: rawDeltaSeconds,
+      edge: trackClipTrimDrag.edge,
+      snapPoints,
+      trackClips: sourceClips,
+    });
+    return sourceClips.map((sourceClip) =>
+      resizeSmartEditTrackClipPreview(sourceClip, trackClipTrimDrag.edge, snappedDeltaSeconds),
+    );
+  }, [
+    boundedPlayheadSeconds,
+    selectedBatchTrackClips,
+    selectedTrackClipIdSet,
+    selectedTrackClipIds,
+    timelinePixelsPerSecond,
+    trackClipTrimDrag,
+    trackSegments,
+  ]);
   const trackBoxSelectTrackIdSet = useMemo(
     () =>
       new Set(
@@ -5967,10 +6107,23 @@ export const SmartEditPanel = ({
       selectTrackClip(trackClip, event);
     }
     setTrackClipTrimDrag({
+      currentClientX: event.clientX,
       edge,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       trackClip,
+    });
+  };
+
+  const updateTrackClipTrimDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!trackClipTrimDrag || trackClipTrimDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setTrackClipTrimDrag({
+      ...trackClipTrimDrag,
+      currentClientX: event.clientX,
     });
   };
 
@@ -5980,10 +6133,32 @@ export const SmartEditPanel = ({
     }
     event.preventDefault();
     event.stopPropagation();
-    const deltaSeconds = snapTimelineSeconds(
-      (event.clientX - trackClipTrimDrag.startClientX) / timelinePixelsPerSecond,
-    );
+    const snapPoints = [
+      boundedPlayheadSeconds,
+      ...trackSegments
+        .flatMap((track) => track.segments)
+        .filter((segment) => !selectedTrackClipIdSet.has(segment.id))
+        .flatMap((segment) => [
+          segment.startSecond,
+          snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+        ]),
+    ];
+    const preview = previewSmartEditTrackClipTrimDrag({
+      currentClientX: event.clientX,
+      edge: trackClipTrimDrag.edge,
+      pixelsPerSecond: timelinePixelsPerSecond,
+      snapPoints,
+      startClientX: trackClipTrimDrag.startClientX,
+      trackClip: trackClipTrimDrag.trackClip,
+    });
     setTrackClipTrimDrag(undefined);
+    if (!preview) {
+      return;
+    }
+    const deltaSeconds =
+      trackClipTrimDrag.edge === "in"
+        ? preview.startSecond - trackClipTrimDrag.trackClip.startSecond
+        : preview.durationSeconds - trackClipTrimDrag.trackClip.durationSeconds;
     if (Math.abs(deltaSeconds) < 0.001) {
       return;
     }
@@ -8779,7 +8954,7 @@ export const SmartEditPanel = ({
                       }}
                     />
                   ) : null}
-                  {trackClipDragPreview
+                  {[...trackClipDragPreview, ...trackClipTrimPreview]
                     .filter((preview) => preview.trackId === track.id)
                     .map((preview) => (
                       <span
@@ -8858,6 +9033,7 @@ export const SmartEditPanel = ({
                           onDragStart={(event) => event.preventDefault()}
                           onPointerCancel={() => setTrackClipTrimDrag(undefined)}
                           onPointerDown={(event) => startTrackClipTrimDrag(event, segment, "in")}
+                          onPointerMove={updateTrackClipTrimDrag}
                           onPointerUp={finishTrackClipTrimDrag}
                         />
                       ) : null}
@@ -8885,6 +9061,7 @@ export const SmartEditPanel = ({
                           onDragStart={(event) => event.preventDefault()}
                           onPointerCancel={() => setTrackClipTrimDrag(undefined)}
                           onPointerDown={(event) => startTrackClipTrimDrag(event, segment, "out")}
+                          onPointerMove={updateTrackClipTrimDrag}
                           onPointerUp={finishTrackClipTrimDrag}
                         />
                       ) : null}

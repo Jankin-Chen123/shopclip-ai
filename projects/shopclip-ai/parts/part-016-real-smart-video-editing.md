@@ -1937,3 +1937,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps track clip drag previews|previews track clip drag|snaps selected independent timeline material|moves and deletes multiple independent|resizes multiple selected|resizes independent|keeps linked detached|updates playback speed for selected|updates mute and hidden state|updates audio volume and fades|adds audio volume keyframes|trims multiple selected|splits multiple selected|duplicates independent|cuts independent|copies and pastes independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
 - Remaining:
   - Browser-level validation should confirm the ghost clip and final drop position stay aligned in a loaded project timeline.
+
+## 2026-06-06 Timeline Trim Preview Ghost
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Improves direct manipulation feedback for CutCap/OpenCut-style clip edge trimming.
+- Fix:
+  - Added `previewSmartEditTrackClipTrimDrag` to calculate in/out trim previews with minimum duration and edge snapping.
+  - Trim handles now update pointer position while dragging and render a ghost clip for the expected resized video, audio, or subtitle block.
+  - Releasing a trim handle now commits the same snapped trim result shown by the preview, keeping visual feedback and final timeline state aligned.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "previews track clip trim"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "previews track clip trim|snaps track clip drag previews|previews track clip drag|snaps selected independent timeline material|resizes multiple selected|resizes independent|keeps linked detached|moves and deletes multiple independent|trims multiple selected|splits multiple selected|renders smart edit as an editor workspace"`
+- Remaining:
+  - Browser-level validation should confirm trim ghost feedback feels natural on a loaded project timeline after deploy.
