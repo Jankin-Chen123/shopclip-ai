@@ -4729,6 +4729,65 @@ Second imported caption`,
     expect(removed.timeline?.elements.some((element) => element.id === "text-batch-caption")).toBe(false);
   });
 
+  it("snaps selected independent timeline material ends to the playhead while moving", () => {
+    const basePlan = detachSmartEditSceneVideoToTimelineElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        id: "plan-move-end-snap",
+        projectId: "project-1",
+        segments: [
+          {
+            assetTags: [],
+            durationSeconds: 3,
+            enabled: true,
+            id: "segment-1",
+            order: 1,
+            rationale: "Use generated scene material.",
+            sceneId: "scene-1",
+            source: {
+              endSecond: 6,
+              kind: "generated-scene-clip",
+              sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+              sceneClipUrl: "https://cdn.example.test/scene.mp4",
+              sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+              startSecond: 0,
+            },
+            subtitle: "Hook",
+            timelineStartSecond: 1,
+            transition: "cut",
+            voiceover: "",
+          },
+        ],
+        strategy: "Move end snap.",
+        targetDurationSeconds: 8,
+      } satisfies SmartEditPlan,
+      "segment-1",
+      "move-end-snap",
+    );
+
+    const moved = moveSmartEditTimelineElementsOnTimeline(
+      basePlan,
+      ["video-segment-1-move-end-snap"],
+      1.9,
+      "magnetic",
+      6,
+    );
+
+    expect(moved.timeline?.elements.find((element) => element.id === "video-segment-1-move-end-snap")).toMatchObject({
+      startSecond: 3,
+    });
+    expect(
+      moved.timeline?.elements.find((element) => element.id === "source-audio-segment-1-move-end-snap"),
+    ).toMatchObject({
+      startSecond: 3,
+    });
+  });
+
   it("ripples a linked generated video and audio material only once during batch delete", () => {
     const basePlan = addSmartEditTimelineTextElement(
       detachSmartEditSceneVideoToTimelineElement(
@@ -5442,6 +5501,67 @@ Second imported caption`,
     expect(resizedOut.timeline?.elements.find((element) => element.id === "text-batch-resize-caption")).toMatchObject({
       durationSeconds: 1,
       startSecond: 1.5,
+    });
+  });
+
+  it("snaps selected independent timeline material trim edges to the playhead", () => {
+    const basePlan = detachSmartEditSceneVideoToTimelineElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        id: "plan-resize-snap",
+        projectId: "project-1",
+        segments: [
+          {
+            assetTags: [],
+            durationSeconds: 4,
+            enabled: true,
+            id: "segment-1",
+            order: 1,
+            rationale: "Use generated scene material.",
+            sceneId: "scene-1",
+            source: {
+              endSecond: 8,
+              kind: "generated-scene-clip",
+              sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+              sceneClipUrl: "https://cdn.example.test/scene.mp4",
+              sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+              startSecond: 0,
+            },
+            subtitle: "Hook",
+            timelineStartSecond: 1,
+            transition: "cut",
+            voiceover: "",
+          },
+        ],
+        strategy: "Resize snap.",
+        targetDurationSeconds: 8,
+      } satisfies SmartEditPlan,
+      "segment-1",
+      "resize-snap",
+    );
+
+    const resized = resizeSmartEditTimelineElementsEdge(
+      basePlan,
+      ["video-segment-1-resize-snap"],
+      "out",
+      0.9,
+      6,
+    );
+
+    expect(resized.timeline?.elements.find((element) => element.id === "video-segment-1-resize-snap")).toMatchObject({
+      durationSeconds: 5,
+      trimEndSecond: 9,
+    });
+    expect(
+      resized.timeline?.elements.find((element) => element.id === "source-audio-segment-1-resize-snap"),
+    ).toMatchObject({
+      durationSeconds: 5,
+      trimEndSecond: 9,
     });
   });
 

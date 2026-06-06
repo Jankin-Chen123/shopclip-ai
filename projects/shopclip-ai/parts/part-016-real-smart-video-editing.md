@@ -1907,3 +1907,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "adds audio volume keyframes|updates audio volume and fades|updates playback speed for selected|updates mute and hidden state|trims multiple selected|splits multiple selected|resizes multiple selected|duplicates independent|cuts independent|copies and pastes independent|multiple independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
 - Remaining:
   - Browser-level validation should confirm the keyframe action lands on the expected selected audio clips after deploy.
+
+## 2026-06-06 Timeline Material Edge Snapping
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Improves timeline precision for CutCap/OpenCut-style editing without adding stickers, effects, or other advanced extras.
+- Fix:
+  - `resolveTimelineBlockStart` now snaps both selected material starts and selected material ends to playhead and neighboring material edges.
+  - `resizeSmartEditTimelineElementsEdge` now accepts snap points and snaps selected trim edges to the playhead or unselected material boundaries.
+  - Multi-selected trim-handle edits pass the current playhead into the edge-resize helper so UI drag operations use the same tested snapping behavior.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps selected independent timeline material"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps selected independent timeline material|moves and deletes multiple independent|resizes multiple selected|resizes independent|keeps linked detached|updates playback speed for selected|updates mute and hidden state|updates audio volume and fades|adds audio volume keyframes|trims multiple selected|splits multiple selected|duplicates independent|cuts independent|copies and pastes independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
+- Remaining:
+  - Browser-level validation should confirm the snapping feels predictable during drag and trim interactions after deploy.

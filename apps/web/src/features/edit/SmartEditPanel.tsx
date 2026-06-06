@@ -1037,14 +1037,20 @@ const resolveTimelineBlockStart = (
     return clampTimelineStart(snapTimelineSeconds(desiredStart));
   }
 
-  const nearbySnapPoint = snapPoints
+  const edgeSnapStarts = snapPoints.flatMap((point) =>
+    blockItems.flatMap((item) => [
+      point - item.offsetSecond,
+      point - item.offsetSecond - item.durationSeconds,
+    ]),
+  );
+  const nearbySnapStart = edgeSnapStarts
     .map((point) => clampTimelineStart(snapTimelineSeconds(point)))
     .filter((point) => Math.abs(point - desiredStart) <= TIMELINE_EDGE_SNAP_SECONDS)
     .sort((left, right) => Math.abs(left - desiredStart) - Math.abs(right - desiredStart))[0];
-  const snappedDesired = clampTimelineStart(snapTimelineSeconds(nearbySnapPoint ?? desiredStart));
+  const snappedDesired = clampTimelineStart(snapTimelineSeconds(nearbySnapStart ?? desiredStart));
   const rawCandidates = [
     snappedDesired,
-    ...snapPoints,
+    ...edgeSnapStarts,
     ...intervals.flatMap((interval) =>
       blockItems.flatMap((item) => [
         interval.endSecond - item.offsetSecond,
@@ -3475,6 +3481,7 @@ export const resizeSmartEditTimelineElementsEdge = (
   elementIds: string[],
   edge: "in" | "out",
   deltaSeconds: number,
+  snapPointsOrPlayhead?: number | number[],
 ): SmartEditPlan => {
   const snappedDelta = snapTimelineSeconds(deltaSeconds);
   if (Math.abs(snappedDelta) < 0.001) {
@@ -3491,9 +3498,41 @@ export const resizeSmartEditTimelineElementsEdge = (
   if (resizableElements.length === 0) {
     return plan;
   }
+  const externalSnapPoints =
+    typeof snapPointsOrPlayhead === "number"
+      ? [snapPointsOrPlayhead]
+      : Array.isArray(snapPointsOrPlayhead)
+        ? snapPointsOrPlayhead
+        : [];
+  const snapPoints = [
+    ...externalSnapPoints,
+    ...baseTimeline.elements
+      .filter((element) => !resizeIds.has(element.id))
+      .flatMap((element) => [
+        element.startSecond,
+        snapTimelineSeconds(element.startSecond + element.durationSeconds),
+      ]),
+  ];
+  const snappedEdgeDelta =
+    snapPoints
+      .flatMap((point) =>
+        resizableElements.map((element) => {
+          const currentEdge =
+            edge === "in"
+              ? element.startSecond
+              : snapTimelineSeconds(element.startSecond + element.durationSeconds);
+          const desiredEdge = snapTimelineSeconds(currentEdge + snappedDelta);
+          return {
+            delta: snapTimelineSeconds(point - currentEdge),
+            distance: Math.abs(point - desiredEdge),
+          };
+        }),
+      )
+      .filter((candidate) => candidate.distance <= TIMELINE_EDGE_SNAP_SECONDS)
+      .sort((left, right) => left.distance - right.distance)[0]?.delta ?? snappedDelta;
   const resizedById = new Map<string, SmartEditTimelineElement>();
   for (const element of resizableElements) {
-    const resizedElement = resizePersistentTimelineElementEdge(element, edge, snappedDelta);
+    const resizedElement = resizePersistentTimelineElementEdge(element, edge, snappedEdgeDelta);
     if (!resizedElement) {
       return plan;
     }
@@ -5855,7 +5894,7 @@ export const SmartEditPanel = ({
           !isTimelineTrackLocked(selectedClip.trackId),
       );
     const nextPlan = shouldResizeSelectedBatch
-      ? resizeSmartEditTimelineElementsEdge(plan, selectedResizeIds, edge, deltaSeconds)
+      ? resizeSmartEditTimelineElementsEdge(plan, selectedResizeIds, edge, deltaSeconds, boundedPlayheadSeconds)
       : resizeSmartEditTrackClipEdge(plan, trackClip, edge, deltaSeconds);
     if (nextPlan === plan) {
       return;
