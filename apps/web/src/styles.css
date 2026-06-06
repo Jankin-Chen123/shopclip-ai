@@ -5140,9 +5140,26 @@ textarea {
   min-height: 74px;
 }
 
+.smart-edit-track-lane.box-selecting {
+  cursor: crosshair;
+  user-select: none;
+}
+
+.smart-edit-track-box-selection {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  z-index: 4;
+  border: 1px solid rgba(59, 130, 246, 0.72);
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.14);
+  pointer-events: none;
+}
+
 .smart-edit-track-clip {
   position: absolute;
   top: 0;
+  z-index: 2;
   display: grid;
   grid-template-rows: auto minmax(18px, 1fr) auto;
   gap: 4px;

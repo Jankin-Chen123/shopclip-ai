@@ -54,6 +54,7 @@ import {
   removeSmartEditSegmentsFromTimeline,
   removeSmartEditTimelineElementsFromTimeline,
   removeSmartEditTimelineElementFromTimeline,
+  selectSmartEditTimelineElementIdsInBox,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
@@ -4021,6 +4022,64 @@ Second imported caption`,
     expect(removed.timeline?.elements.some((element) => element.id === "video-segment-1-batch")).toBe(false);
     expect(removed.timeline?.elements.some((element) => element.id === "source-audio-segment-1-batch")).toBe(false);
     expect(removed.timeline?.elements.some((element) => element.id === "text-batch-caption")).toBe(false);
+  });
+
+  it("selects independent timeline materials inside a track box range", () => {
+    const plan = addSmartEditTimelineTextElement(
+      addSmartEditTimelineTextElement(
+        addSmartEditTimelineVoiceElement(
+          {
+            audio: {
+              bgmTrack: "none",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            createdAt: "2026-06-06T00:00:00.000Z",
+            id: "plan-box-select",
+            projectId: "project-1",
+            segments: [
+              {
+                assetTags: [],
+                durationSeconds: 4,
+                enabled: true,
+                id: "segment-1",
+                order: 1,
+                rationale: "Box selection demo.",
+                sceneId: "scene-1",
+                source: { imageUrl: "https://cdn.example.test/image.png", kind: "image-asset" },
+                subtitle: "Base",
+                timelineStartSecond: 0,
+                transition: "cut",
+                voiceover: "",
+              },
+            ],
+            strategy: "Select independent materials.",
+            targetDurationSeconds: 8,
+          } satisfies SmartEditPlan,
+          1,
+          "box-voice",
+        ),
+        2,
+        "box-text-a",
+      ),
+      5,
+      "box-text-b",
+    );
+
+    expect(
+      selectSmartEditTimelineElementIdsInBox(plan, {
+        endSecond: 4.2,
+        startSecond: 1.5,
+        trackIds: ["caption"],
+      }),
+    ).toEqual(["text-box-text-a"]);
+    expect(
+      selectSmartEditTimelineElementIdsInBox(plan, {
+        endSecond: 3.4,
+        startSecond: 0.4,
+        trackIds: ["voice", "caption"],
+      }),
+    ).toEqual(["voice-box-voice", "text-box-text-a"]);
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

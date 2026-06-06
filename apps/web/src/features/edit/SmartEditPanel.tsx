@@ -2044,6 +2044,15 @@ type TrackClipTrimDragState = {
   trackClip: SmartEditTrackSegment;
 };
 
+type TrackBoxSelectDragState = {
+  currentClientX: number;
+  currentLaneX: number;
+  pointerId: number;
+  startClientX: number;
+  startLaneX: number;
+  trackId: SmartEditTrackId;
+};
+
 export type SmartEditClipboard = {
   items: Array<{
     elements?: SmartEditTimeline["elements"];
@@ -3137,6 +3146,44 @@ const expandedPersistentTimelineElementIds = (
   return ids;
 };
 
+export const selectSmartEditTimelineElementIdsInBox = (
+  plan: SmartEditPlan,
+  box: {
+    endSecond: number;
+    startSecond: number;
+    trackIds: SmartEditTrackId[];
+  },
+): string[] => {
+  const timeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const startSecond = Math.min(box.startSecond, box.endSecond);
+  const endSecond = Math.max(box.startSecond, box.endSecond);
+  const trackIds = new Set(box.trackIds);
+  const trackOrder = new Map(box.trackIds.map((trackId, index) => [trackId, index]));
+  if (endSecond - startSecond < 0.001 || trackIds.size === 0) {
+    return [];
+  }
+  return timeline.elements
+    .filter((element) => {
+      if (isDerivedTimelineElement(element) || !trackIds.has(smartEditTrackIdForElement(element))) {
+        return false;
+      }
+      return intervalsOverlap(
+        startSecond,
+        endSecond,
+        element.startSecond,
+        element.startSecond + element.durationSeconds,
+      );
+    })
+    .sort((left, right) => {
+      const leftTrack = smartEditTrackIdForElement(left);
+      const rightTrack = smartEditTrackIdForElement(right);
+      return leftTrack === rightTrack
+        ? left.startSecond - right.startSecond
+        : (trackOrder.get(leftTrack) ?? 0) - (trackOrder.get(rightTrack) ?? 0);
+    })
+    .map((element) => element.id);
+};
+
 export const removeSmartEditTimelineElementsFromTimeline = (
   plan: SmartEditPlan,
   elementIds: string[],
@@ -3786,6 +3833,7 @@ export const SmartEditPanel = ({
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
   const [trackClipMoveDrag, setTrackClipMoveDrag] = useState<TrackClipMoveDragState | undefined>();
   const [trackClipTrimDrag, setTrackClipTrimDrag] = useState<TrackClipTrimDragState | undefined>();
+  const [trackBoxSelectDrag, setTrackBoxSelectDrag] = useState<TrackBoxSelectDragState | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [timelineEditMode, setTimelineEditMode] = useState<SmartEditTimelineEditMode>("magnetic");
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
@@ -3804,6 +3852,7 @@ export const SmartEditPanel = ({
       setSelectedTrackClipIds([]);
       setTrackClipMoveDrag(undefined);
       setTrackClipTrimDrag(undefined);
+      setTrackBoxSelectDrag(undefined);
       setTimelineMoveDrag(undefined);
       setTrimDrag(undefined);
       setSmartEditClipboard(undefined);
@@ -5085,6 +5134,69 @@ export const SmartEditPanel = ({
       suppressTimelineMoveClickRef.current = false;
     }, 0);
     trimTrackClipEdge(trackClipTrimDrag.trackClip, trackClipTrimDrag.edge, deltaSeconds);
+  };
+
+  const startTrackBoxSelectDrag = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    trackId: SmartEditTrackId,
+  ) => {
+    if (!plan || event.target !== event.currentTarget || isTimelineTrackLocked(trackId)) {
+      return;
+    }
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const laneRect = event.currentTarget.getBoundingClientRect();
+    const laneScroller = event.currentTarget.parentElement;
+    const laneX = event.clientX - laneRect.left + (laneScroller?.scrollLeft ?? 0);
+    setTrackBoxSelectDrag({
+      currentClientX: event.clientX,
+      currentLaneX: laneX,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startLaneX: laneX,
+      trackId,
+    });
+  };
+
+  const updateTrackBoxSelectDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!trackBoxSelectDrag || trackBoxSelectDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    const laneRect = event.currentTarget.getBoundingClientRect();
+    const laneScroller = event.currentTarget.parentElement;
+    const laneX = event.clientX - laneRect.left + (laneScroller?.scrollLeft ?? 0);
+    setTrackBoxSelectDrag((current) =>
+      current ? { ...current, currentClientX: event.clientX, currentLaneX: laneX } : current,
+    );
+  };
+
+  const finishTrackBoxSelectDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!plan || !trackBoxSelectDrag || trackBoxSelectDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    const startX = Math.min(trackBoxSelectDrag.startLaneX, trackBoxSelectDrag.currentLaneX);
+    const endX = Math.max(trackBoxSelectDrag.startLaneX, trackBoxSelectDrag.currentLaneX);
+    setTrackBoxSelectDrag(undefined);
+    if (endX - startX < 8) {
+      return;
+    }
+    const startSecond = snapTimelineSeconds(startX / timelinePixelsPerSecond);
+    const endSecond = snapTimelineSeconds(endX / timelinePixelsPerSecond);
+    const selectedIds = selectSmartEditTimelineElementIdsInBox(plan, {
+      endSecond,
+      startSecond,
+      trackIds: [trackBoxSelectDrag.trackId],
+    });
+    if (selectedIds.length === 0) {
+      setSelectedTrackClipId(undefined);
+      setSelectedTrackClipIds([]);
+      return;
+    }
+    setSelectedTrackClipIds(selectedIds);
+    setSelectedTrackClipId(selectedIds.at(-1));
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
   };
 
   const removeSelectedSegment = () => {
@@ -7504,7 +7616,30 @@ export const SmartEditPanel = ({
                 </button>
               </div>
               <div className="smart-edit-track-clips">
-                <div className="smart-edit-track-lane" style={{ width: timelineWidth }}>
+                <div
+                  className={`smart-edit-track-lane ${
+                    trackBoxSelectDrag?.trackId === track.id ? "box-selecting" : ""
+                  }`.trim()}
+                  style={{ width: timelineWidth }}
+                  onPointerCancel={() => setTrackBoxSelectDrag(undefined)}
+                  onPointerDown={(event) => startTrackBoxSelectDrag(event, track.id)}
+                  onPointerMove={updateTrackBoxSelectDrag}
+                  onPointerUp={finishTrackBoxSelectDrag}
+                >
+                  {trackBoxSelectDrag?.trackId === track.id ? (
+                    <span
+                      className="smart-edit-track-box-selection"
+                      style={{
+                        left: Math.min(
+                          trackBoxSelectDrag.startLaneX,
+                          trackBoxSelectDrag.currentLaneX,
+                        ),
+                        width: Math.abs(
+                          trackBoxSelectDrag.currentLaneX - trackBoxSelectDrag.startLaneX,
+                        ),
+                      }}
+                    />
+                  ) : null}
                   {track.segments.map((segment) => (
                     <article
                       className={`smart-edit-track-clip ${

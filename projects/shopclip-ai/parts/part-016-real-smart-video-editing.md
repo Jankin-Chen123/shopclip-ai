@@ -1619,3 +1619,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - The next high-value editor upgrades are drag ghost previews, box selection, and denser keyboard/mouse operations.
+
+## 2026-06-06 Timeline Material Box Selection
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a direct-manipulation selection primitive inspired by OpenCut/CutCap editors.
+- Fix:
+  - Added `selectSmartEditTimelineElementIdsInBox` to select persistent video/audio/text timeline materials by time range and track.
+  - The selector ignores derived storyboard timeline elements so box selection targets the editable material clips.
+  - Track lanes now support dragging on empty lane background to draw a selection rectangle and select independent materials in that range.
+  - Selected materials continue to use the existing batch toolbar for nudge-left, nudge-right, delete, and clear selection.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "selects independent timeline materials inside a track box range"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize|linked|unlink|slip|multiple independent|box range"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Cross-track marquee selection and drag ghost previews remain high-value editor upgrades.
