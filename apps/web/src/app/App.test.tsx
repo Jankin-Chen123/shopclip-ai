@@ -49,6 +49,7 @@ import {
   moveSmartEditSegmentOnTimelineWithMode,
   moveSmartEditTrackClipOnTimeline,
   moveSmartEditTimelineElementsOnTimeline,
+  previewSmartEditTrackClipDrag,
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
   removeSmartEditSegmentsFromTimeline,
@@ -4080,6 +4081,80 @@ Second imported caption`,
         trackIds: ["voice", "caption"],
       }),
     ).toEqual(["voice-box-voice", "text-box-text-a"]);
+  });
+
+  it("previews track clip drag positions for selected timeline materials", () => {
+    const clips = [
+      {
+        durationSeconds: 2,
+        id: "video-a",
+        meta: "Video",
+        range: "0.0s - 2.0s",
+        startSecond: 1,
+        title: "Video A",
+        trackId: "video" as const,
+      },
+      {
+        durationSeconds: 1.5,
+        id: "audio-a",
+        meta: "Audio",
+        range: "2.0s - 3.5s",
+        startSecond: 2,
+        title: "Audio A",
+        trackId: "sourceAudio" as const,
+      },
+      {
+        durationSeconds: 1,
+        id: "caption-a",
+        meta: "Text",
+        range: "5.0s - 6.0s",
+        startSecond: 5,
+        title: "Caption A",
+        trackId: "caption" as const,
+      },
+    ];
+
+    expect(
+      previewSmartEditTrackClipDrag({
+        currentClientX: 165,
+        pixelsPerSecond: 40,
+        selectedIds: ["video-a", "audio-a"],
+        startClientX: 100,
+        trackClip: clips[0],
+        trackClips: clips,
+      }),
+    ).toEqual([
+      {
+        durationSeconds: 2,
+        id: "video-a",
+        startSecond: 2.6,
+        trackId: "video",
+      },
+      {
+        durationSeconds: 1.5,
+        id: "audio-a",
+        startSecond: 3.6,
+        trackId: "sourceAudio",
+      },
+    ]);
+
+    expect(
+      previewSmartEditTrackClipDrag({
+        currentClientX: 0,
+        pixelsPerSecond: 40,
+        selectedIds: [],
+        startClientX: 100,
+        trackClip: clips[0],
+        trackClips: clips,
+      }),
+    ).toEqual([
+      {
+        durationSeconds: 2,
+        id: "video-a",
+        startSecond: 0,
+        trackId: "video",
+      },
+    ]);
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

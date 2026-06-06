@@ -1638,3 +1638,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Cross-track marquee selection and drag ghost previews remain high-value editor upgrades.
+
+## 2026-06-06 Timeline Drag Ghost Preview
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a direct manipulation affordance expected from CutCap/OpenCut-style timelines: previewing target clip positions while dragging.
+- Fix:
+  - Added `previewSmartEditTrackClipDrag` to compute ghost positions from pointer delta, selected material ids, timeline scale, and clip starts.
+  - Dragging a single independent material now renders a dashed ghost at the candidate target position.
+  - Dragging within a multi-selected material group renders ghost positions for the full selected group while preserving relative offsets.
+  - Ghost positions clamp at timeline start so negative drags do not preview outside the timeline.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "previews track clip drag positions"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize|linked|unlink|slip|multiple independent|box range|drag positions"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - Cross-track marquee selection and richer keyboard/mouse operations remain the next high-value editor upgrades.

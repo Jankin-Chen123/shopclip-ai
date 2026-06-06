@@ -5169,6 +5169,18 @@ textarea {
   padding: 8px 10px;
 }
 
+.smart-edit-track-clip-ghost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  border: 1px dashed rgba(59, 130, 246, 0.82);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.18);
+  pointer-events: none;
+}
+
 .smart-edit-track-clip[role="button"] {
   cursor: pointer;
 }

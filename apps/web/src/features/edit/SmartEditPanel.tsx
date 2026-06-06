@@ -2032,6 +2032,7 @@ type TimelineMoveDragState = {
 };
 
 type TrackClipMoveDragState = {
+  currentClientX: number;
   pointerId: number;
   startClientX: number;
   trackClip: SmartEditTrackSegment;
@@ -3317,6 +3318,43 @@ export const moveSmartEditTimelineElementsOnTimeline = (
   return withUpdatedTimelineElements(plan, movedElements, baseTimeline.tracks);
 };
 
+export const previewSmartEditTrackClipDrag = ({
+  currentClientX,
+  pixelsPerSecond,
+  selectedIds,
+  startClientX,
+  trackClip,
+  trackClips,
+}: {
+  currentClientX: number;
+  pixelsPerSecond: number;
+  selectedIds: string[];
+  startClientX: number;
+  trackClip: Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">;
+  trackClips: Array<Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">>;
+}): Array<Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">> => {
+  if (pixelsPerSecond <= 0) {
+    return [];
+  }
+  const selectedIdSet = new Set(selectedIds);
+  const sourceClips =
+    selectedIdSet.has(trackClip.id) && selectedIdSet.size > 1
+      ? trackClips.filter((candidate) => selectedIdSet.has(candidate.id))
+      : [trackClip];
+  if (sourceClips.length === 0) {
+    return [];
+  }
+  const rawDeltaSeconds = snapTimelineSeconds((currentClientX - startClientX) / pixelsPerSecond);
+  const earliestStart = Math.min(...sourceClips.map((candidate) => candidate.startSecond));
+  const clampedDeltaSeconds = Math.max(rawDeltaSeconds, -earliestStart);
+  return sourceClips.map((candidate) => ({
+    durationSeconds: candidate.durationSeconds,
+    id: candidate.id,
+    startSecond: clampTimelineStart(snapTimelineSeconds(candidate.startSecond + clampedDeltaSeconds)),
+    trackId: candidate.trackId,
+  }));
+};
+
 export const moveSmartEditTrackClipOnTimeline = (
   plan: SmartEditPlan,
   trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
@@ -3932,6 +3970,20 @@ export const SmartEditPanel = ({
         .flatMap((track) => track.segments)
         .filter((trackClip) => selectedTrackClipIdSet.has(trackClip.id)),
     [selectedTrackClipIdSet, trackSegments],
+  );
+  const trackClipDragPreview = useMemo(
+    () =>
+      trackClipMoveDrag
+        ? previewSmartEditTrackClipDrag({
+            currentClientX: trackClipMoveDrag.currentClientX,
+            pixelsPerSecond: timelinePixelsPerSecond,
+            selectedIds: selectedTrackClipIds,
+            startClientX: trackClipMoveDrag.startClientX,
+            trackClip: trackClipMoveDrag.trackClip,
+            trackClips: trackSegments.flatMap((track) => track.segments),
+          })
+        : [],
+    [selectedTrackClipIds, timelinePixelsPerSecond, trackClipMoveDrag, trackSegments],
   );
   const selectedTimelineElement = useMemo(
     () => plan?.timeline?.elements.find((element) => element.id === selectedTrackClip?.id),
@@ -5020,10 +5072,20 @@ export const SmartEditPanel = ({
       selectTrackClip(trackClip, event);
     }
     setTrackClipMoveDrag({
+      currentClientX: event.clientX,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       trackClip,
     });
+  };
+
+  const updateTrackClipMoveDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!trackClipMoveDrag || trackClipMoveDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    setTrackClipMoveDrag((current) =>
+      current ? { ...current, currentClientX: event.clientX } : current,
+    );
   };
 
   const finishTrackClipMoveDrag = (event: ReactPointerEvent<HTMLElement>) => {
@@ -7640,6 +7702,19 @@ export const SmartEditPanel = ({
                       }}
                     />
                   ) : null}
+                  {trackClipDragPreview
+                    .filter((preview) => preview.trackId === track.id)
+                    .map((preview) => (
+                      <span
+                        aria-hidden="true"
+                        className="smart-edit-track-clip-ghost"
+                        key={`ghost-${preview.id}`}
+                        style={{
+                          left: preview.startSecond * timelinePixelsPerSecond,
+                          width: Math.max(116, preview.durationSeconds * timelinePixelsPerSecond),
+                        }}
+                      />
+                    ))}
                   {track.segments.map((segment) => (
                     <article
                       className={`smart-edit-track-clip ${
@@ -7683,6 +7758,7 @@ export const SmartEditPanel = ({
                         setTrackClipTrimDrag(undefined);
                       }}
                       onPointerDown={(event) => startTrackClipMoveDrag(event, segment)}
+                      onPointerMove={updateTrackClipMoveDrag}
                       onPointerUp={finishTrackClipMoveDrag}
                     >
                       {segment.trackId !== "bgm" ? (
