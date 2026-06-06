@@ -1847,3 +1847,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - Browser-level validation should confirm the toolbar action on a loaded project timeline after deploy.
+
+## 2026-06-06 Linked Material Ripple Gap Merge
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Fixes a real editing edge case for CutCap/OpenCut-style ripple deletion after generated scene clips are split into linked video and source-audio materials.
+- Fix:
+  - `normalizedRippleGaps` now merges overlapping or adjacent ripple gaps before computing timeline shifts.
+  - Batch deleting a linked generated video/audio pair now closes the removed clip span once instead of counting the video track and audio track as two separate gaps.
+  - Later independent text/audio/video materials keep the expected relative timeline position after ripple delete.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "ripples a linked generated video"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "ripples a linked generated video|ripples the timeline|deletes an independent|trims multiple selected|splits multiple selected|moves and deletes multiple independent|closes the timeline gap|keeps linked detached"`
+- Remaining:
+  - Continue browser-level validation on the deployed workspace as larger smart-edit flows mature.

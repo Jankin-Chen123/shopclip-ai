@@ -924,7 +924,16 @@ const normalizedRippleGaps = (gaps: SmartEditRippleGap[]): SmartEditRippleGap[] 
       startSecond: snapTimelineSeconds(Math.min(gap.startSecond, gap.endSecond)),
     }))
     .filter((gap) => gap.endSecond - gap.startSecond >= MIN_SMART_EDIT_CLIP_SECONDS)
-    .sort((left, right) => left.startSecond - right.startSecond);
+    .sort((left, right) => left.startSecond - right.startSecond)
+    .reduce<SmartEditRippleGap[]>((merged, gap) => {
+      const previous = merged.at(-1);
+      if (!previous || gap.startSecond > previous.endSecond + 0.001) {
+        merged.push(gap);
+        return merged;
+      }
+      previous.endSecond = snapTimelineSeconds(Math.max(previous.endSecond, gap.endSecond));
+      return merged;
+    }, []);
 
 const rippleShiftAtSecond = (second: number, gaps: SmartEditRippleGap[]): number =>
   normalizedRippleGaps(gaps).reduce((shiftSeconds, gap) => {

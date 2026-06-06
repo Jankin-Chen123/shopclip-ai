@@ -4566,6 +4566,66 @@ Second imported caption`,
     expect(removed.timeline?.elements.some((element) => element.id === "text-batch-caption")).toBe(false);
   });
 
+  it("ripples a linked generated video and audio material only once during batch delete", () => {
+    const basePlan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-ripple-linked-delete",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Use generated scene material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Ripple delete linked materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "linked-delete",
+      ),
+      5,
+      "tail-after-linked",
+    );
+
+    const nextPlan = removeSmartEditTimelineElementsFromTimeline(
+      basePlan,
+      ["video-segment-1-linked-delete"],
+      "ripple",
+    );
+
+    expect(nextPlan.timeline?.elements.some((element) => element.id === "video-segment-1-linked-delete")).toBe(false);
+    expect(nextPlan.timeline?.elements.some((element) => element.id === "source-audio-segment-1-linked-delete")).toBe(
+      false,
+    );
+    expect(nextPlan.timeline?.elements.find((element) => element.id === "text-tail-after-linked")).toMatchObject({
+      startSecond: 2,
+    });
+  });
+
   it("selects independent timeline materials inside a track box range", () => {
     const plan = addSmartEditTimelineTextElement(
       addSmartEditTimelineTextElement(
