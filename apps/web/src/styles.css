@@ -1,6 +1,6 @@
 :root {
   color: #f8fafc;
-  background: #111111;
+  background: #080a10;
   font-family:
     Inter,
     ui-sans-serif,
@@ -12,24 +12,26 @@
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
-  --surface: #171717;
-  --surface-2: #202020;
-  --surface-3: #2a2a2a;
+  --surface: #121721;
+  --surface-2: #171d2a;
+  --surface-3: #1d2533;
   --surface-hot: #24141d;
-  --surface-blue: #101d2b;
-  --surface-green: #10241d;
+  --surface-blue: #0f2231;
+  --surface-green: #0d241d;
   --text: #f8fafc;
-  --muted: #b6bdc8;
-  --subtle: #7f8794;
-  --border: rgba(255, 255, 255, 0.12);
+  --muted: #9aa7b8;
+  --subtle: #64748b;
+  --border: rgba(148, 163, 184, 0.2);
   --primary: #ec4899;
-  --primary-strong: #f472b6;
+  --primary-strong: #f9a8d4;
   --trace: #60a5fa;
   --amber: #f59e0b;
   --cyan: #22d3ee;
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #fb7185;
+  --shadow-strong: 0 24px 72px rgba(0, 0, 0, 0.38);
+  --shadow-soft: 0 18px 46px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -7017,4 +7019,271 @@ textarea {
     min-height: 0;
     aspect-ratio: 16 / 9;
   }
+}
+
+/* Demo A visual refresh: color, surface, and widget treatment only. */
+body {
+  background:
+    linear-gradient(135deg, rgba(236, 72, 153, 0.075), transparent 34%),
+    linear-gradient(225deg, rgba(34, 211, 238, 0.055), transparent 42%),
+    var(--bg, #080a10);
+}
+
+.workspace-shell {
+  background:
+    linear-gradient(135deg, rgba(236, 72, 153, 0.07), transparent 34%),
+    linear-gradient(225deg, rgba(34, 211, 238, 0.055), transparent 44%),
+    #080a10;
+}
+
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(236, 72, 153, 0.12), transparent 28%),
+    linear-gradient(0deg, rgba(34, 211, 238, 0.08), transparent 36%),
+    #0d111a;
+}
+
+.brand-icon,
+.page-card-icon,
+.project-history-icon,
+.asset-import-icon,
+.asset-empty-icon,
+.project-studio-flow-icon {
+  border: 1px solid rgba(236, 72, 153, 0.4);
+  color: #fbcfe8;
+  background:
+    linear-gradient(145deg, rgba(236, 72, 153, 0.22), rgba(34, 211, 238, 0.14)),
+    rgba(236, 72, 153, 0.08);
+  box-shadow: 0 0 28px rgba(236, 72, 153, 0.14);
+}
+
+.language-switcher,
+.nav-list a,
+.settings-entry,
+.topbar-status,
+.project-search input,
+input,
+textarea,
+select {
+  border-color: var(--border);
+  background: rgba(8, 10, 16, 0.62);
+}
+
+.nav-list a:hover,
+.settings-entry:hover,
+.settings-entry.active {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.nav-list a.active {
+  border-color: rgba(236, 72, 153, 0.38);
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.18), rgba(34, 211, 238, 0.08));
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.language-switcher button.active,
+.flow-tabs button.active,
+.asset-browser-tabs button.active,
+.project-detail-tabs button.active,
+.project-studio-flow-item.active {
+  border-color: rgba(236, 72, 153, 0.38);
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.18), rgba(34, 211, 238, 0.08));
+}
+
+.page-hero,
+.creation-stepper,
+.panel,
+.studio-panel,
+.page-card,
+.project-card,
+.project-detail-sidebar,
+.project-detail-main,
+.project-info-panel,
+.project-library-panel,
+.project-history-item,
+.asset-prep-card,
+.asset-card,
+.external-asset-card,
+.asset-search-result,
+.script-result,
+.script-generation-panel,
+.empty-state,
+.scene-card,
+.preview-export,
+.preview-box,
+.scene-clip-card,
+.metric-card,
+.funnel-panel,
+.factor-panel,
+.project-library-card,
+.project-script-selector-panel,
+.project-studio-empty,
+.project-studio-script-card,
+.project-video-preview,
+.project-script-detail,
+.project-script-composer,
+.project-modal,
+.studio-return-bar {
+  border-color: var(--border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 180px),
+    var(--surface);
+}
+
+.creation-main .panel,
+.creation-main .studio-panel,
+.project-portfolio-heading,
+.studio-return-bar.is-project-studio {
+  background:
+    linear-gradient(135deg, rgba(236, 72, 153, 0.12), transparent 42%),
+    linear-gradient(225deg, rgba(34, 211, 238, 0.09), transparent 52%),
+    rgba(18, 23, 33, 0.82);
+}
+
+.page-card:hover,
+.page-card.active,
+.project-card:hover,
+.project-card:focus-visible,
+.project-history-item:hover,
+.project-history-item.active,
+.asset-card:hover,
+.asset-card.is-selected,
+.external-asset-card:hover,
+.external-asset-card.is-selected,
+.scene-card:hover,
+.scene-card.selected,
+.project-library-card:hover,
+.project-script-card:hover,
+.project-script-card:focus-visible,
+.project-script-card.active,
+.project-studio-script-card:hover,
+.project-studio-script-card:focus-visible,
+.project-studio-script-card.active,
+.project-video-card:hover,
+.project-video-card:focus-visible {
+  border-color: rgba(236, 72, 153, 0.42);
+  background:
+    linear-gradient(180deg, rgba(236, 72, 153, 0.09), transparent 190px),
+    var(--surface-2);
+  box-shadow: var(--shadow-soft);
+}
+
+.button {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.button-primary,
+.creation-main .button-primary,
+.concept-top-cta {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--primary), #db2777);
+  box-shadow: 0 18px 40px rgba(236, 72, 153, 0.23);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: linear-gradient(90deg, #f472b6, #db2777);
+}
+
+.button-secondary,
+.button-ghost {
+  border-color: var(--border);
+  background: rgba(23, 29, 42, 0.88);
+}
+
+.button-secondary:hover:not(:disabled),
+.button-ghost:hover:not(:disabled) {
+  border-color: rgba(203, 213, 225, 0.32);
+  background: var(--surface-3);
+}
+
+.button-danger {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, 0.34);
+  background: rgba(251, 113, 133, 0.14);
+}
+
+.status-pill,
+.project-card-tag,
+.asset-card-detail-chip,
+.asset-prep-preview-chip,
+.external-selection-mark,
+.project-library-card span {
+  border-color: rgba(52, 211, 153, 0.36);
+  color: #86efac;
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.project-studio-script-card span {
+  color: #bae6fd;
+  background: transparent;
+}
+
+.status-neutral {
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.26);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.status-info,
+.project-card-tag,
+.asset-card-detail-chip,
+.asset-prep-preview-chip,
+.external-selection-mark {
+  color: #bae6fd;
+  border-color: rgba(34, 211, 238, 0.36);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.status-warning {
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.36);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.status-danger {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, 0.36);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.project-card-media,
+.project-product-placeholder,
+.asset-card-frame,
+.asset-prep-thumb-media,
+.asset-prep-library-preview-frame,
+.preview-art,
+.preview-box,
+.project-video-preview video {
+  border-color: rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(90deg, transparent 0 30%, rgba(236, 72, 153, 0.36) 30% 36%, transparent 36% 64%, rgba(34, 211, 238, 0.28) 64% 70%, transparent 70%),
+    linear-gradient(135deg, #302232, #132832);
+}
+
+.metric-bar,
+.funnel-bar,
+.project-card-divider {
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.metric-bar span,
+.funnel-bar span,
+.timeline-track article.active,
+.timeline-track article:focus-visible {
+  background: linear-gradient(90deg, var(--primary), var(--cyan));
+}
+
+.eyebrow,
+.creation-main .eyebrow {
+  color: #f9a8d4;
+}
+
+a,
+.project-card-open,
+.asset-prep-card-heading svg,
+.project-detail-tabs button:hover,
+.project-studio-flow-item:hover {
+  color: #bae6fd;
 }
