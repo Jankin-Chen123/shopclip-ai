@@ -53,6 +53,7 @@ import {
   moveSmartEditSegmentOnTimelineWithMode,
   moveSmartEditTrackClipOnTimeline,
   moveSmartEditTimelineElementsOnTimeline,
+  playheadSecondsFromTimelinePointer,
   previewSmartEditTrackClipDrag,
   previewSmartEditTrackClipTrimDrag,
   pasteSmartEditClipboardAtPlayhead,
@@ -4973,6 +4974,36 @@ Second imported caption`,
     expect(smartEditTimelineKeyboardNudgeSeconds("ArrowRight", true)).toBe(1);
     expect(smartEditTimelineKeyboardNudgeSeconds("ArrowLeft", true)).toBe(-1);
     expect(smartEditTimelineKeyboardNudgeSeconds("ArrowUp", true)).toBeUndefined();
+  });
+
+  it("maps timeline pointer positions to snapped playhead seconds", () => {
+    expect(
+      playheadSecondsFromTimelinePointer({
+        clientX: 265,
+        durationSeconds: 12,
+        pixelsPerSecond: 50,
+        scrollLeft: 40,
+        timelineLeft: 100,
+      }),
+    ).toBe(4.1);
+
+    expect(
+      playheadSecondsFromTimelinePointer({
+        clientX: 50,
+        durationSeconds: 12,
+        pixelsPerSecond: 50,
+        timelineLeft: 100,
+      }),
+    ).toBe(0);
+
+    expect(
+      playheadSecondsFromTimelinePointer({
+        clientX: 900,
+        durationSeconds: 6,
+        pixelsPerSecond: 50,
+        timelineLeft: 100,
+      }),
+    ).toBe(6);
   });
 
   it("previews track clip drag positions for selected timeline materials", () => {

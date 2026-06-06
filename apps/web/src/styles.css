@@ -4929,6 +4929,9 @@ textarea {
   height: 28px;
   min-width: 100%;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
 }
 
 .timeline-ruler span {
@@ -4958,7 +4961,13 @@ textarea {
   width: 2px;
   background: var(--primary-strong);
   box-shadow: 0 0 0 1px rgba(244, 114, 182, 0.25);
-  pointer-events: none;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.timeline-playhead.dragging {
+  box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.18);
 }
 
 .timeline-playhead::before {

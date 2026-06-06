@@ -1952,3 +1952,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "previews track clip trim|snaps track clip drag previews|previews track clip drag|snaps selected independent timeline material|resizes multiple selected|resizes independent|keeps linked detached|moves and deletes multiple independent|trims multiple selected|splits multiple selected|renders smart edit as an editor workspace"`
 - Remaining:
   - Browser-level validation should confirm trim ghost feedback feels natural on a loaded project timeline after deploy.
+
+## 2026-06-06 Timeline Playhead Scrubbing
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a direct timeline navigation primitive expected in CutCap/OpenCut-style editors.
+- Fix:
+  - Added `playheadSecondsFromTimelinePointer` to map timeline ruler pointer positions into snapped, bounded playhead seconds.
+  - The timeline ruler now supports click-and-drag playhead positioning, including scrolled timelines and zoomed timelines.
+  - The playhead line itself is draggable, with visible dragging feedback, so split/trim/paste actions can be positioned directly from the timeline.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "maps timeline pointer"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "maps timeline pointer|splits multiple selected|trims multiple selected|pastes selected smart edit segments|copies and pastes independent|previews track clip trim|snaps track clip drag previews|renders smart edit as an editor workspace"`
+- Remaining:
+  - Browser-level validation should confirm ruler scrubbing is comfortable with real timeline scrolling after deploy.

@@ -2222,6 +2222,10 @@ type TrackClipTrimDragState = {
   trackClip: SmartEditTrackSegment;
 };
 
+type PlayheadDragState = {
+  pointerId: number;
+};
+
 type TrackBoxSelectDragState = {
   currentClientX: number;
   currentClientY: number;
@@ -3814,6 +3818,29 @@ export const selectSmartEditTimelineElementIds = (plan: SmartEditPlan): string[]
     .map((element) => element.id);
 };
 
+export const playheadSecondsFromTimelinePointer = ({
+  clientX,
+  durationSeconds,
+  pixelsPerSecond,
+  scrollLeft = 0,
+  timelineLeft,
+}: {
+  clientX: number;
+  durationSeconds: number;
+  pixelsPerSecond: number;
+  scrollLeft?: number;
+  timelineLeft: number;
+}): number => {
+  if (pixelsPerSecond <= 0) {
+    return 0;
+  }
+  const rawSeconds = (clientX - timelineLeft + scrollLeft) / pixelsPerSecond;
+  return Math.min(
+    Math.max(0, snapTimelineSeconds(durationSeconds)),
+    clampTimelineStart(snapTimelineSeconds(rawSeconds)),
+  );
+};
+
 export const selectSmartEditTrackIdsInMarquee = (
   trackRows: Array<{
     bottom: number;
@@ -4637,6 +4664,7 @@ export const SmartEditPanel = ({
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
   const [trackClipMoveDrag, setTrackClipMoveDrag] = useState<TrackClipMoveDragState | undefined>();
   const [trackClipTrimDrag, setTrackClipTrimDrag] = useState<TrackClipTrimDragState | undefined>();
+  const [playheadDrag, setPlayheadDrag] = useState<PlayheadDragState | undefined>();
   const [trackBoxSelectDrag, setTrackBoxSelectDrag] = useState<TrackBoxSelectDragState | undefined>();
   const [timelineMoveDrag, setTimelineMoveDrag] = useState<TimelineMoveDragState | undefined>();
   const [timelineEditMode, setTimelineEditMode] = useState<SmartEditTimelineEditMode>("magnetic");
@@ -4656,6 +4684,7 @@ export const SmartEditPanel = ({
       setSelectedTrackClipIds([]);
       setTrackClipMoveDrag(undefined);
       setTrackClipTrimDrag(undefined);
+      setPlayheadDrag(undefined);
       setTrackBoxSelectDrag(undefined);
       setTimelineMoveDrag(undefined);
       setTrimDrag(undefined);
@@ -5928,6 +5957,50 @@ export const SmartEditPanel = ({
     commitPlanChange(replaceSegment(plan, trimDrag.segmentId, (segment) =>
       trimSegmentSource(segment, trimDrag.edge, sourceDeltaSeconds),
     ), { label: trimDrag.edge === "in" ? "Trim clip in" : "Trim clip out" });
+  };
+
+  const playheadSecondsForPointerEvent = (event: ReactPointerEvent<HTMLElement>): number => {
+    const timelineScroll = event.currentTarget.closest(".timeline-scroll") as HTMLElement | null;
+    const timelineRuler = timelineScroll?.querySelector<HTMLElement>(".timeline-ruler");
+    const timelineRect = (timelineRuler ?? event.currentTarget).getBoundingClientRect();
+    return playheadSecondsFromTimelinePointer({
+      clientX: event.clientX,
+      durationSeconds: timelineDurationSeconds,
+      pixelsPerSecond: timelinePixelsPerSecond,
+      scrollLeft: timelineScroll?.scrollLeft ?? 0,
+      timelineLeft: timelineRect.left,
+    });
+  };
+
+  const updatePlayheadFromPointer = (event: ReactPointerEvent<HTMLElement>) => {
+    setPlayheadSeconds(playheadSecondsForPointerEvent(event));
+  };
+
+  const startPlayheadDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPlayheadDrag({ pointerId: event.pointerId });
+    updatePlayheadFromPointer(event);
+  };
+
+  const updatePlayheadDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!playheadDrag || playheadDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    updatePlayheadFromPointer(event);
+  };
+
+  const finishPlayheadDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!playheadDrag || playheadDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    updatePlayheadFromPointer(event);
+    setPlayheadDrag(undefined);
   };
 
   const startTimelineMoveDrag = (
@@ -8752,7 +8825,14 @@ export const SmartEditPanel = ({
         )}
         {sortedSegments.length > 0 ? (
           <div className="timeline-scroll">
-            <div className="timeline-ruler" style={{ width: timelineWidth }}>
+            <div
+              className="timeline-ruler"
+              style={{ width: timelineWidth }}
+              onPointerCancel={() => setPlayheadDrag(undefined)}
+              onPointerDown={startPlayheadDrag}
+              onPointerMove={updatePlayheadDrag}
+              onPointerUp={finishPlayheadDrag}
+            >
               {rulerTicks.map((tick) => (
                 <span
                   key={tick}
@@ -8763,8 +8843,12 @@ export const SmartEditPanel = ({
               ))}
             </div>
             <div
-              className="timeline-playhead"
+              className={`timeline-playhead ${playheadDrag ? "dragging" : ""}`.trim()}
               style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
+              onPointerCancel={() => setPlayheadDrag(undefined)}
+              onPointerDown={startPlayheadDrag}
+              onPointerMove={updatePlayheadDrag}
+              onPointerUp={finishPlayheadDrag}
             />
             <div className="timeline-track" style={{ width: timelineWidth }}>
               {timedTimelineSegments.map(({ segment, startSecond }) => (
