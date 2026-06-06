@@ -1533,3 +1533,27 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - This improves the base timeline editing demo. Later upgrades can add linked A/V selection, slip edit, drag previews, and multi-track selection ergonomics.
+
+## 2026-06-06 Linked Scene Video And Audio Materials
+
+- Scope:
+  - Continues the requested video/audio/subtitle editing path and adapts the OpenCut-style source-audio separation model to ShopClip's generated scene materials.
+  - Generated scene video and extracted/generated audio are treated as linked timeline materials when both are available.
+- Fix:
+  - Added optional `linkedGroupId` to persistent smart-edit timeline elements.
+  - Detaching a generated scene video now creates a `video-main` element and, when `sceneClipAudioUrl` exists, a linked `audio-source` element with the same start, duration, playback rate, trim range, waveform, fade, and volume metadata.
+  - Moving one linked element moves the other by the same resolved timeline delta.
+  - Resizing either linked edge applies the same trim operation to the linked counterpart.
+  - Deleting one linked element removes the whole linked video/audio group so orphan picture or sound is not left behind.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "linked detached scene"`
+  - `corepack pnpm --filter @shopclip/shared test -- src/schemas.test.ts`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize|linked"`
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/api build`
+- Remaining:
+  - Linked A/V now works for generated scene materials. Later improvements can add explicit unlink/relink controls and multi-select box selection.

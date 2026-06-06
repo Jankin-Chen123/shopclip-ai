@@ -3671,6 +3671,7 @@ Second imported caption`,
     const nextPlan = detachSmartEditSceneVideoToTimelineElement(plan, "segment-1", "test");
     const updatedSegment = nextPlan.segments.find((segment) => segment.id === "segment-1");
     const detachedVideo = nextPlan.timeline?.elements.find((element) => element.id === "video-segment-1-test");
+    const detachedAudio = nextPlan.timeline?.elements.find((element) => element.id === "source-audio-segment-1-test");
 
     expect(updatedSegment?.enabled).toBe(false);
     expect(detachedVideo).toMatchObject({
@@ -3689,7 +3690,102 @@ Second imported caption`,
       trimEndSecond: 5.25,
       trimStartSecond: 0.25,
     });
+    expect(detachedVideo?.linkedGroupId).toBe("scene-material-segment-1-test");
     expect(detachedVideo?.segmentId).toBeUndefined();
+    expect(detachedAudio).toMatchObject({
+      detachedAudio: true,
+      durationSeconds: 4,
+      id: "source-audio-segment-1-test",
+      kind: "audio",
+      label: "Scene 1 linked audio",
+      linkedGroupId: "scene-material-segment-1-test",
+      playbackRate: 1.5,
+      sourceUrl: "https://cdn.example.com/scene-1-audio.m4a",
+      startSecond: 1,
+      trackId: "audio-source",
+      trimEndSecond: 5.25,
+      trimStartSecond: 0.25,
+    });
+  });
+
+  it("keeps linked detached scene video and audio together when moving, resizing, and deleting", () => {
+    const plan = detachSmartEditSceneVideoToTimelineElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        id: "plan-linked",
+        projectId: "project-1",
+        segments: [
+          {
+            assetTags: [],
+            durationSeconds: 4,
+            enabled: true,
+            id: "segment-1",
+            order: 1,
+            playbackRate: 1,
+            rationale: "Use linked generated scene material.",
+            sceneId: "scene-1",
+            source: {
+              endSecond: 4,
+              kind: "generated-scene-clip",
+              sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+              sceneClipUrl: "https://cdn.example.test/scene.mp4",
+              sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+              startSecond: 0,
+            },
+            subtitle: "Hook",
+            timelineStartSecond: 1,
+            transition: "cut",
+            voiceover: "",
+          },
+        ],
+        strategy: "Edit linked generated scene materials.",
+        targetDurationSeconds: 5,
+      } satisfies SmartEditPlan,
+      "segment-1",
+      "linked",
+    );
+
+    const moved = moveSmartEditTrackClipOnTimeline(
+      plan,
+      { id: "video-segment-1-linked", trackId: "video" },
+      1.2,
+      "magnetic",
+    );
+    expect(moved.timeline?.elements.find((element) => element.id === "video-segment-1-linked")).toMatchObject({
+      startSecond: 2.2,
+    });
+    expect(moved.timeline?.elements.find((element) => element.id === "source-audio-segment-1-linked")).toMatchObject({
+      startSecond: 2.2,
+    });
+
+    const resized = resizeSmartEditTrackClipEdge(
+      moved,
+      { id: "source-audio-segment-1-linked", trackId: "sourceAudio" },
+      "in",
+      0.7,
+    );
+    expect(resized.timeline?.elements.find((element) => element.id === "video-segment-1-linked")).toMatchObject({
+      durationSeconds: 3.3,
+      startSecond: 2.9,
+      trimStartSecond: 0.7,
+    });
+    expect(resized.timeline?.elements.find((element) => element.id === "source-audio-segment-1-linked")).toMatchObject({
+      durationSeconds: 3.3,
+      startSecond: 2.9,
+      trimStartSecond: 0.7,
+    });
+
+    const removed = removeSmartEditTimelineElementFromTimeline(
+      resized,
+      "video-segment-1-linked",
+    );
+    expect(removed.timeline?.elements.some((element) => element.id === "video-segment-1-linked")).toBe(false);
+    expect(removed.timeline?.elements.some((element) => element.id === "source-audio-segment-1-linked")).toBe(false);
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

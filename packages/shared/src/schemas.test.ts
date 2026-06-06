@@ -949,6 +949,7 @@ describe("shared contract schemas", () => {
             kind: "video",
             sceneId: "scene-1",
             segmentId: "segment-1",
+            linkedGroupId: "linked-scene-1",
             sourceUrl: "https://cdn.example.test/scene-video.mp4",
             label: "Independent video",
             startSecond: 1.2,
@@ -963,6 +964,7 @@ describe("shared contract schemas", () => {
             kind: "audio",
             sceneId: "scene-1",
             segmentId: "segment-1",
+            linkedGroupId: "linked-scene-1",
             sourceUrl: "https://cdn.example.test/scene-audio.m4a",
             label: "Independent audio",
             startSecond: 0.5,
@@ -1012,6 +1014,7 @@ describe("shared contract schemas", () => {
     expect(plan.timeline?.elements.find((element) => element.kind === "text")?.text).toBe(
       "Persistent caption",
     );
+    expect(plan.timeline?.elements.filter((element) => element.linkedGroupId === "linked-scene-1")).toHaveLength(2);
     expect(plan.timeline?.elements.find((element) => element.id === "clip-audio-1")).toMatchObject({
       audioFadeInSeconds: 0.3,
       audioFadeOutSeconds: 0.4,

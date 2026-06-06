@@ -2447,6 +2447,38 @@ export const detachSmartEditSceneVideoToTimelineElement = (
     segment.source.endSecond === undefined
       ? sourceStart + segment.durationSeconds * playbackRate
       : segment.source.endSecond;
+  const linkedGroupId = segment.source.sceneClipAudioUrl
+    ? `scene-material-${segment.id}-${token}`
+    : undefined;
+  const detachedAudioElement: SmartEditTimelineElement | undefined =
+    segment.source.sceneClipAudioUrl && linkedGroupId
+      ? {
+          audioFadeInSeconds: segment.sourceAudioFadeInSeconds ?? 0,
+          audioFadeOutSeconds: segment.sourceAudioFadeOutSeconds ?? 0,
+          audioVolume: segment.sourceAudioVolume ?? 1,
+          audioVolumeKeyframes: audioVolumeKeyframes(
+            segment.sourceAudioVolumeKeyframes,
+            segment.durationSeconds,
+          ),
+          audioWaveform: segment.source.sceneClipAudioWaveform,
+          detachedAudio: true,
+          durationSeconds: segment.durationSeconds,
+          hidden: false,
+          id: `source-audio-${segment.id}-${token}`,
+          kind: "audio",
+          label: `Scene ${segment.order} linked audio`,
+          linkedGroupId,
+          muted: false,
+          playbackRate,
+          sceneId: segment.sceneId,
+          sourceDurationSeconds: Math.max(MIN_SMART_EDIT_CLIP_SECONDS, trimEndSecond - sourceStart),
+          sourceUrl: segment.source.sceneClipAudioUrl,
+          startSecond: segmentTimelineBaseStart(plan, segment.id),
+          trackId: "audio-source",
+          trimEndSecond,
+          trimStartSecond: sourceStart,
+        }
+      : undefined;
   const detachedElement: SmartEditTimelineElement = {
     detachedAudio: false,
     durationSeconds: segment.durationSeconds,
@@ -2454,6 +2486,7 @@ export const detachSmartEditSceneVideoToTimelineElement = (
     id: `video-${segment.id}-${token}`,
     kind: "video",
     label: `Scene ${segment.order} detached video`,
+    linkedGroupId,
     muted: false,
     playbackRate,
     sceneId: segment.sceneId,
@@ -2479,15 +2512,32 @@ export const detachSmartEditSceneVideoToTimelineElement = (
   const baseTimeline = disabledPlan.timeline ?? buildSmartEditTimeline(disabledPlan);
   return withUpdatedTimelineElements(
     disabledPlan,
-    [...baseTimeline.elements, detachedElement],
-    ensureTimelineTrack(baseTimeline, {
-      hidden: false,
-      id: "video-main",
-      kind: "video",
-      label: "Video",
-      locked: false,
-      muted: false,
-    }),
+    [
+      ...baseTimeline.elements,
+      ...(detachedAudioElement ? [detachedAudioElement] : []),
+      detachedElement,
+    ],
+    ensureTimelineTrack(
+      {
+        ...baseTimeline,
+        tracks: ensureTimelineTrack(baseTimeline, {
+          hidden: false,
+          id: "video-main",
+          kind: "video",
+          label: "Video",
+          locked: false,
+          muted: false,
+        }),
+      },
+      {
+        hidden: false,
+        id: "audio-source",
+        kind: "audio",
+        label: "Source audio",
+        locked: false,
+        muted: false,
+      },
+    ),
   );
 };
 
@@ -2773,6 +2823,20 @@ const resizeSmartEditSegmentEdge = (
   };
 };
 
+const linkedTimelineElementIds = (
+  timeline: SmartEditTimeline,
+  element: SmartEditTimelineElement,
+): Set<string> => {
+  if (!element.linkedGroupId) {
+    return new Set([element.id]);
+  }
+  return new Set(
+    timeline.elements
+      .filter((candidate) => candidate.linkedGroupId === element.linkedGroupId)
+      .map((candidate) => candidate.id),
+  );
+};
+
 export const resizeSmartEditTrackClipEdge = (
   plan: SmartEditPlan,
   trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
@@ -2797,11 +2861,18 @@ export const resizeSmartEditTrackClipEdge = (
     if (!resizedElement) {
       return plan;
     }
+    const linkedIds = linkedTimelineElementIds(baseTimeline, targetElement);
     return withUpdatedTimelineElements(
       plan,
-      baseTimeline.elements.map((element) =>
-        element.id === targetElement.id ? resizedElement : element,
-      ),
+      baseTimeline.elements.map((element) => {
+        if (element.id === targetElement.id) {
+          return resizedElement;
+        }
+        if (!linkedIds.has(element.id)) {
+          return element;
+        }
+        return resizePersistentTimelineElementEdge(element, edge, snappedDelta) ?? element;
+      }),
       baseTimeline.tracks,
     );
   }
@@ -2840,11 +2911,18 @@ export const resizeSmartEditTrackClipEdge = (
     if (!resizedElement) {
       return plan;
     }
+    const linkedIds = linkedTimelineElementIds(baseTimeline, targetElement);
     return withUpdatedTimelineElements(
       plan,
-      baseTimeline.elements.map((element) =>
-        element.id === targetElement.id ? resizedElement : element,
-      ),
+      baseTimeline.elements.map((element) => {
+        if (element.id === targetElement.id) {
+          return resizedElement;
+        }
+        if (!linkedIds.has(element.id)) {
+          return element;
+        }
+        return resizePersistentTimelineElementEdge(element, edge, snappedDelta) ?? element;
+      }),
       baseTimeline.tracks,
     );
   }
@@ -2861,7 +2939,8 @@ export const removeSmartEditTimelineElementFromTimeline = (
   if (!targetElement) {
     return plan;
   }
-  const retainedElements = baseTimeline.elements.filter((element) => element.id !== elementId);
+  const removeIds = linkedTimelineElementIds(baseTimeline, targetElement);
+  const retainedElements = baseTimeline.elements.filter((element) => !removeIds.has(element.id));
   const removedGap = {
     endSecond: snapTimelineSeconds(targetElement.startSecond + targetElement.durationSeconds),
     startSecond: targetElement.startSecond,
@@ -2900,9 +2979,24 @@ export const moveSmartEditTrackClipOnTimeline = (
     if (!targetElement) {
       return plan;
     }
+    const linkedIds = linkedTimelineElementIds(baseTimeline, targetElement);
+    const moveLinkedElements = (nextStart: number, elements = baseTimeline.elements) => {
+      const actualDelta = snapTimelineSeconds(nextStart - targetElement.startSecond);
+      return elements.map((element) =>
+        linkedIds.has(element.id)
+          ? {
+              ...element,
+              startSecond: clampTimelineStart(snapTimelineSeconds(element.startSecond + actualDelta)),
+            }
+          : element,
+      );
+    };
     if (editMode === "magnetic") {
       const intervals = baseTimeline.elements
-        .filter((element) => element.id !== targetElement.id && element.trackId === targetElement.trackId)
+        .filter(
+          (element) =>
+            !linkedIds.has(element.id) && element.trackId === targetElement.trackId,
+        )
         .map((element) => ({
           endSecond: snapTimelineSeconds(element.startSecond + element.durationSeconds),
           id: element.id,
@@ -2919,15 +3013,17 @@ export const moveSmartEditTrackClipOnTimeline = (
         targetElement.startSecond + deltaSeconds,
         snapPoints,
       );
-      return updateSmartEditTimelineElement(plan, targetElement.id, {
-        startSecond: nextStart,
-      });
+      return withUpdatedTimelineElements(plan, moveLinkedElements(nextStart), baseTimeline.tracks);
     }
     if (editMode === "insert") {
       const nextStart = clampTimelineStart(snapTimelineSeconds(targetElement.startSecond + deltaSeconds));
       const nextElements = baseTimeline.elements.map((element) => {
-        if (element.id === targetElement.id) {
-          return { ...element, startSecond: nextStart };
+        if (linkedIds.has(element.id)) {
+          const actualDelta = snapTimelineSeconds(nextStart - targetElement.startSecond);
+          return {
+            ...element,
+            startSecond: clampTimelineStart(snapTimelineSeconds(element.startSecond + actualDelta)),
+          };
         }
         if (
           element.trackId === targetElement.trackId &&
@@ -2948,16 +3044,29 @@ export const moveSmartEditTrackClipOnTimeline = (
       const nextElements = baseTimeline.elements
         .filter(
           (element) =>
-            element.id === targetElement.id ||
+            linkedIds.has(element.id) ||
             element.trackId !== targetElement.trackId ||
             !intervalsOverlap(nextStart, nextEnd, element.startSecond, element.startSecond + element.durationSeconds),
         )
-        .map((element) => (element.id === targetElement.id ? { ...element, startSecond: nextStart } : element));
+        .map((element) => {
+          if (!linkedIds.has(element.id)) {
+            return element;
+          }
+          const actualDelta = snapTimelineSeconds(nextStart - targetElement.startSecond);
+          return {
+            ...element,
+            startSecond: clampTimelineStart(snapTimelineSeconds(element.startSecond + actualDelta)),
+          };
+        });
       return withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks);
     }
-    return updateSmartEditTimelineElement(plan, targetElement.id, {
-      startSecond: targetElement.startSecond + deltaSeconds,
-    });
+    return withUpdatedTimelineElements(
+      plan,
+      moveLinkedElements(
+        clampTimelineStart(snapTimelineSeconds(targetElement.startSecond + deltaSeconds)),
+      ),
+      baseTimeline.tracks,
+    );
   }
   if (trackClip.trackId === "video") {
     return moveSmartEditSegmentOnTimelineWithMode(

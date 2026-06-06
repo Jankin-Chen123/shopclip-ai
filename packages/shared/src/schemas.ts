@@ -679,6 +679,7 @@ export const SmartEditTimelineElementSchema = z
     kind: z.enum(["video", "audio", "text", "bgm"]),
     sceneId: z.string().trim().min(1).optional(),
     segmentId: z.string().trim().min(1).optional(),
+    linkedGroupId: z.string().trim().min(1).optional(),
     sourceUrl: z.string().trim().min(1).optional(),
     sourceObjectKey: z.string().trim().min(1).optional(),
     text: z.string().trim().optional(),
