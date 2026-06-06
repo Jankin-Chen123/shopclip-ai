@@ -7,7 +7,7 @@
 - Owner role: `implementation-engineer`
 - Status: In Progress
 - Created: 2026-06-02
-- Last updated: 2026-06-02
+- Last updated: 2026-06-06
 
 ## Source Of Truth
 
@@ -2159,6 +2159,38 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Added a Select track action to every multi-track header, disabled when the track has no selectable independent materials.
   - Selecting a track clears storyboard selection and prepares the selected track materials for batch style, source slip, audio, visibility, copy, cut, duplicate, or delete actions.
   - Added English and Chinese UI copy for the track-selection action.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`
+
+## 2026-06-06 Timeline Localization Polish
+
+- Scope:
+  - Small but coherent UX polish for the narrowed video, audio, and subtitle editing demo.
+  - Keeps the Smart Edit timeline controls usable in Chinese mode while preserving the existing command-history stack.
+- Fix:
+  - Localized the multi-selected audio quick actions for 50%/100%/150% volume, fade in/out, and audio keyframe creation.
+  - Localized audio-volume keyframe inspector titles, add-keyframe buttons, empty states, and keyframe delete actions for source audio, voiceover, and independent timeline audio materials.
+  - Localized core material/segment inspector controls for source in/out, speed, audio fades, source/voice volume, detach/relink, split/remove, text styling, and linked-material status.
+  - Localized audio keyframe marker aria-labels and tooltips so timeline accessibility text follows the active UI language.
+  - Updated the Smart Edit command-history label formatter so Undo/Redo buttons can use localized prefixes and translated common timeline action names.
+  - Added English and Chinese history-action label maps for common clip, material, subtitle, source-slip, split, keyframe, detach, and relink operations.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts`
+
+## 2026-06-06 Timeline Text Merge Batch
+
+- Scope:
+  - Coherent subtitle/text editing improvement for the narrowed video, audio, and subtitle editing demo.
+  - Adds practical timeline operations expected in short-video editors when caption fragments need to be merged or split for timing edits.
+- Fix:
+  - Added `mergeSmartEditTimelineTextElements` to merge selected independent text timeline materials on unlocked tracks.
+  - The merged caption spans the earliest start to latest end, keeps the first caption style, and joins selected caption text in timeline order.
+  - Added a Merge text action in the multi-material toolbar that appears for selected text materials and is enabled only when at least two text clips are selected.
+  - Added `splitSmartEditTimelineTextElementByLines` to split a single multi-line text material into consecutive per-line text clips while preserving style.
+  - Added a Split lines action in the single text-material inspector, enabled only when the selected text material has at least two non-empty lines.
+  - Added English and Chinese UI copy plus command-history copy for the merge and split-line actions.
 - Verification:
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`

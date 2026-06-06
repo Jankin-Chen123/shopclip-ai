@@ -2169,6 +2169,7 @@ type SmartEditTrackSegment = {
   muted?: boolean;
   hidden?: boolean;
   audioVolumeKeyframes?: SmartEditAudioVolumeKeyframe[];
+  text?: string;
   textColor?: string;
   textFontSize?: number;
   textPositionYPercent?: number;
@@ -2292,14 +2293,14 @@ export class SmartEditCommandHistory {
     );
   }
 
-  undoLabel(): string {
+  undoLabel(undoText = "Undo", formatLabel: (label: string) => string = (label) => label): string {
     const entry = this.undoStack.at(-1);
-    return entry ? `Undo ${entry.label}` : "Undo";
+    return entry ? `${undoText} ${formatLabel(entry.label)}` : undoText;
   }
 
-  redoLabel(): string {
+  redoLabel(redoText = "Redo", formatLabel: (label: string) => string = (label) => label): string {
     const entry = this.redoStack.at(-1);
-    return entry ? `Redo ${entry.label}` : "Redo";
+    return entry ? `${redoText} ${formatLabel(entry.label)}` : redoText;
   }
 }
 
@@ -3906,6 +3907,114 @@ export const updateSmartEditTimelineElementsTextStyle = (
   return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
 };
 
+export const mergeSmartEditTimelineTextElements = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const selectedIds = new Set(elementIds);
+  const textElements = baseTimeline.elements
+    .filter(
+      (element) =>
+        selectedIds.has(element.id) &&
+        !isDerivedTimelineElement(element) &&
+        !lockedTrackIds.has(element.trackId) &&
+        element.kind === "text",
+    )
+    .sort((left, right) => left.startSecond - right.startSecond);
+  if (textElements.length < 2) {
+    return plan;
+  }
+
+  const firstElement = textElements[0]!;
+  const mergeIds = new Set(textElements.map((element) => element.id));
+  const startSecond = Math.min(...textElements.map((element) => element.startSecond));
+  const endSecond = Math.max(
+    ...textElements.map((element) => element.startSecond + element.durationSeconds),
+  );
+  const mergedText = textElements
+    .map((element) => element.text?.trim() || element.label.trim())
+    .filter(Boolean)
+    .join("\n");
+  const mergedElement: SmartEditTimelineElement = {
+    ...firstElement,
+    durationSeconds: clampSmartEditDuration(snapTimelineSeconds(endSecond - startSecond)),
+    label: mergedText.split("\n").find(Boolean) ?? firstElement.label,
+    startSecond,
+    text: mergedText,
+    trimEndSecond: undefined,
+    trimStartSecond: 0,
+  };
+  const nextElements = [
+    ...baseTimeline.elements.filter((element) => !mergeIds.has(element.id)),
+    mergedElement,
+  ].sort((left, right) =>
+    left.trackId === right.trackId
+      ? left.startSecond - right.startSecond
+      : baseTimeline.tracks.findIndex((track) => track.id === left.trackId) -
+        baseTimeline.tracks.findIndex((track) => track.id === right.trackId),
+  );
+  return withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks);
+};
+
+export const splitSmartEditTimelineTextElementByLines = (
+  plan: SmartEditPlan,
+  elementId: string,
+  splitToken = String(Date.now()),
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (
+    !targetElement ||
+    targetElement.kind !== "text" ||
+    isDerivedTimelineElement(targetElement) ||
+    lockedTrackIds.has(targetElement.trackId)
+  ) {
+    return plan;
+  }
+  const lines = (targetElement.text ?? targetElement.label)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2 || targetElement.durationSeconds < MIN_SMART_EDIT_CLIP_SECONDS * lines.length) {
+    return plan;
+  }
+
+  const sliceDuration = snapTimelineSeconds(targetElement.durationSeconds / lines.length);
+  const splitElements = lines.map((line, index): SmartEditTimelineElement => {
+    const isLast = index === lines.length - 1;
+    const startSecond = snapTimelineSeconds(targetElement.startSecond + sliceDuration * index);
+    const durationSeconds = isLast
+      ? snapTimelineSeconds(
+          targetElement.startSecond + targetElement.durationSeconds - startSecond,
+        )
+      : sliceDuration;
+    return {
+      ...targetElement,
+      durationSeconds: Math.max(MIN_SMART_EDIT_CLIP_SECONDS, durationSeconds),
+      id: index === 0 ? targetElement.id : `${targetElement.id}-line-${splitToken}-${index + 1}`,
+      label: line,
+      startSecond,
+      text: line,
+      trimEndSecond: undefined,
+      trimStartSecond: 0,
+    };
+  });
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.flatMap((element) =>
+      element.id === targetElement.id ? splitElements : [element],
+    ),
+    baseTimeline.tracks,
+  );
+};
+
 export const selectSmartEditTimelineElementIdsInBox = (
   plan: SmartEditPlan,
   box: {
@@ -4588,7 +4697,13 @@ const SmartEditWaveformStrip = ({ segment }: { segment: SmartEditTrackSegment })
   );
 };
 
-const SmartEditAudioKeyframeMarkers = ({ segment }: { segment: SmartEditTrackSegment }) => {
+const SmartEditAudioKeyframeMarkers = ({
+  label,
+  segment,
+}: {
+  label: string;
+  segment: SmartEditTrackSegment;
+}) => {
   const keyframes = audioVolumeKeyframes(
     segment.audioVolumeKeyframes,
     segment.durationSeconds,
@@ -4600,9 +4715,9 @@ const SmartEditAudioKeyframeMarkers = ({ segment }: { segment: SmartEditTrackSeg
 
   return (
     <div
-      aria-label={`Audio volume keyframes for ${segment.title}`}
+      aria-label={`${label}: ${segment.title}`}
       className="smart-edit-audio-keyframes"
-      title="Audio volume keyframes"
+      title={label}
     >
       {keyframes.map((keyframe) => (
         <i
@@ -4663,6 +4778,7 @@ const timelineTrackSegments = (
           textPositionYPercent: element.textPositionYPercent,
           trackId: smartEditTrackIdForTimelineTrack(track),
           trimStartSecond: element.trimStartSecond,
+          text: element.text,
           title: element.kind === "text" ? element.text ?? element.label : element.label,
           waveform: element.audioWaveform,
         })),
@@ -4722,6 +4838,7 @@ const timelineTrackSegments = (
           meta: "storyboard text",
           range: timelineRangeLabel(startSecond, duration),
           startSecond,
+          text: clip.material?.text || clip.subtitle,
           trackId: "caption",
           title: clip.material?.text || clip.subtitle,
         })),
@@ -4804,6 +4921,7 @@ const timelineTrackSegments = (
         durationSeconds: captionDurationSeconds,
         startSecond: startSecond + captionOffsetSeconds,
         hidden: segment.captionHidden ?? false,
+        text: segment.subtitle,
         trackId: "caption" as const,
       };
     });
@@ -5092,6 +5210,9 @@ export const SmartEditPanel = ({
   const hasSelectedTextTimelineMaterials = selectedBatchTrackClips.some(
     (trackClip) => !trackClip.segmentId && trackClip.trackId === "caption",
   );
+  const selectedTextTimelineMaterialCount = selectedBatchTrackClips.filter(
+    (trackClip) => !trackClip.segmentId && trackClip.trackId === "caption",
+  ).length;
   const trackClipDragPreview = useMemo(
     () =>
       trackClipMoveDrag
@@ -5179,6 +5300,13 @@ export const SmartEditPanel = ({
     () => plan?.timeline?.elements.find((element) => element.id === selectedTrackClip?.id),
     [plan, selectedTrackClip],
   );
+  const selectedTimelineTextLineCount =
+    selectedTimelineElement?.kind === "text"
+      ? (selectedTimelineElement.text ?? selectedTimelineElement.label)
+          .split(/\r?\n/u)
+          .map((line) => line.trim())
+          .filter(Boolean).length
+      : 0;
   const selectedLinkedElements = useMemo(() => {
     if (!plan?.timeline || !selectedTimelineElement?.linkedGroupId) {
       return [];
@@ -5229,6 +5357,10 @@ export const SmartEditPanel = ({
     );
   const isTimelineTrackLocked = (trackId: SmartEditTrackId): boolean =>
     timelineTrackForTrack(trackId)?.locked ?? false;
+  const commandHistoryLabel = (label: string): string =>
+    Object.prototype.hasOwnProperty.call(copy.historyActions, label)
+      ? copy.historyActions[label as keyof typeof copy.historyActions]
+      : label;
 
   const commitPlanChange = (
     nextPlan: SmartEditPlan,
@@ -7099,6 +7231,56 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label });
   };
 
+  const splitSelectedTimelineTextMaterialByLines = () => {
+    if (!plan || !selectedTimelineElement || selectedTimelineElement.kind !== "text") {
+      return;
+    }
+    const nextPlan = splitSmartEditTimelineTextElementByLines(
+      plan,
+      selectedTimelineElement.id,
+      `lines-${Date.now()}`,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Split text clip by lines" });
+    const splitIds =
+      nextPlan.timeline?.elements
+        .filter(
+          (element) =>
+            element.id === selectedTimelineElement.id ||
+            element.id.startsWith(`${selectedTimelineElement.id}-line-`),
+        )
+        .map((element) => element.id) ?? [];
+    if (splitIds.length > 0) {
+      setSelectedTrackClipId(splitIds[0]);
+      setSelectedTrackClipIds(splitIds);
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
+    }
+  };
+
+  const mergeSelectedTimelineTextMaterials = () => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineTextMaterialIds = selectedBatchTrackClips
+      .filter((trackClip) => !trackClip.segmentId && trackClip.trackId === "caption")
+      .map((trackClip) => trackClip.id);
+    if (selectedTimelineTextMaterialIds.length < 2) {
+      return;
+    }
+    const nextPlan = mergeSmartEditTimelineTextElements(plan, selectedTimelineTextMaterialIds);
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Merge selected text clips" });
+    setSelectedTrackClipId(selectedTimelineTextMaterialIds[0]);
+    setSelectedTrackClipIds([selectedTimelineTextMaterialIds[0]!]);
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
+  };
+
   const duplicateSelectedSegments = () => {
     if (!plan || selectedBatchSegments.length === 0) {
       return;
@@ -7538,7 +7720,7 @@ export const SmartEditPanel = ({
                   </label>
                   <div className="smart-edit-trim-grid">
                     <label>
-                      Audio volume
+                      {copy.audioVolume}
                       <input
                         min={0}
                         max={4}
@@ -7554,7 +7736,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Audio fade in
+                      {copy.audioFadeIn}
                       <input
                         min={0}
                         max={10}
@@ -7570,7 +7752,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Audio fade out
+                      {copy.audioFadeOut}
                       <input
                         min={0}
                         max={10}
@@ -7588,14 +7770,14 @@ export const SmartEditPanel = ({
                   </div>
                   {selectedSegment.source.sceneClipAudioUrl ? (
                     <Button icon={<Volume2 size={16} />} onClick={detachSelectedSourceAudio}>
-                      Detach audio
+                      {copy.detachAudio}
                     </Button>
                   ) : null}
                   <div className="smart-edit-effect-keyframes">
                     <div className="smart-edit-section-header">
-                      <h6>Audio volume keyframes</h6>
+                      <h6>{copy.audioVolumeKeyframesTitle}</h6>
                       <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("sourceAudio")}>
-                        Add volume keyframe
+                        {copy.addVolumeKeyframe}
                       </Button>
                     </div>
                     {audioVolumeKeyframes(
@@ -7622,13 +7804,13 @@ export const SmartEditPanel = ({
                               type="button"
                               onClick={() => removeSegmentAudioVolumeKeyframe("sourceAudio", keyframe.id)}
                             >
-                              Delete
+                              {copy.deleteKeyframe}
                             </button>
                           </article>
                         ))}
                       </div>
                     ) : (
-                      <small>No audio volume keyframes.</small>
+                      <small>{copy.noAudioVolumeKeyframes}</small>
                     )}
                   </div>
                   <label className="toggle-row">
@@ -7681,7 +7863,7 @@ export const SmartEditPanel = ({
                     />
                   </label>
                   <label>
-                    Caption duration
+                    {copy.captionDuration}
                     <input
                       min={MIN_SMART_EDIT_CLIP_SECONDS}
                       max={Math.max(
@@ -7757,7 +7939,7 @@ export const SmartEditPanel = ({
                     />
                   </label>
                   <label>
-                    Voice duration
+                    {copy.voiceDuration}
                     <input
                       min={MIN_SMART_EDIT_CLIP_SECONDS}
                       max={Math.max(
@@ -7785,7 +7967,7 @@ export const SmartEditPanel = ({
                   </label>
                   <div className="smart-edit-trim-grid">
                     <label>
-                      Voice volume
+                      {copy.voiceVolume}
                       <input
                         min={0}
                         max={4}
@@ -7801,7 +7983,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Voice fade in
+                      {copy.voiceFadeIn}
                       <input
                         min={0}
                         max={10}
@@ -7817,7 +7999,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Voice fade out
+                      {copy.voiceFadeOut}
                       <input
                         min={0}
                         max={10}
@@ -7835,9 +8017,9 @@ export const SmartEditPanel = ({
                   </div>
                   <div className="smart-edit-effect-keyframes">
                     <div className="smart-edit-section-header">
-                      <h6>Voice volume keyframes</h6>
+                      <h6>{copy.voiceVolumeKeyframesTitle}</h6>
                       <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("voice")}>
-                        Add volume keyframe
+                        {copy.addVolumeKeyframe}
                       </Button>
                     </div>
                     {audioVolumeKeyframes(
@@ -7864,13 +8046,13 @@ export const SmartEditPanel = ({
                               type="button"
                               onClick={() => removeSegmentAudioVolumeKeyframe("voice", keyframe.id)}
                             >
-                              Delete
+                              {copy.deleteKeyframe}
                             </button>
                           </article>
                         ))}
                       </div>
                     ) : (
-                      <small>No voice volume keyframes.</small>
+                      <small>{copy.noVoiceVolumeKeyframes}</small>
                     )}
                   </div>
                 </>
@@ -7885,16 +8067,16 @@ export const SmartEditPanel = ({
                 <span>{trackLabels[selectedTrackClip.trackId]}</span>
                 <small>{selectedTrackClip.range}</small>
                 {selectedTimelineElement.linkedGroupId ? (
-                  <small>Linked group: {selectedLinkedElements.length} clips</small>
+                  <small>{copy.linkedMaterialGroup(selectedLinkedElements.length)}</small>
                 ) : (
-                  <small>Unlinked material</small>
+                  <small>{copy.unlinkedMaterial}</small>
                 )}
               </div>
               {selectedTimelineElement.kind === "video" || selectedTimelineElement.kind === "audio" ? (
                 <div className="smart-edit-linked-actions">
                   {selectedTimelineElement.linkedGroupId ? (
                     <Button icon={<Unlink size={16} />} onClick={unlinkSelectedTimelineElementGroup}>
-                      Unlink audio/video
+                      {copy.unlinkAudioVideo}
                     </Button>
                   ) : (
                     <Button
@@ -7902,7 +8084,7 @@ export const SmartEditPanel = ({
                       icon={<Link size={16} />}
                       onClick={relinkSelectedTimelineElementGroup}
                     >
-                      Relink scene material
+                      {copy.relinkSceneMaterial}
                     </Button>
                   )}
                 </div>
@@ -7924,7 +8106,7 @@ export const SmartEditPanel = ({
                 </label>
               ) : (
                 <label>
-                  Material name
+                  {copy.materialName}
                   <input
                     type="text"
                     value={selectedTimelineElement.label}
@@ -7963,7 +8145,7 @@ export const SmartEditPanel = ({
               {selectedTimelineElement.kind === "video" || selectedTimelineElement.kind === "audio" ? (
                 <div className="smart-edit-trim-grid">
                   <label>
-                    Source in
+                    {copy.sourceIn}
                     <input
                       min={0}
                       step={0.1}
@@ -7977,7 +8159,7 @@ export const SmartEditPanel = ({
                     />
                   </label>
                   <label>
-                    Source out
+                    {copy.sourceOut}
                     <input
                       readOnly
                       type="number"
@@ -8009,7 +8191,7 @@ export const SmartEditPanel = ({
                 <>
                   <div className="smart-edit-trim-grid">
                     <label>
-                      Speed
+                      {copy.speed}
                       <input
                         min={0.25}
                         max={4}
@@ -8024,7 +8206,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Audio volume
+                      {copy.audioVolume}
                       <input
                         min={0}
                         max={4}
@@ -8039,7 +8221,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Audio fade in
+                      {copy.audioFadeIn}
                       <input
                         min={0}
                         max={10}
@@ -8054,7 +8236,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Audio fade out
+                      {copy.audioFadeOut}
                       <input
                         min={0}
                         max={10}
@@ -8071,9 +8253,9 @@ export const SmartEditPanel = ({
                   </div>
                   <div className="smart-edit-effect-keyframes">
                     <div className="smart-edit-section-header">
-                      <h6>Audio volume keyframes</h6>
+                      <h6>{copy.audioVolumeKeyframesTitle}</h6>
                       <Button onClick={addTimelineElementAudioVolumeKeyframeAtPlayhead}>
-                        Add volume keyframe
+                        {copy.addVolumeKeyframe}
                       </Button>
                     </div>
                     {audioVolumeKeyframes(
@@ -8092,13 +8274,13 @@ export const SmartEditPanel = ({
                               type="button"
                               onClick={() => removeTimelineElementAudioVolumeKeyframe(keyframe.id)}
                             >
-                              Delete
+                              {copy.deleteKeyframe}
                             </button>
                           </article>
                         ))}
                       </div>
                     ) : (
-                      <small>No audio volume keyframes.</small>
+                      <small>{copy.noAudioVolumeKeyframes}</small>
                     )}
                   </div>
                   <label className="toggle-row">
@@ -8149,10 +8331,16 @@ export const SmartEditPanel = ({
                     >
                       {copy.topNoteTextStyle}
                     </Button>
+                    <Button
+                      disabled={selectedTimelineTextLineCount < 2}
+                      onClick={splitSelectedTimelineTextMaterialByLines}
+                    >
+                      {copy.splitTextClipByLines}
+                    </Button>
                   </div>
                   <div className="smart-edit-trim-grid">
                     <label>
-                      Text size
+                      {copy.textSize}
                       <input
                         min={12}
                         max={72}
@@ -8167,7 +8355,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Text position
+                      {copy.textPosition}
                       <input
                         min={8}
                         max={92}
@@ -8182,7 +8370,7 @@ export const SmartEditPanel = ({
                       />
                     </label>
                     <label>
-                      Text color
+                      {copy.textColor}
                       <input
                         type="color"
                         value={selectedTimelineElement.textColor ?? "#ffffff"}
@@ -8242,7 +8430,7 @@ export const SmartEditPanel = ({
                   icon={<Scissors size={16} />}
                   onClick={splitSelectedSegment}
                 >
-                  Split
+                  {copy.splitClip}
                 </Button>
                 <Button
                   icon={<Copy size={16} />}
@@ -8259,7 +8447,7 @@ export const SmartEditPanel = ({
                 {selectedTrackClip?.trackId === "video" &&
                 (selectedSegment.source.sceneClipVideoOnlyUrl || selectedSegment.source.sceneClipUrl) ? (
                   <Button icon={<Film size={16} />} onClick={detachSelectedSceneVideo}>
-                    Detach video
+                    {copy.detachVideo}
                   </Button>
                 ) : null}
                 <Button
@@ -8267,7 +8455,7 @@ export const SmartEditPanel = ({
                   icon={<Trash2 size={16} />}
                   onClick={removeSelectedSegment}
                 >
-                  Remove
+                  {copy.removeClip}
                 </Button>
               </div>
               <section className="smart-edit-inspector-section">
@@ -8302,7 +8490,7 @@ export const SmartEditPanel = ({
                   />
                 </label>
                 <label>
-                  Speed
+                  {copy.speed}
                   <input
                     max={4}
                     min={0.25}
@@ -8335,11 +8523,11 @@ export const SmartEditPanel = ({
                       }))
                     }
                   />
-                  Mute original audio
+                  {copy.muteOriginalAudio}
                 </label>
                 <div className="smart-edit-trim-grid">
                   <label>
-                    Source in
+                    {copy.sourceIn}
                     <input
                       min={0}
                       step={0.1}
@@ -8375,7 +8563,7 @@ export const SmartEditPanel = ({
                     />
                   </label>
                   <label>
-                    Source out
+                    {copy.sourceOut}
                     <input
                       min={0}
                       step={0.1}
@@ -8965,11 +9153,11 @@ export const SmartEditPanel = ({
               ) : null}
               <section className="smart-edit-inspector-section">
                 <div className="smart-edit-section-header">
-                  <h4>Audio volume envelopes</h4>
+                  <h4>{copy.audioVolumeEnvelopes}</h4>
                 </div>
                 <div className="smart-edit-trim-grid">
                   <label>
-                    Source audio volume
+                    {copy.sourceAudioVolume}
                     <input
                       min={0}
                       max={4}
@@ -8985,7 +9173,7 @@ export const SmartEditPanel = ({
                     />
                   </label>
                   <label>
-                    Voice volume
+                    {copy.voiceVolume}
                     <input
                       min={0}
                       max={4}
@@ -9003,9 +9191,9 @@ export const SmartEditPanel = ({
                 </div>
                 <div className="smart-edit-effect-keyframes">
                   <div className="smart-edit-section-header">
-                    <h6>Source audio volume keyframes</h6>
+                    <h6>{copy.sourceAudioVolumeKeyframesTitle}</h6>
                     <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("sourceAudio")}>
-                      Add volume keyframe
+                      {copy.addVolumeKeyframe}
                     </Button>
                   </div>
                   {audioVolumeKeyframes(
@@ -9024,20 +9212,20 @@ export const SmartEditPanel = ({
                             type="button"
                             onClick={() => removeSegmentAudioVolumeKeyframe("sourceAudio", keyframe.id)}
                           >
-                            Delete
+                            {copy.deleteKeyframe}
                           </button>
                         </article>
                       ))}
                     </div>
                   ) : (
-                    <small>No source audio volume keyframes.</small>
+                    <small>{copy.noSourceAudioVolumeKeyframes}</small>
                   )}
                 </div>
                 <div className="smart-edit-effect-keyframes">
                   <div className="smart-edit-section-header">
-                    <h6>Voice volume keyframes</h6>
+                    <h6>{copy.voiceVolumeKeyframesTitle}</h6>
                     <Button onClick={() => addSegmentAudioVolumeKeyframeAtPlayhead("voice")}>
-                      Add volume keyframe
+                      {copy.addVolumeKeyframe}
                     </Button>
                   </div>
                   {audioVolumeKeyframes(
@@ -9056,13 +9244,13 @@ export const SmartEditPanel = ({
                             type="button"
                             onClick={() => removeSegmentAudioVolumeKeyframe("voice", keyframe.id)}
                           >
-                            Delete
+                            {copy.deleteKeyframe}
                           </button>
                         </article>
                       ))}
                     </div>
                   ) : (
-                    <small>No voice volume keyframes.</small>
+                    <small>{copy.noVoiceVolumeKeyframes}</small>
                   )}
                 </div>
               </section>
@@ -9185,14 +9373,14 @@ export const SmartEditPanel = ({
             icon={<RotateCcw size={16} />}
             onClick={undoPlanChange}
           >
-            {commandHistory.undoLabel()}
+            {commandHistory.undoLabel(copy.undo, commandHistoryLabel)}
           </Button>
           <Button
             disabled={commandHistory.redoStack.length === 0}
             icon={<RotateCw size={16} />}
             onClick={redoPlanChange}
           >
-            {commandHistory.redoLabel()}
+            {commandHistory.redoLabel(copy.redo, commandHistoryLabel)}
           </Button>
           <div className="timeline-edit-mode-toggle" aria-label={copy.editMode}>
             {smartEditTimelineEditModes.map((mode) => (
@@ -9387,6 +9575,12 @@ export const SmartEditPanel = ({
             {hasSelectedTextTimelineMaterials ? (
               <>
                 <Button
+                  disabled={selectedTextTimelineMaterialCount < 2}
+                  onClick={mergeSelectedTimelineTextMaterials}
+                >
+                  {copy.mergeTextClips}
+                </Button>
+                <Button
                   onClick={() =>
                     updateSelectedTimelineMaterialTextStyle(
                       {
@@ -9431,21 +9625,23 @@ export const SmartEditPanel = ({
               </>
             ) : null}
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 0.5 }, "Set selected audio volume 50%")}>
-              Vol 50%
+              {copy.audioVolume50}
             </Button>
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 1 }, "Set selected audio volume 100%")}>
-              Vol 100%
+              {copy.audioVolume100}
             </Button>
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 1.5 }, "Set selected audio volume 150%")}>
-              Vol 150%
+              {copy.audioVolume150}
             </Button>
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioFadeInSeconds: 0.3 }, "Set selected audio fade in")}>
-              Fade in
+              {copy.audioFadeInQuick}
             </Button>
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioFadeOutSeconds: 0.3 }, "Set selected audio fade out")}>
-              Fade out
+              {copy.audioFadeOutQuick}
             </Button>
-            <Button onClick={addSelectedTimelineMaterialAudioKeyframes}>Keyframe</Button>
+            <Button onClick={addSelectedTimelineMaterialAudioKeyframes}>
+              {copy.addAudioKeyframe}
+            </Button>
             <Button onClick={() => updateSelectedTimelineMaterialState({ muted: true })}>
               {copy.muteSelected}
             </Button>
@@ -9865,7 +10061,10 @@ export const SmartEditPanel = ({
                       <b>{segment.title}</b>
                       {segment.waveform ? <SmartEditWaveformStrip segment={segment} /> : null}
                       {segment.trackId === "sourceAudio" || segment.trackId === "voice" || segment.trackId === "bgm" ? (
-                        <SmartEditAudioKeyframeMarkers segment={segment} />
+                        <SmartEditAudioKeyframeMarkers
+                          label={copy.audioVolumeKeyframesTitle}
+                          segment={segment}
+                        />
                       ) : null}
                       {segment.trackId === "caption" ? <SmartEditTextStyleStrip segment={segment} /> : null}
                       <small>{segment.meta}</small>
