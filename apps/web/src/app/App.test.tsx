@@ -71,6 +71,7 @@ import {
   trimSmartEditTimelineElementAtPlayhead,
   trimSmartEditTimelineElementsAtPlayhead,
   resizeSmartEditTrackClipEdge,
+  resizeSmartEditTimelineElementsEdge,
   relinkSmartEditTimelineElementWithSceneMate,
   relinkSmartEditTimelineElements,
   slipSmartEditTimelineElementSource,
@@ -5188,6 +5189,98 @@ Second imported caption`,
       text: "New text",
     });
     expect(resizedCaption.targetDurationSeconds).toBeGreaterThanOrEqual(5);
+  });
+
+  it("resizes multiple selected independent timeline materials from the same edge", () => {
+    const basePlan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-batch-resize",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 4,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Use generated scene material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 4,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Batch resize generated materials.",
+          targetDurationSeconds: 6,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "batch-resize",
+      ),
+      1,
+      "batch-resize-caption",
+    );
+
+    const resizedIn = resizeSmartEditTimelineElementsEdge(
+      basePlan,
+      ["video-segment-1-batch-resize", "text-batch-resize-caption"],
+      "in",
+      0.5,
+    );
+    expect(resizedIn.timeline?.elements.find((element) => element.id === "video-segment-1-batch-resize")).toMatchObject({
+      durationSeconds: 3.5,
+      startSecond: 1.5,
+      trimStartSecond: 0.5,
+    });
+    expect(
+      resizedIn.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-resize"),
+    ).toMatchObject({
+      durationSeconds: 3.5,
+      startSecond: 1.5,
+      trimStartSecond: 0.5,
+    });
+    expect(resizedIn.timeline?.elements.find((element) => element.id === "text-batch-resize-caption")).toMatchObject({
+      durationSeconds: 1.5,
+      startSecond: 1.5,
+    });
+
+    const resizedOut = resizeSmartEditTimelineElementsEdge(
+      resizedIn,
+      ["video-segment-1-batch-resize", "text-batch-resize-caption"],
+      "out",
+      -0.5,
+    );
+    expect(resizedOut.timeline?.elements.find((element) => element.id === "video-segment-1-batch-resize")).toMatchObject({
+      durationSeconds: 3,
+      trimEndSecond: 3.5,
+      trimStartSecond: 0.5,
+    });
+    expect(
+      resizedOut.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-resize"),
+    ).toMatchObject({
+      durationSeconds: 3,
+      trimEndSecond: 3.5,
+      trimStartSecond: 0.5,
+    });
+    expect(resizedOut.timeline?.elements.find((element) => element.id === "text-batch-resize-caption")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1.5,
+    });
   });
 
   it("ripples the timeline when deleting a smart edit segment", () => {

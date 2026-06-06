@@ -1862,3 +1862,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "ripples a linked generated video|ripples the timeline|deletes an independent|trims multiple selected|splits multiple selected|moves and deletes multiple independent|closes the timeline gap|keeps linked detached"`
 - Remaining:
   - Continue browser-level validation on the deployed workspace as larger smart-edit flows mature.
+
+## 2026-06-06 Timeline Material Batch Edge Resize
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a multi-clip edge-trim primitive expected in CutCap/OpenCut-style timeline editors.
+- Fix:
+  - Added `resizeSmartEditTimelineElementsEdge` for trimming the same in/out edge across selected persistent timeline materials.
+  - The helper expands linked generated video/audio mates, skips derived storyboard clips, respects locked tracks, and applies the edit as an all-or-nothing batch when every selected material can be resized.
+  - Track clip trim clicks and trim-handle drags now preserve a selected independent material group and trim the selected group together.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "resizes multiple selected independent"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "resizes multiple selected|resizes independent|keeps linked detached|moves and deletes multiple independent|trims multiple selected|splits multiple selected|ripples a linked generated video|updates playback speed for selected|updates mute and hidden state"`
+- Remaining:
+  - Browser-level validation should confirm multi-selected trim handles feel correct on a loaded project timeline.

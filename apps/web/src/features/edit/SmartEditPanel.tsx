@@ -3470,6 +3470,42 @@ export const resizeSmartEditTrackClipEdge = (
   return plan;
 };
 
+export const resizeSmartEditTimelineElementsEdge = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  edge: "in" | "out",
+  deltaSeconds: number,
+): SmartEditPlan => {
+  const snappedDelta = snapTimelineSeconds(deltaSeconds);
+  if (Math.abs(snappedDelta) < 0.001) {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const resizeIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  const resizableElements = baseTimeline.elements.filter(
+    (element) => resizeIds.has(element.id) && !lockedTrackIds.has(element.trackId),
+  );
+  if (resizableElements.length === 0) {
+    return plan;
+  }
+  const resizedById = new Map<string, SmartEditTimelineElement>();
+  for (const element of resizableElements) {
+    const resizedElement = resizePersistentTimelineElementEdge(element, edge, snappedDelta);
+    if (!resizedElement) {
+      return plan;
+    }
+    resizedById.set(element.id, resizedElement);
+  }
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.map((element) => resizedById.get(element.id) ?? element),
+    baseTimeline.tracks,
+  );
+};
+
 export const removeSmartEditTimelineElementFromTimeline = (
   plan: SmartEditPlan,
   elementId: string,
@@ -5709,17 +5745,39 @@ export const SmartEditPanel = ({
     if (!plan || trackClip.trackId === "bgm" || isTimelineTrackLocked(trackClip.trackId)) {
       return;
     }
-    const nextPlan = resizeSmartEditTrackClipEdge(plan, trackClip, edge, deltaSeconds);
+    const selectedResizeIds =
+      selectedTrackClipIds.length > 1 && selectedTrackClipIdSet.has(trackClip.id)
+        ? selectedTrackClipIds
+        : [];
+    const shouldResizeSelectedBatch =
+      selectedResizeIds.length > 1 &&
+      selectedBatchTrackClips.every(
+        (selectedClip) =>
+          !selectedClip.segmentId &&
+          selectedClip.trackId !== "bgm" &&
+          !isTimelineTrackLocked(selectedClip.trackId),
+      );
+    const nextPlan = shouldResizeSelectedBatch
+      ? resizeSmartEditTimelineElementsEdge(plan, selectedResizeIds, edge, deltaSeconds)
+      : resizeSmartEditTrackClipEdge(plan, trackClip, edge, deltaSeconds);
     if (nextPlan === plan) {
       return;
     }
     commitPlanChange(nextPlan, {
-      label: edge === "in" ? `Trim ${trackClip.trackId} in` : `Trim ${trackClip.trackId} out`,
+      label: shouldResizeSelectedBatch
+        ? edge === "in"
+          ? "Trim selected materials in"
+          : "Trim selected materials out"
+        : edge === "in"
+          ? `Trim ${trackClip.trackId} in`
+          : `Trim ${trackClip.trackId} out`,
     });
     setSelectedTrackClipId(trackClip.id);
-    setSelectedTrackClipIds([trackClip.id]);
-    setSelectedSegmentIds(trackClip.segmentId ? [trackClip.segmentId] : []);
-    if (trackClip.segmentId) {
+    setSelectedTrackClipIds(shouldResizeSelectedBatch ? selectedResizeIds : [trackClip.id]);
+    setSelectedSegmentIds(
+      shouldResizeSelectedBatch ? [] : trackClip.segmentId ? [trackClip.segmentId] : [],
+    );
+    if (!shouldResizeSelectedBatch && trackClip.segmentId) {
       onSelectedSegmentChange(trackClip.segmentId);
     } else {
       onSelectedSegmentChange(undefined);
@@ -5738,7 +5796,11 @@ export const SmartEditPanel = ({
       return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
-    selectTrackClip(trackClip, event);
+    if (selectedTrackClipIdSet.has(trackClip.id) && selectedTrackClipIds.length > 1) {
+      setSelectedTrackClipId(trackClip.id);
+    } else {
+      selectTrackClip(trackClip, event);
+    }
     setTrackClipTrimDrag({
       edge,
       pointerId: event.pointerId,
