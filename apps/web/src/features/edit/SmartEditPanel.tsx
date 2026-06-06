@@ -35,6 +35,8 @@ import {
   SkipForward,
   Trash2,
   Unlock,
+  Link,
+  Unlink,
   Volume2,
   VolumeX,
   ZoomIn,
@@ -2837,6 +2839,91 @@ const linkedTimelineElementIds = (
   );
 };
 
+export const unlinkSmartEditTimelineElementGroup = (
+  plan: SmartEditPlan,
+  elementId: string,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (!targetElement?.linkedGroupId) {
+    return plan;
+  }
+  const linkedGroupId = targetElement.linkedGroupId;
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.map((element) =>
+      element.linkedGroupId === linkedGroupId
+        ? {
+            ...element,
+            linkedGroupId: undefined,
+          }
+        : element,
+    ),
+    baseTimeline.tracks,
+  );
+};
+
+export const relinkSmartEditTimelineElements = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const selectedIds = new Set(elementIds);
+  if (selectedIds.size < 2) {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const selectedElements = baseTimeline.elements.filter((element) => selectedIds.has(element.id));
+  const kinds = new Set(selectedElements.map((element) => element.kind));
+  const sceneIds = new Set(selectedElements.map((element) => element.sceneId).filter(Boolean));
+  if (
+    selectedElements.length < 2 ||
+    !kinds.has("video") ||
+    !kinds.has("audio") ||
+    sceneIds.size > 1
+  ) {
+    return plan;
+  }
+  const linkedGroupId = `linked-material-${token}`;
+  return withUpdatedTimelineElements(
+    plan,
+    baseTimeline.elements.map((element) =>
+      selectedIds.has(element.id)
+        ? {
+            ...element,
+            linkedGroupId,
+          }
+        : element,
+    ),
+    baseTimeline.tracks,
+  );
+};
+
+export const relinkSmartEditTimelineElementWithSceneMate = (
+  plan: SmartEditPlan,
+  elementId: string,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const targetElement = baseTimeline.elements.find((element) => element.id === elementId);
+  if (!targetElement || targetElement.linkedGroupId || !targetElement.sceneId) {
+    return plan;
+  }
+  const targetKind = targetElement.kind;
+  if (targetKind !== "video" && targetKind !== "audio") {
+    return plan;
+  }
+  const mate = baseTimeline.elements.find(
+    (element) =>
+      element.id !== targetElement.id &&
+      !element.linkedGroupId &&
+      element.sceneId === targetElement.sceneId &&
+      ((targetKind === "video" && element.kind === "audio") ||
+        (targetKind === "audio" && element.kind === "video")),
+  );
+  return mate ? relinkSmartEditTimelineElements(plan, [targetElement.id, mate.id], token) : plan;
+};
+
 export const resizeSmartEditTrackClipEdge = (
   plan: SmartEditPlan,
   trackClip: Pick<SmartEditTrackSegment, "id" | "segmentId" | "trackId">,
@@ -3568,6 +3655,33 @@ export const SmartEditPanel = ({
     () => plan?.timeline?.elements.find((element) => element.id === selectedTrackClip?.id),
     [plan, selectedTrackClip],
   );
+  const selectedLinkedElements = useMemo(() => {
+    if (!plan?.timeline || !selectedTimelineElement?.linkedGroupId) {
+      return [];
+    }
+    return plan.timeline.elements.filter(
+      (element) => element.linkedGroupId === selectedTimelineElement.linkedGroupId,
+    );
+  }, [plan?.timeline, selectedTimelineElement]);
+  const canRelinkSelectedTimelineElement = useMemo(() => {
+    if (
+      !plan?.timeline ||
+      !selectedTimelineElement ||
+      selectedTimelineElement.linkedGroupId ||
+      !selectedTimelineElement.sceneId ||
+      (selectedTimelineElement.kind !== "video" && selectedTimelineElement.kind !== "audio")
+    ) {
+      return false;
+    }
+    return plan.timeline.elements.some(
+      (element) =>
+        element.id !== selectedTimelineElement.id &&
+        !element.linkedGroupId &&
+        element.sceneId === selectedTimelineElement.sceneId &&
+        ((selectedTimelineElement.kind === "video" && element.kind === "audio") ||
+          (selectedTimelineElement.kind === "audio" && element.kind === "video")),
+    );
+  }, [plan?.timeline, selectedTimelineElement]);
   const trackLabels = {
     bgm: copy.bgmTrack,
     caption: copy.captionTrack,
@@ -4156,6 +4270,34 @@ export const SmartEditPanel = ({
     commitPlanChange(updateSmartEditTimelineElement(plan, selectedTimelineElement.id, patch), {
       label: `Edit ${selectedTrackClip?.trackId ?? "timeline"} material`,
     });
+  };
+
+  const unlinkSelectedTimelineElementGroup = () => {
+    if (!plan || !selectedTimelineElement?.linkedGroupId) {
+      return;
+    }
+    const nextPlan = unlinkSmartEditTimelineElementGroup(plan, selectedTimelineElement.id);
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Unlink scene material group" });
+    setSelectedTrackClipId(selectedTimelineElement.id);
+  };
+
+  const relinkSelectedTimelineElementGroup = () => {
+    if (!plan || !selectedTimelineElement) {
+      return;
+    }
+    const nextPlan = relinkSmartEditTimelineElementWithSceneMate(
+      plan,
+      selectedTimelineElement.id,
+      `${Date.now()}`,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Relink scene material group" });
+    setSelectedTrackClipId(selectedTimelineElement.id);
   };
 
   const updateSelectedSegmentTimelineStart = (nextStartSecond: number) => {
@@ -5390,7 +5532,29 @@ export const SmartEditPanel = ({
                 <strong>{selectedTimelineElement.label}</strong>
                 <span>{trackLabels[selectedTrackClip.trackId]}</span>
                 <small>{selectedTrackClip.range}</small>
+                {selectedTimelineElement.linkedGroupId ? (
+                  <small>Linked group: {selectedLinkedElements.length} clips</small>
+                ) : (
+                  <small>Unlinked material</small>
+                )}
               </div>
+              {selectedTimelineElement.kind === "video" || selectedTimelineElement.kind === "audio" ? (
+                <div className="smart-edit-linked-actions">
+                  {selectedTimelineElement.linkedGroupId ? (
+                    <Button icon={<Unlink size={16} />} onClick={unlinkSelectedTimelineElementGroup}>
+                      Unlink audio/video
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled={!canRelinkSelectedTimelineElement}
+                      icon={<Link size={16} />}
+                      onClick={relinkSelectedTimelineElementGroup}
+                    >
+                      Relink scene material
+                    </Button>
+                  )}
+                </div>
+              ) : null}
               <label>
                 {selectedTrackClip.trackId === "voice" ? copy.voiceover : copy.subtitle}
                 <textarea

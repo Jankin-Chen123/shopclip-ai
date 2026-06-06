@@ -57,6 +57,9 @@ import {
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
   resizeSmartEditTrackClipEdge,
+  relinkSmartEditTimelineElementWithSceneMate,
+  relinkSmartEditTimelineElements,
+  unlinkSmartEditTimelineElementGroup,
   updateSmartEditTimelineElement,
   updateSmartEditTimelineTrack,
 } from "../features/edit/SmartEditPanel";
@@ -3786,6 +3789,90 @@ Second imported caption`,
     );
     expect(removed.timeline?.elements.some((element) => element.id === "video-segment-1-linked")).toBe(false);
     expect(removed.timeline?.elements.some((element) => element.id === "source-audio-segment-1-linked")).toBe(false);
+  });
+
+  it("unlinks and relinks detached scene video and audio materials", () => {
+    const plan = detachSmartEditSceneVideoToTimelineElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        id: "plan-unlink",
+        projectId: "project-1",
+        segments: [
+          {
+            assetTags: [],
+            durationSeconds: 4,
+            enabled: true,
+            id: "segment-1",
+            order: 1,
+            rationale: "Use generated scene material.",
+            sceneId: "scene-1",
+            source: {
+              endSecond: 4,
+              kind: "generated-scene-clip",
+              sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+              sceneClipUrl: "https://cdn.example.test/scene.mp4",
+              sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+              startSecond: 0,
+            },
+            subtitle: "Hook",
+            timelineStartSecond: 1,
+            transition: "cut",
+            voiceover: "",
+          },
+        ],
+        strategy: "Edit generated scene materials.",
+        targetDurationSeconds: 5,
+      } satisfies SmartEditPlan,
+      "segment-1",
+      "unlink",
+    );
+
+    const unlinked = unlinkSmartEditTimelineElementGroup(plan, "video-segment-1-unlink");
+    expect(unlinked.timeline?.elements.every((element) => element.linkedGroupId === undefined)).toBe(true);
+
+    const movedUnlinked = moveSmartEditTrackClipOnTimeline(
+      unlinked,
+      { id: "video-segment-1-unlink", trackId: "video" },
+      1,
+      "magnetic",
+    );
+    expect(movedUnlinked.timeline?.elements.find((element) => element.id === "video-segment-1-unlink")).toMatchObject({
+      startSecond: 2,
+    });
+    expect(movedUnlinked.timeline?.elements.find((element) => element.id === "source-audio-segment-1-unlink")).toMatchObject({
+      startSecond: 1,
+    });
+
+    const relinked = relinkSmartEditTimelineElementWithSceneMate(
+      movedUnlinked,
+      "video-segment-1-unlink",
+      "again",
+    );
+    expect(
+      relinked.timeline?.elements.filter((element) => element.linkedGroupId === "linked-material-again"),
+    ).toHaveLength(2);
+
+    const movedRelinked = moveSmartEditTrackClipOnTimeline(
+      relinked,
+      { id: "source-audio-segment-1-unlink", trackId: "sourceAudio" },
+      0.5,
+      "magnetic",
+    );
+    expect(movedRelinked.timeline?.elements.find((element) => element.id === "source-audio-segment-1-unlink")).toMatchObject({
+      startSecond: 1.5,
+    });
+    expect(movedRelinked.timeline?.elements.find((element) => element.id === "video-segment-1-unlink")).toMatchObject({
+      startSecond: 2.5,
+    });
+
+    expect(
+      relinkSmartEditTimelineElements(movedUnlinked, ["video-segment-1-unlink"], "too-small"),
+    ).toBe(movedUnlinked);
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {

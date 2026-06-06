@@ -1557,3 +1557,24 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api build`
 - Remaining:
   - Linked A/V now works for generated scene materials. Later improvements can add explicit unlink/relink controls and multi-select box selection.
+
+## 2026-06-06 Linked Material Unlink And Relink Controls
+
+- Scope:
+  - Continues the video/audio/subtitle editing path and turns linked generated scene materials into a controllable editing primitive.
+  - Matches the OpenCut-style source-audio workflow expectation that linked A/V can be separated for independent edits and restored when needed.
+- Fix:
+  - Added `unlinkSmartEditTimelineElementGroup` to clear `linkedGroupId` across the selected linked video/audio group.
+  - Added `relinkSmartEditTimelineElements` and `relinkSmartEditTimelineElementWithSceneMate` to rebuild a video/audio group for unlinked elements from the same scene.
+  - Independent timeline material inspector now shows linked/unlinked status.
+  - Linked video/audio elements expose an `Unlink audio/video` action.
+  - Unlinked scene video/audio elements expose a `Relink scene material` action when a compatible scene mate exists.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "unlinks and relinks"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "linked detached scene|unlinks and relinks"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize|linked|unlink"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - The next interaction gap is multi-select box selection or slip edit. Unlink/relink is now available as a base demo control.
