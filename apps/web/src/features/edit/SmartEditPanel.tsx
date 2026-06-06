@@ -2013,6 +2013,25 @@ export const copySmartEditTimelineElementsToClipboard = (
   return timelineItems.length > 0 ? { items: [], timelineItems } : undefined;
 };
 
+export const cutSmartEditTimelineElementsToClipboard = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  editMode: SmartEditTimelineEditMode = "magnetic",
+): { clipboard: SmartEditClipboard | undefined; plan: SmartEditPlan } => {
+  const clipboard = copySmartEditTimelineElementsToClipboard(plan, elementIds);
+  if (!clipboard?.timelineItems?.length) {
+    return { clipboard: undefined, plan };
+  }
+  return {
+    clipboard,
+    plan: removeSmartEditTimelineElementsFromTimeline(
+      plan,
+      clipboard.timelineItems.map((item) => item.element.id),
+      editMode,
+    ),
+  };
+};
+
 export const pasteSmartEditTimelineClipboardAtPlayhead = (
   plan: SmartEditPlan,
   clipboard: SmartEditClipboard | undefined,
@@ -5599,6 +5618,30 @@ export const SmartEditPanel = ({
     );
   };
 
+  const cutSelectedTimelineMaterialsToLocalClipboard = () => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedBatchTrackClips
+      .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
+      .map((trackClip) => trackClip.id);
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const cut = cutSmartEditTimelineElementsToClipboard(
+      plan,
+      selectedTimelineMaterialIds,
+      timelineEditMode,
+    );
+    if (!cut.clipboard || cut.plan === plan) {
+      return;
+    }
+    setSmartEditClipboard(cut.clipboard);
+    commitPlanChange(cut.plan, { label: `Cut selected materials (${timelineEditMode})` });
+    setSelectedTrackClipId(undefined);
+    setSelectedTrackClipIds([]);
+  };
+
   const duplicateSelectedSegments = () => {
     if (!plan || selectedBatchSegments.length === 0) {
       return;
@@ -5710,6 +5753,11 @@ export const SmartEditPanel = ({
         if (isCommandKey && event.key.toLowerCase() === "c") {
           event.preventDefault();
           copySelectedSegmentsToLocalClipboard();
+          return;
+        }
+        if (isCommandKey && event.key.toLowerCase() === "x") {
+          event.preventDefault();
+          cutSelectedTimelineMaterialsToLocalClipboard();
           return;
         }
         if (isCommandKey && event.key.toLowerCase() === "v") {
@@ -7730,6 +7778,12 @@ export const SmartEditPanel = ({
               onClick={() => moveSelectedTrackClips(TRIM_NUDGE_SECONDS)}
             >
               +0.1s
+            </Button>
+            <Button icon={<Copy size={16} />} onClick={copySelectedSegmentsToLocalClipboard}>
+              {copy.copySelected}
+            </Button>
+            <Button icon={<Scissors size={16} />} onClick={cutSelectedTimelineMaterialsToLocalClipboard}>
+              {copy.cutSelected}
             </Button>
             <Button icon={<Trash2 size={16} />} onClick={removeSelectedTrackClip}>
               {copy.deleteSelected}

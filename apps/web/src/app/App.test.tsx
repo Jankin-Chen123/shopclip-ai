@@ -42,6 +42,7 @@ import {
   copySmartEditSegmentsToClipboard,
   copySmartEditTimelineElementsToClipboard,
   createSmartEditCommandHistory,
+  cutSmartEditTimelineElementsToClipboard,
   detachSmartEditSceneVideoToTimelineElement,
   detachSmartEditSourceAudioToTimelineElement,
   duplicateSmartEditSegmentOnTimeline,
@@ -2968,6 +2969,82 @@ Second imported caption`,
       startSecond: 13,
     });
     expect(pasted.targetDurationSeconds).toBe(15);
+  });
+
+  it("cuts independent smart edit timeline materials into the local clipboard", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-cut-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Cut independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Cut independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "cut",
+      ),
+      4,
+      "cut-caption",
+    );
+
+    const cut = cutSmartEditTimelineElementsToClipboard(plan, [
+      "video-segment-1-cut",
+      "text-cut-caption",
+    ]);
+    const pasted = pasteSmartEditTimelineClipboardAtPlayhead(
+      cut.plan,
+      cut.clipboard,
+      6,
+      "cut-paste",
+      "free",
+    );
+
+    expect(cut.clipboard?.timelineItems?.map((item) => item.element.id)).toEqual([
+      "source-audio-segment-1-cut",
+      "video-segment-1-cut",
+      "text-cut-caption",
+    ]);
+    expect(cut.plan.timeline?.elements.some((element) => element.id === "video-segment-1-cut")).toBe(false);
+    expect(cut.plan.timeline?.elements.some((element) => element.id === "source-audio-segment-1-cut")).toBe(false);
+    expect(cut.plan.timeline?.elements.some((element) => element.id === "text-cut-caption")).toBe(false);
+    expect(pasted.timeline?.elements.find((element) => element.id === "source-audio-segment-1-cut-cut-paste-1")).toMatchObject({
+      startSecond: 6,
+    });
+    expect(pasted.timeline?.elements.find((element) => element.id === "video-segment-1-cut-cut-paste-2")).toMatchObject({
+      startSecond: 6,
+    });
+    expect(pasted.timeline?.elements.find((element) => element.id === "text-cut-caption-cut-paste-3")).toMatchObject({
+      startSecond: 9,
+    });
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {

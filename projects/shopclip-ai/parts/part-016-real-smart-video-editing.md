@@ -1719,3 +1719,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Browser-level validation should confirm clipboard focus routing in the live workspace with a loaded timeline.
+
+## 2026-06-06 Timeline Material Cut
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds the editor-standard cut operation for independent timeline materials after generated scene clips have been split into video/audio/text assets.
+- Fix:
+  - Added `cutSmartEditTimelineElementsToClipboard` to snapshot selected independent timeline materials, expand linked video/audio mates, and remove the originals from the timeline.
+  - `Ctrl+X` / `Cmd+X` now cuts selected independent video/audio/text materials into the local smart edit clipboard.
+  - The multi-selection material toolbar now exposes Copy, Cut, and Delete controls side by side.
+  - Cut materials can be pasted back at the playhead with the existing timeline material paste path.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "cuts independent smart edit timeline materials"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "cuts independent|copies and pastes independent|multiple independent|selects all editable independent|keyboard arrow nudges"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Browser-level validation should confirm shortcut focus routing on the deployed workspace with a real loaded timeline.
