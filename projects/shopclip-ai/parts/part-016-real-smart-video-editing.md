@@ -1598,3 +1598,24 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Remaining:
   - The base demo now covers practical video/audio/subtitle editing primitives: split, trim, delete, move, resize, track state, linked A/V unlink/relink, source slip, subtitles, and audio volume/fade/keyframes.
   - Later upgrades should target timeline selection ergonomics, drag previews, and denser multi-track workflows.
+
+## 2026-06-06 Timeline Material Multi-Select
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds OpenCut/CutCap-style multi-selection ergonomics for independent timeline materials after generated scene clips have been split into video/audio/text assets.
+- Fix:
+  - Added `moveSmartEditTimelineElementsOnTimeline` for batch moving persistent timeline materials while preserving their relative offsets.
+  - Added `removeSmartEditTimelineElementsFromTimeline` for deleting multiple selected persistent timeline materials.
+  - Batch operations expand linked video/audio groups so selecting one side of generated scene media keeps the group together.
+  - Track clip selection now supports Ctrl/Meta toggling and Shift range selection.
+  - Dragging one selected independent material can move the selected material batch together.
+  - The timeline batch toolbar now supports nudge-left, nudge-right, delete, and clear selection for selected independent materials.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "moves and deletes multiple independent"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "smart edit|timeline|independent|track state|source audio|SRT|resize|linked|unlink|slip|multiple independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - `corepack pnpm --filter @shopclip/web lint`
+- Remaining:
+  - The next high-value editor upgrades are drag ghost previews, box selection, and denser keyboard/mouse operations.

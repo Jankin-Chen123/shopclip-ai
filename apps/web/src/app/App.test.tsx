@@ -48,9 +48,11 @@ import {
   moveSmartEditSegmentOnTimeline,
   moveSmartEditSegmentOnTimelineWithMode,
   moveSmartEditTrackClipOnTimeline,
+  moveSmartEditTimelineElementsOnTimeline,
   pasteSmartEditClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
   removeSmartEditSegmentsFromTimeline,
+  removeSmartEditTimelineElementsFromTimeline,
   removeSmartEditTimelineElementFromTimeline,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
@@ -3950,6 +3952,75 @@ Second imported caption`,
       trimEndSecond: 8,
       trimStartSecond: 5,
     });
+  });
+
+  it("moves and deletes multiple independent smart edit timeline materials as a batch", () => {
+    const basePlan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-batch-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Use generated scene material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Batch edit generated materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "batch",
+      ),
+      5,
+      "batch-caption",
+    );
+
+    const moved = moveSmartEditTimelineElementsOnTimeline(
+      basePlan,
+      ["video-segment-1-batch", "text-batch-caption"],
+      1.2,
+    );
+    expect(moved.timeline?.elements.find((element) => element.id === "video-segment-1-batch")).toMatchObject({
+      startSecond: 2.2,
+    });
+    expect(moved.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch")).toMatchObject({
+      startSecond: 2.2,
+    });
+    expect(moved.timeline?.elements.find((element) => element.id === "text-batch-caption")).toMatchObject({
+      startSecond: 6.2,
+    });
+
+    const removed = removeSmartEditTimelineElementsFromTimeline(
+      moved,
+      ["video-segment-1-batch", "text-batch-caption"],
+    );
+    expect(removed.timeline?.elements.some((element) => element.id === "video-segment-1-batch")).toBe(false);
+    expect(removed.timeline?.elements.some((element) => element.id === "source-audio-segment-1-batch")).toBe(false);
+    expect(removed.timeline?.elements.some((element) => element.id === "text-batch-caption")).toBe(false);
   });
 
   it("adds an independent text element to the smart edit timeline at the playhead", () => {
