@@ -39,6 +39,7 @@ import {
   importSmartEditSrtCaptionsToTimeline,
   applySmartEditCommandHistoryRedo,
   applySmartEditCommandHistoryUndo,
+  closeSmartEditTimelineGapAtPlayhead,
   copySmartEditSegmentsToClipboard,
   copySmartEditTimelineElementsToClipboard,
   createSmartEditCommandHistory,
@@ -5339,6 +5340,76 @@ Second imported caption`,
     });
     expect(nextPlan.segments[0].timelineStartSecond).toBe(0);
     expect(nextPlan.targetDurationSeconds).toBe(4);
+  });
+
+  it("closes the timeline gap at the playhead across video audio and subtitle materials", () => {
+    const baseSegment = {
+      assetTags: ["hero"],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds: 2,
+      enabled: true,
+      playbackRate: 1,
+      rationale: "Close a visible timeline gap.",
+      source: {
+        assetId: "asset-1",
+        kind: "image-asset" as const,
+      },
+      sourceAudioMuted: false,
+      transition: "cut" as const,
+      voiceoverStartOffsetSeconds: 0,
+    };
+    const plan = addSmartEditTimelineTextElement(
+      {
+        audio: {
+          bgmTrack: "none",
+          targetLanguage: "zh-CN",
+          voice: "clear-host",
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        id: "plan-close-gap",
+        projectId: "project-1",
+        segments: [
+          {
+            ...baseSegment,
+            id: "segment-1",
+            order: 1,
+            sceneId: "scene-1",
+            subtitle: "First",
+            timelineStartSecond: 0,
+            voiceover: "First voice",
+          },
+          {
+            ...baseSegment,
+            id: "segment-2",
+            order: 2,
+            sceneId: "scene-2",
+            subtitle: "Second",
+            timelineStartSecond: 5,
+            voiceover: "Second voice",
+          },
+        ],
+        strategy: "Close a gap.",
+        targetDurationSeconds: 8,
+      } satisfies SmartEditPlan,
+      6,
+      "gap-caption",
+    );
+
+    const closed = closeSmartEditTimelineGapAtPlayhead(plan, 3);
+
+    expect(closed.segments.map((segment) => [segment.id, segment.timelineStartSecond])).toEqual([
+      ["segment-1", 0],
+      ["segment-2", 2],
+    ]);
+    expect(closed.timeline?.elements.find((element) => element.id === "segment-2-video")).toMatchObject({
+      startSecond: 2,
+    });
+    expect(closed.timeline?.elements.find((element) => element.id === "text-gap-caption")).toMatchObject({
+      startSecond: 3,
+    });
+    expect(closed.targetDurationSeconds).toBe(5);
+    expect(closeSmartEditTimelineGapAtPlayhead(closed, 1)).toBe(closed);
   });
 
   it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {

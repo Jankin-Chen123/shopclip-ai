@@ -2345,6 +2345,103 @@ const withUpdatedTimelineElements = (
   };
 };
 
+const mergedTimelineIntervals = (
+  elements: SmartEditTimeline["elements"],
+): SmartEditRippleGap[] =>
+  elements
+    .map((element) => ({
+      endSecond: snapTimelineSeconds(element.startSecond + element.durationSeconds),
+      startSecond: clampTimelineStart(element.startSecond),
+    }))
+    .filter((interval) => interval.endSecond - interval.startSecond >= MIN_SMART_EDIT_CLIP_SECONDS)
+    .sort((left, right) => left.startSecond - right.startSecond)
+    .reduce<SmartEditRippleGap[]>((merged, interval) => {
+      const previous = merged.at(-1);
+      if (!previous || interval.startSecond > previous.endSecond + 0.001) {
+        merged.push(interval);
+        return merged;
+      }
+      previous.endSecond = Math.max(previous.endSecond, interval.endSecond);
+      return merged;
+    }, []);
+
+const timelineGapAtPlayhead = (
+  intervals: SmartEditRippleGap[],
+  playheadSecond: number,
+): SmartEditRippleGap | undefined => {
+  const playhead = clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  if (intervals.length === 0) {
+    return undefined;
+  }
+  const first = intervals[0];
+  if (!first) {
+    return undefined;
+  }
+  if (first.startSecond >= MIN_SMART_EDIT_CLIP_SECONDS && playhead <= first.startSecond + 0.001) {
+    return { startSecond: 0, endSecond: first.startSecond };
+  }
+  for (let index = 0; index < intervals.length - 1; index += 1) {
+    const current = intervals[index];
+    const next = intervals[index + 1];
+    if (!current || !next) {
+      continue;
+    }
+    const gap = {
+      endSecond: next.startSecond,
+      startSecond: current.endSecond,
+    };
+    if (
+      gap.endSecond - gap.startSecond >= MIN_SMART_EDIT_CLIP_SECONDS &&
+      playhead >= gap.startSecond - 0.001 &&
+      playhead <= gap.endSecond + 0.001
+    ) {
+      return gap;
+    }
+  }
+  return undefined;
+};
+
+export const closeSmartEditTimelineGapAtPlayhead = (
+  plan: SmartEditPlan,
+  playheadSecond: number,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const gap = timelineGapAtPlayhead(mergedTimelineIntervals(baseTimeline.elements), playheadSecond);
+  if (!gap) {
+    return plan;
+  }
+  const gapDurationSeconds = snapTimelineSeconds(gap.endSecond - gap.startSecond);
+  if (gapDurationSeconds < MIN_SMART_EDIT_CLIP_SECONDS) {
+    return plan;
+  }
+  const nextElements = baseTimeline.elements.map((element) =>
+    element.startSecond >= gap.endSecond - 0.001
+      ? {
+          ...element,
+          startSecond: clampTimelineStart(snapTimelineSeconds(element.startSecond - gapDurationSeconds)),
+        }
+      : element,
+  );
+  const currentStarts = timelineStartsForSegments(plan.segments);
+  const nextSegments = plan.segments.map((segment) => {
+    const startSecond = currentStarts.get(segment.id) ?? segment.timelineStartSecond ?? 0;
+    return startSecond >= gap.endSecond - 0.001
+      ? {
+          ...segment,
+          timelineStartSecond: clampTimelineStart(snapTimelineSeconds(startSecond - gapDurationSeconds)),
+        }
+      : segment;
+  });
+  return withUpdatedTimelineElements(
+    {
+      ...plan,
+      segments: nextSegments,
+    },
+    nextElements,
+    baseTimeline.tracks,
+  );
+};
+
 export const updateSmartEditTimelineTrack = (
   plan: SmartEditPlan,
   trackId: string,
@@ -5412,6 +5509,18 @@ export const SmartEditPanel = ({
     setSelectedSegmentIds([target.segment.id]);
   };
 
+  const closeGapAtPlayhead = () => {
+    if (!plan) {
+      return;
+    }
+    const nextPlan = closeSmartEditTimelineGapAtPlayhead(plan, boundedPlayheadSeconds);
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Close timeline gap" });
+    setPlayheadSeconds((current) => Math.min(current, nextPlan.targetDurationSeconds));
+  };
+
   const nudgeSegmentTrim = (
     segmentId: string,
     edge: "in" | "out",
@@ -8017,6 +8126,13 @@ export const SmartEditPanel = ({
             onClick={() => trimAtPlayhead("left")}
           >
             {copy.trimRightAtPlayhead}
+          </Button>
+          <Button
+            disabled={!plan}
+            icon={<SkipBack size={16} />}
+            onClick={closeGapAtPlayhead}
+          >
+            {copy.closeGapAtPlayhead}
           </Button>
           <Button
             disabled={!plan}

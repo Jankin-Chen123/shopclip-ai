@@ -1829,3 +1829,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - The base demo now covers the essential video/audio/subtitle timeline editing set. Browser-level validation on the deployed workspace is still needed before marking the broader OpenCut-like objective complete.
+
+## 2026-06-06 Timeline Gap Close
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a practical editing operation for cleaning up rough cuts after dragging, trimming, or deleting clips.
+- Fix:
+  - Added `closeSmartEditTimelineGapAtPlayhead` to detect the empty interval under the playhead and shift all later storyboard and persistent timeline materials left by that gap duration.
+  - The operation preserves existing clips when the playhead is inside occupied media instead of creating accidental timeline movement.
+  - The timeline toolbar now exposes `Close gap` / `闭合空隙`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "closes the timeline gap"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "closes the timeline gap|ripple|updates mute and hidden state|updates playback speed for selected|trims multiple selected|splits multiple selected|duplicates independent|cuts independent|copies and pastes independent|multiple independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Browser-level validation should confirm the toolbar action on a loaded project timeline after deploy.
