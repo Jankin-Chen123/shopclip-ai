@@ -3209,6 +3209,22 @@ export const selectSmartEditTimelineElementIdsInBox = (
     .map((element) => element.id);
 };
 
+export const selectSmartEditTimelineElementIds = (plan: SmartEditPlan): string[] => {
+  const timeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const trackOrder = new Map(timeline.tracks.map((track, index) => [track.id, index]));
+  const lockedTrackIds = new Set(
+    timeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  return timeline.elements
+    .filter((element) => !isDerivedTimelineElement(element) && !lockedTrackIds.has(element.trackId))
+    .sort((left, right) =>
+      left.trackId === right.trackId
+        ? left.startSecond - right.startSecond
+        : (trackOrder.get(left.trackId) ?? 0) - (trackOrder.get(right.trackId) ?? 0),
+    )
+    .map((element) => element.id);
+};
+
 export const selectSmartEditTrackIdsInMarquee = (
   trackRows: Array<{
     bottom: number;
@@ -4329,6 +4345,21 @@ export const SmartEditPanel = ({
     setSelectedTrackClipId(undefined);
     setSelectedTrackClipIds([]);
     onSelectedSegmentChange(sortedSegments[0]?.id);
+  };
+
+  const selectAllTimelineElements = (): boolean => {
+    if (!plan) {
+      return false;
+    }
+    const timelineElementIds = selectSmartEditTimelineElementIds(plan);
+    if (timelineElementIds.length === 0) {
+      return false;
+    }
+    setSelectedTrackClipIds(timelineElementIds);
+    setSelectedTrackClipId(timelineElementIds.at(-1));
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
+    return true;
   };
 
   const clearMultiSelection = () => {
@@ -5560,6 +5591,9 @@ export const SmartEditPanel = ({
         }
         if (isCommandKey && event.key.toLowerCase() === "a") {
           event.preventDefault();
+          if (!selectedSegment && selectAllTimelineElements()) {
+            return;
+          }
           selectAllSegments();
           return;
         }

@@ -56,6 +56,7 @@ import {
   removeSmartEditTimelineElementsFromTimeline,
   removeSmartEditTimelineElementFromTimeline,
   selectSmartEditTrackIdsInMarquee,
+  selectSmartEditTimelineElementIds,
   selectSmartEditTimelineElementIdsInBox,
   smartEditTimelineKeyboardNudgeSeconds,
   splitSmartEditSegmentOnTimeline,
@@ -4083,6 +4084,51 @@ Second imported caption`,
         trackIds: ["voice", "caption"],
       }),
     ).toEqual(["voice-box-voice", "text-box-text-a"]);
+  });
+
+  it("selects all editable independent smart edit timeline materials while skipping locked tracks", () => {
+    const plan = updateSmartEditTimelineTrack(
+      addSmartEditTimelineTextElement(
+        addSmartEditTimelineVoiceElement(
+          {
+            audio: {
+              bgmTrack: "none",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            createdAt: "2026-06-06T00:00:00.000Z",
+            id: "plan-select-all-materials",
+            projectId: "project-1",
+            segments: [
+              {
+                assetTags: [],
+                durationSeconds: 4,
+                enabled: true,
+                id: "segment-1",
+                order: 1,
+                rationale: "Keep derived storyboard materials out of timeline select-all.",
+                sceneId: "scene-1",
+                source: { imageUrl: "https://cdn.example.test/image.png", kind: "image-asset" },
+                subtitle: "Derived caption",
+                timelineStartSecond: 0,
+                transition: "cut",
+                voiceover: "",
+              },
+            ],
+            strategy: "Select independent materials.",
+            targetDurationSeconds: 8,
+          } satisfies SmartEditPlan,
+          1,
+          "select-all-voice",
+        ),
+        2,
+        "select-all-text",
+      ),
+      "voiceover",
+      { locked: true },
+    );
+
+    expect(selectSmartEditTimelineElementIds(plan)).toEqual(["text-select-all-text"]);
   });
 
   it("selects track ids crossed by a cross-track marquee range", () => {

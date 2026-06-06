@@ -1688,3 +1688,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Browser-level validation should confirm keyboard focus handling in the live workspace when a real project timeline is loaded.
+
+## 2026-06-06 Timeline Material Select All
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Improves the editor selection model so keyboard shortcuts operate on independent timeline materials, not only storyboard segments.
+- Fix:
+  - Added `selectSmartEditTimelineElementIds` to collect editable persistent timeline material ids in track order while skipping derived storyboard clips and locked tracks.
+  - `Ctrl+A` / `Cmd+A` now selects all independent timeline materials when the user is in timeline-material context; storyboard segment select-all remains the fallback.
+  - The selected timeline material batch can then be moved with keyboard nudges or deleted with the existing batch controls.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "selects all editable independent|keyboard arrow nudges|multiple independent|box range|cross-track marquee"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Browser-level validation should confirm focus routing for `Ctrl+A` on the live workspace once a real timeline is loaded.
