@@ -1922,3 +1922,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps selected independent timeline material|moves and deletes multiple independent|resizes multiple selected|resizes independent|keeps linked detached|updates playback speed for selected|updates mute and hidden state|updates audio volume and fades|adds audio volume keyframes|trims multiple selected|splits multiple selected|duplicates independent|cuts independent|copies and pastes independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
 - Remaining:
   - Browser-level validation should confirm the snapping feels predictable during drag and trim interactions after deploy.
+
+## 2026-06-06 Timeline Drag Preview Snapping
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Aligns drag preview behavior with the actual magnetic drop behavior so edits feel predictable while dragging.
+- Fix:
+  - `previewSmartEditTrackClipDrag` now accepts snap points and snaps preview starts/ends to playhead or edge points when close enough.
+  - The Smart Edit UI passes the current playhead plus unselected timeline material boundaries into drag previews.
+  - Existing non-snapping preview behavior remains unchanged when no snap points are provided.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps track clip drag previews"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "snaps track clip drag previews|previews track clip drag|snaps selected independent timeline material|moves and deletes multiple independent|resizes multiple selected|resizes independent|keeps linked detached|updates playback speed for selected|updates mute and hidden state|updates audio volume and fades|adds audio volume keyframes|trims multiple selected|splits multiple selected|duplicates independent|cuts independent|copies and pastes independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
+- Remaining:
+  - Browser-level validation should confirm the ghost clip and final drop position stay aligned in a loaded project timeline.

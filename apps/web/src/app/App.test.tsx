@@ -5048,6 +5048,39 @@ Second imported caption`,
     ]);
   });
 
+  it("snaps track clip drag previews to playhead and edge snap points", () => {
+    const clips = [
+      {
+        durationSeconds: 2,
+        id: "video-a",
+        meta: "Video",
+        range: "1.0s - 3.0s",
+        startSecond: 1,
+        title: "Video A",
+        trackId: "video" as const,
+      },
+    ];
+
+    expect(
+      previewSmartEditTrackClipDrag({
+        currentClientX: 176,
+        pixelsPerSecond: 40,
+        selectedIds: ["video-a"],
+        snapPoints: [5],
+        startClientX: 100,
+        trackClip: clips[0],
+        trackClips: clips,
+      }),
+    ).toEqual([
+      {
+        durationSeconds: 2,
+        id: "video-a",
+        startSecond: 3,
+        trackId: "video",
+      },
+    ]);
+  });
+
   it("adds an independent text element to the smart edit timeline at the playhead", () => {
     const plan = {
       audio: {

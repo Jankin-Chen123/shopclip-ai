@@ -3976,6 +3976,7 @@ export const previewSmartEditTrackClipDrag = ({
   currentClientX,
   pixelsPerSecond,
   selectedIds,
+  snapPoints = [],
   startClientX,
   trackClip,
   trackClips,
@@ -3983,6 +3984,7 @@ export const previewSmartEditTrackClipDrag = ({
   currentClientX: number;
   pixelsPerSecond: number;
   selectedIds: string[];
+  snapPoints?: number[];
   startClientX: number;
   trackClip: Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">;
   trackClips: Array<Pick<SmartEditTrackSegment, "durationSeconds" | "id" | "startSecond" | "trackId">>;
@@ -4001,10 +4003,27 @@ export const previewSmartEditTrackClipDrag = ({
   const rawDeltaSeconds = snapTimelineSeconds((currentClientX - startClientX) / pixelsPerSecond);
   const earliestStart = Math.min(...sourceClips.map((candidate) => candidate.startSecond));
   const clampedDeltaSeconds = Math.max(rawDeltaSeconds, -earliestStart);
+  const previewDeltaSeconds =
+    snapPoints
+      .flatMap((point) =>
+        sourceClips.flatMap((candidate) => [
+          {
+            delta: snapTimelineSeconds(point - candidate.startSecond),
+            distance: Math.abs(point - (candidate.startSecond + clampedDeltaSeconds)),
+          },
+          {
+            delta: snapTimelineSeconds(point - candidate.startSecond - candidate.durationSeconds),
+            distance: Math.abs(point - (candidate.startSecond + candidate.durationSeconds + clampedDeltaSeconds)),
+          },
+        ]),
+      )
+      .filter((candidate) => candidate.distance <= TIMELINE_EDGE_SNAP_SECONDS)
+      .sort((left, right) => left.distance - right.distance)[0]?.delta ?? clampedDeltaSeconds;
+  const finalDeltaSeconds = Math.max(previewDeltaSeconds, -earliestStart);
   return sourceClips.map((candidate) => ({
     durationSeconds: candidate.durationSeconds,
     id: candidate.id,
-    startSecond: clampTimelineStart(snapTimelineSeconds(candidate.startSecond + clampedDeltaSeconds)),
+    startSecond: clampTimelineStart(snapTimelineSeconds(candidate.startSecond + finalDeltaSeconds)),
     trackId: candidate.trackId,
   }));
 };
@@ -4632,12 +4651,22 @@ export const SmartEditPanel = ({
             currentClientX: trackClipMoveDrag.currentClientX,
             pixelsPerSecond: timelinePixelsPerSecond,
             selectedIds: selectedTrackClipIds,
+            snapPoints: [
+              boundedPlayheadSeconds,
+              ...trackSegments
+                .flatMap((track) => track.segments)
+                .filter((segment) => !selectedTrackClipIdSet.has(segment.id))
+                .flatMap((segment) => [
+                  segment.startSecond,
+                  snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+                ]),
+            ],
             startClientX: trackClipMoveDrag.startClientX,
             trackClip: trackClipMoveDrag.trackClip,
             trackClips: trackSegments.flatMap((track) => track.segments),
           })
         : [],
-    [selectedTrackClipIds, timelinePixelsPerSecond, trackClipMoveDrag, trackSegments],
+    [boundedPlayheadSeconds, selectedTrackClipIdSet, selectedTrackClipIds, timelinePixelsPerSecond, trackClipMoveDrag, trackSegments],
   );
   const trackBoxSelectTrackIdSet = useMemo(
     () =>
