@@ -1673,3 +1673,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - The next high-value editor upgrades are denser keyboard operations and browser-level validation of marquee drag behavior on the live workspace.
+
+## 2026-06-06 Timeline Keyboard Nudge Controls
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds keyboard-level timeline positioning controls expected in an editor workflow.
+- Fix:
+  - Added `smartEditTimelineKeyboardNudgeSeconds` to map ArrowLeft/ArrowRight to `-0.1s`/`+0.1s`, with Shift expanding the nudge to `-1s`/`+1s`.
+  - Selected independent video/audio/text timeline materials now move with ArrowLeft/ArrowRight instead of only changing storyboard selection.
+  - The same move path supports one selected independent material or a multi-selected material batch, preserving linked A/V expansion and track-lock checks.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "keyboard arrow nudges|multiple independent|box range|cross-track marquee"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Browser-level validation should confirm keyboard focus handling in the live workspace when a real project timeline is loaded.

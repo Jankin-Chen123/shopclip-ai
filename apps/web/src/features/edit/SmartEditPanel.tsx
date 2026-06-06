@@ -79,6 +79,20 @@ const TIMELINE_SNAP_SECONDS = 0.1;
 const TIMELINE_EDGE_SNAP_SECONDS = 0.2;
 const ENABLE_ADVANCED_VISUAL_CONTROLS = false;
 
+export const smartEditTimelineKeyboardNudgeSeconds = (
+  key: string,
+  shiftKey: boolean,
+): number | undefined => {
+  const delta = shiftKey ? 1 : TRIM_NUDGE_SECONDS;
+  if (key === "ArrowLeft") {
+    return -delta;
+  }
+  if (key === "ArrowRight") {
+    return delta;
+  }
+  return undefined;
+};
+
 const clampSmartEditDuration = (durationSeconds: number): number =>
   Number.isFinite(durationSeconds)
     ? Math.max(MIN_SMART_EDIT_CLIP_SECONDS, Math.min(MAX_SMART_EDIT_CLIP_SECONDS, durationSeconds))
@@ -4366,13 +4380,13 @@ export const SmartEditPanel = ({
   };
 
   const moveSelectedTrackClips = (deltaSeconds: number) => {
-    if (!plan || selectedBatchTrackClips.length < 2) {
+    if (!plan || selectedBatchTrackClips.length < 1) {
       return;
     }
     const movableClips = selectedBatchTrackClips.filter(
       (trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId),
     );
-    if (movableClips.length < 2) {
+    if (movableClips.length < 1) {
       return;
     }
     const nextPlan = moveSmartEditTimelineElementsOnTimeline(
@@ -5564,13 +5578,21 @@ export const SmartEditPanel = ({
           trimAtPlayhead("left");
           return;
         }
+        const keyboardNudgeSeconds = smartEditTimelineKeyboardNudgeSeconds(event.key, event.shiftKey);
+        if (keyboardNudgeSeconds !== undefined && selectedTrackClip && !selectedTrackClip.segmentId) {
+          event.preventDefault();
+          moveSelectedTrackClips(keyboardNudgeSeconds);
+          return;
+        }
         if (event.key === "ArrowLeft") {
           event.preventDefault();
           selectByOffset(-1);
+          return;
         }
         if (event.key === "ArrowRight") {
           event.preventDefault();
           selectByOffset(1);
+          return;
         }
         if (event.key === "Delete" && selectedTrackClip) {
           event.preventDefault();

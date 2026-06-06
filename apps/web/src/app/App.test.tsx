@@ -57,6 +57,7 @@ import {
   removeSmartEditTimelineElementFromTimeline,
   selectSmartEditTrackIdsInMarquee,
   selectSmartEditTimelineElementIdsInBox,
+  smartEditTimelineKeyboardNudgeSeconds,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
@@ -4097,6 +4098,14 @@ Second imported caption`,
         { endY: 265, startY: 28 },
       ),
     ).toEqual(["video", "caption", "sourceAudio"]);
+  });
+
+  it("maps timeline keyboard arrow nudges to frame-level and coarse moves", () => {
+    expect(smartEditTimelineKeyboardNudgeSeconds("ArrowRight", false)).toBe(0.1);
+    expect(smartEditTimelineKeyboardNudgeSeconds("ArrowLeft", false)).toBe(-0.1);
+    expect(smartEditTimelineKeyboardNudgeSeconds("ArrowRight", true)).toBe(1);
+    expect(smartEditTimelineKeyboardNudgeSeconds("ArrowLeft", true)).toBe(-1);
+    expect(smartEditTimelineKeyboardNudgeSeconds("ArrowUp", true)).toBeUndefined();
   });
 
   it("previews track clip drag positions for selected timeline materials", () => {
