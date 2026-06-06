@@ -3447,6 +3447,40 @@ export const updateSmartEditTimelineElementsPlaybackRate = (
   return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
 };
 
+export const updateSmartEditTimelineElementsState = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  patch: {
+    hidden?: boolean;
+    muted?: boolean;
+  },
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const updateIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (updateIds.size === 0) {
+    return plan;
+  }
+  let changed = false;
+  const nextElements = baseTimeline.elements.map((element) => {
+    if (!updateIds.has(element.id) || isDerivedTimelineElement(element)) {
+      return element;
+    }
+    const nextElement: SmartEditTimeline["elements"][number] = { ...element };
+    if (patch.muted !== undefined && (element.kind === "audio" || element.kind === "bgm")) {
+      nextElement.muted = patch.muted;
+    }
+    if (patch.hidden !== undefined && (element.kind === "video" || element.kind === "text")) {
+      nextElement.hidden = patch.hidden;
+    }
+    if (nextElement.muted !== element.muted || nextElement.hidden !== element.hidden) {
+      changed = true;
+      return nextElement;
+    }
+    return element;
+  });
+  return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
+};
+
 export const selectSmartEditTimelineElementIdsInBox = (
   plan: SmartEditPlan,
   box: {
@@ -5892,6 +5926,29 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label: `Set selected material speed ${clampPlaybackRate(playbackRate)}x` });
   };
 
+  const updateSelectedTimelineMaterialState = (patch: { hidden?: boolean; muted?: boolean }) => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const nextPlan = updateSmartEditTimelineElementsState(plan, selectedTimelineMaterialIds, patch);
+    if (nextPlan === plan) {
+      return;
+    }
+    const label =
+      patch.muted !== undefined
+        ? patch.muted
+          ? "Mute selected materials"
+          : "Unmute selected materials"
+        : patch.hidden
+          ? "Hide selected materials"
+          : "Show selected materials";
+    commitPlanChange(nextPlan, { label });
+  };
+
   const duplicateSelectedSegments = () => {
     if (!plan || selectedBatchSegments.length === 0) {
       return;
@@ -8041,6 +8098,18 @@ export const SmartEditPanel = ({
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(0.5)}>0.5x</Button>
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(1)}>1x</Button>
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(2)}>2x</Button>
+            <Button onClick={() => updateSelectedTimelineMaterialState({ muted: true })}>
+              {copy.muteSelected}
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialState({ muted: false })}>
+              {copy.unmuteSelected}
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialState({ hidden: true })}>
+              {copy.hideSelectedMaterials}
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialState({ hidden: false })}>
+              {copy.showSelectedMaterials}
+            </Button>
             <Button icon={<Trash2 size={16} />} onClick={removeSelectedTrackClip}>
               {copy.deleteSelected}
             </Button>

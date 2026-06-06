@@ -75,6 +75,7 @@ import {
   slipSmartEditTimelineElementSource,
   unlinkSmartEditTimelineElementGroup,
   updateSmartEditTimelineElementsPlaybackRate,
+  updateSmartEditTimelineElementsState,
   updateSmartEditTimelineElement,
   updateSmartEditTimelineTrack,
 } from "../features/edit/SmartEditPanel";
@@ -3188,6 +3189,89 @@ Second imported caption`,
     });
     expect(slowPlan.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-speed")).toMatchObject({
       playbackRate: 0.25,
+    });
+  });
+
+  it("updates mute and hidden state for selected independent timeline materials", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-batch-state-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Batch state independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Batch state independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "batch-state",
+      ),
+      4,
+      "batch-state-caption",
+    );
+
+    const mutedAndHidden = updateSmartEditTimelineElementsState(
+      plan,
+      ["video-segment-1-batch-state", "text-batch-state-caption"],
+      { hidden: true, muted: true },
+    );
+
+    expect(mutedAndHidden.timeline?.elements.find((element) => element.id === "video-segment-1-batch-state")).toMatchObject({
+      hidden: true,
+      muted: false,
+    });
+    expect(mutedAndHidden.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-state")).toMatchObject({
+      hidden: false,
+      muted: true,
+    });
+    expect(mutedAndHidden.timeline?.elements.find((element) => element.id === "text-batch-state-caption")).toMatchObject({
+      hidden: true,
+      muted: false,
+    });
+
+    const visibleAndAudible = updateSmartEditTimelineElementsState(
+      mutedAndHidden,
+      ["video-segment-1-batch-state", "source-audio-segment-1-batch-state", "text-batch-state-caption"],
+      { hidden: false, muted: false },
+    );
+    expect(visibleAndAudible.timeline?.elements.find((element) => element.id === "video-segment-1-batch-state")).toMatchObject({
+      hidden: false,
+      muted: false,
+    });
+    expect(visibleAndAudible.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-state")).toMatchObject({
+      hidden: false,
+      muted: false,
+    });
+    expect(visibleAndAudible.timeline?.elements.find((element) => element.id === "text-batch-state-caption")).toMatchObject({
+      hidden: false,
+      muted: false,
     });
   });
 

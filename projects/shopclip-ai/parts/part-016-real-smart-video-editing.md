@@ -1810,3 +1810,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - Browser-level validation should confirm multi-selected linked video/audio/text materials trim together in a loaded workspace.
+
+## 2026-06-06 Timeline Material Batch State
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds bulk state controls for selected independent timeline materials without expanding into stickers, effects, masks, or other fine-grained OpenCut extras.
+- Fix:
+  - Added `updateSmartEditTimelineElementsState` for batch mute/show-hide updates on persistent timeline materials.
+  - The helper expands linked generated video/audio mates, skips derived storyboard timeline clips, applies `muted` only to audio/BGM materials, and applies `hidden` only to video/text materials.
+  - The independent-material multi-selection toolbar now exposes Mute selected, Unmute selected, Hide selected materials, and Show selected materials.
+  - Added localized copy for generic selected-material visibility actions.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates mute and hidden state"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates mute and hidden state|updates playback speed for selected|trims multiple selected|splits multiple selected|duplicates independent|cuts independent|copies and pastes independent|multiple independent|selects all editable independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - The base demo now covers the essential video/audio/subtitle timeline editing set. Browser-level validation on the deployed workspace is still needed before marking the broader OpenCut-like objective complete.
