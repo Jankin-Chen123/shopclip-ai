@@ -72,6 +72,7 @@ import {
   relinkSmartEditTimelineElements,
   slipSmartEditTimelineElementSource,
   unlinkSmartEditTimelineElementGroup,
+  updateSmartEditTimelineElementsPlaybackRate,
   updateSmartEditTimelineElement,
   updateSmartEditTimelineTrack,
 } from "../features/edit/SmartEditPanel";
@@ -3113,6 +3114,79 @@ Second imported caption`,
       startSecond: 9,
     });
     expect(duplicated.targetDurationSeconds).toBe(11);
+  });
+
+  it("updates playback speed for selected independent video and audio materials", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-batch-speed-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Batch speed independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Batch speed independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "batch-speed",
+      ),
+      4,
+      "batch-speed-caption",
+    );
+
+    const fastPlan = updateSmartEditTimelineElementsPlaybackRate(
+      plan,
+      ["video-segment-1-batch-speed", "text-batch-speed-caption"],
+      8,
+    );
+    expect(fastPlan.timeline?.elements.find((element) => element.id === "video-segment-1-batch-speed")).toMatchObject({
+      playbackRate: 4,
+    });
+    expect(fastPlan.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-speed")).toMatchObject({
+      playbackRate: 4,
+    });
+    expect(fastPlan.timeline?.elements.find((element) => element.id === "text-batch-speed-caption")).toMatchObject({
+      playbackRate: 1,
+    });
+
+    const slowPlan = updateSmartEditTimelineElementsPlaybackRate(
+      fastPlan,
+      ["video-segment-1-batch-speed"],
+      0.1,
+    );
+    expect(slowPlan.timeline?.elements.find((element) => element.id === "video-segment-1-batch-speed")).toMatchObject({
+      playbackRate: 0.25,
+    });
+    expect(slowPlan.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-speed")).toMatchObject({
+      playbackRate: 0.25,
+    });
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {

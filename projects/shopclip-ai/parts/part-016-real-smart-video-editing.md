@@ -1756,3 +1756,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - Browser-level validation should confirm the duplicate toolbar action on a real loaded timeline.
+
+## 2026-06-06 Timeline Material Batch Speed
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a high-frequency timeline speed control for selected generated video/audio materials.
+- Fix:
+  - Added `updateSmartEditTimelineElementsPlaybackRate` for batch speed updates on persistent timeline materials.
+  - The helper expands linked generated video/audio mates, skips derived storyboard clips, skips text/subtitle materials, and clamps speed to the existing `0.25x`-`4x` range.
+  - The independent-material multi-selection toolbar now exposes `0.5x`, `1x`, and `2x` speed actions.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates playback speed for selected independent"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates playback speed for selected|updates independent audio material speed|duplicates independent|cuts independent|copies and pastes independent|multiple independent|selects all editable independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Browser-level validation should confirm speed actions on selected linked scene video/audio materials in a loaded workspace.

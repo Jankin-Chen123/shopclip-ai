@@ -3322,6 +3322,38 @@ const expandedPersistentTimelineElementIds = (
   return ids;
 };
 
+export const updateSmartEditTimelineElementsPlaybackRate = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  playbackRate: number,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const updateIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (updateIds.size === 0) {
+    return plan;
+  }
+  const nextPlaybackRate = clampPlaybackRate(playbackRate);
+  let changed = false;
+  const nextElements = baseTimeline.elements.map((element) => {
+    if (
+      !updateIds.has(element.id) ||
+      isDerivedTimelineElement(element) ||
+      (element.kind !== "video" && element.kind !== "audio")
+    ) {
+      return element;
+    }
+    if (element.playbackRate === nextPlaybackRate) {
+      return element;
+    }
+    changed = true;
+    return {
+      ...element,
+      playbackRate: nextPlaybackRate,
+    };
+  });
+  return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
+};
+
 export const selectSmartEditTimelineElementIdsInBox = (
   plan: SmartEditPlan,
   box: {
@@ -5642,13 +5674,16 @@ export const SmartEditPanel = ({
     );
   };
 
+  const selectedEditableTimelineMaterialIds = () =>
+    selectedBatchTrackClips
+      .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
+      .map((trackClip) => trackClip.id);
+
   const cutSelectedTimelineMaterialsToLocalClipboard = () => {
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedBatchTrackClips
-      .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
-      .map((trackClip) => trackClip.id);
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
     if (selectedTimelineMaterialIds.length === 0) {
       return;
     }
@@ -5670,9 +5705,7 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedBatchTrackClips
-      .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
-      .map((trackClip) => trackClip.id);
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
     if (selectedTimelineMaterialIds.length === 0) {
       return;
     }
@@ -5697,6 +5730,25 @@ export const SmartEditPanel = ({
       setSelectedTrackClipId(duplicatedIds[0]);
       setSelectedTrackClipIds(duplicatedIds);
     }
+  };
+
+  const updateSelectedTimelineMaterialSpeed = (playbackRate: number) => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const nextPlan = updateSmartEditTimelineElementsPlaybackRate(
+      plan,
+      selectedTimelineMaterialIds,
+      playbackRate,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: `Set selected material speed ${clampPlaybackRate(playbackRate)}x` });
   };
 
   const duplicateSelectedSegments = () => {
@@ -7845,6 +7897,9 @@ export const SmartEditPanel = ({
             <Button icon={<Copy size={16} />} onClick={duplicateSelectedTimelineMaterials}>
               {copy.duplicateSelected}
             </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialSpeed(0.5)}>0.5x</Button>
+            <Button onClick={() => updateSelectedTimelineMaterialSpeed(1)}>1x</Button>
+            <Button onClick={() => updateSelectedTimelineMaterialSpeed(2)}>2x</Button>
             <Button icon={<Trash2 size={16} />} onClick={removeSelectedTrackClip}>
               {copy.deleteSelected}
             </Button>
