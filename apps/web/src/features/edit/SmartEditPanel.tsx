@@ -4675,6 +4675,7 @@ export const SmartEditPanel = ({
   const suppressTrimClickRef = useRef(false);
   const suppressTimelineMoveClickRef = useRef(false);
   const isSyncingTrackScrollRef = useRef(false);
+  const mainTimelineScrollRef = useRef<HTMLDivElement | null>(null);
   const trackScrollRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [commandHistory, setCommandHistory] = useState<SmartEditCommandHistory>(() =>
@@ -4756,10 +4757,49 @@ export const SmartEditPanel = ({
       preview.currentTime = nextTime;
     }
   };
+  const scrollContainerPlayheadIntoView = (
+    container: HTMLDivElement | null,
+    seconds: number,
+  ) => {
+    if (!container || container.clientWidth <= 0 || container.scrollWidth <= container.clientWidth) {
+      return;
+    }
+    const playheadX = seconds * timelinePixelsPerSecond;
+    const guard = Math.min(180, Math.max(80, container.clientWidth * 0.24));
+    const visibleStart = container.scrollLeft + guard;
+    const visibleEnd = container.scrollLeft + container.clientWidth - guard;
+    if (playheadX >= visibleStart && playheadX <= visibleEnd) {
+      return;
+    }
+    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    const nextScrollLeft = Math.max(
+      0,
+      Math.min(playheadX - container.clientWidth / 2, maxScrollLeft),
+    );
+    if (Math.abs(container.scrollLeft - nextScrollLeft) > 1) {
+      container.scrollLeft = nextScrollLeft;
+    }
+  };
+  const scrollPlayheadIntoView = (seconds: number) => {
+    window.requestAnimationFrame(() => {
+      scrollContainerPlayheadIntoView(mainTimelineScrollRef.current, seconds);
+      for (const container of trackScrollRefs.current) {
+        scrollContainerPlayheadIntoView(container, seconds);
+      }
+    });
+  };
   const setPlayheadAndSeekPreview = (seconds: number) => {
     const nextSecond = Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(seconds)));
     setPlayheadSeconds(nextSecond);
     setPreviewCurrentTime(nextSecond);
+    scrollPlayheadIntoView(nextSecond);
+  };
+  const setPlayheadFromPreviewTime = (seconds: number) => {
+    const nextSecond = Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(seconds)));
+    setPlayheadSeconds((current) =>
+      Math.abs(current - nextSecond) > 0.05 ? nextSecond : current,
+    );
+    scrollPlayheadIntoView(nextSecond);
   };
   const togglePreviewPlayback = (): boolean => {
     const preview = previewRef.current;
@@ -7024,16 +7064,10 @@ export const SmartEditPanel = ({
               tabIndex={0}
               onLoadedMetadata={() => setPreviewCurrentTime(boundedPlayheadSeconds)}
               onSeeked={(event) => {
-                const nextTime = Math.min(event.currentTarget.currentTime, timelineDurationSeconds);
-                setPlayheadSeconds((current) =>
-                  Math.abs(current - nextTime) > 0.05 ? snapTimelineSeconds(nextTime) : current,
-                );
+                setPlayheadFromPreviewTime(event.currentTarget.currentTime);
               }}
               onTimeUpdate={(event) => {
-                const nextTime = Math.min(event.currentTarget.currentTime, timelineDurationSeconds);
-                setPlayheadSeconds((current) =>
-                  Math.abs(current - nextTime) > 0.05 ? snapTimelineSeconds(nextTime) : current,
-                );
+                setPlayheadFromPreviewTime(event.currentTarget.currentTime);
               }}
               onKeyDown={(event) => {
                 if (event.key === " ") {
@@ -8976,7 +9010,7 @@ export const SmartEditPanel = ({
           </div>
         )}
         {sortedSegments.length > 0 ? (
-          <div className="timeline-scroll">
+          <div className="timeline-scroll" ref={mainTimelineScrollRef}>
             <div
               className="timeline-ruler"
               style={{ width: timelineWidth }}

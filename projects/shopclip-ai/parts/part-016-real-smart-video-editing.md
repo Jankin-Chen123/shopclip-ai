@@ -2043,3 +2043,15 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Updated timeline shortcut hints to include Space playback.
 - Verification:
   - No local tests run for this small low-risk preview/playhead interaction change per updated user preference.
+
+## 2026-06-06 Timeline Follow Playhead
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+  - Improves long-timeline editing ergonomics while preview playback is driving the playhead.
+- Fix:
+  - Added playhead-follow scrolling for the main sequence timeline and the multi-track material stack.
+  - Preview playback, preview seek, timeline slider changes, ruler drag, edit-point navigation, empty lane click, and gap close now keep the shared playhead inside the visible timeline window when possible.
+  - The follow behavior centers the playhead only when it leaves a guarded visible region, so manual scrolling is not constantly overridden.
+- Verification:
+  - No local tests run for this small low-risk playback/timeline viewport change per updated user preference.
