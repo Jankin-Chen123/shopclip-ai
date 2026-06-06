@@ -76,6 +76,7 @@ import {
   relinkSmartEditTimelineElements,
   slipSmartEditTimelineElementSource,
   unlinkSmartEditTimelineElementGroup,
+  addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead,
   updateSmartEditTimelineElementsPlaybackRate,
   updateSmartEditTimelineElementsAudioProperties,
   updateSmartEditTimelineElementsState,
@@ -3355,6 +3356,87 @@ Second imported caption`,
     expect(textElement?.audioFadeInSeconds).toBeUndefined();
     expect(textElement?.audioFadeOutSeconds).toBeUndefined();
     expect(textElement?.audioVolume).toBeUndefined();
+  });
+
+  it("adds audio volume keyframes at the playhead for selected independent audio materials", () => {
+    const plan = addSmartEditTimelineTextElement(
+      addSmartEditTimelineVoiceElement(
+        detachSmartEditSceneVideoToTimelineElement(
+          {
+            audio: {
+              bgmTrack: "none",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            createdAt: "2026-06-06T00:00:00.000Z",
+            id: "plan-batch-audio-keyframes",
+            projectId: "project-1",
+            segments: [
+              {
+                assetTags: [],
+                durationSeconds: 3,
+                enabled: true,
+                id: "segment-1",
+                order: 1,
+                rationale: "Batch audio keyframe material.",
+                sceneId: "scene-1",
+                source: {
+                  endSecond: 6,
+                  kind: "generated-scene-clip",
+                  sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                  sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                  sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                  startSecond: 0,
+                },
+                subtitle: "Hook",
+                timelineStartSecond: 1,
+                transition: "cut",
+                voiceover: "",
+              },
+            ],
+            strategy: "Batch add audio keyframes.",
+            targetDurationSeconds: 8,
+          } satisfies SmartEditPlan,
+          "segment-1",
+          "batch-keyframe",
+        ),
+        1.5,
+        "batch-keyframe-voice",
+      ),
+      1,
+      "batch-keyframe-caption",
+    );
+
+    const updated = addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead(
+      plan,
+      ["video-segment-1-batch-keyframe", "voice-batch-keyframe-voice", "text-batch-keyframe-caption"],
+      2,
+      0.7,
+      "batch",
+    );
+
+    expect(
+      updated.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-keyframe"),
+    ).toMatchObject({
+      audioVolumeKeyframes: [
+        {
+          id: "audio-keyframe-source-audio-segment-1-batch-keyframe-batch",
+          timeSecond: 1,
+          volume: 0.7,
+        },
+      ],
+    });
+    expect(updated.timeline?.elements.find((element) => element.id === "voice-batch-keyframe-voice")).toMatchObject({
+      audioVolumeKeyframes: [
+        {
+          id: "audio-keyframe-voice-batch-keyframe-voice-batch",
+          timeSecond: 0.5,
+          volume: 0.7,
+        },
+      ],
+    });
+    expect(updated.timeline?.elements.find((element) => element.id === "video-segment-1-batch-keyframe")?.audioVolumeKeyframes).toBeUndefined();
+    expect(updated.timeline?.elements.find((element) => element.id === "text-batch-keyframe-caption")?.audioVolumeKeyframes).toBeUndefined();
   });
 
   it("splits multiple selected independent timeline materials at the playhead", () => {

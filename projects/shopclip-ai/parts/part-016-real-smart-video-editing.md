@@ -1892,3 +1892,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates audio volume and fades|updates playback speed for selected|updates mute and hidden state|updates independent audio material speed"`
 - Remaining:
   - Browser-level validation should confirm the quick audio controls are ergonomic in a loaded project timeline.
+
+## 2026-06-06 Timeline Material Batch Audio Keyframes
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds a basic dynamic-audio editing primitive for selected independent timeline materials.
+- Fix:
+  - Added `addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead` for batch volume keyframes at the current playhead.
+  - The helper expands linked generated video/audio mates, updates only audio/BGM materials, skips derived storyboard clips, respects locked tracks, and ignores materials outside the playhead span.
+  - The selected-material toolbar now exposes a `Keyframe` action beside volume and fade controls.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "adds audio volume keyframes"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "adds audio volume keyframes|updates audio volume and fades|updates playback speed for selected|updates mute and hidden state|trims multiple selected|splits multiple selected|resizes multiple selected|duplicates independent|cuts independent|copies and pastes independent|multiple independent|keyboard arrow nudges|renders smart edit as an editor workspace"`
+- Remaining:
+  - Browser-level validation should confirm the keyframe action lands on the expected selected audio clips after deploy.

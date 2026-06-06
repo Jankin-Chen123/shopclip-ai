@@ -3639,6 +3639,53 @@ export const updateSmartEditTimelineElementsAudioProperties = (
   return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
 };
 
+export const addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  playheadSecond: number,
+  volume?: number,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const updateIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (updateIds.size === 0) {
+    return plan;
+  }
+  let changed = false;
+  const nextElements = baseTimeline.elements.map((element) => {
+    const elementEndSecond = element.startSecond + element.durationSeconds;
+    if (
+      !updateIds.has(element.id) ||
+      isDerivedTimelineElement(element) ||
+      lockedTrackIds.has(element.trackId) ||
+      (element.kind !== "audio" && element.kind !== "bgm") ||
+      playheadSecond < element.startSecond ||
+      playheadSecond > elementEndSecond
+    ) {
+      return element;
+    }
+    const timeSecond = clampVisualKeyframeTime(playheadSecond - element.startSecond, element.durationSeconds);
+    const nextKeyframes = audioVolumeKeyframes(element.audioVolumeKeyframes, element.durationSeconds)
+      .filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05)
+      .concat({
+        easing: "linear" as const,
+        id: `audio-keyframe-${element.id}-${token}`,
+        timeSecond,
+        volume: clampAudioVolume(volume ?? element.audioVolume ?? 1),
+      })
+      .sort((left, right) => left.timeSecond - right.timeSecond);
+    changed = true;
+    return {
+      ...element,
+      audioVolumeKeyframes: nextKeyframes,
+    };
+  });
+  return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
+};
+
 export const updateSmartEditTimelineElementsState = (
   plan: SmartEditPlan,
   elementIds: string[],
@@ -6182,6 +6229,25 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label });
   };
 
+  const addSelectedTimelineMaterialAudioKeyframes = () => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const nextPlan = addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead(
+      plan,
+      selectedTimelineMaterialIds,
+      boundedPlayheadSeconds,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Add selected audio volume keyframes" });
+  };
+
   const updateSelectedTimelineMaterialState = (patch: { hidden?: boolean; muted?: boolean }) => {
     if (!plan) {
       return;
@@ -8376,6 +8442,7 @@ export const SmartEditPanel = ({
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioFadeOutSeconds: 0.3 }, "Set selected audio fade out")}>
               Fade out
             </Button>
+            <Button onClick={addSelectedTimelineMaterialAudioKeyframes}>Keyframe</Button>
             <Button onClick={() => updateSelectedTimelineMaterialState({ muted: true })}>
               {copy.muteSelected}
             </Button>
