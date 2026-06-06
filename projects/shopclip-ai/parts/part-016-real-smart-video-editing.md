@@ -1738,3 +1738,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - Browser-level validation should confirm shortcut focus routing on the deployed workspace with a real loaded timeline.
+
+## 2026-06-06 Timeline Material Duplicate
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds the one-click duplicate operation expected in CutCap/OpenCut-style timeline editing for independent materials.
+- Fix:
+  - Added `duplicateSmartEditTimelineElementsOnTimeline` to duplicate selected persistent video/audio/text timeline materials.
+  - Duplicate expands linked generated video/audio mates, preserves relative offsets, assigns fresh ids/linked group ids, and places the copied block directly after the selected block.
+  - The independent-material multi-selection toolbar now exposes `Copy`, `Cut`, `Duplicate`, and `Delete` as first-class actions.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "duplicates independent smart edit timeline materials"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "duplicates independent|cuts independent|copies and pastes independent|multiple independent|selects all editable independent|keyboard arrow nudges"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Browser-level validation should confirm the duplicate toolbar action on a real loaded timeline.

@@ -47,6 +47,7 @@ import {
   detachSmartEditSourceAudioToTimelineElement,
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
+  duplicateSmartEditTimelineElementsOnTimeline,
   moveSmartEditSegmentOnTimeline,
   moveSmartEditSegmentOnTimelineWithMode,
   moveSmartEditTrackClipOnTimeline,
@@ -3045,6 +3046,73 @@ Second imported caption`,
     expect(pasted.timeline?.elements.find((element) => element.id === "text-cut-caption-cut-paste-3")).toMatchObject({
       startSecond: 9,
     });
+  });
+
+  it("duplicates independent smart edit timeline materials directly after the selected block", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-duplicate-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Duplicate independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Duplicate independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "duplicate",
+      ),
+      4,
+      "duplicate-caption",
+    );
+
+    const duplicated = duplicateSmartEditTimelineElementsOnTimeline(
+      plan,
+      ["video-segment-1-duplicate", "text-duplicate-caption"],
+      "material-dup",
+      "free",
+    );
+
+    expect(duplicated.timeline?.elements.find((element) => element.id === "source-audio-segment-1-duplicate-material-dup-1")).toMatchObject({
+      label: "Scene 1 linked audio (copy)",
+      startSecond: 6,
+    });
+    expect(duplicated.timeline?.elements.find((element) => element.id === "video-segment-1-duplicate-material-dup-2")).toMatchObject({
+      label: "Scene 1 detached video (copy)",
+      startSecond: 6,
+    });
+    expect(duplicated.timeline?.elements.find((element) => element.id === "text-duplicate-caption-material-dup-3")).toMatchObject({
+      label: "New text (copy)",
+      startSecond: 9,
+    });
+    expect(duplicated.targetDurationSeconds).toBe(11);
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {

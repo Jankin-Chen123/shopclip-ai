@@ -2032,6 +2032,30 @@ export const cutSmartEditTimelineElementsToClipboard = (
   };
 };
 
+export const duplicateSmartEditTimelineElementsOnTimeline = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  duplicateToken = String(Date.now()),
+  editMode: SmartEditTimelineEditMode = "magnetic",
+): SmartEditPlan => {
+  const clipboard = copySmartEditTimelineElementsToClipboard(plan, elementIds);
+  if (!clipboard?.timelineItems?.length) {
+    return plan;
+  }
+  const blockEnd = Math.max(
+    ...clipboard.timelineItems.map((item) =>
+      snapTimelineSeconds(item.startSecond + item.element.durationSeconds),
+    ),
+  );
+  return pasteSmartEditTimelineClipboardAtPlayhead(
+    plan,
+    clipboard,
+    blockEnd,
+    duplicateToken,
+    editMode,
+  );
+};
+
 export const pasteSmartEditTimelineClipboardAtPlayhead = (
   plan: SmartEditPlan,
   clipboard: SmartEditClipboard | undefined,
@@ -5642,6 +5666,39 @@ export const SmartEditPanel = ({
     setSelectedTrackClipIds([]);
   };
 
+  const duplicateSelectedTimelineMaterials = () => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedBatchTrackClips
+      .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
+      .map((trackClip) => trackClip.id);
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const duplicateToken = `material-${Date.now()}`;
+    const nextPlan = duplicateSmartEditTimelineElementsOnTimeline(
+      plan,
+      selectedTimelineMaterialIds,
+      duplicateToken,
+      timelineEditMode,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: `Duplicate selected materials (${timelineEditMode})` });
+    const duplicatedIds =
+      nextPlan.timeline?.elements
+        .map((element) => element.id)
+        .filter((id) =>
+          selectedTimelineMaterialIds.some((sourceId) => id.startsWith(`${sourceId}-${duplicateToken}-`)),
+        ) ?? [];
+    if (duplicatedIds.length > 0) {
+      setSelectedTrackClipId(duplicatedIds[0]);
+      setSelectedTrackClipIds(duplicatedIds);
+    }
+  };
+
   const duplicateSelectedSegments = () => {
     if (!plan || selectedBatchSegments.length === 0) {
       return;
@@ -7784,6 +7841,9 @@ export const SmartEditPanel = ({
             </Button>
             <Button icon={<Scissors size={16} />} onClick={cutSelectedTimelineMaterialsToLocalClipboard}>
               {copy.cutSelected}
+            </Button>
+            <Button icon={<Copy size={16} />} onClick={duplicateSelectedTimelineMaterials}>
+              {copy.duplicateSelected}
             </Button>
             <Button icon={<Trash2 size={16} />} onClick={removeSelectedTrackClip}>
               {copy.deleteSelected}
