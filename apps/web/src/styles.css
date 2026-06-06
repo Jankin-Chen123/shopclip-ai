@@ -1821,10 +1821,9 @@ textarea {
 }
 
 .asset-library-toolbar {
-  display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(320px, 1fr);
+  display: flex;
   gap: 16px;
-  align-items: stretch;
+  align-items: center;
 }
 
 .asset-import-button {
@@ -1842,6 +1841,7 @@ textarea {
 
 .asset-import-card {
   display: flex;
+  flex: 0 0 300px;
   align-items: center;
   gap: 14px;
   padding: 18px;
@@ -1870,10 +1870,12 @@ textarea {
 }
 
 .asset-unified-search-button {
-  align-self: stretch;
+  align-self: center;
+  width: auto;
   justify-content: center;
-  min-height: 104px;
-  font-size: 0.95rem;
+  min-height: 48px;
+  padding: 0 18px;
+  font-size: 0.9rem;
 }
 
 .asset-import-icon {
@@ -2586,33 +2588,23 @@ textarea {
   align-items: center;
 }
 
-.asset-search-source-tabs {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(130px, 1fr));
-  gap: 6px;
-  align-self: start;
-  padding: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(8, 10, 16, 0.42);
+.asset-search-dialog-form {
+  grid-template-columns: minmax(0, 1fr) 180px auto;
 }
 
-.asset-search-source-tabs button {
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+.asset-search-source-filter {
+  display: grid;
+  gap: 4px;
+}
+
+.asset-search-source-filter span {
   color: var(--muted);
-  background: transparent;
+  font-size: 0.72rem;
   font-weight: 800;
-  cursor: pointer;
 }
 
-.asset-search-source-tabs button.active,
-.asset-search-source-tabs button:hover {
-  color: var(--text);
-  border-color: rgba(34, 211, 238, 0.32);
-  background: linear-gradient(90deg, rgba(236, 72, 153, 0.16), rgba(34, 211, 238, 0.1));
+.asset-search-source-filter select {
+  min-height: 46px;
 }
 
 .external-provider-summary {

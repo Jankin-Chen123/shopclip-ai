@@ -20,9 +20,14 @@
 - Local screenshots:
   - `output/verify-assets-ui.png`
   - `output/verify-assets-search-modal.png`
+  - `output/verify-assets-compact-button-fixed-2.png`
+  - `output/verify-assets-search-filter-fixed-2.png`
   - `output/verify-inspiration-ui.png`
   - `output/verify-inspiration-history-collapsed.png`
   - `output/verify-project-ui.png`
+- Asset search regression check:
+  - Local source search now filters the current asset list in the dialog and does not call `/api/assets/search`.
+  - Source selection is presented as a single `Source` filter in the same search form, not as separate local/third-party sections.
 
 ## Notes
 
