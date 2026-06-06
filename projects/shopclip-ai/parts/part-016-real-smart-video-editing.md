@@ -2030,3 +2030,16 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Updated the Smart Edit timeline hint text to expose the core split, trim, edit-point, delete, and clear-selection shortcuts.
 - Verification:
   - No local tests run for this small low-risk keyboard/UI hint change per updated user preference.
+
+## 2026-06-06 Preview Playhead Sync
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+  - Makes the rendered preview behave more like a real editor monitor tied to the timeline playhead.
+- Fix:
+  - Added editor-level Space playback toggling when focus is inside Smart Edit but not on a text field or native control.
+  - Seeking the timeline playhead through the slider, ruler drag, edit-point navigation, empty lane click, or gap close now seeks the rendered preview video when metadata is available.
+  - Preview video `timeupdate` and `seeked` events now update the shared Smart Edit playhead, keeping the ruler and multi-track lane playhead aligned during playback.
+  - Updated timeline shortcut hints to include Space playback.
+- Verification:
+  - No local tests run for this small low-risk preview/playhead interaction change per updated user preference.

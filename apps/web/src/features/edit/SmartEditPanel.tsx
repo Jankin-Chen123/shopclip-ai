@@ -677,6 +677,12 @@ const isTextEditingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLSelectElement ||
   (target instanceof HTMLElement && target.isContentEditable);
 
+const isPlaybackShortcutControlTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLButtonElement ||
+  target instanceof HTMLAnchorElement ||
+  target instanceof HTMLVideoElement ||
+  (target instanceof HTMLElement && target.getAttribute("role") === "button");
+
 const planDurationSeconds = (segments: SmartEditSegment[]): number =>
   Math.min(
     600,
@@ -4740,6 +4746,34 @@ export const SmartEditPanel = ({
   const boundedPlayheadSeconds = Math.min(playheadSeconds, timelineDurationSeconds);
   const timelinePixelsPerSecond = TIMELINE_BASE_PX_PER_SECOND * timelineZoom;
   const timelineWidth = Math.max(720, timelineDurationSeconds * timelinePixelsPerSecond);
+  const setPreviewCurrentTime = (seconds: number) => {
+    const preview = previewRef.current;
+    if (!preview || !Number.isFinite(preview.duration)) {
+      return;
+    }
+    const nextTime = Math.max(0, Math.min(seconds, preview.duration));
+    if (Math.abs(preview.currentTime - nextTime) > 0.05) {
+      preview.currentTime = nextTime;
+    }
+  };
+  const setPlayheadAndSeekPreview = (seconds: number) => {
+    const nextSecond = Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(seconds)));
+    setPlayheadSeconds(nextSecond);
+    setPreviewCurrentTime(nextSecond);
+  };
+  const togglePreviewPlayback = (): boolean => {
+    const preview = previewRef.current;
+    if (!preview) {
+      return false;
+    }
+    if (preview.paused) {
+      setPreviewCurrentTime(boundedPlayheadSeconds);
+      void preview.play();
+    } else {
+      preview.pause();
+    }
+    return true;
+  };
   const rulerTicks = useMemo(
     () => timelineRulerTicks(timelineDurationSeconds),
     [timelineDurationSeconds],
@@ -5930,7 +5964,7 @@ export const SmartEditPanel = ({
       return;
     }
     commitPlanChange(nextPlan, { label: "Close timeline gap" });
-    setPlayheadSeconds((current) => Math.min(current, nextPlan.targetDurationSeconds));
+    setPlayheadAndSeekPreview(Math.min(boundedPlayheadSeconds, nextPlan.targetDurationSeconds));
   };
 
   const nudgeSegmentTrim = (
@@ -6010,7 +6044,7 @@ export const SmartEditPanel = ({
   };
 
   const updatePlayheadFromPointer = (event: ReactPointerEvent<HTMLElement>) => {
-    setPlayheadSeconds(playheadSecondsForPointerEvent(event));
+    setPlayheadAndSeekPreview(playheadSecondsForPointerEvent(event));
   };
 
   const jumpPlayheadToEditPoint = (direction: "previous" | "next") => {
@@ -6019,7 +6053,7 @@ export const SmartEditPanel = ({
       direction === "next"
         ? trackEditPoints.find((point) => point > threshold)
         : [...trackEditPoints].reverse().find((point) => point < threshold);
-    setPlayheadSeconds(nextPoint ?? (direction === "next" ? timelineDurationSeconds : 0));
+    setPlayheadAndSeekPreview(nextPoint ?? (direction === "next" ? timelineDurationSeconds : 0));
   };
 
   const setTrackScrollRef = (index: number) => (element: HTMLDivElement | null) => {
@@ -6388,7 +6422,7 @@ export const SmartEditPanel = ({
     const endX = Math.max(trackBoxSelectDrag.startLaneX, trackBoxSelectDrag.currentLaneX);
     setTrackBoxSelectDrag(undefined);
     if (endX - startX < 8) {
-      setPlayheadSeconds(playheadSecondsForPointerEvent(event));
+      setPlayheadAndSeekPreview(playheadSecondsForPointerEvent(event));
       return;
     }
     const startSecond = snapTimelineSeconds(startX / timelinePixelsPerSecond);
@@ -6768,6 +6802,12 @@ export const SmartEditPanel = ({
         if (isTextEditingTarget(event.target)) {
           return;
         }
+        if (!isCommandKey && event.key === " " && !isPlaybackShortcutControlTarget(event.target)) {
+          if (togglePreviewPlayback()) {
+            event.preventDefault();
+          }
+          return;
+        }
         if (isCommandKey && event.key.toLowerCase() === "c") {
           event.preventDefault();
           copySelectedSegmentsToLocalClipboard();
@@ -6982,14 +7022,24 @@ export const SmartEditPanel = ({
               ref={previewRef}
               src={result.previewUrl}
               tabIndex={0}
+              onLoadedMetadata={() => setPreviewCurrentTime(boundedPlayheadSeconds)}
+              onSeeked={(event) => {
+                const nextTime = Math.min(event.currentTarget.currentTime, timelineDurationSeconds);
+                setPlayheadSeconds((current) =>
+                  Math.abs(current - nextTime) > 0.05 ? snapTimelineSeconds(nextTime) : current,
+                );
+              }}
+              onTimeUpdate={(event) => {
+                const nextTime = Math.min(event.currentTarget.currentTime, timelineDurationSeconds);
+                setPlayheadSeconds((current) =>
+                  Math.abs(current - nextTime) > 0.05 ? snapTimelineSeconds(nextTime) : current,
+                );
+              }}
               onKeyDown={(event) => {
                 if (event.key === " ") {
                   event.preventDefault();
-                  if (previewRef.current?.paused) {
-                    void previewRef.current.play();
-                  } else {
-                    previewRef.current?.pause();
-                  }
+                  event.stopPropagation();
+                  togglePreviewPlayback();
                 }
               }}
             >
@@ -8719,7 +8769,7 @@ export const SmartEditPanel = ({
               step={0.1}
               type="range"
               value={boundedPlayheadSeconds}
-              onChange={(event) => setPlayheadSeconds(Number(event.target.value))}
+              onChange={(event) => setPlayheadAndSeekPreview(Number(event.target.value))}
             />
           </label>
           <strong>{formatTimelineTime(boundedPlayheadSeconds)}</strong>

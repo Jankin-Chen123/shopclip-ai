@@ -356,7 +356,7 @@ export const copy = {
       pasteClipboardAtPlayhead: "Paste copied",
       moveEarlier: "Move earlier",
       moveLater: "Move later",
-      deleteHint: "Drag a clip to move it. Shortcuts: S split, Q/W trim, Alt+Arrow jump cuts, Delete/Backspace remove, Esc clear selection.",
+      deleteHint: "Drag a clip to move it. Shortcuts: Space play, S split, Q/W trim, Alt+Arrow jump cuts, Delete/Backspace remove, Esc clear selection.",
       timelineControls: "Timeline controls",
       editMode: "Edit mode",
       editModes: {
@@ -755,7 +755,7 @@ export const copy = {
       pasteClipboardAtPlayhead: "粘贴复制片段",
       moveEarlier: "前移",
       moveLater: "后移",
-      deleteHint: "拖动片段可移动位置。快捷键：S 切分，Q/W 裁剪，Alt+方向键跳剪辑点，Delete/Backspace 删除，Esc 清空选择。",
+      deleteHint: "拖动片段可移动位置。快捷键：空格播放，S 切分，Q/W 裁剪，Alt+方向键跳剪辑点，Delete/Backspace 删除，Esc 清空选择。",
       timelineControls: "时间轴控制",
       editMode: "编辑模式",
       editModes: {
