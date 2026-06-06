@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "re
 import type { ProjectBrief, ProjectSummary, RenderTask, ScriptResult } from "@shopclip/shared";
 import {
   ArrowLeft,
-  ArrowUpRight,
   BarChart3,
   Box,
   Check,
@@ -11,7 +10,6 @@ import {
   FileText,
   Film,
   Images,
-  LayoutDashboard,
   Plus,
   Trash2,
   X,
@@ -55,9 +53,6 @@ const getText = (language: Language) =>
     ? {
         portfolioTitle: "项目",
         portfolioSubtitle: "每张卡片代表一个商品项目，进入后管理素材、剧本和视频。",
-        searchPlaceholder: "搜索商品名称或品牌...",
-        allFilter: "全部",
-        sortLatest: "最近更新",
         openProject: "打开项目工作区",
         createProject: "新建项目",
         loading: "项目加载中",
@@ -87,9 +82,6 @@ const getText = (language: Language) =>
         portfolioTitle: "Project portfolio",
         portfolioSubtitle:
           "Each card represents one product project with its materials, scripts, and videos.",
-        searchPlaceholder: "Search product name or brand...",
-        allFilter: "All",
-        sortLatest: "Recently updated",
         openProject: "Open project workspace",
         createProject: "Create project",
         loading: "Loading projects",
@@ -369,18 +361,6 @@ export const ProjectWorkspace = ({
   if (!project) {
     return (
       <section className="project-portfolio" aria-labelledby="project-portfolio-title">
-        <div className="project-portfolio-toolbar">
-          <label className="project-search">
-            <span className="sr-only">{text.searchPlaceholder}</span>
-            <input placeholder={text.searchPlaceholder} readOnly />
-          </label>
-          <Button disabled icon={<LayoutDashboard size={17} />}>
-            {text.allFilter}
-          </Button>
-          <Button disabled icon={<ArrowUpRight size={17} />}>
-            {text.sortLatest}
-          </Button>
-        </div>
         <div className="project-portfolio-heading">
           <div>
             <h1 id="project-portfolio-title">{text.portfolioTitle}</h1>

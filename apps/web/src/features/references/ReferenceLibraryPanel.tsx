@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { AssetMetadata, ReferenceVideo, ViralTemplate } from "@shopclip/shared";
 import {
-  AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Loader2,
   Plus,
@@ -181,26 +181,6 @@ const createReferenceDraft = (reference: ReferenceVideo): ReferenceDraft => ({
   title: reference.title,
 });
 
-const getMissingFields = (draft: ReferenceDraft, copy: ReferenceCopy): string[] => {
-  const fields: string[] = [];
-  if (!draft.sourceAssetId && !draft.sourceUrl?.trim()) {
-    fields.push(copy.missingSource);
-  }
-  if (!draft.title.trim()) {
-    fields.push(copy.missingTitle);
-  }
-  if (!draft.sourcePlatform.trim()) {
-    fields.push(copy.missingPlatform);
-  }
-  if (!draft.category.trim()) {
-    fields.push(copy.missingCategory);
-  }
-  if (!draft.sourceDeclaration.trim()) {
-    fields.push(copy.missingDeclaration);
-  }
-  return fields;
-};
-
 const getElapsedLabel = (reference: ReferenceVideo): string => {
   const timestamp = Date.parse(reference.updatedAt || reference.createdAt);
   if (Number.isNaN(timestamp)) {
@@ -343,6 +323,7 @@ export const ReferenceLibraryPanel = ({
     },
   );
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(new Set());
+  const [isHistoryOpen, setIsHistoryOpen] = useState(true);
 
   const updateDraft = (field: keyof ReferenceDraft, value: string | undefined) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -361,7 +342,6 @@ export const ReferenceLibraryPanel = ({
     draft.sourceDeclaration.trim() &&
     draft.title.trim() &&
     draft.category.trim();
-  const missingFields = getMissingFields(draft, copy);
   const activeReferences = references.filter(
     (reference) => isPendingReference(reference) && !isStalledReference(reference),
   );
@@ -461,18 +441,6 @@ export const ReferenceLibraryPanel = ({
           value={draft.sourceDeclaration}
         />
       </label>
-      <div
-        className={`reference-readiness ${canAnalyze ? "is-ready" : "is-blocked"}`}
-        role="status"
-      >
-        {canAnalyze ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-        <div>
-          <strong>{canAnalyze ? copy.readyToSubmitTitle : copy.blockedSubmitTitle}</strong>
-          <p>
-            {canAnalyze ? copy.readyToSubmitBody : copy.missingFields(missingFields.join(", "))}
-          </p>
-        </div>
-      </div>
       <Button
         disabled={disabled || isLoading || !canAnalyze}
         icon={isLoading ? <Loader2 className="spin" size={18} /> : <WandSparkles size={18} />}
@@ -552,12 +520,28 @@ export const ReferenceLibraryPanel = ({
         </div>
       ) : null}
 
-      <div className="reference-breakdown-list">
-        {references.length === 0 ? (
+      <div className="reference-breakdown-list reference-history-accordion">
+        <button
+          aria-expanded={isHistoryOpen}
+          className="reference-history-toggle"
+          onClick={() => setIsHistoryOpen((current) => !current)}
+          type="button"
+        >
+          <span>
+            <strong>{language === "zh" ? "历史拆解任务" : "Breakdown history"}</strong>
+            <small>{copy.status(references.length)}</small>
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={isHistoryOpen ? "is-open" : undefined}
+            size={18}
+          />
+        </button>
+        {isHistoryOpen && references.length === 0 ? (
           <div className="empty-state compact-empty">
             <strong>{copy.empty}</strong>
           </div>
-        ) : (
+        ) : isHistoryOpen ? (
           <>
             <div className="reference-bulk-actions">
               <strong>{copy.selectedCount(selectedCount)}</strong>
@@ -646,7 +630,7 @@ export const ReferenceLibraryPanel = ({
               );
             })}
           </>
-        )}
+        ) : null}
       </div>
     </section>
   );
