@@ -1967,3 +1967,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "maps timeline pointer|splits multiple selected|trims multiple selected|pastes selected smart edit segments|copies and pastes independent|previews track clip trim|snaps track clip drag previews|renders smart edit as an editor workspace"`
 - Remaining:
   - Browser-level validation should confirm ruler scrubbing is comfortable with real timeline scrolling after deploy.
+
+## 2026-06-06 Track Stack Playhead Ruler
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Extends the playhead/navigation model from the main sequence timeline into the actual multi-track material editor.
+- Fix:
+  - Added a multi-track ruler row above the video, subtitle, source-audio, voice, and BGM lanes.
+  - The multi-track ruler reuses the same snapped playhead pointer mapping as the main timeline, so click-and-drag scrubbing works consistently across both areas.
+  - Each material lane now renders the shared playhead line, making split/trim/paste targets visible directly over the editable video/audio/subtitle tracks.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "renders smart edit as an editor workspace"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "renders smart edit as an editor workspace|maps timeline pointer|splits multiple selected|trims multiple selected|pastes selected smart edit segments|copies and pastes independent|previews track clip trim|snaps track clip drag previews"`
+- Remaining:
+  - Browser-level validation should confirm the multi-track ruler and lane playheads stay visually aligned while horizontally scrolled.

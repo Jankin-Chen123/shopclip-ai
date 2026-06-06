@@ -6200,6 +6200,8 @@ Second imported caption`,
     expect(markup).toContain("Copy and voice");
     expect(markup).toContain("Segment state");
     expect(markup).toContain("Selected");
+    expect(markup).toContain("smart-edit-track-ruler");
+    expect(markup).toContain("smart-edit-track-playhead");
   });
 
   it("parses reference script assets into readable preview sections", () => {

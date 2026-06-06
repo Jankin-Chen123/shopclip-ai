@@ -5100,6 +5100,13 @@ textarea {
   align-items: stretch;
 }
 
+.smart-edit-track-ruler-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
 .smart-edit-track-label {
   display: grid;
   align-content: center;
@@ -5109,6 +5116,10 @@ textarea {
   color: var(--muted);
   font-size: 0.8rem;
   padding-right: 10px;
+}
+
+.smart-edit-track-ruler-label {
+  min-height: 34px;
 }
 
 .smart-edit-track-label strong {
@@ -5143,10 +5154,59 @@ textarea {
   padding-bottom: 2px;
 }
 
+.smart-edit-track-ruler {
+  position: relative;
+  height: 28px;
+  min-width: 100%;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+}
+
+.smart-edit-track-ruler > span:not(.smart-edit-track-playhead) {
+  position: absolute;
+  bottom: 5px;
+  transform: translateX(-1px);
+  color: var(--muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.smart-edit-track-ruler > span:not(.smart-edit-track-playhead)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 1px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .smart-edit-track-lane {
   position: relative;
   min-width: 100%;
   min-height: 74px;
+}
+
+.smart-edit-track-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 2px;
+  background: var(--primary-strong);
+  box-shadow: 0 0 0 1px rgba(244, 114, 182, 0.25);
+  pointer-events: none;
+}
+
+.smart-edit-track-playhead.dragging {
+  box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.18);
+}
+
+.smart-edit-track-playhead.lane-playhead {
+  top: 0;
+  bottom: 0;
 }
 
 .smart-edit-track-lane.box-selecting {

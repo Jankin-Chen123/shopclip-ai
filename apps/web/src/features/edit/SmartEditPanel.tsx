@@ -5960,9 +5960,13 @@ export const SmartEditPanel = ({
   };
 
   const playheadSecondsForPointerEvent = (event: ReactPointerEvent<HTMLElement>): number => {
-    const timelineScroll = event.currentTarget.closest(".timeline-scroll") as HTMLElement | null;
-    const timelineRuler = timelineScroll?.querySelector<HTMLElement>(".timeline-ruler");
-    const timelineRect = (timelineRuler ?? event.currentTarget).getBoundingClientRect();
+    const timelineScroll =
+      (event.currentTarget.closest(".timeline-scroll") as HTMLElement | null) ??
+      (event.currentTarget.closest(".smart-edit-track-clips") as HTMLElement | null);
+    const timelineSurface = timelineScroll?.querySelector<HTMLElement>(
+      ".timeline-ruler, .smart-edit-track-ruler, .smart-edit-track-lane",
+    );
+    const timelineRect = (timelineSurface ?? event.currentTarget).getBoundingClientRect();
     return playheadSecondsFromTimelinePointer({
       clientX: event.clientX,
       durationSeconds: timelineDurationSeconds,
@@ -8949,6 +8953,35 @@ export const SmartEditPanel = ({
             <h3>{copy.trackStack}</h3>
             <span>{copy.trackStackHint}</span>
           </div>
+          <section className="smart-edit-track-ruler-row" aria-label={`${copy.trackStack} ${copy.playhead}`}>
+            <div className="smart-edit-track-label smart-edit-track-ruler-label">
+              <strong>{copy.playhead}</strong>
+            </div>
+            <div className="smart-edit-track-clips">
+              <div
+                className="smart-edit-track-ruler"
+                style={{ width: timelineWidth }}
+                onPointerCancel={() => setPlayheadDrag(undefined)}
+                onPointerDown={startPlayheadDrag}
+                onPointerMove={updatePlayheadDrag}
+                onPointerUp={finishPlayheadDrag}
+              >
+                {rulerTicks.map((tick) => (
+                  <span
+                    key={`track-ruler-${tick}`}
+                    style={{ left: Math.min(tick, timelineDurationSeconds) * timelinePixelsPerSecond }}
+                  >
+                    {formatTimelineTime(tick)}
+                  </span>
+                ))}
+                <span
+                  aria-hidden="true"
+                  className={`smart-edit-track-playhead ${playheadDrag ? "dragging" : ""}`.trim()}
+                  style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
+                />
+              </div>
+            </div>
+          </section>
           {trackSegments.map((track) => {
             const timelineTrack = timelineTrackForTrack(track.id);
             const trackMuted = timelineTrack?.muted ?? track.segments.every((segment) => segment.muted);
@@ -9024,6 +9057,11 @@ export const SmartEditPanel = ({
                   onPointerMove={updateTrackBoxSelectDrag}
                   onPointerUp={finishTrackBoxSelectDrag}
                 >
+                  <span
+                    aria-hidden="true"
+                    className="smart-edit-track-playhead lane-playhead"
+                    style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
+                  />
                   {trackBoxSelectTrackIdSet.has(track.id) && trackBoxSelectDrag ? (
                     <span
                       className="smart-edit-track-box-selection"
