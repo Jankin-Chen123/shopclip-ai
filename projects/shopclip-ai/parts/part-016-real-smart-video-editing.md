@@ -1877,3 +1877,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "resizes multiple selected|resizes independent|keeps linked detached|moves and deletes multiple independent|trims multiple selected|splits multiple selected|ripples a linked generated video|updates playback speed for selected|updates mute and hidden state"`
 - Remaining:
   - Browser-level validation should confirm multi-selected trim handles feel correct on a loaded project timeline.
+
+## 2026-06-06 Timeline Material Batch Audio Properties
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds high-frequency batch audio controls for selected independent timeline materials.
+- Fix:
+  - Added `updateSmartEditTimelineElementsAudioProperties` for batch audio volume, fade-in, and fade-out updates.
+  - The helper expands linked generated video/audio mates, updates only audio/BGM materials, skips derived storyboard clips, and respects locked tracks.
+  - The selected-material toolbar now exposes volume presets `50%`, `100%`, `150%`, plus quick `Fade in` and `Fade out` actions.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates audio volume and fades"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "updates audio volume and fades|updates playback speed for selected|updates mute and hidden state|updates independent audio material speed"`
+- Remaining:
+  - Browser-level validation should confirm the quick audio controls are ergonomic in a loaded project timeline.

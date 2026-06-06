@@ -77,6 +77,7 @@ import {
   slipSmartEditTimelineElementSource,
   unlinkSmartEditTimelineElementGroup,
   updateSmartEditTimelineElementsPlaybackRate,
+  updateSmartEditTimelineElementsAudioProperties,
   updateSmartEditTimelineElementsState,
   updateSmartEditTimelineElement,
   updateSmartEditTimelineTrack,
@@ -3275,6 +3276,85 @@ Second imported caption`,
       hidden: false,
       muted: false,
     });
+  });
+
+  it("updates audio volume and fades for selected independent audio materials", () => {
+    const plan = addSmartEditTimelineTextElement(
+      addSmartEditTimelineVoiceElement(
+        detachSmartEditSceneVideoToTimelineElement(
+          {
+            audio: {
+              bgmTrack: "none",
+              targetLanguage: "zh-CN",
+              voice: "clear-host",
+            },
+            createdAt: "2026-06-06T00:00:00.000Z",
+            id: "plan-batch-audio-materials",
+            projectId: "project-1",
+            segments: [
+              {
+                assetTags: [],
+                durationSeconds: 3,
+                enabled: true,
+                id: "segment-1",
+                order: 1,
+                rationale: "Batch audio independent material.",
+                sceneId: "scene-1",
+                source: {
+                  endSecond: 6,
+                  kind: "generated-scene-clip",
+                  sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                  sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                  sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                  startSecond: 0,
+                },
+                subtitle: "Hook",
+                timelineStartSecond: 1,
+                transition: "cut",
+                voiceover: "",
+              },
+            ],
+            strategy: "Batch edit independent audio materials.",
+            targetDurationSeconds: 8,
+          } satisfies SmartEditPlan,
+          "segment-1",
+          "batch-audio",
+        ),
+        4,
+        "batch-audio-voice",
+      ),
+      5,
+      "batch-audio-caption",
+    );
+
+    const updated = updateSmartEditTimelineElementsAudioProperties(
+      plan,
+      ["video-segment-1-batch-audio", "voice-batch-audio-voice", "text-batch-audio-caption"],
+      {
+        audioFadeInSeconds: 0.4,
+        audioFadeOutSeconds: 0.6,
+        audioVolume: 1.5,
+      },
+    );
+
+    const videoElement = updated.timeline?.elements.find((element) => element.id === "video-segment-1-batch-audio");
+    expect(videoElement?.audioFadeInSeconds).toBeUndefined();
+    expect(videoElement?.audioFadeOutSeconds).toBeUndefined();
+    expect(videoElement?.audioVolume).toBeUndefined();
+    expect(updated.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-audio")).toMatchObject({
+      audioFadeInSeconds: 0.4,
+      audioFadeOutSeconds: 0.6,
+      audioVolume: 1.5,
+    });
+    expect(updated.timeline?.elements.find((element) => element.id === "voice-batch-audio-voice")).toMatchObject({
+      audioFadeInSeconds: 0.4,
+      audioFadeOutSeconds: 0.6,
+      audioVolume: 1.5,
+    });
+    const textElement = updated.timeline?.elements.find((element) => element.id === "text-batch-audio-caption");
+    expect(textElement?.audioFadeInSeconds).toBeUndefined();
+    expect(textElement?.audioFadeOutSeconds).toBeUndefined();
+    expect(textElement?.audioVolume).toBeUndefined();
   });
 
   it("splits multiple selected independent timeline materials at the playhead", () => {

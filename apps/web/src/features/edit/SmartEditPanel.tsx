@@ -3589,6 +3589,56 @@ export const updateSmartEditTimelineElementsPlaybackRate = (
   return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
 };
 
+export const updateSmartEditTimelineElementsAudioProperties = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  patch: {
+    audioFadeInSeconds?: number;
+    audioFadeOutSeconds?: number;
+    audioVolume?: number;
+  },
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const updateIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (updateIds.size === 0) {
+    return plan;
+  }
+  let changed = false;
+  const nextElements = baseTimeline.elements.map((element) => {
+    if (
+      !updateIds.has(element.id) ||
+      isDerivedTimelineElement(element) ||
+      lockedTrackIds.has(element.trackId) ||
+      (element.kind !== "audio" && element.kind !== "bgm")
+    ) {
+      return element;
+    }
+    const nextElement: SmartEditTimeline["elements"][number] = { ...element };
+    if (patch.audioVolume !== undefined) {
+      nextElement.audioVolume = clampAudioVolume(patch.audioVolume);
+    }
+    if (patch.audioFadeInSeconds !== undefined) {
+      nextElement.audioFadeInSeconds = clampAudioFade(patch.audioFadeInSeconds);
+    }
+    if (patch.audioFadeOutSeconds !== undefined) {
+      nextElement.audioFadeOutSeconds = clampAudioFade(patch.audioFadeOutSeconds);
+    }
+    if (
+      nextElement.audioVolume !== element.audioVolume ||
+      nextElement.audioFadeInSeconds !== element.audioFadeInSeconds ||
+      nextElement.audioFadeOutSeconds !== element.audioFadeOutSeconds
+    ) {
+      changed = true;
+      return nextElement;
+    }
+    return element;
+  });
+  return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
+};
+
 export const updateSmartEditTimelineElementsState = (
   plan: SmartEditPlan,
   elementIds: string[],
@@ -6106,6 +6156,32 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label: `Set selected material speed ${clampPlaybackRate(playbackRate)}x` });
   };
 
+  const updateSelectedTimelineMaterialAudio = (
+    patch: {
+      audioFadeInSeconds?: number;
+      audioFadeOutSeconds?: number;
+      audioVolume?: number;
+    },
+    label: string,
+  ) => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const nextPlan = updateSmartEditTimelineElementsAudioProperties(
+      plan,
+      selectedTimelineMaterialIds,
+      patch,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label });
+  };
+
   const updateSelectedTimelineMaterialState = (patch: { hidden?: boolean; muted?: boolean }) => {
     if (!plan) {
       return;
@@ -8285,6 +8361,21 @@ export const SmartEditPanel = ({
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(0.5)}>0.5x</Button>
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(1)}>1x</Button>
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(2)}>2x</Button>
+            <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 0.5 }, "Set selected audio volume 50%")}>
+              Vol 50%
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 1 }, "Set selected audio volume 100%")}>
+              Vol 100%
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 1.5 }, "Set selected audio volume 150%")}>
+              Vol 150%
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioFadeInSeconds: 0.3 }, "Set selected audio fade in")}>
+              Fade in
+            </Button>
+            <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioFadeOutSeconds: 0.3 }, "Set selected audio fade out")}>
+              Fade out
+            </Button>
             <Button onClick={() => updateSelectedTimelineMaterialState({ muted: true })}>
               {copy.muteSelected}
             </Button>
