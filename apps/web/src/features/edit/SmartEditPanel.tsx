@@ -2917,6 +2917,66 @@ export const trimSmartEditTimelineElementAtPlayhead = (
   );
 };
 
+export const trimSmartEditTimelineElementsAtPlayhead = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  playheadSecond: number,
+  side: "left" | "right",
+  editMode: SmartEditTimelineEditMode = "magnetic",
+): SmartEditPlan | undefined => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const trimIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (trimIds.size === 0) {
+    return undefined;
+  }
+  const splitSecond = snapTimelineSeconds(playheadSecond);
+  const removedGaps: SmartEditRippleGap[] = [];
+  let changed = false;
+  const retainedElements = baseTimeline.elements.flatMap((element) => {
+    if (!trimIds.has(element.id) || isDerivedTimelineElement(element)) {
+      return [element];
+    }
+    const elementStart = clampTimelineStart(element.startSecond);
+    const elementEnd = snapTimelineSeconds(elementStart + element.durationSeconds);
+    if (
+      splitSecond <= elementStart + MIN_SMART_EDIT_CLIP_SECONDS ||
+      splitSecond >= elementEnd - MIN_SMART_EDIT_CLIP_SECONDS
+    ) {
+      return [element];
+    }
+    changed = true;
+    removedGaps.push(
+      side === "left"
+        ? {
+            endSecond: elementEnd,
+            startSecond: splitSecond,
+          }
+        : {
+            endSecond: splitSecond,
+            startSecond: elementStart,
+          },
+    );
+    return trimPersistentTimelineElementAtSecond(element, splitSecond, side);
+  });
+  if (!changed) {
+    return undefined;
+  }
+  const nextElements =
+    editMode === "ripple"
+      ? shiftTimelineElementsByRippleGaps(retainedElements, removedGaps)
+      : retainedElements;
+  const nextSegments =
+    editMode === "ripple" ? shiftSegmentsByRippleGaps(plan.segments, removedGaps) : plan.segments;
+  return withUpdatedTimelineElements(
+    {
+      ...plan,
+      segments: nextSegments,
+    },
+    nextElements,
+    baseTimeline.tracks,
+  );
+};
+
 const resizePersistentTimelineElementEdge = (
   element: SmartEditTimelineElement,
   edge: "in" | "out",
@@ -5221,6 +5281,30 @@ export const SmartEditPanel = ({
   const trimAtPlayhead = (side: "left" | "right") => {
     if (!plan) {
       return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length > 1) {
+      const nextPlan = trimSmartEditTimelineElementsAtPlayhead(
+        plan,
+        selectedTimelineMaterialIds,
+        boundedPlayheadSeconds,
+        side,
+        timelineEditMode,
+      );
+      if (nextPlan) {
+        commitPlanChange(nextPlan, {
+          label:
+            side === "left"
+              ? "Trim selected materials right at playhead"
+              : "Trim selected materials left at playhead",
+        });
+        setSelectedTrackClipIds(
+          selectedTimelineMaterialIds.filter((id) =>
+            nextPlan.timeline?.elements.some((element) => element.id === id),
+          ),
+        );
+        return;
+      }
     }
     if (
       selectedTrackClip &&

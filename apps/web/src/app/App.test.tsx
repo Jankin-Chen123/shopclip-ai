@@ -68,6 +68,7 @@ import {
   splitSmartEditTimelineElementsAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
+  trimSmartEditTimelineElementsAtPlayhead,
   resizeSmartEditTrackClipEdge,
   relinkSmartEditTimelineElementWithSceneMate,
   relinkSmartEditTimelineElements,
@@ -3265,6 +3266,94 @@ Second imported caption`,
     expect(split?.timeline?.elements.find((element) => element.id === "text-batch-split-caption-split-batch-knife")).toMatchObject({
       durationSeconds: 1,
       startSecond: 2,
+    });
+  });
+
+  it("trims multiple selected independent timeline materials at the playhead", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-batch-trim-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Batch trim independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Batch trim independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "batch-trim",
+      ),
+      1,
+      "batch-trim-caption",
+    );
+
+    const keepRight = trimSmartEditTimelineElementsAtPlayhead(
+      plan,
+      ["video-segment-1-batch-trim", "text-batch-trim-caption"],
+      2,
+      "right",
+    );
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "video-segment-1-batch-trim")).toMatchObject({
+      durationSeconds: 2,
+      startSecond: 2,
+      trimStartSecond: 1,
+    });
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-trim")).toMatchObject({
+      durationSeconds: 2,
+      startSecond: 2,
+      trimStartSecond: 1,
+    });
+    expect(keepRight?.timeline?.elements.find((element) => element.id === "text-batch-trim-caption")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 2,
+    });
+
+    const keepLeft = trimSmartEditTimelineElementsAtPlayhead(
+      plan,
+      ["video-segment-1-batch-trim", "text-batch-trim-caption"],
+      2,
+      "left",
+    );
+    expect(keepLeft?.timeline?.elements.find((element) => element.id === "video-segment-1-batch-trim")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1,
+      trimEndSecond: 1,
+    });
+    expect(keepLeft?.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-trim")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1,
+      trimEndSecond: 1,
+    });
+    expect(keepLeft?.timeline?.elements.find((element) => element.id === "text-batch-trim-caption")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1,
     });
   });
 

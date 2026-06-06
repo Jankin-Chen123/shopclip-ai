@@ -1792,3 +1792,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - Browser-level validation should confirm multi-selected linked video/audio/text materials split together in a loaded workspace.
+
+## 2026-06-06 Timeline Material Batch Trim
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds multi-material trim-to-playhead behavior so selected generated video/audio/text clips can be shortened together.
+- Fix:
+  - Added `trimSmartEditTimelineElementsAtPlayhead` for batch trimming persistent timeline materials.
+  - The helper expands linked generated video/audio mates, skips derived storyboard clips, and trims only materials intersected by the playhead.
+  - `Q` / `W` and toolbar trim actions now trim multi-selected independent materials in one operation.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "trims multiple selected independent"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "trims multiple selected|trims an independent|trims persistent|splits multiple selected|splits an independent|resizes independent|updates playback speed for selected|duplicates independent|cuts independent|multiple independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Browser-level validation should confirm multi-selected linked video/audio/text materials trim together in a loaded workspace.
