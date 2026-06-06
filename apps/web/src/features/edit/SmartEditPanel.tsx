@@ -2166,6 +2166,7 @@ type SmartEditTrackSegment = {
   startSecond: number;
   muted?: boolean;
   hidden?: boolean;
+  audioVolumeKeyframes?: SmartEditAudioVolumeKeyframe[];
   trimStartSecond?: number;
   waveform?: SmartEditAudioWaveform;
 };
@@ -4434,6 +4435,38 @@ const SmartEditWaveformStrip = ({ segment }: { segment: SmartEditTrackSegment })
   );
 };
 
+const SmartEditAudioKeyframeMarkers = ({ segment }: { segment: SmartEditTrackSegment }) => {
+  const keyframes = audioVolumeKeyframes(
+    segment.audioVolumeKeyframes,
+    segment.durationSeconds,
+  ).filter((keyframe) => keyframe.timeSecond >= 0 && keyframe.timeSecond <= segment.durationSeconds);
+
+  if (keyframes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      aria-label={`Audio volume keyframes for ${segment.title}`}
+      className="smart-edit-audio-keyframes"
+      title="Audio volume keyframes"
+    >
+      {keyframes.map((keyframe) => (
+        <i
+          key={`${segment.id}-${keyframe.id}`}
+          style={{
+            left: `${Math.min(
+              100,
+              Math.max(0, (keyframe.timeSecond / Math.max(0.1, segment.durationSeconds)) * 100),
+            )}%`,
+          }}
+          title={`${keyframe.timeSecond.toFixed(1)}s / ${keyframe.volume.toFixed(2)}`}
+        />
+      ))}
+    </div>
+  );
+};
+
 const timelineTrackSegments = (
   plan: SmartEditPlan | undefined,
   assets: AssetMetadata[],
@@ -4445,6 +4478,7 @@ const timelineTrackSegments = (
       segments: plan.timeline!.elements
         .filter((element) => element.trackId === track.id)
         .map((element) => ({
+          audioVolumeKeyframes: element.audioVolumeKeyframes,
           durationSeconds: element.durationSeconds,
           hidden: element.hidden,
           id: element.id,
@@ -4567,6 +4601,10 @@ const timelineTrackSegments = (
         meta: segment.sourceAudioMuted ? "muted source audio" : "source audio material",
         durationSeconds: sourceAudioDurationSeconds,
         startSecond: startSecond + sourceAudioOffsetSeconds,
+        audioVolumeKeyframes: audioVolumeKeyframes(
+          segment.sourceAudioVolumeKeyframes,
+          sourceAudioDurationSeconds,
+        ),
         muted: segment.sourceAudioMuted ?? false,
         trackId: "sourceAudio" as const,
         trimStartSecond: segment.source.startSecond,
@@ -4617,6 +4655,10 @@ const timelineTrackSegments = (
         meta: plan.audio.voice,
         durationSeconds: voiceoverDurationSeconds,
         startSecond: startSecond + voiceoverOffsetSeconds,
+        audioVolumeKeyframes: audioVolumeKeyframes(
+          segment.voiceoverVolumeKeyframes,
+          voiceoverDurationSeconds,
+        ),
         trackId: "voice" as const,
       };
     });
@@ -9352,6 +9394,9 @@ export const SmartEditPanel = ({
                       <span>{segment.range}</span>
                       <b>{segment.title}</b>
                       {segment.waveform ? <SmartEditWaveformStrip segment={segment} /> : null}
+                      {segment.trackId === "sourceAudio" || segment.trackId === "voice" || segment.trackId === "bgm" ? (
+                        <SmartEditAudioKeyframeMarkers segment={segment} />
+                      ) : null}
                       <small>{segment.meta}</small>
                       {segment.trackId !== "bgm" ? (
                         <button

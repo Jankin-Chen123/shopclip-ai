@@ -2055,3 +2055,15 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - The follow behavior centers the playhead only when it leaves a guarded visible region, so manual scrolling is not constantly overridden.
 - Verification:
   - No local tests run for this small low-risk playback/timeline viewport change per updated user preference.
+
+## 2026-06-06 Audio Keyframe Timeline Markers
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+  - Makes audio volume envelope edits visible directly on the timeline instead of only in the inspector.
+- Fix:
+  - Carried audio volume keyframes into multi-track audio clip view models.
+  - Rendered keyframe markers inside source-audio, voice, and BGM timeline clips when keyframes exist.
+  - Added compact marker styling that aligns keyframe diamonds by clip-relative time while preserving the existing waveform display.
+- Verification:
+  - No local tests run for this small low-risk audio timeline visualization change per updated user preference.
