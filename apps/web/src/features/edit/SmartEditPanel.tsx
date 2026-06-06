@@ -2167,6 +2167,9 @@ type SmartEditTrackSegment = {
   muted?: boolean;
   hidden?: boolean;
   audioVolumeKeyframes?: SmartEditAudioVolumeKeyframe[];
+  textColor?: string;
+  textFontSize?: number;
+  textPositionYPercent?: number;
   trimStartSecond?: number;
   waveform?: SmartEditAudioWaveform;
 };
@@ -4467,6 +4470,22 @@ const SmartEditAudioKeyframeMarkers = ({ segment }: { segment: SmartEditTrackSeg
   );
 };
 
+const SmartEditTextStyleStrip = ({ segment }: { segment: SmartEditTrackSegment }) => {
+  if (segment.trackId !== "caption") {
+    return null;
+  }
+  const color = normalizeTextColor(segment.textColor) ?? "#ffffff";
+  const size = clampTextFontSize(segment.textFontSize ?? 42);
+  const position = Math.round(clampTextPositionYPercent(segment.textPositionYPercent ?? 12));
+  return (
+    <div className="smart-edit-text-style-strip" title="Text style">
+      <i aria-hidden="true" style={{ background: color }} />
+      <span>{size}px</span>
+      <span>Y {position}%</span>
+    </div>
+  );
+};
+
 const timelineTrackSegments = (
   plan: SmartEditPlan | undefined,
   assets: AssetMetadata[],
@@ -4489,9 +4508,12 @@ const timelineTrackSegments = (
           range: timelineRangeLabel(element.startSecond, element.durationSeconds),
           segmentId: element.segmentId,
           startSecond: element.startSecond,
+          textColor: element.textColor,
+          textFontSize: element.textFontSize,
+          textPositionYPercent: element.textPositionYPercent,
           trackId: smartEditTrackIdForTimelineTrack(track),
           trimStartSecond: element.trimStartSecond,
-          title: element.label,
+          title: element.kind === "text" ? element.text ?? element.label : element.label,
           waveform: element.audioWaveform,
         })),
     }));
@@ -7584,19 +7606,35 @@ export const SmartEditPanel = ({
                   )}
                 </div>
               ) : null}
-              <label>
-                {selectedTrackClip.trackId === "voice" ? copy.voiceover : copy.subtitle}
-                <textarea
-                  rows={3}
-                  value={selectedTimelineElement.text ?? selectedTimelineElement.label}
-                  onChange={(event) =>
-                    updateSelectedTimelineElement({
-                      label: event.target.value || selectedTimelineElement.label,
-                      text: event.target.value,
-                    })
-                  }
-                />
-              </label>
+              {selectedTimelineElement.kind === "text" ? (
+                <label>
+                  {copy.subtitle}
+                  <textarea
+                    rows={3}
+                    value={selectedTimelineElement.text ?? selectedTimelineElement.label}
+                    onChange={(event) => {
+                      const nextText = event.target.value;
+                      updateSelectedTimelineElement({
+                        label: nextText.trim() || "Text clip",
+                        text: nextText,
+                      });
+                    }}
+                  />
+                </label>
+              ) : (
+                <label>
+                  Material name
+                  <input
+                    type="text"
+                    value={selectedTimelineElement.label}
+                    onChange={(event) =>
+                      updateSelectedTimelineElement({
+                        label: event.target.value.trim() || selectedTimelineElement.label,
+                      })
+                    }
+                  />
+                </label>
+              )}
               <label>
                 {copy.timelineElementStart}
                 <input
@@ -7775,50 +7813,87 @@ export const SmartEditPanel = ({
                 </>
               ) : null}
               {selectedTimelineElement.kind === "text" ? (
-                <div className="smart-edit-trim-grid">
-                  <label>
-                    Text size
-                    <input
-                      min={12}
-                      max={72}
-                      step={1}
-                      type="number"
-                      value={selectedTimelineElement.textFontSize ?? 42}
-                      onChange={(event) =>
+                <>
+                  <div className="smart-edit-linked-actions text-style-presets">
+                    <Button
+                      onClick={() =>
                         updateSelectedTimelineElement({
-                          textFontSize: Number(event.target.value),
+                          textColor: "#ffffff",
+                          textFontSize: 42,
+                          textPositionYPercent: 82,
                         })
                       }
-                    />
-                  </label>
-                  <label>
-                    Text position
-                    <input
-                      min={8}
-                      max={92}
-                      step={1}
-                      type="number"
-                      value={selectedTimelineElement.textPositionYPercent ?? 12}
-                      onChange={(event) =>
+                    >
+                      Bottom white
+                    </Button>
+                    <Button
+                      onClick={() =>
                         updateSelectedTimelineElement({
-                          textPositionYPercent: Number(event.target.value),
+                          textColor: "#facc15",
+                          textFontSize: 44,
+                          textPositionYPercent: 82,
                         })
                       }
-                    />
-                  </label>
-                  <label>
-                    Text color
-                    <input
-                      type="color"
-                      value={selectedTimelineElement.textColor ?? "#ffffff"}
-                      onChange={(event) =>
+                    >
+                      Highlight
+                    </Button>
+                    <Button
+                      onClick={() =>
                         updateSelectedTimelineElement({
-                          textColor: event.target.value,
+                          textColor: "#ffffff",
+                          textFontSize: 36,
+                          textPositionYPercent: 18,
                         })
                       }
-                    />
-                  </label>
-                </div>
+                    >
+                      Top note
+                    </Button>
+                  </div>
+                  <div className="smart-edit-trim-grid">
+                    <label>
+                      Text size
+                      <input
+                        min={12}
+                        max={72}
+                        step={1}
+                        type="number"
+                        value={selectedTimelineElement.textFontSize ?? 42}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            textFontSize: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Text position
+                      <input
+                        min={8}
+                        max={92}
+                        step={1}
+                        type="number"
+                        value={selectedTimelineElement.textPositionYPercent ?? 12}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            textPositionYPercent: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Text color
+                      <input
+                        type="color"
+                        value={selectedTimelineElement.textColor ?? "#ffffff"}
+                        onChange={(event) =>
+                          updateSelectedTimelineElement({
+                            textColor: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </>
               ) : null}
               <label className="toggle-row">
                 <input
@@ -9397,6 +9472,7 @@ export const SmartEditPanel = ({
                       {segment.trackId === "sourceAudio" || segment.trackId === "voice" || segment.trackId === "bgm" ? (
                         <SmartEditAudioKeyframeMarkers segment={segment} />
                       ) : null}
+                      {segment.trackId === "caption" ? <SmartEditTextStyleStrip segment={segment} /> : null}
                       <small>{segment.meta}</small>
                       {segment.trackId !== "bgm" ? (
                         <button

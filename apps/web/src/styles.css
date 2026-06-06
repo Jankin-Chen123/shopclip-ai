@@ -5390,6 +5390,28 @@ textarea {
   pointer-events: none;
 }
 
+.smart-edit-text-style-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.smart-edit-text-style-strip i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(248, 250, 252, 0.42);
+  border-radius: 3px;
+}
+
+.text-style-presets {
+  flex-wrap: wrap;
+}
+
 .smart-edit-trace {
   display: grid;
   gap: 8px;

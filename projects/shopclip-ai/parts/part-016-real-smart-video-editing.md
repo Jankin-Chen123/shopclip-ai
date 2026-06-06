@@ -2067,3 +2067,30 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Added compact marker styling that aligns keyframe diamonds by clip-relative time while preserving the existing waveform display.
 - Verification:
   - No local tests run for this small low-risk audio timeline visualization change per updated user preference.
+
+## 2026-06-06 Text Material Inspector Cleanup
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+  - Makes the material inspector clearer when editing subtitle/text clips versus video/audio clips.
+- Fix:
+  - Text timeline materials now show a dedicated subtitle body textarea.
+  - Clearing a text clip body now updates the clip card label to a neutral `Text clip` fallback instead of keeping stale subtitle text.
+  - Video and audio timeline materials now show a material-name input instead of a misleading subtitle textarea.
+- Verification:
+  - No local tests run for this small low-risk inspector/UI copy change per updated user preference.
+
+## 2026-06-06 Subtitle Material Editing Batch
+
+- Scope:
+  - Coherent subtitle/text editing batch for the narrowed video, audio, and subtitle editing demo.
+  - Groups several small text-material UX improvements before commit/deploy, following the updated batching preference.
+- Fix:
+  - Text timeline materials show a dedicated subtitle body editor, while video/audio materials show a material-name field.
+  - Text clips can be cleared without leaving stale subtitle labels behind; the card falls back to `Text clip`.
+  - Added common subtitle style presets for bottom white, highlighted, and top-note captions.
+  - Caption timeline cards now show compact style metadata: color swatch, font size, and vertical position.
+- Verification:
+  - `git diff --check`
+  - `git ls-files .agents AGENTS.md plugins .gitignore.agent-workflow-pack .agents/memory`
+  - No local tests run for this low-risk subtitle/text UI batch per updated user preference.
