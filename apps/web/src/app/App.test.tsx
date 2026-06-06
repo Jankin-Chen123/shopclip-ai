@@ -55,6 +55,7 @@ import {
   removeSmartEditSegmentsFromTimeline,
   removeSmartEditTimelineElementsFromTimeline,
   removeSmartEditTimelineElementFromTimeline,
+  selectSmartEditTrackIdsInMarquee,
   selectSmartEditTimelineElementIdsInBox,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
@@ -4081,6 +4082,21 @@ Second imported caption`,
         trackIds: ["voice", "caption"],
       }),
     ).toEqual(["voice-box-voice", "text-box-text-a"]);
+  });
+
+  it("selects track ids crossed by a cross-track marquee range", () => {
+    expect(
+      selectSmartEditTrackIdsInMarquee(
+        [
+          { bottom: 74, locked: false, top: 0, trackId: "video" },
+          { bottom: 158, locked: false, top: 84, trackId: "caption" },
+          { bottom: 242, locked: false, top: 168, trackId: "sourceAudio" },
+          { bottom: 326, locked: true, top: 252, trackId: "voice" },
+          { bottom: 410, locked: false, top: 336, trackId: "bgm" },
+        ],
+        { endY: 265, startY: 28 },
+      ),
+    ).toEqual(["video", "caption", "sourceAudio"]);
   });
 
   it("previews track clip drag positions for selected timeline materials", () => {

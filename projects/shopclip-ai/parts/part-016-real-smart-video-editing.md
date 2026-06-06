@@ -1657,3 +1657,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web lint`
 - Remaining:
   - Cross-track marquee selection and richer keyboard/mouse operations remain the next high-value editor upgrades.
+
+## 2026-06-06 Cross-Track Timeline Marquee Selection
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Improves OpenCut/CutCap-style timeline ergonomics by letting a box selection span multiple track rows instead of only the lane where the drag started.
+- Fix:
+  - Added `selectSmartEditTrackIdsInMarquee` to resolve timeline track ids from a vertical marquee range while skipping locked tracks.
+  - Track box selection now records per-track row geometry at drag start, updates vertical drag coordinates, and selects editable timeline materials across all intersected tracks.
+  - The selection overlay now appears on every crossed track row, while single-lane horizontal box selection remains supported when vertical movement is effectively zero.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "cross-track marquee"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "box range|cross-track marquee|drag positions|multiple independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - The next high-value editor upgrades are denser keyboard operations and browser-level validation of marquee drag behavior on the live workspace.

@@ -2047,11 +2047,21 @@ type TrackClipTrimDragState = {
 
 type TrackBoxSelectDragState = {
   currentClientX: number;
+  currentClientY: number;
   currentLaneX: number;
+  currentTimelineY: number;
   pointerId: number;
   startClientX: number;
+  startClientY: number;
   startLaneX: number;
+  startTimelineY: number;
   trackId: SmartEditTrackId;
+  trackRows: Array<{
+    bottom: number;
+    locked: boolean;
+    top: number;
+    trackId: SmartEditTrackId;
+  }>;
 };
 
 export type SmartEditClipboard = {
@@ -3185,6 +3195,32 @@ export const selectSmartEditTimelineElementIdsInBox = (
     .map((element) => element.id);
 };
 
+export const selectSmartEditTrackIdsInMarquee = (
+  trackRows: Array<{
+    bottom: number;
+    locked?: boolean;
+    top: number;
+    trackId: SmartEditTrackId;
+  }>,
+  range: {
+    endY: number;
+    startY: number;
+  },
+): SmartEditTrackId[] => {
+  const startY = Math.min(range.startY, range.endY);
+  const endY = Math.max(range.startY, range.endY);
+  if (endY - startY < 1) {
+    return trackRows
+      .filter((row) => !row.locked && startY >= row.top && startY <= row.bottom)
+      .sort((left, right) => left.top - right.top)
+      .map((row) => row.trackId);
+  }
+  return trackRows
+    .filter((row) => !row.locked && intervalsOverlap(startY, endY, row.top, row.bottom))
+    .sort((left, right) => left.top - right.top)
+    .map((row) => row.trackId);
+};
+
 export const removeSmartEditTimelineElementsFromTimeline = (
   plan: SmartEditPlan,
   elementIds: string[],
@@ -3984,6 +4020,18 @@ export const SmartEditPanel = ({
           })
         : [],
     [selectedTrackClipIds, timelinePixelsPerSecond, trackClipMoveDrag, trackSegments],
+  );
+  const trackBoxSelectTrackIdSet = useMemo(
+    () =>
+      new Set(
+        trackBoxSelectDrag
+          ? selectSmartEditTrackIdsInMarquee(trackBoxSelectDrag.trackRows, {
+              endY: trackBoxSelectDrag.currentTimelineY,
+              startY: trackBoxSelectDrag.startTimelineY,
+            })
+          : [],
+      ),
+    [trackBoxSelectDrag],
   );
   const selectedTimelineElement = useMemo(
     () => plan?.timeline?.elements.find((element) => element.id === selectedTrackClip?.id),
@@ -5210,13 +5258,33 @@ export const SmartEditPanel = ({
     const laneRect = event.currentTarget.getBoundingClientRect();
     const laneScroller = event.currentTarget.parentElement;
     const laneX = event.clientX - laneRect.left + (laneScroller?.scrollLeft ?? 0);
+    const stackElement = event.currentTarget.closest(".smart-edit-track-stack") as HTMLElement | null;
+    const stackRect = stackElement?.getBoundingClientRect();
+    const trackRows = trackSegments.map((track) => {
+      const trackRowElement = stackElement?.querySelector<HTMLElement>(
+        `.smart-edit-track-row[data-track-id="${track.id}"]`,
+      );
+      const trackRowRect = trackRowElement?.getBoundingClientRect() ?? laneRect;
+      return {
+        bottom: stackRect ? trackRowRect.bottom - stackRect.top : trackRowRect.bottom,
+        locked: isTimelineTrackLocked(track.id),
+        top: stackRect ? trackRowRect.top - stackRect.top : trackRowRect.top,
+        trackId: track.id,
+      };
+    });
+    const timelineY = stackRect ? event.clientY - stackRect.top : event.clientY;
     setTrackBoxSelectDrag({
       currentClientX: event.clientX,
+      currentClientY: event.clientY,
       currentLaneX: laneX,
+      currentTimelineY: timelineY,
       pointerId: event.pointerId,
       startClientX: event.clientX,
+      startClientY: event.clientY,
       startLaneX: laneX,
+      startTimelineY: timelineY,
       trackId,
+      trackRows,
     });
   };
 
@@ -5227,8 +5295,19 @@ export const SmartEditPanel = ({
     const laneRect = event.currentTarget.getBoundingClientRect();
     const laneScroller = event.currentTarget.parentElement;
     const laneX = event.clientX - laneRect.left + (laneScroller?.scrollLeft ?? 0);
+    const stackElement = event.currentTarget.closest(".smart-edit-track-stack") as HTMLElement | null;
+    const stackRect = stackElement?.getBoundingClientRect();
+    const timelineY = stackRect ? event.clientY - stackRect.top : event.clientY;
     setTrackBoxSelectDrag((current) =>
-      current ? { ...current, currentClientX: event.clientX, currentLaneX: laneX } : current,
+      current
+        ? {
+            ...current,
+            currentClientX: event.clientX,
+            currentClientY: event.clientY,
+            currentLaneX: laneX,
+            currentTimelineY: timelineY,
+          }
+        : current,
     );
   };
 
@@ -5248,7 +5327,10 @@ export const SmartEditPanel = ({
     const selectedIds = selectSmartEditTimelineElementIdsInBox(plan, {
       endSecond,
       startSecond,
-      trackIds: [trackBoxSelectDrag.trackId],
+      trackIds: selectSmartEditTrackIdsInMarquee(trackBoxSelectDrag.trackRows, {
+        endY: trackBoxSelectDrag.currentTimelineY,
+        startY: trackBoxSelectDrag.startTimelineY,
+      }),
     });
     if (selectedIds.length === 0) {
       setSelectedTrackClipId(undefined);
@@ -7626,7 +7708,12 @@ export const SmartEditPanel = ({
             const canMuteTrack = track.id === "sourceAudio" || track.id === "voice" || track.id === "bgm";
             const canHideTrack = track.id === "video" || track.id === "caption";
             return (
-            <section className="smart-edit-track-row" key={track.id} aria-label={trackLabels[track.id]}>
+            <section
+              className="smart-edit-track-row"
+              data-track-id={track.id}
+              key={track.id}
+              aria-label={trackLabels[track.id]}
+            >
               <div className="smart-edit-track-label">
                 <strong>{trackLabels[track.id]}</strong>
                 {canMuteTrack && track.segments.length > 0 ? (
@@ -7680,7 +7767,7 @@ export const SmartEditPanel = ({
               <div className="smart-edit-track-clips">
                 <div
                   className={`smart-edit-track-lane ${
-                    trackBoxSelectDrag?.trackId === track.id ? "box-selecting" : ""
+                    trackBoxSelectTrackIdSet.has(track.id) ? "box-selecting" : ""
                   }`.trim()}
                   style={{ width: timelineWidth }}
                   onPointerCancel={() => setTrackBoxSelectDrag(undefined)}
@@ -7688,7 +7775,7 @@ export const SmartEditPanel = ({
                   onPointerMove={updateTrackBoxSelectDrag}
                   onPointerUp={finishTrackBoxSelectDrag}
                 >
-                  {trackBoxSelectDrag?.trackId === track.id ? (
+                  {trackBoxSelectTrackIdSet.has(track.id) && trackBoxSelectDrag ? (
                     <span
                       className="smart-edit-track-box-selection"
                       style={{
