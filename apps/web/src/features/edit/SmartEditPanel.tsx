@@ -1984,6 +1984,110 @@ export const pasteSmartEditClipboardAtPlayhead = (
   });
 };
 
+export const copySmartEditTimelineElementsToClipboard = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+): SmartEditClipboard | undefined => {
+  const timeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const selectedIds = new Set(elementIds);
+  for (const elementId of elementIds) {
+    const element = timeline.elements.find((candidate) => candidate.id === elementId);
+    if (!element || isDerivedTimelineElement(element)) {
+      continue;
+    }
+    for (const linkedId of linkedTimelineElementIds(timeline, element)) {
+      selectedIds.add(linkedId);
+    }
+  }
+  const timelineItems = timeline.elements
+    .filter((element) => selectedIds.has(element.id) && !isDerivedTimelineElement(element))
+    .sort((left, right) =>
+      left.startSecond === right.startSecond
+        ? left.trackId.localeCompare(right.trackId)
+        : left.startSecond - right.startSecond,
+    )
+    .map((element) => ({
+      element: { ...element },
+      startSecond: element.startSecond,
+    }));
+  return timelineItems.length > 0 ? { items: [], timelineItems } : undefined;
+};
+
+export const pasteSmartEditTimelineClipboardAtPlayhead = (
+  plan: SmartEditPlan,
+  clipboard: SmartEditClipboard | undefined,
+  playheadSecond: number,
+  duplicateToken = String(Date.now()),
+  editMode: SmartEditTimelineEditMode = "magnetic",
+): SmartEditPlan => {
+  if (!clipboard?.timelineItems?.length) {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const earliestStart = Math.min(...clipboard.timelineItems.map((item) => item.startSecond));
+  const blockItems = clipboard.timelineItems.map((item) => ({
+    durationSeconds: item.element.durationSeconds,
+    offsetSecond: snapTimelineSeconds(item.startSecond - earliestStart),
+  }));
+  const intervals = baseTimeline.elements.map((element) => ({
+    endSecond: snapTimelineSeconds(element.startSecond + element.durationSeconds),
+    id: element.id,
+    startSecond: clampTimelineStart(element.startSecond),
+  }));
+  const targetStart =
+    editMode === "magnetic"
+      ? resolveTimelineBlockStart(
+          intervals,
+          blockItems,
+          playheadSecond,
+          [playheadSecond, ...intervals.flatMap((interval) => [interval.startSecond, interval.endSecond])],
+        )
+      : clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const pastedElements = clipboard.timelineItems.map((item, index) => ({
+    ...item.element,
+    id: `${item.element.id}-${duplicateToken}-${index + 1}`,
+    label: `${item.element.label} (copy)`,
+    linkedGroupId: item.element.linkedGroupId
+      ? `${item.element.linkedGroupId}-${duplicateToken}`
+      : undefined,
+    startSecond: clampTimelineStart(
+      snapTimelineSeconds(targetStart + item.startSecond - earliestStart),
+    ),
+  }));
+  const blockEnd = Math.max(
+    ...pastedElements.map((element) => snapTimelineSeconds(element.startSecond + element.durationSeconds)),
+  );
+  const blockDuration = snapTimelineSeconds(blockEnd - targetStart);
+  const nextElements =
+    editMode === "insert"
+      ? [
+          ...baseTimeline.elements.map((element) =>
+            element.startSecond + element.durationSeconds > targetStart + 0.001
+              ? {
+                  ...element,
+                  startSecond: snapTimelineSeconds(element.startSecond + blockDuration),
+                }
+              : element,
+          ),
+          ...pastedElements,
+        ]
+      : editMode === "overwrite"
+        ? [
+            ...baseTimeline.elements.filter(
+              (element) =>
+                !intervalsOverlap(
+                  targetStart,
+                  blockEnd,
+                  element.startSecond,
+                  element.startSecond + element.durationSeconds,
+                ),
+            ),
+            ...pastedElements,
+          ]
+        : [...baseTimeline.elements, ...pastedElements];
+  return withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks);
+};
+
 export type SmartEditTimelineEditMode = "magnetic" | "insert" | "overwrite" | "ripple";
 
 type SmartEditTrackSegment = {
@@ -2082,6 +2186,10 @@ export type SmartEditClipboard = {
   items: Array<{
     elements?: SmartEditTimeline["elements"];
     segment: SmartEditSegment;
+    startSecond: number;
+  }>;
+  timelineItems?: Array<{
+    element: SmartEditTimelineElement;
     startSecond: number;
   }>;
 };
@@ -5470,7 +5578,17 @@ export const SmartEditPanel = ({
   };
 
   const copySelectedSegmentsToLocalClipboard = () => {
-    if (!plan || selectedBatchSegments.length === 0) {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedBatchTrackClips
+      .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
+      .map((trackClip) => trackClip.id);
+    if (selectedTimelineMaterialIds.length > 0) {
+      setSmartEditClipboard(copySmartEditTimelineElementsToClipboard(plan, selectedTimelineMaterialIds));
+      return;
+    }
+    if (selectedBatchSegments.length === 0) {
       return;
     }
     setSmartEditClipboard(
@@ -5526,6 +5644,30 @@ export const SmartEditPanel = ({
       return;
     }
     const duplicateToken = `clip-${Date.now()}`;
+    if (smartEditClipboard.timelineItems?.length) {
+      const nextPlan = pasteSmartEditTimelineClipboardAtPlayhead(
+        plan,
+        smartEditClipboard,
+        boundedPlayheadSeconds,
+        duplicateToken,
+        timelineEditMode,
+      );
+      commitPlanChange(nextPlan, { label: `Paste copied materials (${timelineEditMode})` });
+      const pastedIds = nextPlan.timeline?.elements
+        .map((element) => element.id)
+        .filter((id) =>
+          smartEditClipboard.timelineItems?.some((item) =>
+            id.startsWith(`${item.element.id}-${duplicateToken}-`),
+          ),
+        ) ?? [];
+      if (pastedIds.length > 0) {
+        setSelectedTrackClipIds(pastedIds);
+        setSelectedTrackClipId(pastedIds.at(-1));
+        setSelectedSegmentIds([]);
+        onSelectedSegmentChange(undefined);
+      }
+      return;
+    }
     const nextPlan = pasteSmartEditClipboardAtPlayhead(
       plan,
       smartEditClipboard,

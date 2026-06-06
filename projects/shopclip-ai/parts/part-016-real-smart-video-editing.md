@@ -1703,3 +1703,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
 - Remaining:
   - Browser-level validation should confirm focus routing for `Ctrl+A` on the live workspace once a real timeline is loaded.
+
+## 2026-06-06 Timeline Material Clipboard
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds editor-style copy/paste for independent timeline materials after scene clips have been split into video/audio/text assets.
+- Fix:
+  - Extended `SmartEditClipboard` with `timelineItems` for persistent timeline material snapshots while keeping the existing storyboard segment clipboard intact.
+  - Added `copySmartEditTimelineElementsToClipboard` and `pasteSmartEditTimelineClipboardAtPlayhead` to copy selected independent video/audio/text materials, preserve relative offsets, and paste them at the playhead.
+  - Linked video/audio materials are expanded during copy so a selected linked side can paste the group together with a fresh linked group id.
+  - `Ctrl+C` / `Cmd+C` and `Ctrl+V` / `Cmd+V` now prefer selected independent timeline materials; storyboard segment copy/paste remains the fallback.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "copies and pastes independent|copies and pastes persistent|copies smart edit segments|selects all editable independent|keyboard arrow nudges|multiple independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+- Remaining:
+  - Browser-level validation should confirm clipboard focus routing in the live workspace with a loaded timeline.

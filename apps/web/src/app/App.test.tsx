@@ -40,6 +40,7 @@ import {
   applySmartEditCommandHistoryRedo,
   applySmartEditCommandHistoryUndo,
   copySmartEditSegmentsToClipboard,
+  copySmartEditTimelineElementsToClipboard,
   createSmartEditCommandHistory,
   detachSmartEditSceneVideoToTimelineElement,
   detachSmartEditSourceAudioToTimelineElement,
@@ -51,6 +52,7 @@ import {
   moveSmartEditTimelineElementsOnTimeline,
   previewSmartEditTrackClipDrag,
   pasteSmartEditClipboardAtPlayhead,
+  pasteSmartEditTimelineClipboardAtPlayhead,
   pasteSmartEditSegmentsAtPlayhead,
   removeSmartEditSegmentsFromTimeline,
   removeSmartEditTimelineElementsFromTimeline,
@@ -2902,6 +2904,70 @@ Second imported caption`,
       startSecond: 9,
       text: "Edited caption",
     });
+  });
+
+  it("copies and pastes independent smart edit timeline materials at the playhead", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-copy-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Copy independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Copy independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "copy",
+      ),
+      4,
+      "copy-caption",
+    );
+
+    const clipboard = copySmartEditTimelineElementsToClipboard(plan, [
+      "video-segment-1-copy",
+      "text-copy-caption",
+    ]);
+    const pasted = pasteSmartEditTimelineClipboardAtPlayhead(plan, clipboard, 10, "material-paste");
+
+    expect(clipboard?.timelineItems?.map((item) => item.element.id)).toEqual([
+      "video-segment-1-copy",
+      "text-copy-caption",
+    ]);
+    expect(pasted.timeline?.elements.find((element) => element.id === "video-segment-1-copy-material-paste-1")).toMatchObject({
+      label: "Scene 1 detached video (copy)",
+      startSecond: 10,
+    });
+    expect(pasted.timeline?.elements.find((element) => element.id === "text-copy-caption-material-paste-2")).toMatchObject({
+      label: "New text (copy)",
+      startSecond: 13,
+    });
+    expect(pasted.targetDurationSeconds).toBe(15);
   });
 
   it("duplicates a smart edit segment into an editable timeline clip", () => {
