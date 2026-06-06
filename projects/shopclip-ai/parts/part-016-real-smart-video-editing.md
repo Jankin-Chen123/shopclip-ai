@@ -2094,3 +2094,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `git diff --check`
   - `git ls-files .agents AGENTS.md plugins .gitignore.agent-workflow-pack .agents/memory`
   - No local tests run for this low-risk subtitle/text UI batch per updated user preference.
+
+## 2026-06-06 Playhead Material Alignment Batch
+
+- Scope:
+  - Coherent playhead-centered editing batch for the narrowed video, audio, and subtitle editing demo.
+  - Improves timeline operations that CutCap/OpenCut-style editors usually expose around the current playhead.
+- Fix:
+  - Added a timeline control to select all unlocked material clips intersecting the current playhead.
+  - Added start-to-playhead and end-to-playhead alignment actions for selected independent timeline materials.
+  - The same alignment actions are exposed in the multi-material batch toolbar for faster grouped edits.
+  - Added English and Chinese UI copy for the new playhead selection/alignment controls.
+- Verification:
+  - `git diff --check`
+  - `git ls-files .agents AGENTS.md plugins .gitignore.agent-workflow-pack .agents/memory`
+  - `corepack pnpm --filter @shopclip/web typecheck`

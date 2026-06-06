@@ -19,6 +19,7 @@ import type {
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   Clock3,
   Copy,
   Film,
@@ -6658,6 +6659,68 @@ export const SmartEditPanel = ({
       .filter((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
       .map((trackClip) => trackClip.id);
 
+  const selectTrackClipsAtPlayhead = () => {
+    const selectedIds = trackSegments
+      .flatMap((track) => track.segments)
+      .filter((trackClip) => !isTimelineTrackLocked(trackClip.trackId))
+      .filter((trackClip) => {
+        const startSecond = clampTimelineStart(trackClip.startSecond);
+        const endSecond = snapTimelineSeconds(startSecond + trackClip.durationSeconds);
+        return boundedPlayheadSeconds >= startSecond - 0.001 && boundedPlayheadSeconds <= endSecond + 0.001;
+      })
+      .map((trackClip) => trackClip.id);
+    if (selectedIds.length === 0) {
+      setSelectedTrackClipId(undefined);
+      setSelectedTrackClipIds([]);
+      return;
+    }
+    setSelectedTrackClipId(selectedIds.at(-1));
+    setSelectedTrackClipIds(selectedIds);
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
+  };
+
+  const alignSelectedTimelineMaterialsToPlayhead = (edge: "start" | "end") => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const selectedIds = new Set(selectedTimelineMaterialIds);
+    const selectedTimelineMaterials = selectedBatchTrackClips.filter((trackClip) =>
+      selectedIds.has(trackClip.id),
+    );
+    if (selectedTimelineMaterials.length === 0) {
+      return;
+    }
+    const anchorSecond =
+      edge === "start"
+        ? Math.min(...selectedTimelineMaterials.map((trackClip) => trackClip.startSecond))
+        : Math.max(
+            ...selectedTimelineMaterials.map((trackClip) =>
+              snapTimelineSeconds(trackClip.startSecond + trackClip.durationSeconds),
+            ),
+          );
+    const nextPlan = moveSmartEditTimelineElementsOnTimeline(
+      plan,
+      selectedTimelineMaterialIds,
+      boundedPlayheadSeconds - anchorSecond,
+      timelineEditMode,
+      boundedPlayheadSeconds,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, {
+      label:
+        edge === "start"
+          ? `Align selected materials start (${timelineEditMode})`
+          : `Align selected materials end (${timelineEditMode})`,
+    });
+  };
+
   const cutSelectedTimelineMaterialsToLocalClipboard = () => {
     if (!plan) {
       return;
@@ -8926,6 +8989,27 @@ export const SmartEditPanel = ({
           <strong>{formatTimelineTime(boundedPlayheadSeconds)}</strong>
           <Button
             disabled={!plan}
+            icon={<Check size={16} />}
+            onClick={selectTrackClipsAtPlayhead}
+          >
+            {copy.selectAtPlayhead}
+          </Button>
+          <Button
+            disabled={!plan || selectedEditableTimelineMaterialIds().length === 0}
+            icon={<SkipBack size={16} />}
+            onClick={() => alignSelectedTimelineMaterialsToPlayhead("start")}
+          >
+            {copy.alignStartToPlayhead}
+          </Button>
+          <Button
+            disabled={!plan || selectedEditableTimelineMaterialIds().length === 0}
+            icon={<SkipForward size={16} />}
+            onClick={() => alignSelectedTimelineMaterialsToPlayhead("end")}
+          >
+            {copy.alignEndToPlayhead}
+          </Button>
+          <Button
+            disabled={!plan}
             icon={<SkipBack size={16} />}
             onClick={() => jumpPlayheadToEditPoint("previous")}
           >
@@ -9033,6 +9117,12 @@ export const SmartEditPanel = ({
               onClick={() => moveSelectedTrackClips(TRIM_NUDGE_SECONDS)}
             >
               +0.1s
+            </Button>
+            <Button icon={<SkipBack size={16} />} onClick={() => alignSelectedTimelineMaterialsToPlayhead("start")}>
+              {copy.alignStartToPlayhead}
+            </Button>
+            <Button icon={<SkipForward size={16} />} onClick={() => alignSelectedTimelineMaterialsToPlayhead("end")}>
+              {copy.alignEndToPlayhead}
             </Button>
             <Button icon={<Copy size={16} />} onClick={copySelectedSegmentsToLocalClipboard}>
               {copy.copySelected}
