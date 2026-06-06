@@ -2109,3 +2109,56 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `git diff --check`
   - `git ls-files .agents AGENTS.md plugins .gitignore.agent-workflow-pack .agents/memory`
   - `corepack pnpm --filter @shopclip/web typecheck`
+
+## 2026-06-06 Subtitle SRT Export Batch
+
+- Scope:
+  - Coherent subtitle workflow improvement for the narrowed video, audio, and subtitle editing demo.
+  - Complements the existing SRT import and text-track editing flow.
+- Fix:
+  - Added a Smart Edit SRT exporter that collects visible text-track timeline materials, sorts them by start time, and serializes them to standard SRT timestamps.
+  - Added a Download SRT action in the subtitle import/export panel so edited subtitle timing and text can be exported from the current timeline.
+  - Added English and Chinese UI copy plus empty/exported status messages for the SRT export action.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+
+## 2026-06-06 Batch Source Slip Controls
+
+- Scope:
+  - Coherent source-trim workflow improvement for the narrowed video, audio, and subtitle editing demo.
+  - Extends single-material source slipping into multi-selected video/audio materials.
+- Fix:
+  - Added a batch source-slip helper for selected timeline materials.
+  - Linked scene video/audio groups are deduplicated during batch slipping so the same group is not shifted twice.
+  - Added source -0.1s / +0.1s actions to the multi-material toolbar for OpenCut/CutCap-style source slipping without moving clips on the timeline.
+  - Added English and Chinese UI copy for the new batch source-slip actions.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`
+
+## 2026-06-06 Batch Subtitle Style Presets
+
+- Scope:
+  - Coherent subtitle styling workflow improvement for the narrowed video, audio, and subtitle editing demo.
+  - Extends single-text-material styling into multi-selected text materials.
+- Fix:
+  - Added a batch text-style update helper for selected independent timeline text materials.
+  - Multi-selected subtitle/text materials can now apply bottom-white, highlight, and top-note presets from the batch toolbar.
+  - Reused the same preset copy in the single-material inspector and batch toolbar for English and Chinese UI.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`
+
+## 2026-06-06 Track Material Selection Controls
+
+- Scope:
+  - Coherent multi-track selection workflow improvement for the narrowed video, audio, and subtitle editing demo.
+  - Makes batch actions faster when the user wants to operate on all editable materials in one track.
+- Fix:
+  - Added a helper to select all unlocked independent timeline materials for a specific track.
+  - Added a Select track action to every multi-track header, disabled when the track has no selectable independent materials.
+  - Selecting a track clears storyboard selection and prepares the selected track materials for batch style, source slip, audio, visibility, copy, cut, duplicate, or delete actions.
+  - Added English and Chinese UI copy for the track-selection action.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`

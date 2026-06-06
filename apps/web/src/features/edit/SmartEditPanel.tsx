@@ -22,6 +22,7 @@ import {
   Check,
   Clock3,
   Copy,
+  Download,
   Film,
   Loader2,
   Music2,
@@ -2560,6 +2561,55 @@ const parseSmartEditSrtCues = (input: string): SmartEditSrtCue[] => {
     });
 };
 
+const formatSmartEditSrtTimestamp = (seconds: number): string => {
+  const totalMilliseconds = Math.max(0, Math.round(seconds * 1000));
+  const milliseconds = totalMilliseconds % 1000;
+  const totalSeconds = Math.floor(totalMilliseconds / 1000);
+  const displaySeconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const displayMinutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  return [
+    String(hours).padStart(2, "0"),
+    String(displayMinutes).padStart(2, "0"),
+    String(displaySeconds).padStart(2, "0"),
+  ].join(":") + `,${String(milliseconds).padStart(3, "0")}`;
+};
+
+export const exportSmartEditTimelineCaptionsToSrt = (plan: SmartEditPlan): string => {
+  const timeline = mergePersistentTimelineWithDerivedSegments(plan, buildSmartEditTimeline(plan));
+  const hiddenTrackIds = new Set(
+    timeline.tracks.filter((track) => track.hidden).map((track) => track.id),
+  );
+  const captions = timeline.elements
+    .filter(
+      (element) =>
+        element.kind === "text" &&
+        !element.hidden &&
+        !hiddenTrackIds.has(element.trackId) &&
+        element.durationSeconds >= MIN_SMART_EDIT_CLIP_SECONDS,
+    )
+    .map((element) => ({
+      endSecond: element.startSecond + element.durationSeconds,
+      startSecond: element.startSecond,
+      text: (element.text ?? element.label).replace(/\r\n?/g, "\n").trim(),
+    }))
+    .filter((caption) => caption.text && caption.endSecond > caption.startSecond)
+    .sort((left, right) => left.startSecond - right.startSecond || left.endSecond - right.endSecond);
+
+  return captions
+    .map((caption, index) =>
+      [
+        String(index + 1),
+        `${formatSmartEditSrtTimestamp(caption.startSecond)} --> ${formatSmartEditSrtTimestamp(
+          caption.endSecond,
+        )}`,
+        caption.text,
+      ].join("\n"),
+    )
+    .join("\n\n");
+};
+
 export const importSmartEditSrtCaptionsToTimeline = (
   plan: SmartEditPlan,
   srtText: string,
@@ -3316,6 +3366,36 @@ export const slipSmartEditTimelineElementSource = (
   );
 };
 
+export const slipSmartEditTimelineElementsSource = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  deltaSeconds: number,
+): SmartEditPlan => {
+  const snappedDelta = snapTimelineSeconds(deltaSeconds);
+  if (elementIds.length === 0 || Math.abs(snappedDelta) < 0.001) {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const requestedIds = new Set(elementIds);
+  const processedIds = new Set<string>();
+  let nextPlan = plan;
+
+  for (const element of baseTimeline.elements) {
+    if (!requestedIds.has(element.id) || processedIds.has(element.id)) {
+      continue;
+    }
+    if (element.kind !== "video" && element.kind !== "audio") {
+      processedIds.add(element.id);
+      continue;
+    }
+    const linkedIds = linkedTimelineElementIds(baseTimeline, element);
+    linkedIds.forEach((linkedId) => processedIds.add(linkedId));
+    nextPlan = slipSmartEditTimelineElementSource(nextPlan, element.id, snappedDelta);
+  }
+
+  return nextPlan;
+};
+
 export const unlinkSmartEditTimelineElementGroup = (
   plan: SmartEditPlan,
   elementId: string,
@@ -3776,6 +3856,56 @@ export const updateSmartEditTimelineElementsState = (
   return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
 };
 
+export const updateSmartEditTimelineElementsTextStyle = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  patch: {
+    textColor?: string;
+    textFontSize?: number;
+    textPositionYPercent?: number;
+  },
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const updateIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (updateIds.size === 0) {
+    return plan;
+  }
+  let changed = false;
+  const nextElements = baseTimeline.elements.map((element) => {
+    if (
+      !updateIds.has(element.id) ||
+      isDerivedTimelineElement(element) ||
+      lockedTrackIds.has(element.trackId) ||
+      element.kind !== "text"
+    ) {
+      return element;
+    }
+    const nextElement: SmartEditTimeline["elements"][number] = { ...element };
+    if (patch.textColor !== undefined) {
+      nextElement.textColor = normalizeTextColor(patch.textColor) ?? element.textColor;
+    }
+    if (patch.textFontSize !== undefined) {
+      nextElement.textFontSize = clampTextFontSize(patch.textFontSize);
+    }
+    if (patch.textPositionYPercent !== undefined) {
+      nextElement.textPositionYPercent = clampTextPositionYPercent(patch.textPositionYPercent);
+    }
+    if (
+      nextElement.textColor !== element.textColor ||
+      nextElement.textFontSize !== element.textFontSize ||
+      nextElement.textPositionYPercent !== element.textPositionYPercent
+    ) {
+      changed = true;
+      return nextElement;
+    }
+    return element;
+  });
+  return changed ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks) : plan;
+};
+
 export const selectSmartEditTimelineElementIdsInBox = (
   plan: SmartEditPlan,
   box: {
@@ -3827,6 +3957,25 @@ export const selectSmartEditTimelineElementIds = (plan: SmartEditPlan): string[]
         ? left.startSecond - right.startSecond
         : (trackOrder.get(left.trackId) ?? 0) - (trackOrder.get(right.trackId) ?? 0),
     )
+    .map((element) => element.id);
+};
+
+export const selectSmartEditTimelineElementIdsForTrack = (
+  plan: SmartEditPlan,
+  trackId: SmartEditTrackId,
+): string[] => {
+  const timeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    timeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  return timeline.elements
+    .filter(
+      (element) =>
+        !isDerivedTimelineElement(element) &&
+        !lockedTrackIds.has(element.trackId) &&
+        smartEditTrackIdForElement(element) === trackId,
+    )
+    .sort((left, right) => left.startSecond - right.startSecond)
     .map((element) => element.id);
 };
 
@@ -4761,6 +4910,7 @@ export const SmartEditPanel = ({
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [srtImportText, setSrtImportText] = useState("");
   const [srtImportMessage, setSrtImportMessage] = useState<string | undefined>();
+  const [srtExportMessage, setSrtExportMessage] = useState<string | undefined>();
   const plan = result?.plan;
 
   useEffect(() => {
@@ -4780,6 +4930,7 @@ export const SmartEditPanel = ({
       setPlayheadSeconds(0);
       setSrtImportText("");
       setSrtImportMessage(undefined);
+      setSrtExportMessage(undefined);
     }
   }, [historyPlanId, plan?.id]);
   const sortedSegments = useMemo(
@@ -4937,6 +5088,9 @@ export const SmartEditPanel = ({
         .flatMap((track) => track.segments)
         .filter((trackClip) => selectedTrackClipIdSet.has(trackClip.id)),
     [selectedTrackClipIdSet, trackSegments],
+  );
+  const hasSelectedTextTimelineMaterials = selectedBatchTrackClips.some(
+    (trackClip) => !trackClip.segmentId && trackClip.trackId === "caption",
   );
   const trackClipDragPreview = useMemo(
     () =>
@@ -5135,6 +5289,27 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label: "Import SRT captions" });
     setSrtImportText("");
     setSrtImportMessage(`Imported ${importedCount} captions.`);
+    setSrtExportMessage(undefined);
+  };
+
+  const exportSrtCaptions = () => {
+    if (!plan || typeof document === "undefined") {
+      return;
+    }
+    const srt = exportSmartEditTimelineCaptionsToSrt(plan);
+    if (!srt.trim()) {
+      setSrtExportMessage(copy.srtExportEmpty);
+      return;
+    }
+    const blobUrl = URL.createObjectURL(new Blob([`${srt}\n`], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = `${plan.id}-captions.srt`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+    setSrtExportMessage(copy.srtExportReady);
   };
 
   const detachSelectedSourceAudio = () => {
@@ -5318,6 +5493,24 @@ export const SmartEditPanel = ({
     setSelectedSegmentIds([]);
     onSelectedSegmentChange(undefined);
     return true;
+  };
+
+  const selectTimelineTrackMaterials = (trackId: SmartEditTrackId) => {
+    if (!plan) {
+      return;
+    }
+    const selectedIds = selectSmartEditTimelineElementIdsForTrack(plan, trackId);
+    if (selectedIds.length === 0) {
+      setSelectedTrackClipId(undefined);
+      setSelectedTrackClipIds([]);
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
+      return;
+    }
+    setSelectedTrackClipId(selectedIds.at(-1));
+    setSelectedTrackClipIds(selectedIds);
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
   };
 
   const clearMultiSelection = () => {
@@ -6793,6 +6986,25 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label: `Set selected material speed ${clampPlaybackRate(playbackRate)}x` });
   };
 
+  const slipSelectedTimelineMaterialsSource = (deltaSeconds: number) => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const nextPlan = slipSmartEditTimelineElementsSource(
+      plan,
+      selectedTimelineMaterialIds,
+      deltaSeconds,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: "Slip selected material sources" });
+  };
+
   const updateSelectedTimelineMaterialAudio = (
     patch: {
       audioFadeInSeconds?: number;
@@ -6858,6 +7070,32 @@ export const SmartEditPanel = ({
         : patch.hidden
           ? "Hide selected materials"
           : "Show selected materials";
+    commitPlanChange(nextPlan, { label });
+  };
+
+  const updateSelectedTimelineMaterialTextStyle = (
+    patch: {
+      textColor?: string;
+      textFontSize?: number;
+      textPositionYPercent?: number;
+    },
+    label: string,
+  ) => {
+    if (!plan) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length === 0) {
+      return;
+    }
+    const nextPlan = updateSmartEditTimelineElementsTextStyle(
+      plan,
+      selectedTimelineMaterialIds,
+      patch,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
     commitPlanChange(nextPlan, { label });
   };
 
@@ -7887,7 +8125,7 @@ export const SmartEditPanel = ({
                         })
                       }
                     >
-                      Bottom white
+                      {copy.bottomWhiteTextStyle}
                     </Button>
                     <Button
                       onClick={() =>
@@ -7898,7 +8136,7 @@ export const SmartEditPanel = ({
                         })
                       }
                     >
-                      Highlight
+                      {copy.highlightTextStyle}
                     </Button>
                     <Button
                       onClick={() =>
@@ -7909,7 +8147,7 @@ export const SmartEditPanel = ({
                         })
                       }
                     >
-                      Top note
+                      {copy.topNoteTextStyle}
                     </Button>
                   </div>
                   <div className="smart-edit-trim-grid">
@@ -9081,7 +9319,7 @@ export const SmartEditPanel = ({
         <details className="timeline-srt-import">
           <summary>
             <strong>Import SRT captions</strong>
-            <span>{srtImportMessage ?? "Paste subtitles into the text track"}</span>
+            <span>{srtImportMessage ?? srtExportMessage ?? copy.srtImportHint}</span>
           </summary>
           <div className="timeline-srt-import-body">
             <textarea
@@ -9092,6 +9330,7 @@ export const SmartEditPanel = ({
               onChange={(event) => {
                 setSrtImportText(event.target.value);
                 setSrtImportMessage(undefined);
+                setSrtExportMessage(undefined);
               }}
             />
             <Button
@@ -9100,6 +9339,9 @@ export const SmartEditPanel = ({
               onClick={importSrtCaptions}
             >
               Import captions
+            </Button>
+            <Button disabled={!plan} icon={<Download size={16} />} onClick={exportSrtCaptions}>
+              {copy.exportSrtCaptions}
             </Button>
           </div>
         </details>
@@ -9136,6 +9378,58 @@ export const SmartEditPanel = ({
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(0.5)}>0.5x</Button>
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(1)}>1x</Button>
             <Button onClick={() => updateSelectedTimelineMaterialSpeed(2)}>2x</Button>
+            <Button icon={<SkipBack size={16} />} onClick={() => slipSelectedTimelineMaterialsSource(-TRIM_NUDGE_SECONDS)}>
+              {copy.slipSourceBackward}
+            </Button>
+            <Button icon={<SkipForward size={16} />} onClick={() => slipSelectedTimelineMaterialsSource(TRIM_NUDGE_SECONDS)}>
+              {copy.slipSourceForward}
+            </Button>
+            {hasSelectedTextTimelineMaterials ? (
+              <>
+                <Button
+                  onClick={() =>
+                    updateSelectedTimelineMaterialTextStyle(
+                      {
+                        textColor: "#ffffff",
+                        textFontSize: 42,
+                        textPositionYPercent: 82,
+                      },
+                      "Set selected text style bottom white",
+                    )
+                  }
+                >
+                  {copy.bottomWhiteTextStyle}
+                </Button>
+                <Button
+                  onClick={() =>
+                    updateSelectedTimelineMaterialTextStyle(
+                      {
+                        textColor: "#facc15",
+                        textFontSize: 44,
+                        textPositionYPercent: 82,
+                      },
+                      "Set selected text style highlight",
+                    )
+                  }
+                >
+                  {copy.highlightTextStyle}
+                </Button>
+                <Button
+                  onClick={() =>
+                    updateSelectedTimelineMaterialTextStyle(
+                      {
+                        textColor: "#ffffff",
+                        textFontSize: 36,
+                        textPositionYPercent: 18,
+                      },
+                      "Set selected text style top note",
+                    )
+                  }
+                >
+                  {copy.topNoteTextStyle}
+                </Button>
+              </>
+            ) : null}
             <Button onClick={() => updateSelectedTimelineMaterialAudio({ audioVolume: 0.5 }, "Set selected audio volume 50%")}>
               Vol 50%
             </Button>
@@ -9382,6 +9676,9 @@ export const SmartEditPanel = ({
             const trackLocked = timelineTrack?.locked ?? false;
             const canMuteTrack = track.id === "sourceAudio" || track.id === "voice" || track.id === "bgm";
             const canHideTrack = track.id === "video" || track.id === "caption";
+            const selectableTrackMaterialIds = plan
+              ? selectSmartEditTimelineElementIdsForTrack(plan, track.id)
+              : [];
             return (
             <section
               className="smart-edit-track-row"
@@ -9391,6 +9688,14 @@ export const SmartEditPanel = ({
             >
               <div className="smart-edit-track-label">
                 <strong>{trackLabels[track.id]}</strong>
+                <button
+                  disabled={selectableTrackMaterialIds.length === 0}
+                  type="button"
+                  onClick={() => selectTimelineTrackMaterials(track.id)}
+                >
+                  <Check size={14} />
+                  <span>{copy.selectTrackMaterials}</span>
+                </button>
                 {canMuteTrack && track.segments.length > 0 ? (
                   <button
                     type="button"
