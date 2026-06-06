@@ -2017,3 +2017,16 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - Edit points are derived from multi-track material starts and ends, so navigation follows video, audio, subtitle, voice, and BGM clip boundaries.
 - Verification:
   - No local tests run for this small low-risk interaction change per updated user preference.
+
+## 2026-06-06 Timeline Keyboard Polish
+
+- Scope:
+  - Small interaction polish for the narrowed video, audio, and subtitle editing demo.
+  - Improves keyboard-driven editing ergonomics without adding non-demo sticker/effect features.
+- Fix:
+  - Added `Alt/Option + ArrowLeft/ArrowRight` shortcuts to jump the playhead to the previous or next edit point.
+  - Added `Backspace` as an alternate delete shortcut for selected timeline materials or storyboard clips.
+  - Added `Esc` to collapse multi-selection back to the active selected material or clip.
+  - Updated the Smart Edit timeline hint text to expose the core split, trim, edit-point, delete, and clear-selection shortcuts.
+- Verification:
+  - No local tests run for this small low-risk keyboard/UI hint change per updated user preference.

@@ -6820,6 +6820,21 @@ export const SmartEditPanel = ({
           trimAtPlayhead("left");
           return;
         }
+        if (!isCommandKey && event.altKey && event.key === "ArrowLeft") {
+          event.preventDefault();
+          jumpPlayheadToEditPoint("previous");
+          return;
+        }
+        if (!isCommandKey && event.altKey && event.key === "ArrowRight") {
+          event.preventDefault();
+          jumpPlayheadToEditPoint("next");
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          clearMultiSelection();
+          return;
+        }
         const keyboardNudgeSeconds = smartEditTimelineKeyboardNudgeSeconds(event.key, event.shiftKey);
         if (keyboardNudgeSeconds !== undefined && selectedTrackClip && !selectedTrackClip.segmentId) {
           event.preventDefault();
@@ -6836,12 +6851,12 @@ export const SmartEditPanel = ({
           selectByOffset(1);
           return;
         }
-        if (event.key === "Delete" && selectedTrackClip) {
+        if ((event.key === "Delete" || event.key === "Backspace") && selectedTrackClip) {
           event.preventDefault();
           removeSelectedTrackClip();
           return;
         }
-        if (event.key === "Delete" && selectedSegment) {
+        if ((event.key === "Delete" || event.key === "Backspace") && selectedSegment) {
           event.preventDefault();
           removeSelectedSegment();
         }
