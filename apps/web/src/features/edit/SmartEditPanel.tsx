@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import type { UIEvent as ReactUIEvent } from "react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -3841,6 +3842,19 @@ export const playheadSecondsFromTimelinePointer = ({
   );
 };
 
+export const smartEditSyncedScrollLeft = ({
+  clientWidth,
+  scrollLeft,
+  scrollWidth,
+}: {
+  clientWidth: number;
+  scrollLeft: number;
+  scrollWidth: number;
+}): number => {
+  const maxScrollLeft = Math.max(0, scrollWidth - clientWidth);
+  return Math.max(0, Math.min(maxScrollLeft, scrollLeft));
+};
+
 export const selectSmartEditTrackIdsInMarquee = (
   trackRows: Array<{
     bottom: number;
@@ -4654,6 +4668,8 @@ export const SmartEditPanel = ({
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const suppressTrimClickRef = useRef(false);
   const suppressTimelineMoveClickRef = useRef(false);
+  const isSyncingTrackScrollRef = useRef(false);
+  const trackScrollRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [historyPlanId, setHistoryPlanId] = useState<string | undefined>();
   const [commandHistory, setCommandHistory] = useState<SmartEditCommandHistory>(() =>
     createSmartEditCommandHistory(),
@@ -5978,6 +5994,32 @@ export const SmartEditPanel = ({
 
   const updatePlayheadFromPointer = (event: ReactPointerEvent<HTMLElement>) => {
     setPlayheadSeconds(playheadSecondsForPointerEvent(event));
+  };
+
+  const setTrackScrollRef = (index: number) => (element: HTMLDivElement | null) => {
+    trackScrollRefs.current[index] = element;
+  };
+
+  const syncTrackStackScroll = (event: ReactUIEvent<HTMLDivElement>) => {
+    if (isSyncingTrackScrollRef.current) {
+      return;
+    }
+    const source = event.currentTarget;
+    isSyncingTrackScrollRef.current = true;
+    for (const target of trackScrollRefs.current) {
+      if (!target || target === source) {
+        continue;
+      }
+      const nextScrollLeft = smartEditSyncedScrollLeft({
+        clientWidth: target.clientWidth,
+        scrollLeft: source.scrollLeft,
+        scrollWidth: target.scrollWidth,
+      });
+      if (Math.abs(target.scrollLeft - nextScrollLeft) > 0.5) {
+        target.scrollLeft = nextScrollLeft;
+      }
+    }
+    isSyncingTrackScrollRef.current = false;
   };
 
   const startPlayheadDrag = (event: ReactPointerEvent<HTMLElement>) => {
@@ -8957,7 +8999,11 @@ export const SmartEditPanel = ({
             <div className="smart-edit-track-label smart-edit-track-ruler-label">
               <strong>{copy.playhead}</strong>
             </div>
-            <div className="smart-edit-track-clips">
+            <div
+              className="smart-edit-track-clips"
+              ref={setTrackScrollRef(0)}
+              onScroll={syncTrackStackScroll}
+            >
               <div
                 className="smart-edit-track-ruler"
                 style={{ width: timelineWidth }}
@@ -8982,7 +9028,7 @@ export const SmartEditPanel = ({
               </div>
             </div>
           </section>
-          {trackSegments.map((track) => {
+          {trackSegments.map((track, index) => {
             const timelineTrack = timelineTrackForTrack(track.id);
             const trackMuted = timelineTrack?.muted ?? track.segments.every((segment) => segment.muted);
             const trackHidden = timelineTrack?.hidden ?? track.segments.every((segment) => segment.hidden);
@@ -9046,7 +9092,11 @@ export const SmartEditPanel = ({
                   <span>{trackLocked ? "Unlock" : "Lock"}</span>
                 </button>
               </div>
-              <div className="smart-edit-track-clips">
+              <div
+                className="smart-edit-track-clips"
+                ref={setTrackScrollRef(index + 1)}
+                onScroll={syncTrackStackScroll}
+              >
                 <div
                   className={`smart-edit-track-lane ${
                     trackBoxSelectTrackIdSet.has(track.id) ? "box-selecting" : ""

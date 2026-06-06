@@ -1982,3 +1982,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "renders smart edit as an editor workspace|maps timeline pointer|splits multiple selected|trims multiple selected|pastes selected smart edit segments|copies and pastes independent|previews track clip trim|snaps track clip drag previews"`
 - Remaining:
   - Browser-level validation should confirm the multi-track ruler and lane playheads stay visually aligned while horizontally scrolled.
+
+## 2026-06-06 Track Stack Scroll Sync
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Improves the multi-track editor ergonomics needed for CutCap/OpenCut-style timeline editing.
+- Fix:
+  - Added `smartEditSyncedScrollLeft` to clamp synchronized scroll positions to each target lane's available width.
+  - The multi-track ruler and every video/audio/subtitle material lane now synchronize horizontal scroll positions.
+  - This keeps the ruler ticks, shared playhead, and material clips aligned while the user scrolls any track row.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "clamps synced track stack scroll"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "clamps synced track stack scroll|renders smart edit as an editor workspace|maps timeline pointer|splits multiple selected|trims multiple selected|pastes selected smart edit segments|copies and pastes independent|previews track clip trim|snaps track clip drag previews"`
+- Remaining:
+  - Browser-level validation should confirm synchronized scroll stays smooth on long real render timelines.

@@ -65,6 +65,7 @@ import {
   selectSmartEditTrackIdsInMarquee,
   selectSmartEditTimelineElementIds,
   selectSmartEditTimelineElementIdsInBox,
+  smartEditSyncedScrollLeft,
   smartEditTimelineKeyboardNudgeSeconds,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
@@ -5004,6 +5005,32 @@ Second imported caption`,
         timelineLeft: 100,
       }),
     ).toBe(6);
+  });
+
+  it("clamps synced track stack scroll positions to the target lane width", () => {
+    expect(
+      smartEditSyncedScrollLeft({
+        clientWidth: 320,
+        scrollLeft: 460,
+        scrollWidth: 900,
+      }),
+    ).toBe(460);
+
+    expect(
+      smartEditSyncedScrollLeft({
+        clientWidth: 320,
+        scrollLeft: 720,
+        scrollWidth: 900,
+      }),
+    ).toBe(580);
+
+    expect(
+      smartEditSyncedScrollLeft({
+        clientWidth: 320,
+        scrollLeft: -12,
+        scrollWidth: 900,
+      }),
+    ).toBe(0);
   });
 
   it("previews track clip drag positions for selected timeline materials", () => {
