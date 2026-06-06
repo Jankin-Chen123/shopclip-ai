@@ -127,26 +127,6 @@ const getExternalVideoPosterUrl = (asset: ExternalAssetResult) =>
 
 const externalSearchTypeForCategory = (category: AssetCategory): AssetCategory => category;
 
-const assetMatchesLocalQuery = (asset: AssetMetadata, query: string) => {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return false;
-  }
-
-  return [
-    asset.name,
-    asset.type,
-    asset.mimeType,
-    asset.source,
-    asset.embeddingText,
-    ...(asset.tags ?? []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-    .includes(normalizedQuery);
-};
-
 const isImageAsset = (asset: AssetMetadata) =>
   asset.type === "image" || asset.mimeType?.startsWith("image/");
 
@@ -561,8 +541,10 @@ export const AssetsPanel = ({
   disabled,
   error,
   isLoading,
+  isSearching,
   hasSearched,
   language,
+  hasProject,
   onImportExternalAsset,
   onImportFiles,
   onProcessAsset,
@@ -580,7 +562,6 @@ export const AssetsPanel = ({
 }: AssetsPanelProps) => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isExternalSearchOpen, setIsExternalSearchOpen] = useState(false);
-  const [searchDialogMode, setSearchDialogMode] = useState<"local" | "external">("local");
   const [externalModalQuery, setExternalModalQuery] = useState("");
   const [externalModalResults, setExternalModalResults] = useState<ExternalAssetResult[]>([]);
   const [externalModalPage, setExternalModalPage] = useState(1);
@@ -604,6 +585,7 @@ export const AssetsPanel = ({
   const isTemplateCategory = activeCategory === "template";
   const isScriptCategory = activeCategory === "script";
   const shouldShowAssetToolbar = !isTemplateCategory && !isScriptCategory;
+  const shouldShowExternalStockEntry = !isTemplateCategory && !isScriptCategory;
   const ui = isTemplateCategory ? templateUi[language] : categoryUi[language][activeCategory];
   const importUi = genericImportUi[language];
   const CategoryIcon = categoryIcons[activeCategory];
@@ -620,10 +602,6 @@ export const AssetsPanel = ({
   const externalSearchType = externalSearchTypeForCategory(externalModalType);
   const hasConfiguredStockProvider = configuredSearchProviders.length > 0;
   const isShowingSearchResults = hasSearched && searchQuery.trim().length > 0;
-  const localSearchQuery = searchQuery.trim();
-  const localDialogResults = localSearchQuery
-    ? assets.filter((asset) => assetMatchesLocalQuery(asset, localSearchQuery))
-    : [];
   const normalizedTemplateQuery = isTemplateCategory ? searchQuery.trim().toLowerCase() : "";
   const visibleTemplates =
     isTemplateCategory && normalizedTemplateQuery
@@ -748,13 +726,10 @@ export const AssetsPanel = ({
     }
   };
 
-  const openSearchDialog = (mode: "local" | "external" = "local") => {
+  const openExternalSearch = () => {
     const initialType = activeCategory;
     setIsExternalSearchOpen(true);
-    setSearchDialogMode(mode);
-    if (mode === "external" || !externalModalQuery) {
-      setExternalModalQuery(searchQuery);
-    }
+    setExternalModalQuery("");
     setExternalModalType(initialType);
     setSelectedExternalAssetIds(new Set());
     setExternalImportMessage(undefined);
@@ -763,36 +738,9 @@ export const AssetsPanel = ({
     setExternalModalHasMore(false);
   };
 
-  const handleSearchDialogSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleExternalSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (searchDialogMode === "local") {
-      return;
-    }
     void runExternalSearch();
-  };
-
-  const handleSearchSourceChange = (mode: "local" | "external") => {
-    if (mode === searchDialogMode) {
-      return;
-    }
-
-    const currentQuery = searchDialogMode === "local" ? searchQuery : externalModalQuery;
-    setSearchDialogMode(mode);
-    setExternalModalError(undefined);
-    setExternalImportMessage(undefined);
-    setSelectedExternalAssetIds(new Set());
-
-    if (mode === "local") {
-      onSearchQueryChange(currentQuery);
-      return;
-    }
-
-    setExternalModalQuery(currentQuery);
-    setExternalModalResults([]);
-    setExternalModalHasMore(false);
-    if (currentQuery.trim() && hasConfiguredStockProvider) {
-      void runExternalSearch(currentQuery, 1, "replace", externalModalType);
-    }
   };
 
   const handleCategoryClick = (category: AssetCategory) => {
@@ -979,15 +927,27 @@ export const AssetsPanel = ({
             </span>
           </button>
 
-          <Button
-            className="asset-unified-search-button"
-            disabled={disabled}
-            icon={<Search size={18} />}
-            onClick={() => openSearchDialog("local")}
-            variant="secondary"
-          >
-            {language === "zh" ? "搜索素材" : "Search assets"}
-          </Button>
+          <div className="asset-search-box asset-search-panel">
+            <label className="sr-only" htmlFor={searchInputId}>
+              {ui.searchLabel}
+            </label>
+            <div className="asset-search-input-shell">
+              <Search size={20} aria-hidden="true" />
+              <input
+                id={searchInputId}
+                value={searchQuery}
+                onChange={(event) => onSearchQueryChange(event.target.value)}
+                placeholder={ui.searchPlaceholder}
+              />
+            </div>
+            <Button
+              disabled={disabled || isSearching}
+              icon={isSearching ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+              onClick={onSearchAssets}
+            >
+              {copy.search}
+            </Button>
+          </div>
         </div>
       ) : isTemplateCategory ? (
         <div className="asset-search-box asset-search-panel asset-template-search-panel">
@@ -1018,6 +978,43 @@ export const AssetsPanel = ({
         </p>
       ) : null}
 
+      {shouldShowExternalStockEntry ? (
+        <section className="external-stock-entry" aria-labelledby="external-stock-entry-title">
+          <div>
+            <span className="external-source-pill">
+              <Globe2 size={14} aria-hidden="true" />
+              {language === "zh" ? "第三方素材库" : "Third-party stock"}
+            </span>
+            <h3 id="external-stock-entry-title">
+              {language === "zh" ? "搜索可直接导入的外部素材" : "Search external stock assets"}
+            </h3>
+            <p>
+              {hasProject
+                ? language === "zh"
+                  ? "在悬浮窗中搜索已配置素材库，勾选后可一键导入腾讯 COS。"
+                  : "Search configured stock libraries, select results, and import them to Tencent COS."
+                : language === "zh"
+                  ? "无需先切回项目页；勾选素材会直接导入腾讯 COS 并写入素材库。"
+                  : "No need to switch pages first; selected assets import directly to Tencent COS."}
+            </p>
+          </div>
+          <Button
+            disabled={disabled || isSearching || !onSearchExternalAssets}
+            icon={
+              isExternalModalSearching ? (
+                <Loader2 className="spin" size={18} />
+              ) : (
+                <Search size={18} />
+              )
+            }
+            onClick={openExternalSearch}
+            variant="primary"
+          >
+            {language === "zh" ? "搜索第三方素材" : "Search stock"}
+          </Button>
+        </section>
+      ) : null}
+
       {previewAssets.length > 0 ? (
         <div className="asset-bulk-actions">
           <strong>
@@ -1027,9 +1024,7 @@ export const AssetsPanel = ({
           </strong>
           {isScriptCategory ? (
             <Button
-              disabled={
-                disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0
-              }
+              disabled={disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0}
               icon={<LayoutTemplate size={18} />}
               onClick={() => void handleExtractTemplateFromSelectedScripts()}
               variant="primary"
@@ -1536,13 +1531,15 @@ export const AssetsPanel = ({
           >
             <div className="asset-import-dialog-heading external-search-heading">
               <div>
-                <p className="eyebrow">{language === "zh" ? "素材搜索" : "Asset search"}</p>
+                <p className="eyebrow">
+                  {language === "zh" ? "第三方素材库" : "Third-party stock"}
+                </p>
                 <h3 id="external-search-title">
-                  {language === "zh" ? "搜索素材库" : "Search asset libraries"}
+                  {language === "zh" ? "搜索第三方素材" : "Search third-party assets"}
                 </h3>
               </div>
               <button
-                aria-label={language === "zh" ? "关闭素材搜索" : "Close asset search"}
+                aria-label={language === "zh" ? "关闭第三方素材搜索" : "Close stock search"}
                 className="icon-button"
                 onClick={closeExternalSearch}
                 type="button"
@@ -1551,63 +1548,31 @@ export const AssetsPanel = ({
               </button>
             </div>
 
-            <form
-              className="external-search-form asset-search-dialog-form"
-              onSubmit={handleSearchDialogSubmit}
-            >
+            <form className="external-search-form" onSubmit={handleExternalSearchSubmit}>
               <label className="sr-only" htmlFor={externalSearchInputId}>
-                {searchDialogMode === "local"
-                  ? ui.searchLabel
-                  : language === "zh"
-                    ? "第三方素材搜索关键词"
-                    : "External stock search query"}
+                {language === "zh" ? "第三方素材搜索关键词" : "External stock search query"}
               </label>
               <div className="asset-search-input-shell">
                 <Search size={20} aria-hidden="true" />
-                {searchDialogMode === "local" ? (
-                  <input
-                    id={externalSearchInputId}
-                    onChange={(event) => onSearchQueryChange(event.target.value)}
-                    placeholder={ui.searchPlaceholder}
-                    value={searchQuery}
-                  />
-                ) : (
-                  <input
-                    id={externalSearchInputId}
-                    onChange={(event) => {
-                      setExternalModalQuery(event.target.value);
-                      setExternalImportMessage(undefined);
-                    }}
-                    placeholder={language === "zh" ? "输入素材关键词" : "Search photos and videos"}
-                    value={externalModalQuery}
-                  />
-                )}
+                <input
+                  id={externalSearchInputId}
+                  onChange={(event) => {
+                    setExternalModalQuery(event.target.value);
+                    setExternalImportMessage(undefined);
+                  }}
+                  placeholder={language === "zh" ? "输入素材关键词" : "Search photos and videos"}
+                  value={externalModalQuery}
+                />
               </div>
-              <label className="asset-search-source-filter">
-                <span>{language === "zh" ? "来源" : "Source"}</span>
-                <select
-                  onChange={(event) =>
-                    handleSearchSourceChange(event.target.value as "local" | "external")
-                  }
-                  value={searchDialogMode}
-                >
-                  <option value="local">{language === "zh" ? "本地素材" : "Local assets"}</option>
-                  <option value="external">
-                    {language === "zh" ? "第三方素材" : "Third-party stock"}
-                  </option>
-                </select>
-              </label>
               <Button
                 disabled={
-                  searchDialogMode === "local"
-                    ? disabled || !searchQuery.trim()
-                    : disabled ||
-                      isExternalModalSearching ||
-                      !externalModalQuery.trim() ||
-                      !hasConfiguredStockProvider
+                  disabled ||
+                  isExternalModalSearching ||
+                  !externalModalQuery.trim() ||
+                  !hasConfiguredStockProvider
                 }
                 icon={
-                  searchDialogMode === "external" && isExternalModalSearching ? (
+                  isExternalModalSearching ? (
                     <Loader2 className="spin" size={18} />
                   ) : (
                     <Search size={18} />
@@ -1620,42 +1585,38 @@ export const AssetsPanel = ({
               </Button>
             </form>
 
-            {searchDialogMode === "external" ? (
-              <div
-                className="asset-browser-tabs external-type-tabs"
-                aria-label={language === "zh" ? "第三方素材类型" : "External stock asset types"}
-              >
-                {assetCategories.map((category) => (
-                  <button
-                    aria-pressed={externalModalType === category}
-                    className={externalModalType === category ? "active" : undefined}
-                    key={category}
-                    onClick={() => handleExternalTypeClick(category)}
-                    type="button"
-                  >
-                    <span>{getAssetCategoryLabel(category, language)}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div
+              className="asset-browser-tabs external-type-tabs"
+              aria-label={language === "zh" ? "第三方素材类型" : "External stock asset types"}
+            >
+              {assetCategories.map((category) => (
+                <button
+                  aria-pressed={externalModalType === category}
+                  className={externalModalType === category ? "active" : undefined}
+                  key={category}
+                  onClick={() => handleExternalTypeClick(category)}
+                  type="button"
+                >
+                  <span>{getAssetCategoryLabel(category, language)}</span>
+                </button>
+              ))}
+            </div>
 
-            {searchDialogMode === "external" ? (
-              <div className="external-provider-summary" aria-label="Configured stock providers">
-                {enabledStockProviders.map((provider) => (
-                  <span className="external-source-pill" key={provider.source}>
-                    <Globe2 size={14} aria-hidden="true" />
-                    {stockProviderLabel(provider.source)}
-                    {!hasSearchableStockProviderCredential(provider)
-                      ? language === "zh"
-                        ? "（缺少 key）"
-                        : " (missing key)"
-                      : ""}
-                  </span>
-                ))}
-              </div>
-            ) : null}
+            <div className="external-provider-summary" aria-label="Configured stock providers">
+              {enabledStockProviders.map((provider) => (
+                <span className="external-source-pill" key={provider.source}>
+                  <Globe2 size={14} aria-hidden="true" />
+                  {stockProviderLabel(provider.source)}
+                  {!hasSearchableStockProviderCredential(provider)
+                    ? language === "zh"
+                      ? "（缺少 key）"
+                      : " (missing key)"
+                    : ""}
+                </span>
+              ))}
+            </div>
 
-            {searchDialogMode === "external" && !hasConfiguredStockProvider ? (
+            {!hasConfiguredStockProvider ? (
               <div className="external-empty-result external-provider-warning" role="status">
                 <Globe2 size={22} aria-hidden="true" />
                 <div>
@@ -1673,7 +1634,7 @@ export const AssetsPanel = ({
               </div>
             ) : null}
 
-            {searchDialogMode === "external" && externalSearchType === "script" ? (
+            {externalSearchType === "script" ? (
               <p className="external-search-note">
                 {language === "zh"
                   ? "当前第三方素材库主要支持图片、视频和音频；剧本类型会使用相同关键词尝试匹配可参考素材。"
@@ -1688,53 +1649,7 @@ export const AssetsPanel = ({
             ) : null}
 
             <div className="external-search-results-shell" onScroll={handleExternalResultsScroll}>
-              {searchDialogMode === "local" ? (
-                localSearchQuery && localDialogResults.length > 0 ? (
-                  <div
-                    className="asset-search-results asset-search-results-dialog"
-                    aria-live="polite"
-                  >
-                    {localDialogResults.map((asset) => (
-                      <button
-                        className="asset-search-result"
-                        key={asset.id}
-                        onClick={() => setPreviewAsset(asset)}
-                        type="button"
-                      >
-                        <span>{asset.name}</span>
-                        <small>
-                          {getAssetCategoryLabel(activeCategory, language)} /{" "}
-                          {asset.mimeType ?? asset.type}
-                        </small>
-                      </button>
-                    ))}
-                  </div>
-                ) : localSearchQuery ? (
-                  <div className="external-empty-result">
-                    <Search size={22} aria-hidden="true" />
-                    <div>
-                      <h3>{language === "zh" ? "没有找到本地素材" : "No local assets found"}</h3>
-                      <p>
-                        {language === "zh"
-                          ? "可以换一个关键词，或切换到第三方素材继续搜索。"
-                          : "Try another keyword or switch to third-party stock."}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="external-empty-result">
-                    <Search size={22} aria-hidden="true" />
-                    <div>
-                      <h3>{language === "zh" ? "搜索本地素材库" : "Search local library"}</h3>
-                      <p>
-                        {language === "zh"
-                          ? "输入关键词后会在当前素材类型内检索本地素材。"
-                          : "Enter a keyword to search local assets in the current category."}
-                      </p>
-                    </div>
-                  </div>
-                )
-              ) : isExternalModalSearching ? (
+              {isExternalModalSearching ? (
                 <div className="external-search-loading" role="status">
                   <Loader2 className="spin" size={22} aria-hidden="true" />
                   <span>{language === "zh" ? "正在搜索素材..." : "Searching stock assets..."}</span>
@@ -1849,18 +1764,6 @@ export const AssetsPanel = ({
                     )}
                   </div>
                 </>
-              ) : !externalModalQuery.trim() ? (
-                <div className="external-empty-result">
-                  <Globe2 size={22} aria-hidden="true" />
-                  <div>
-                    <h3>{language === "zh" ? "搜索第三方素材" : "Search third-party stock"}</h3>
-                    <p>
-                      {language === "zh"
-                        ? "输入关键词后会在当前弹窗中刷新第三方素材结果。"
-                        : "Enter a keyword to refresh third-party results in this same panel."}
-                    </p>
-                  </div>
-                </div>
               ) : (
                 <div className="external-empty-result">
                   <Globe2 size={22} aria-hidden="true" />
@@ -1877,9 +1780,7 @@ export const AssetsPanel = ({
                 </div>
               )}
             </div>
-            {searchDialogMode === "external" &&
-            hasConfiguredStockProvider &&
-            externalModalResults.length > 0 ? (
+            {hasConfiguredStockProvider && externalModalResults.length > 0 ? (
               <div className="external-bulk-actions">
                 <div>
                   <strong>

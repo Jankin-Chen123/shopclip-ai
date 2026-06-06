@@ -1821,9 +1821,10 @@ textarea {
 }
 
 .asset-library-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(320px, 1fr);
   gap: 16px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .asset-import-button {
@@ -1841,7 +1842,6 @@ textarea {
 
 .asset-import-card {
   display: flex;
-  flex: 0 0 300px;
   align-items: center;
   gap: 14px;
   padding: 18px;
@@ -1867,15 +1867,6 @@ textarea {
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.78rem;
-}
-
-.asset-unified-search-button {
-  align-self: center;
-  width: auto;
-  justify-content: center;
-  min-height: 48px;
-  padding: 0 18px;
-  font-size: 0.9rem;
 }
 
 .asset-import-icon {
@@ -2588,25 +2579,6 @@ textarea {
   align-items: center;
 }
 
-.asset-search-dialog-form {
-  grid-template-columns: minmax(0, 1fr) 180px auto;
-}
-
-.asset-search-source-filter {
-  display: grid;
-  gap: 4px;
-}
-
-.asset-search-source-filter span {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.asset-search-source-filter select {
-  min-height: 46px;
-}
-
 .external-provider-summary {
   display: flex;
   flex-wrap: wrap;
@@ -2627,15 +2599,6 @@ textarea {
   padding-right: 4px;
   scrollbar-color: rgba(34, 211, 238, 0.7) rgba(15, 23, 42, 0.72);
   scrollbar-width: thin;
-}
-
-.asset-search-results-dialog {
-  grid-template-columns: 1fr;
-  gap: 8px;
-}
-
-.asset-search-results-dialog .asset-search-result {
-  text-align: left;
 }
 
 .external-search-results-shell::-webkit-scrollbar {
