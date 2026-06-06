@@ -1774,3 +1774,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
 - Remaining:
   - Browser-level validation should confirm speed actions on selected linked scene video/audio materials in a loaded workspace.
+
+## 2026-06-06 Timeline Material Batch Split
+
+- Scope:
+  - Continues the narrowed base demo direction: video, audio, and subtitle editing only.
+  - Adds multi-material splitting at the playhead, matching the expected editor behavior for cutting selected video/audio/subtitle clips together.
+- Fix:
+  - Added `splitSmartEditTimelineElementsAtPlayhead` for batch splitting persistent timeline materials.
+  - The helper expands linked generated video/audio mates, skips derived storyboard clips, and splits only materials intersected by the playhead.
+  - `S` / `Split at playhead` now splits multi-selected independent materials in one action and selects the generated right-side clips.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "splits multiple selected independent"`
+  - `corepack pnpm --filter @shopclip/web run test src/app/App.test.tsx -t "splits multiple selected|splits an independent|splits persistent|trims an independent|resizes independent|updates playback speed for selected|duplicates independent|cuts independent|multiple independent|selects all editable independent"`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web lint`
+  - `corepack pnpm --filter @shopclip/web build`
+- Remaining:
+  - Browser-level validation should confirm multi-selected linked video/audio/text materials split together in a loaded workspace.

@@ -65,6 +65,7 @@ import {
   smartEditTimelineKeyboardNudgeSeconds,
   splitSmartEditSegmentOnTimeline,
   splitSmartEditTimelineElementAtPlayhead,
+  splitSmartEditTimelineElementsAtPlayhead,
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
   resizeSmartEditTrackClipEdge,
@@ -3186,6 +3187,84 @@ Second imported caption`,
     });
     expect(slowPlan.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-speed")).toMatchObject({
       playbackRate: 0.25,
+    });
+  });
+
+  it("splits multiple selected independent timeline materials at the playhead", () => {
+    const plan = addSmartEditTimelineTextElement(
+      detachSmartEditSceneVideoToTimelineElement(
+        {
+          audio: {
+            bgmTrack: "none",
+            targetLanguage: "zh-CN",
+            voice: "clear-host",
+          },
+          createdAt: "2026-06-06T00:00:00.000Z",
+          id: "plan-batch-split-materials",
+          projectId: "project-1",
+          segments: [
+            {
+              assetTags: [],
+              durationSeconds: 3,
+              enabled: true,
+              id: "segment-1",
+              order: 1,
+              rationale: "Batch split independent material.",
+              sceneId: "scene-1",
+              source: {
+                endSecond: 6,
+                kind: "generated-scene-clip",
+                sceneClipAudioUrl: "https://cdn.example.test/scene-audio.m4a",
+                sceneClipUrl: "https://cdn.example.test/scene.mp4",
+                sceneClipVideoOnlyUrl: "https://cdn.example.test/scene-video.mp4",
+                startSecond: 0,
+              },
+              subtitle: "Hook",
+              timelineStartSecond: 1,
+              transition: "cut",
+              voiceover: "",
+            },
+          ],
+          strategy: "Batch split independent materials.",
+          targetDurationSeconds: 8,
+        } satisfies SmartEditPlan,
+        "segment-1",
+        "batch-split",
+      ),
+      1,
+      "batch-split-caption",
+    );
+
+    const split = splitSmartEditTimelineElementsAtPlayhead(
+      plan,
+      ["video-segment-1-batch-split", "text-batch-split-caption"],
+      2,
+      "batch-knife",
+    );
+
+    expect(split?.timeline?.elements.find((element) => element.id === "video-segment-1-batch-split")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1,
+    });
+    expect(split?.timeline?.elements.find((element) => element.id === "video-segment-1-batch-split-split-batch-knife")).toMatchObject({
+      durationSeconds: 2,
+      startSecond: 2,
+    });
+    expect(split?.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-split")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1,
+    });
+    expect(split?.timeline?.elements.find((element) => element.id === "source-audio-segment-1-batch-split-split-batch-knife")).toMatchObject({
+      durationSeconds: 2,
+      startSecond: 2,
+    });
+    expect(split?.timeline?.elements.find((element) => element.id === "text-batch-split-caption")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 1,
+    });
+    expect(split?.timeline?.elements.find((element) => element.id === "text-batch-split-caption-split-batch-knife")).toMatchObject({
+      durationSeconds: 1,
+      startSecond: 2,
     });
   });
 

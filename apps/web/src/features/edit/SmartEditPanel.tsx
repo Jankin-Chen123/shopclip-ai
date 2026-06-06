@@ -2823,6 +2823,39 @@ export const splitSmartEditTimelineElementAtPlayhead = (
   );
 };
 
+export const splitSmartEditTimelineElementsAtPlayhead = (
+  plan: SmartEditPlan,
+  elementIds: string[],
+  playheadSecond: number,
+  splitToken = String(Date.now()),
+): SmartEditPlan | undefined => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const splitIds = expandedPersistentTimelineElementIds(baseTimeline, elementIds);
+  if (splitIds.size === 0) {
+    return undefined;
+  }
+  const splitSecond = snapTimelineSeconds(playheadSecond);
+  let changed = false;
+  const nextElements = baseTimeline.elements.flatMap((element) => {
+    if (!splitIds.has(element.id) || isDerivedTimelineElement(element)) {
+      return [element];
+    }
+    const elementStart = clampTimelineStart(element.startSecond);
+    const elementEnd = snapTimelineSeconds(elementStart + element.durationSeconds);
+    if (
+      splitSecond <= elementStart + MIN_SMART_EDIT_CLIP_SECONDS ||
+      splitSecond >= elementEnd - MIN_SMART_EDIT_CLIP_SECONDS
+    ) {
+      return [element];
+    }
+    changed = true;
+    return splitPersistentTimelineElement(element, splitSecond, element.segmentId, splitToken);
+  });
+  return changed
+    ? withUpdatedTimelineElements(plan, nextElements, baseTimeline.tracks)
+    : undefined;
+};
+
 export const trimSmartEditTimelineElementAtPlayhead = (
   plan: SmartEditPlan,
   elementId: string,
@@ -5107,6 +5140,30 @@ export const SmartEditPanel = ({
   const splitAtPlayhead = () => {
     if (!plan) {
       return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    if (selectedTimelineMaterialIds.length > 1) {
+      const splitToken = String(Date.now());
+      const nextPlan = splitSmartEditTimelineElementsAtPlayhead(
+        plan,
+        selectedTimelineMaterialIds,
+        boundedPlayheadSeconds,
+        splitToken,
+      );
+      if (nextPlan) {
+        const rightElementIds =
+          nextPlan.timeline?.elements
+            .map((element) => element.id)
+            .filter((id) =>
+              selectedTimelineMaterialIds.some((sourceId) => id === `${sourceId}-split-${splitToken}`),
+            ) ?? [];
+        commitPlanChange(nextPlan, { label: "Split selected materials at playhead" });
+        if (rightElementIds.length > 0) {
+          setSelectedTrackClipId(rightElementIds[0]);
+          setSelectedTrackClipIds(rightElementIds);
+        }
+        return;
+      }
     }
     if (
       selectedTrackClip &&
