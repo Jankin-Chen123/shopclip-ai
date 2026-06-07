@@ -1418,12 +1418,41 @@ const applyLatestSceneMaterialsToSmartEditPlan = (
       },
     };
   });
+  const timeline = plan.timeline
+    ? {
+        ...plan.timeline,
+        elements: plan.timeline.elements.map((element) => {
+          const clip = element.sceneId ? latestMaterials.get(element.sceneId) : undefined;
+          const material = clip?.material;
+          if (!clip || material?.status !== "ready" || !material.videoOnlyUrl) {
+            return element;
+          }
+          if (element.kind === "video" || element.trackId === "video-main") {
+            return {
+              ...element,
+              sourceObjectKey: material.videoObjectKey ?? element.sourceObjectKey,
+              sourceUrl: material.videoOnlyUrl,
+            };
+          }
+          if ((element.kind === "audio" || element.trackId === "audio-source") && material.audioUrl) {
+            return {
+              ...element,
+              audioWaveform: material.audioWaveform ?? element.audioWaveform,
+              sourceObjectKey: material.audioObjectKey ?? element.sourceObjectKey,
+              sourceUrl: material.audioUrl,
+            };
+          }
+          return element;
+        }),
+      }
+    : plan.timeline;
 
   return {
     appliedCount,
     plan: {
       ...plan,
       segments,
+      timeline,
     },
   };
 };

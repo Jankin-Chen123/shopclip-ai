@@ -858,6 +858,9 @@ const buildSmartEditTimeline = (plan: SmartEditPlan): SmartEditTimeline => {
       segmentId: segment.id,
       startSecond: startSecond + captionOffsetSeconds,
       text: segment.subtitle,
+      textColor: segment.captionTextColor,
+      textFontSize: segment.captionTextFontSize,
+      textPositionYPercent: segment.captionTextPositionYPercent,
       trackId: "text-copy",
       trimStartSecond: 0,
     });
@@ -3052,6 +3055,9 @@ export const materializeSmartEditRenderedSegmentsToTimelineElements = (
         segmentId: segment.id,
         startSecond: snapTimelineSeconds(segmentStartSecond + captionOffsetSeconds),
         text: segment.subtitle,
+        textColor: segment.captionTextColor,
+        textFontSize: segment.captionTextFontSize,
+        textPositionYPercent: segment.captionTextPositionYPercent,
         trackId: "text-copy",
         trimStartSecond: 0,
       });

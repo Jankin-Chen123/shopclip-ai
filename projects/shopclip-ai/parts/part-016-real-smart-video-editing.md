@@ -2291,3 +2291,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`
+
+## 2026-06-07 Current Plan Material URL Refresh Batch
+
+- Scope:
+  - End-to-end consistency fix for recomposing an edited Smart Edit timeline after fresh model-rendered scene materials exist.
+  - Prevents persistent timeline video/audio elements from keeping stale provider URLs when the backend has newer ffmpeg-separated video-only/audio assets.
+- Fix:
+  - Updated `applyLatestSceneMaterialsToSmartEditPlan` so it refreshes existing timeline video and source-audio elements with the latest materialized `videoOnlyUrl`, `audioUrl`, object keys, and waveform metadata.
+  - Preserved user timeline edits such as clip timing, hidden/muted state, and text content while only replacing the media source fields.
+  - Preserved caption style fields when generated scene captions are materialized into independent timeline text clips.
+  - Included caption style and audio/voice fade fields in frontend Smart Edit and segment-refresh request payloads for compatibility paths outside `currentPlan`.
+  - Added an API flow regression test that submits a stale `currentPlan` and proves recomposition refreshes timeline video/audio element URLs before ffmpeg composition.
+  - Added a focused frontend regression test for materialized rendered-scene caption styles.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
+  - `apps/web/node_modules/.bin/vitest.CMD run src/app/App.test.tsx -t "materializes rendered scene captions with timeline text styles"`
+  - Note: full `apps/web/src/app/App.test.tsx` currently has two unrelated legacy UI text assertion failures (`Search product name or brand`, `Complete required fields`); the new focused Smart Edit test passes.

@@ -49,6 +49,7 @@ import {
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   duplicateSmartEditTimelineElementsOnTimeline,
+  materializeSmartEditRenderedSegmentsToTimelineElements,
   moveSmartEditSegmentOnTimeline,
   moveSmartEditSegmentOnTimelineWithMode,
   moveSmartEditTrackClipOnTimeline,
@@ -4348,6 +4349,63 @@ Second imported caption`,
       { easing: "linear", id: "volume-0", timeSecond: 0, volume: 0.5 },
       { easing: "linear", id: "volume-1", timeSecond: 1.2, volume: 0.9 },
     ]);
+  });
+
+  it("materializes rendered scene captions with timeline text styles", () => {
+    const plan = {
+      audio: {
+        bgmTrack: "none",
+        targetLanguage: "zh-CN",
+        voice: "clear-host",
+      },
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: true,
+          durationSeconds: 4,
+          timelineStartSecond: 1,
+          transition: "cut",
+          subtitle: "Hook subtitle",
+          captionTextColor: "#ffcc00",
+          captionTextFontSize: 48,
+          captionTextPositionYPercent: 18,
+          voiceover: "",
+          playbackRate: 1,
+          source: {
+            assetId: "asset-video",
+            endSecond: 4,
+            kind: "generated-scene-clip",
+            sceneClipAudioUrl: "https://cdn.example.com/scene-1-audio.m4a",
+            sceneClipUrl: "https://cdn.example.com/scene-1.mp4",
+            sceneClipVideoOnlyUrl: "https://cdn.example.com/scene-1-video.mp4",
+            startSecond: 0,
+          },
+        },
+      ],
+      targetDurationSeconds: 5,
+    } satisfies SmartEditPlan;
+
+    const nextPlan = materializeSmartEditRenderedSegmentsToTimelineElements(
+      plan,
+      ["segment-1"],
+      "styled",
+    );
+    const materializedText = nextPlan.timeline?.elements.find(
+      (element) => element.id === "text-segment-1-styled",
+    );
+
+    expect(nextPlan.segments.find((segment) => segment.id === "segment-1")?.enabled).toBe(false);
+    expect(materializedText).toMatchObject({
+      id: "text-segment-1-styled",
+      kind: "text",
+      text: "Hook subtitle",
+      textColor: "#ffcc00",
+      textFontSize: 48,
+      textPositionYPercent: 18,
+      trackId: "text-copy",
+    });
   });
 
   it("detaches generated scene video into an independent timeline material", () => {

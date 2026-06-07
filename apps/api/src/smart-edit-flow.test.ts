@@ -663,5 +663,55 @@ describe("smart edit API flow", () => {
     expect(
       composedPlan.timeline?.elements.some((element) => element.trackId === "audio-source"),
     ).toBe(true);
+
+    const staleCurrentPlan: SmartEditPlan = {
+      ...composedPlan,
+      id: "stale-current-plan",
+      segments: composedPlan.segments.map((segment) => ({
+        ...segment,
+        source: {
+          ...segment.source,
+          sceneClipAudioUrl: "https://expired.example.test/audio.m4a",
+          sceneClipUrl: "https://expired.example.test/scene.mp4",
+          sceneClipVideoOnlyUrl: "https://expired.example.test/video-only.mp4",
+        },
+      })),
+      timeline: composedPlan.timeline
+        ? {
+            ...composedPlan.timeline,
+            elements: composedPlan.timeline.elements.map((element) =>
+              element.trackId === "video-main" || element.trackId === "audio-source"
+                ? {
+                    ...element,
+                    sourceUrl: `https://expired.example.test/${element.id}`,
+                  }
+                : element,
+            ),
+          }
+        : undefined,
+    };
+    const recomposed = await request<RenderSnapshot>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/smart-edit`,
+      {
+        method: "POST",
+        body: JSON.stringify({ currentPlan: staleCurrentPlan }),
+      },
+    );
+    expect(recomposed.status).toBe(202);
+
+    const completedRecompose = await waitForRenderTask(baseUrl, recomposed.body.renderTask.id);
+    expect(completedRecompose.renderTask.status).toBe("completed");
+    const recomposedPlan = composerPlans[1]!;
+    expect(
+      recomposedPlan.timeline?.elements
+        .filter((element) => element.trackId === "video-main")
+        .every((element) => element.sourceUrl?.includes(render.body.renderTask.id)),
+    ).toBe(true);
+    expect(
+      recomposedPlan.timeline?.elements
+        .filter((element) => element.trackId === "audio-source")
+        .every((element) => element.sourceUrl?.includes(render.body.renderTask.id)),
+    ).toBe(true);
   });
 });
