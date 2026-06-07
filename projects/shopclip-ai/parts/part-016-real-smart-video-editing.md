@@ -2522,3 +2522,15 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-08 Smart Edit Duplicate Preview Removal Batch
+
+- Scope:
+  - Removes the large duplicate selected-segment live preview area from the standalone Smart Edit preview panel.
+- Fix:
+  - Hid the standalone-page `.smart-edit-live-preview` region so the main preview remains the single visible preview surface.
+  - This prevents the selected transform handles from being positioned against an oversized combined preview panel.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

@@ -5330,9 +5330,7 @@ textarea {
 }
 
 .smart-edit-standalone-page .smart-edit-live-preview {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
+  display: none;
 }
 
 .smart-edit-standalone-page .smart-edit-live-preview h4 {
