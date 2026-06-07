@@ -309,6 +309,15 @@ const BackgroundTaskBar = ({
   const runningTasks = tasks.filter((task) => task.status === "running");
 
   const runningCount = runningTasks.length;
+  const runningProgress =
+    runningCount > 0
+      ? Math.round(
+          runningTasks.reduce(
+            (total, task) => total + Math.max(0, Math.min(100, task.progress)),
+            0,
+          ) / runningCount,
+        )
+      : 100;
   const copyText =
     language === "zh"
       ? {
@@ -348,8 +357,15 @@ const BackgroundTaskBar = ({
           )}
         </span>
         <span className="background-task-trigger-copy">
-          <strong>{runningCount > 0 ? copyText.running : copyText.complete}</strong>
+          <strong>
+            {runningCount > 0 ? `${copyText.running} ${runningProgress}%` : copyText.complete}
+          </strong>
           <small>{copyText.openList}</small>
+          {runningCount > 0 ? (
+            <span className="background-task-trigger-progress" aria-hidden="true">
+              <i style={{ width: `${runningProgress}%` }} />
+            </span>
+          ) : null}
         </span>
       </button>
       {isOpen ? (

@@ -873,6 +873,9 @@ export const App = ({
   const [trackedBackgroundTasks, setTrackedBackgroundTasks] = useState<TrackedBackgroundTask[]>(
     [],
   );
+  const backgroundTaskProgressTimers = useRef<Record<string, ReturnType<typeof window.setInterval>>>(
+    {},
+  );
   const [dashboard, setDashboard] = useState<DashboardResponse>();
   const [dirtySceneIds, setDirtySceneIds] = useState<Set<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
@@ -1005,6 +1008,16 @@ export const App = ({
       document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
     }
   }, [language]);
+
+  useEffect(
+    () => () => {
+      Object.values(backgroundTaskProgressTimers.current).forEach((timerId) => {
+        window.clearInterval(timerId);
+      });
+      backgroundTaskProgressTimers.current = {};
+    },
+    [],
+  );
 
   const handlePageChange = (page: WorkspacePageId) => {
     if (page !== "studio" && page !== "delivery" && page !== "edit") {
@@ -1183,6 +1196,40 @@ export const App = ({
     );
   };
 
+  const stopEstimatedBackgroundTaskProgress = (taskId: string) => {
+    const timerId = backgroundTaskProgressTimers.current[taskId];
+    if (!timerId) {
+      return;
+    }
+    window.clearInterval(timerId);
+    delete backgroundTaskProgressTimers.current[taskId];
+  };
+
+  const startEstimatedBackgroundTaskProgress = (taskId: string) => {
+    stopEstimatedBackgroundTaskProgress(taskId);
+    backgroundTaskProgressTimers.current[taskId] = window.setInterval(() => {
+      setTrackedBackgroundTasks((current) =>
+        current.map((task) => {
+          if (task.id !== taskId || task.status !== "running") {
+            return task;
+          }
+          const nextProgress =
+            task.progress < 35
+              ? task.progress + 6
+              : task.progress < 70
+                ? task.progress + 3
+                : task.progress < 90
+                  ? task.progress + 1.4
+                  : task.progress + 0.5;
+          return {
+            ...task,
+            progress: Math.min(96, nextProgress),
+          };
+        }),
+      );
+    }, 900);
+  };
+
   const runAction = async (
     key: string,
     busy: BusyState,
@@ -1201,6 +1248,9 @@ export const App = ({
           id: backgroundTask.id,
         })
       : undefined;
+    if (backgroundTaskId) {
+      startEstimatedBackgroundTaskProgress(backgroundTaskId);
+    }
     setBusyState(busy);
     setErrors((current) => ({ ...current, [key]: undefined }));
     let didFail = false;
@@ -1214,6 +1264,7 @@ export const App = ({
       }));
     } finally {
       if (backgroundTaskId) {
+        stopEstimatedBackgroundTaskProgress(backgroundTaskId);
         updateBackgroundTask(backgroundTaskId, {
           progress: 100,
           status: didFail ? "failed" : "completed",
