@@ -2325,3 +2325,16 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/sceneClipMaterializer.test.ts`
   - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
   - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`
+
+## 2026-06-07 Smart Edit Chain Audit Evidence Batch
+
+- Scope:
+  - Strengthens the end-to-end evidence for the narrowed video, audio, and subtitle editing demo.
+  - Covers the chain from model-render request defaults through materialized scene assets and edited current-plan recomposition.
+- Fix:
+  - Extended `smart-edit-flow.test.ts` so the Seedance-backed render path asserts every scene task is submitted with `generate_audio: true`.
+  - Extended the stale `currentPlan` recomposition scenario so persistent video/audio timeline elements include user edits such as start-time shifts, trims, and playback-rate changes.
+  - Asserted recomposition refreshes stale video/audio element source URLs to the latest materialized scene assets while preserving the user timeline edits and edited caption text.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`

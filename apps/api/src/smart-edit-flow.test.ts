@@ -625,6 +625,11 @@ describe("smart edit API flow", () => {
     expect(completedRender.traceEvents.map((event) => event.step)).toContain(
       "scene-clip-materialize",
     );
+    const seedanceCreateBodies = fetchMock.mock.calls
+      .filter(([url]) => String(url).endsWith("/contents/generations/tasks"))
+      .map(([, init]) => JSON.parse(String((init as RequestInit | undefined)?.body)));
+    expect(seedanceCreateBodies.length).toBeGreaterThan(0);
+    expect(seedanceCreateBodies.every((body) => body.generate_audio === true)).toBe(true);
 
     const smartEdit = await request<RenderSnapshot>(
       baseUrl,
@@ -683,9 +688,20 @@ describe("smart edit API flow", () => {
               element.trackId === "video-main" || element.trackId === "audio-source"
                 ? {
                     ...element,
+                    durationSeconds: Math.max(1, element.durationSeconds - 0.5),
+                    playbackRate: element.trackId === "video-main" ? 1.5 : element.playbackRate,
+                    startSecond: element.startSecond + 0.25,
                     sourceUrl: `https://expired.example.test/${element.id}`,
+                    trimStartSecond: (element.trimStartSecond ?? 0) + 0.5,
                   }
-                : element,
+                : element.trackId === "text-copy"
+                  ? {
+                      ...element,
+                      durationSeconds: Math.max(1, element.durationSeconds - 0.25),
+                      startSecond: element.startSecond + 0.5,
+                      text: "Edited timeline caption",
+                    }
+                  : element,
             ),
           }
         : undefined,
@@ -712,6 +728,21 @@ describe("smart edit API flow", () => {
       recomposedPlan.timeline?.elements
         .filter((element) => element.trackId === "audio-source")
         .every((element) => element.sourceUrl?.includes(render.body.renderTask.id)),
+    ).toBe(true);
+    expect(
+      recomposedPlan.timeline?.elements
+        .filter((element) => element.trackId === "video-main")
+        .every(
+          (element) =>
+            element.startSecond >= 0.25 &&
+            element.playbackRate === 1.5 &&
+            element.trimStartSecond === 0.5,
+        ),
+    ).toBe(true);
+    expect(
+      recomposedPlan.timeline?.elements.some(
+        (element) => element.trackId === "text-copy" && element.text === "Edited timeline caption",
+      ),
     ).toBe(true);
   });
 });
