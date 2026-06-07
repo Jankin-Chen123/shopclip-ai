@@ -11,6 +11,7 @@ import {
   Film,
   Images,
   Plus,
+  Scissors,
   Trash2,
   X,
 } from "lucide-react";
@@ -41,6 +42,7 @@ interface ProjectWorkspaceProps {
   onLoadProject: (projectId: string) => void;
   onRenameRenderTask: (renderTaskId: string, displayName: string) => void;
   onRenameScript: (scriptId: string, displayName: string) => void;
+  onSmartEditVideo: (renderTaskId: string) => void;
   onTabChange: (tab: ProjectDetailTab) => void;
   onUpdateProjectBrief: (brief: ProjectBrief) => void;
   project?: ProjectSnapshot;
@@ -104,6 +106,7 @@ const getText = (language: Language) =>
         dashboard: "Data dashboard",
         addScript: "Add script",
         generateVideo: "Generate video",
+        smartEdit: "Smart edit",
         noScripts: "No scripts yet. Add a script to reuse the script generation module.",
         noVideos:
           "No saved videos yet. Generated videos return here as reusable video library entries.",
@@ -288,6 +291,7 @@ export const ProjectWorkspace = ({
   onLoadProject,
   onRenameRenderTask,
   onRenameScript,
+  onSmartEditVideo,
   onTabChange,
   onUpdateProjectBrief,
   project,
@@ -683,7 +687,9 @@ export const ProjectWorkspace = ({
               onDeleteRenderTask={onDeleteRenderTask}
               onRenameRenderTask={onRenameRenderTask}
               onPreviewVideo={setSelectedVideoId}
+              onSmartEditVideo={onSmartEditVideo}
               downloadLabel={language === "zh" ? "\u4e0b\u8f7d\u89c6\u9891" : "Download video"}
+              smartEditLabel={language === "zh" ? "\u667a\u80fd\u526a\u8f91" : "Smart edit"}
             />
           </section>
         ) : null}
@@ -920,12 +926,16 @@ const VideoList = ({
   onDeleteRenderTask,
   onRenameRenderTask,
   onPreviewVideo,
+  onSmartEditVideo,
+  smartEditLabel,
   videos,
 }: {
   downloadLabel: string;
   onDeleteRenderTask: (renderTaskId: string) => void;
   onRenameRenderTask: (renderTaskId: string, displayName: string) => void;
   onPreviewVideo: (renderTaskId: string) => void;
+  onSmartEditVideo: (renderTaskId: string) => void;
+  smartEditLabel: string;
   videos: RenderTask[];
 }) =>
   videos.length > 0 ? (
@@ -966,17 +976,30 @@ const VideoList = ({
             title={cardTitle}
           />
           <p>{formatUpdatedAt(video.updatedAt)}</p>
-          {video.previewUrl || video.exportUrl ? (
-            <a
-              className="project-video-link"
-              download
-              href={video.exportUrl ?? video.previewUrl}
-              onClick={(event) => event.stopPropagation()}
+          <div className="project-video-actions">
+            <button
+              className="project-video-link project-video-smart-edit"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSmartEditVideo(video.id);
+              }}
+              type="button"
             >
-              <Download size={15} aria-hidden="true" />
-              {downloadLabel}
-            </a>
-          ) : null}
+              <Scissors size={15} aria-hidden="true" />
+              {smartEditLabel}
+            </button>
+            {video.previewUrl || video.exportUrl ? (
+              <a
+                className="project-video-link"
+                download
+                href={video.exportUrl ?? video.previewUrl}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Download size={15} aria-hidden="true" />
+                {downloadLabel}
+              </a>
+            ) : null}
+          </div>
         </article>
         );
       })}

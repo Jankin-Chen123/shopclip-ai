@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Film, FileText, ListVideo, Scissors } from "lucide-react";
+import { Download, Film, FileText, ListVideo } from "lucide-react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -365,7 +365,7 @@ type BusyState =
   | "reference";
 
 type ScriptProductionMode = NonNullable<ScriptGenerationRequest["productionMode"]>;
-type ProjectStudioFlow = "script" | "storyboard" | "render" | "edit";
+type ProjectStudioFlow = "script" | "storyboard" | "render";
 type BackgroundTaskKind =
   | "asset-analysis"
   | "asset-recall"
@@ -1019,7 +1019,7 @@ export const App = ({
   );
 
   const handlePageChange = (page: WorkspacePageId) => {
-    if (page !== "studio" && page !== "delivery" && page !== "edit") {
+    if (page !== "studio" && page !== "delivery") {
       setIsProjectStudioMode(false);
     }
     setActivePage(page);
@@ -1049,8 +1049,7 @@ export const App = ({
     setSelectedSmartEditSegmentId(seededResult.plan.segments[0]?.id);
     setExportResult(undefined);
     if (options.navigateToEdit) {
-      setIsProjectStudioMode(true);
-      setProjectStudioFlow("edit");
+      setIsProjectStudioMode(false);
       handlePageChange("edit");
     }
     return true;
@@ -1693,10 +1692,53 @@ export const App = ({
   const handleProjectStudioFlowChange = (flow: ProjectStudioFlow) => {
     setIsProjectStudioMode(true);
     setProjectStudioFlow(flow);
-    handlePageChange(flow === "render" ? "delivery" : flow === "edit" ? "edit" : "studio");
-    if (flow === "edit") {
-      refreshStudioBaseRenderMaterials(renderTask);
+    handlePageChange(flow === "render" ? "delivery" : "studio");
+  };
+
+  const handleOpenSmartEditFromProjectVideo = (renderTaskId: string) => {
+    const selectedRenderTask = project?.renderTasks.find((candidate) => candidate.id === renderTaskId);
+    if (!selectedRenderTask) {
+      return;
     }
+
+    setIsProjectStudioMode(false);
+    setRenderTask(selectedRenderTask);
+    setTraceEvents([]);
+    setExportResult(undefined);
+    setErrors((current) => ({ ...current, smartEdit: undefined }));
+
+    const initialSmartEdit = smartEditResultFromRenderSnapshot({
+      renderTask: selectedRenderTask,
+      traceEvents: [],
+    });
+    if (initialSmartEdit) {
+      setSmartEditResult(initialSmartEdit);
+      setSelectedSmartEditSegmentId(initialSmartEdit.plan.segments[0]?.id);
+    } else if (!seedSmartEditFromSourceRender(selectedRenderTask, [])) {
+      setSmartEditResult(undefined);
+      setSelectedSmartEditSegmentId(undefined);
+    }
+    handlePageChange("edit");
+
+    void loadRenderTask(renderTaskId)
+      .then((render) => {
+        setRenderTask(render.renderTask);
+        setTraceEvents(render.traceEvents);
+        const completedSmartEdit = smartEditResultFromRenderSnapshot(render);
+        if (completedSmartEdit) {
+          setSmartEditResult(completedSmartEdit);
+          setSelectedSmartEditSegmentId(completedSmartEdit.plan.segments[0]?.id);
+          return;
+        }
+        if (!seedSmartEditFromSourceRender(render.renderTask, render.traceEvents)) {
+          setSmartEditResult(undefined);
+          setSelectedSmartEditSegmentId(undefined);
+        }
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Failed to load video for smart edit.";
+        setErrors((current) => ({ ...current, smartEdit: message }));
+      });
   };
 
   const loadProjectScriptIntoStudio = (selectedScript: ScriptResult) => {
@@ -3206,15 +3248,6 @@ export const App = ({
           : "Render a preview, inspect the result, and export it.",
       icon: Film,
     },
-    {
-      id: "edit",
-      label: language === "zh" ? "\u667a\u80fd\u526a\u8f91" : "Smart edit",
-      description:
-        language === "zh"
-          ? "\u57fa\u4e8e\u5206\u955c\u548c\u7d20\u6750\u8fdb\u884c\u667a\u80fd\u526a\u8f91\u4f18\u5316\u3002"
-          : "Use storyboard and assets for smart editing.",
-      icon: Scissors,
-    },
   ];
   const projectScriptStudioFlow = projectStudioFlowItems[0]!;
   const projectStudioPreviewScript = project?.scripts.find(
@@ -3421,6 +3454,7 @@ export const App = ({
                   onLoadProject={handleLoadProjectFromHistory}
                   onRenameRenderTask={handleRenameProjectRenderTask}
                   onRenameScript={handleRenameProjectScript}
+                  onSmartEditVideo={handleOpenSmartEditFromProjectVideo}
                   onTabChange={setProjectDetailTab}
                   onUpdateProjectBrief={handleUpdateProjectBrief}
                   project={project}
@@ -3455,8 +3489,7 @@ export const App = ({
                 />
               ) : null}
 
-              {(activePage === "studio" || activePage === "delivery" || activePage === "edit") &&
-              project ? (
+              {(activePage === "studio" || activePage === "delivery") && project ? (
                 <div className={`studio-return-bar ${isProjectStudioMode ? "is-project-studio" : ""}`}>
                   <div className="studio-return-copy">
                     <strong>{language === "zh" ? "\u5de5\u4f5c\u5ba4" : "Studio"}</strong>

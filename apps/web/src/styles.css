@@ -7030,11 +7030,41 @@ textarea {
   background: rgba(255, 255, 255, 0.045);
 }
 
+.project-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.project-video-actions .project-video-link {
+  margin-top: 0;
+}
+
+button.project-video-link {
+  cursor: pointer;
+}
+
+.project-video-smart-edit {
+  border-color: rgba(34, 211, 238, 0.38);
+  color: #cffafe;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.14), rgba(236, 72, 153, 0.1)),
+    rgba(255, 255, 255, 0.045);
+}
+
 .project-video-link:hover,
 .project-video-link:focus-visible {
   border-color: rgba(34, 211, 238, 0.55);
   outline: none;
   color: #cffafe;
+}
+
+.project-video-smart-edit:hover,
+.project-video-smart-edit:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(34, 211, 238, 0.14);
 }
 
 .project-script-card h4 {
