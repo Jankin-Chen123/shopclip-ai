@@ -35,6 +35,7 @@ interface ProjectWorkspaceProps {
   onCreateProject: () => void;
   onCloseScriptComposer: () => void;
   onDeleteRenderTask: (renderTaskId: string) => void;
+  onDeleteProject: (projectId: string) => void;
   onDeleteScript: (scriptId: string) => void;
   onGenerateVideo: () => void;
   onLoadProject: (projectId: string) => void;
@@ -281,6 +282,7 @@ export const ProjectWorkspace = ({
   onCloseScriptComposer,
   onCreateProject,
   onDeleteRenderTask,
+  onDeleteProject,
   onDeleteScript,
   onGenerateVideo,
   onLoadProject,
@@ -384,37 +386,52 @@ export const ProjectWorkspace = ({
           <div className="project-card-grid">
             {projectHistory.map((historyProject, index) => {
               const coverUrl = getProjectCoverUrl(historyProject);
+              const deleteLabel =
+                language === "zh"
+                  ? `\u5220\u9664\u9879\u76ee ${historyProject.title}`
+                  : `Delete project ${historyProject.title}`;
               return (
-                <button
-                  aria-label={historyProject.title}
-                  className="project-card"
-                  disabled={disabled || isHistoryLoading}
-                  key={historyProject.id}
-                  onClick={() => onLoadProject(historyProject.id)}
-                  type="button"
-                >
-                  <span
-                    className={getProjectImageClass(index)}
-                    aria-hidden={coverUrl ? undefined : "true"}
+                <article className="project-card-shell" key={historyProject.id}>
+                  <button
+                    aria-label={historyProject.title}
+                    className="project-card"
+                    disabled={disabled || isHistoryLoading}
+                    onClick={() => onLoadProject(historyProject.id)}
+                    type="button"
                   >
-                    {coverUrl ? <img alt="" src={coverUrl} /> : null}
-                  </span>
-                  <span className="project-card-body">
-                    <span className="project-card-title">
-                      <strong>{historyProject.title}</strong>
-                      <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
-                        {historyProject.status}
-                      </StatusPill>
+                    <span
+                      className={getProjectImageClass(index)}
+                      aria-hidden={coverUrl ? undefined : "true"}
+                    >
+                      {coverUrl ? <img alt="" src={coverUrl} /> : null}
                     </span>
-                    <span className="project-card-product">{historyProject.productName}</span>
-                    <span className="project-card-divider" />
-                    <span className="project-card-stats">
-                      <span>{plural(historyProject.assetCount, "assets")}</span>
-                      <span>{historyProject.sceneCount > 0 ? "1 script" : "0 scripts"}</span>
-                      <span>{historyProject.status === "completed" ? "1 video" : "0 videos"}</span>
+                    <span className="project-card-body">
+                      <span className="project-card-title">
+                        <strong>{historyProject.title}</strong>
+                        <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
+                          {historyProject.status}
+                        </StatusPill>
+                      </span>
+                      <span className="project-card-product">{historyProject.productName}</span>
+                      <span className="project-card-divider" />
+                      <span className="project-card-stats">
+                        <span>{plural(historyProject.assetCount, "assets")}</span>
+                        <span>{historyProject.sceneCount > 0 ? "1 script" : "0 scripts"}</span>
+                        <span>{historyProject.status === "completed" ? "1 video" : "0 videos"}</span>
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                  <Button
+                    aria-label={deleteLabel}
+                    className="project-card-delete project-card-delete-project"
+                    disabled={disabled || isHistoryLoading}
+                    icon={<Trash2 size={16} />}
+                    onClick={() => onDeleteProject(historyProject.id)}
+                    variant="danger"
+                  >
+                    <span className="sr-only">{language === "zh" ? "\u5220\u9664\u9879\u76ee" : "Delete project"}</span>
+                  </Button>
+                </article>
               );
             })}
           </div>
@@ -489,6 +506,15 @@ export const ProjectWorkspace = ({
             <dd>{plural(videos.length, "videos")}</dd>
           </div>
         </dl>
+        <Button
+          className="project-detail-delete"
+          disabled={disabled}
+          icon={<Trash2 size={18} />}
+          onClick={() => onDeleteProject(project.id)}
+          variant="danger"
+        >
+          {language === "zh" ? "\u5220\u9664\u9879\u76ee" : "Delete project"}
+        </Button>
       </aside>
 
       <div className="project-detail-main">

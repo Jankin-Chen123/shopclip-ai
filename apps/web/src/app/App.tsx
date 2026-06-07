@@ -63,6 +63,7 @@ import {
   createProject,
   createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
+  deleteProject as deleteProjectRequest,
   deleteRenderTask as deleteRenderTaskRequest,
   deleteReferenceVideo,
   deleteScene,
@@ -1841,6 +1842,45 @@ export const App = ({
     handleDeleteAssets([asset.id]);
   };
 
+  const handleDeleteProject = (projectId: string) => {
+    const shouldDelete =
+      typeof window === "undefined" ||
+      window.confirm(
+        language === "zh"
+          ? "\u786e\u8ba4\u5220\u9664\u8fd9\u4e2a\u9879\u76ee\uff1f\u9879\u76ee\u5185\u7684\u5267\u672c\u3001\u89c6\u9891\u548c\u9879\u76ee\u7d20\u6750\u4f1a\u4e00\u5e76\u5220\u9664\u3002"
+          : "Delete this project? Scripts, videos, and project materials will be deleted as well.",
+      );
+    if (!shouldDelete) {
+      return;
+    }
+
+    void runAction("project", "project", async () => {
+      const { deletedProject } = await deleteProjectRequest(projectId);
+      setProjectHistory((current) =>
+        current.filter((candidate) => candidate.id !== deletedProject.id),
+      );
+      if (project?.id === deletedProject.id) {
+        setProject(undefined);
+        setProjectDetailTab("overview");
+        setIsProjectScriptComposerOpen(false);
+        setIsProjectStudioMode(false);
+        setProjectStudioFlow("script");
+        setScript(undefined);
+        setScriptDraft("");
+        setRenderTask(undefined);
+        setSmartEditResult(undefined);
+        setSelectedSmartEditSegmentId(undefined);
+        setTraceEvents([]);
+        setDashboard(undefined);
+        setExportResult(undefined);
+        setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
+        setSelectedSceneId(undefined);
+        setDirtySceneIds(new Set());
+      }
+      refreshProjectHistory();
+    });
+  };
+
   const handleDeleteProjectScript = (scriptId: string) => {
     const shouldDelete =
       typeof window === "undefined" ||
@@ -2907,6 +2947,7 @@ export const App = ({
                   onBackToProjects={handleBackToProjectList}
                   onCloseScriptComposer={() => setIsProjectScriptComposerOpen(false)}
                   onCreateProject={handleCreateProject}
+                  onDeleteProject={handleDeleteProject}
                   onDeleteRenderTask={handleDeleteProjectRenderTask}
                   onDeleteScript={handleDeleteProjectScript}
                   onGenerateVideo={handleGenerateProjectVideo}
