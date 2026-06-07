@@ -2873,17 +2873,24 @@ textarea {
   inset: 0;
   z-index: 100;
   display: grid;
+  min-height: 100dvh;
+  align-items: center;
+  justify-items: center;
   place-items: center;
   padding: 22px;
+  overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(12px);
 }
 
 .external-preview-dialog {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
-  width: min(1120px, 100%);
+  width: min(1120px, calc(100vw - 44px));
   max-height: min(820px, calc(100dvh - 44px));
+  margin: auto;
   overflow: hidden;
   padding: 18px;
   border: 1px solid rgba(34, 211, 238, 0.28);
@@ -2917,7 +2924,7 @@ textarea {
 
 .external-preview-media {
   display: grid;
-  min-height: 420px;
+  min-height: clamp(280px, 48dvh, 420px);
   max-height: min(620px, calc(100dvh - 210px));
   overflow: hidden;
   place-items: center;

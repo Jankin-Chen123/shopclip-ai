@@ -1,5 +1,6 @@
-import type { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, UIEvent } from "react";
+import type { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, ReactElement, UIEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { AssetMetadata, ViralTemplate } from "@shopclip/shared";
 import {
   Check,
@@ -85,6 +86,14 @@ const formatBytes = (bytes?: number) => {
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const renderPreviewOverlay = (overlay: ReactElement) => {
+  if (typeof document === "undefined") {
+    return overlay;
+  }
+
+  return createPortal(overlay, document.body);
 };
 
 const sourceLabel = (source: ExternalAssetResult["source"]) =>
@@ -1244,7 +1253,8 @@ export const AssetsPanel = ({
         </div>
       )}
 
-      {previewTemplate ? (
+      {previewTemplate
+        ? renderPreviewOverlay(
         <div className="external-preview-backdrop" role="presentation">
           <section
             aria-labelledby="template-preview-title"
@@ -1298,10 +1308,12 @@ export const AssetsPanel = ({
               </aside>
             </div>
           </section>
-        </div>
-      ) : null}
+        </div>,
+          )
+        : null}
 
-      {previewAsset ? (
+      {previewAsset
+        ? renderPreviewOverlay(
         <div className="external-preview-backdrop" role="presentation">
           <section
             aria-labelledby="asset-preview-title"
@@ -1518,8 +1530,9 @@ export const AssetsPanel = ({
               </aside>
             </div>
           </section>
-        </div>
-      ) : null}
+        </div>,
+          )
+        : null}
 
       {isExternalSearchOpen ? (
         <div className="asset-import-backdrop external-search-backdrop" role="presentation">
@@ -1804,7 +1817,8 @@ export const AssetsPanel = ({
         </div>
       ) : null}
 
-      {previewExternalAsset ? (
+      {previewExternalAsset
+        ? renderPreviewOverlay(
         <div className="external-preview-backdrop" role="presentation">
           <section
             aria-labelledby="external-preview-title"
@@ -1954,8 +1968,9 @@ export const AssetsPanel = ({
               </aside>
             </div>
           </section>
-        </div>
-      ) : null}
+        </div>,
+          )
+        : null}
 
       {isImportOpen ? (
         <div className="asset-import-backdrop" role="presentation">

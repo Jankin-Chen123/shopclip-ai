@@ -6490,6 +6490,12 @@ Second imported caption`,
     const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
     expect(styles).toMatch(
+      /\.external-preview-backdrop\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*min-height:\s*100dvh;[^}]*align-items:\s*center;[^}]*justify-items:\s*center;[^}]*place-items:\s*center;/s,
+    );
+    expect(styles).toMatch(
+      /\.external-preview-dialog\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*max-height:\s*min\(820px,\s*calc\(100dvh - 44px\)\);[^}]*margin:\s*auto;/s,
+    );
+    expect(styles).toMatch(
       /\.external-preview-content\s*\{[^}]*max-height:\s*min\(620px,\s*calc\(100dvh - 210px\)\);[^}]*overflow:\s*hidden;/s,
     );
     expect(styles).toMatch(
