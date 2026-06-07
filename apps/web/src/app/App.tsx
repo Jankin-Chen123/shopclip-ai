@@ -87,7 +87,6 @@ import {
   regenerateScene,
   reorderScenes,
   retryRenderTask,
-  rewriteScript,
   saveScript,
   refreshSmartEditSegment,
   searchAssets,
@@ -1256,6 +1255,9 @@ export const App = ({
     let didFail = false;
     try {
       await action();
+      if (backgroundTaskId && project?.id) {
+        await syncCurrentProjectSnapshot(project.id);
+      }
     } catch (error) {
       didFail = true;
       setErrors((current) => ({
@@ -1332,6 +1334,22 @@ export const App = ({
       .finally(() => {
         setIsProjectHistoryLoading(false);
       });
+  };
+
+  const syncCurrentProjectSnapshot = async (projectId: string) => {
+    const loadedProject = await loadProject(projectId);
+    setProject(loadedProject);
+    setBrief({
+      title: loadedProject.title,
+      productName: loadedProject.productName,
+      audience: loadedProject.audience,
+      sellingPoints: loadedProject.sellingPoints,
+      tone: loadedProject.tone,
+      style: loadedProject.style,
+      targetDurationSeconds: loadedProject.targetDurationSeconds,
+    });
+    refreshProjectHistory();
+    return loadedProject;
   };
 
   const refreshReferenceLibrary = (options: { includeTemplates?: boolean } = {}) => {
@@ -2492,7 +2510,7 @@ export const App = ({
     handleDeleteReferences([referenceId]);
   };
 
-  const handleRewriteScript = () => {
+  const handleGenerateProjectScript = () => {
     if (!project) {
       setErrors((current) => ({ ...current, script: "Create or load a project first." }));
       return;
@@ -2502,9 +2520,26 @@ export const App = ({
       "script",
       "script",
       async () => {
-        const rewritten = await rewriteScript(project.id, createScriptGenerationRequest());
-        setFallbackProvider(rewritten.fallback.used ? rewritten.fallback.provider : undefined);
-        setScriptDraft(rewritten.scriptText);
+        const generated = await generateScript(project.id, createScriptGenerationRequest());
+        setFallbackProvider(generated.fallback.used ? generated.fallback.provider : undefined);
+        setDashboard(undefined);
+        setScript(generated.script);
+        setScriptDraft(generated.script.narrative);
+        setSelectedSceneId(generated.script.scenes[0]?.id);
+        setDirtySceneIds(new Set());
+        setAssetRecallCandidates([]);
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                scenes: generated.script.scenes,
+                scripts: [...current.scripts, generated.script],
+                status: "ready",
+              }
+            : current,
+        );
+        setIsProjectScriptComposerOpen(false);
+        setProjectDetailTab("scripts");
       },
       {
         backgroundTask: {
@@ -3401,7 +3436,7 @@ export const App = ({
                       isLoading={busyState === "script"}
                       isStoryboardGenerating={busyState === "script"}
                       onConfirmScript={handleSaveProjectScript}
-                      onGenerateScript={handleRewriteScript}
+                      onGenerateScript={handleGenerateProjectScript}
                       onGenerateStoryboard={() => handleGenerateScript("studio")}
                       onProductionModeChange={handleScriptProductionModeChange}
                       onReferenceChange={setSelectedReferenceIdForScript}
@@ -3493,7 +3528,7 @@ export const App = ({
                     fallbackProvider={fallbackProvider}
                     isLoading={busyState === "script"}
                     isStoryboardGenerating={busyState === "script"}
-                    onGenerateScript={handleRewriteScript}
+                    onGenerateScript={handleGenerateProjectScript}
                     onGenerateStoryboard={() => handleGenerateScript("studio")}
                     onProductionModeChange={handleScriptProductionModeChange}
                     onReferenceChange={setSelectedReferenceIdForScript}
