@@ -25,6 +25,9 @@ interface InspirationPanelProps {
   initialHistory?: InspirationSessionHistoryEntry[];
   initialHistoryOpen?: boolean;
   language: Language;
+  onGenerationTaskFinish?: (taskId: string, status: "completed" | "failed") => void;
+  onGenerationTaskProgress?: (taskId: string, progress: number) => void;
+  onGenerationTaskStart?: (assetType: InspirationAssetType) => string;
 }
 
 const copy = {
@@ -196,6 +199,9 @@ export const InspirationPanel = ({
   initialHistory,
   initialHistoryOpen = false,
   language,
+  onGenerationTaskFinish,
+  onGenerationTaskProgress,
+  onGenerationTaskStart,
 }: InspirationPanelProps) => {
   const text = copy[language];
   const [history, setHistory] = useState<InspirationSessionHistoryEntry[]>(
@@ -220,6 +226,7 @@ export const InspirationPanel = ({
     useState<(typeof videoAspectRatioOptions)[number]>("auto");
   const [videoQuality, setVideoQuality] = useState<(typeof qualityOptions)[number]>("standard");
   const [selectedHistoryId, setSelectedHistoryId] = useState(initialResult?.id);
+  const [activeGenerationTaskId, setActiveGenerationTaskId] = useState<string>();
 
   const selectedTypeOption = assetTypeOptions.find((option) => option.type === assetType) ?? assetTypeOptions[1];
   const SelectedTypeIcon = selectedTypeOption.icon;
@@ -263,6 +270,8 @@ export const InspirationPanel = ({
     setError(undefined);
     setPollError(undefined);
     setIsGenerating(true);
+    const generationTaskId = onGenerationTaskStart?.(assetType);
+    setActiveGenerationTaskId(generationTaskId);
     try {
       const generatedResult = await generateInspirationMaterial(
         trimmedPrompt,
@@ -278,8 +287,23 @@ export const InspirationPanel = ({
         saveInspirationHistory(nextHistory);
         return nextHistory;
       });
+      const generatedMaterial = generatedResult.materials[0];
+      if (generationTaskId) {
+        onGenerationTaskProgress?.(generationTaskId, generatedMaterial?.progress ?? 100);
+        if (generatedMaterial?.status !== "processing") {
+          onGenerationTaskFinish?.(
+            generationTaskId,
+            generatedMaterial?.status === "failed" ? "failed" : "completed",
+          );
+          setActiveGenerationTaskId(undefined);
+        }
+      }
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : "Generation failed.");
+      if (generationTaskId) {
+        onGenerationTaskFinish?.(generationTaskId, "failed");
+        setActiveGenerationTaskId(undefined);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -322,6 +346,16 @@ export const InspirationPanel = ({
         }
 
         setPollError(undefined);
+        if (activeGenerationTaskId) {
+          onGenerationTaskProgress?.(activeGenerationTaskId, material.progress ?? 0);
+          if (material.status !== "processing") {
+            onGenerationTaskFinish?.(
+              activeGenerationTaskId,
+              material.status === "failed" ? "failed" : "completed",
+            );
+            setActiveGenerationTaskId(undefined);
+          }
+        }
         setResult((currentResult) => {
           if (currentResult?.id !== resultId) {
             return currentResult;
@@ -341,6 +375,10 @@ export const InspirationPanel = ({
       } catch (taskError) {
         if (!cancelled) {
           setPollError(taskError instanceof Error ? taskError.message : "Video polling failed.");
+          if (activeGenerationTaskId) {
+            onGenerationTaskFinish?.(activeGenerationTaskId, "failed");
+            setActiveGenerationTaskId(undefined);
+          }
         }
       }
     };
@@ -363,7 +401,10 @@ export const InspirationPanel = ({
     activeMaterial?.status,
     activeMaterial?.taskId,
     activeMaterial?.type,
+    activeGenerationTaskId,
     apiConfig,
+    onGenerationTaskFinish,
+    onGenerationTaskProgress,
     result?.id,
     result?.prompt,
   ]);

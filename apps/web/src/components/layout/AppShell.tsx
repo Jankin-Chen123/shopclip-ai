@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -8,6 +8,8 @@ import {
   Film,
   FolderKanban,
   Images,
+  ListChecks,
+  Loader2,
   Lightbulb,
   Scissors,
   Settings,
@@ -34,6 +36,14 @@ export interface WorkspacePage {
   id: WorkspacePageId;
   accent: string;
   icon: LucideIcon;
+}
+
+export interface BackgroundTaskItem {
+  description: string;
+  id: string;
+  progress: number;
+  status: "running" | "completed" | "failed";
+  title: string;
 }
 
 interface WorkspaceSection {
@@ -102,9 +112,11 @@ export const workspaceSections: WorkspaceSection[] = [
 interface AppShellProps {
   activePage: WorkspacePageId;
   activeSection: WorkspaceSectionId;
+  backgroundTasks?: BackgroundTaskItem[];
   children: ReactNode;
   copy: AppCopy;
   language: Language;
+  onBackgroundTaskOpen?: (task: BackgroundTaskItem) => void;
   onPageChange: (page: WorkspacePageId) => void;
   onSectionChange: (section: WorkspaceSectionId) => void;
   projectStudioMode?: boolean;
@@ -113,9 +125,11 @@ interface AppShellProps {
 export const AppShell = ({
   activePage,
   activeSection,
+  backgroundTasks = [],
   children,
   copy,
   language,
+  onBackgroundTaskOpen,
   onPageChange,
   onSectionChange,
   projectStudioMode = false,
@@ -273,6 +287,120 @@ export const AppShell = ({
         ) : null}
         {children}
       </main>
+      <BackgroundTaskBar
+        language={language}
+        onOpenTask={onBackgroundTaskOpen}
+        tasks={backgroundTasks}
+      />
+    </div>
+  );
+};
+
+const BackgroundTaskBar = ({
+  language,
+  onOpenTask,
+  tasks,
+}: {
+  language: Language;
+  onOpenTask?: (task: BackgroundTaskItem) => void;
+  tasks: BackgroundTaskItem[];
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const runningTasks = tasks.filter((task) => task.status === "running");
+
+  const runningCount = runningTasks.length;
+  const copyText =
+    language === "zh"
+      ? {
+          buttonLabel: runningCount > 0 ? `后台任务，${runningCount} 个执行中` : "后台任务已完成",
+          complete: "全部完成",
+          empty: "暂无后台任务",
+          failed: "失败",
+          openList: "后台任务",
+          running: "执行中",
+        }
+      : {
+          buttonLabel: runningCount > 0 ? `${runningCount} background task(s) running` : "Background tasks complete",
+          complete: "All complete",
+          empty: "No background tasks",
+          failed: "Failed",
+          openList: "Background tasks",
+          running: "Running",
+        };
+
+  return (
+    <div className={`background-task-bar ${isOpen ? "is-open" : ""}`}>
+      <button
+        aria-expanded={isOpen}
+        aria-label={copyText.buttonLabel}
+        className="background-task-trigger"
+        onClick={() => setIsOpen((current) => !current)}
+        type="button"
+      >
+        <span className={`background-task-indicator ${runningCount > 0 ? "is-running" : ""}`}>
+          {runningCount > 0 ? (
+            <>
+              <Loader2 className="spin" size={18} aria-hidden="true" />
+              <strong>{runningCount}</strong>
+            </>
+          ) : (
+            <CheckCircle2 size={19} aria-hidden="true" />
+          )}
+        </span>
+        <span className="background-task-trigger-copy">
+          <strong>{runningCount > 0 ? copyText.running : copyText.complete}</strong>
+          <small>{copyText.openList}</small>
+        </span>
+      </button>
+      {isOpen ? (
+        <section className="background-task-popover" aria-label={copyText.openList}>
+          <div className="background-task-popover-heading">
+            <ListChecks size={18} aria-hidden="true" />
+            <strong>{copyText.openList}</strong>
+          </div>
+          <div className="background-task-list">
+            {tasks.length > 0 ? (
+              tasks.map((task) => (
+                <button
+                  className={`background-task-item background-task-item-${task.status}`}
+                  key={task.id}
+                  onClick={() => {
+                    onOpenTask?.(task);
+                    setIsOpen(false);
+                  }}
+                  type="button"
+                >
+                  <span className="background-task-item-status">
+                    {task.status === "running" ? (
+                      <Loader2 className="spin" size={16} aria-hidden="true" />
+                    ) : task.status === "failed" ? (
+                      <span aria-hidden="true">!</span>
+                    ) : (
+                      <CheckCircle2 size={16} aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="background-task-item-copy">
+                    <strong>{task.title}</strong>
+                    <small>{task.description}</small>
+                    <span className="background-task-progress" aria-hidden="true">
+                      <i style={{ width: `${Math.max(0, Math.min(100, task.progress))}%` }} />
+                    </span>
+                  </span>
+                  <em>
+                    {task.status === "running"
+                      ? `${Math.round(task.progress)}%`
+                      : task.status === "failed"
+                        ? copyText.failed
+                        : "100%"}
+                  </em>
+                </button>
+              ))
+            ) : (
+              <p>{copyText.empty}</p>
+            )}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 };

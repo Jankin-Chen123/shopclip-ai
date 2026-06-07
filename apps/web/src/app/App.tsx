@@ -18,6 +18,7 @@ import type {
 
 import {
   AppShell,
+  type BackgroundTaskItem,
   type CreationPageId,
   type WorkspaceSectionId,
   type WorkspacePageId,
@@ -366,6 +367,31 @@ type BusyState =
 
 type ScriptProductionMode = NonNullable<ScriptGenerationRequest["productionMode"]>;
 type ProjectStudioFlow = "script" | "storyboard" | "render" | "edit";
+type BackgroundTaskKind =
+  | "asset-analysis"
+  | "asset-recall"
+  | "inspiration"
+  | "reference-analysis"
+  | "scene-regeneration"
+  | "script"
+  | "smart-edit"
+  | "storyboard"
+  | "suggestions"
+  | "template"
+  | "video";
+
+interface BackgroundTaskTarget {
+  flow?: ProjectStudioFlow;
+  page: WorkspacePageId;
+  projectDetailTab?: ProjectDetailTab;
+  section: WorkspaceSectionId;
+}
+
+interface TrackedBackgroundTask extends BackgroundTaskItem {
+  createdAt: number;
+  kind: BackgroundTaskKind;
+  target: BackgroundTaskTarget;
+}
 
 const getStoredLanguage = (): Language => {
   if (typeof window === "undefined") {
@@ -405,6 +431,77 @@ const getStoredStockProviderConfigs = (): StockProviderConfig[] => {
   } catch {
     return createDefaultStockProviderConfigs();
   }
+};
+
+const getGenerationTaskText = (
+  kind: BackgroundTaskKind,
+  language: Language,
+): Pick<BackgroundTaskItem, "description" | "title"> => {
+  if (language === "zh") {
+    if (kind === "asset-analysis") {
+      return { title: "分析素材", description: "正在调用模型结构化素材内容" };
+    }
+    if (kind === "asset-recall") {
+      return { title: "召回素材", description: "正在为分镜匹配可用素材" };
+    }
+    if (kind === "inspiration") {
+      return { title: "生成灵感素材", description: "正在调用大模型生成创作素材" };
+    }
+    if (kind === "reference-analysis") {
+      return { title: "拆解参考视频", description: "正在分析参考视频结构和爆款因素" };
+    }
+    if (kind === "scene-regeneration") {
+      return { title: "重生成分镜", description: "正在调用模型重生成单个分镜" };
+    }
+    if (kind === "script") {
+      return { title: "生成脚本", description: "正在根据素材和产品信息生成脚本" };
+    }
+    if (kind === "smart-edit") {
+      return { title: "智能剪辑", description: "正在生成剪辑方案和视频片段" };
+    }
+    if (kind === "storyboard") {
+      return { title: "生成分镜", description: "正在生成可编辑的视频分镜" };
+    }
+    if (kind === "suggestions") {
+      return { title: "生成编辑建议", description: "正在调用编辑 Agent 分析分镜" };
+    }
+    if (kind === "template") {
+      return { title: "生成模板", description: "正在提取可复用的脚本/视频模板" };
+    }
+    return { title: "生成视频", description: "正在生成分镜视频和最终预览" };
+  }
+
+  if (kind === "asset-analysis") {
+    return { title: "Analyze asset", description: "Structuring asset content with AI" };
+  }
+  if (kind === "asset-recall") {
+    return { title: "Recall assets", description: "Matching usable assets to the selected scene" };
+  }
+  if (kind === "inspiration") {
+    return { title: "Generate inspiration", description: "Creating material with the model" };
+  }
+  if (kind === "reference-analysis") {
+    return { title: "Analyze reference", description: "Breaking down reference video structure" };
+  }
+  if (kind === "scene-regeneration") {
+    return { title: "Regenerate scene", description: "Regenerating the selected storyboard scene" };
+  }
+  if (kind === "script") {
+    return { title: "Generate script", description: "Creating the script from product context" };
+  }
+  if (kind === "smart-edit") {
+    return { title: "Smart edit", description: "Generating edit plan and video segments" };
+  }
+  if (kind === "storyboard") {
+    return { title: "Generate storyboard", description: "Creating editable storyboard scenes" };
+  }
+  if (kind === "suggestions") {
+    return { title: "Generate suggestions", description: "Running the Editing Agent for this scene" };
+  }
+  if (kind === "template") {
+    return { title: "Generate template", description: "Extracting a reusable creative template" };
+  }
+  return { title: "Generate video", description: "Rendering scene videos and final preview" };
 };
 
 const pageFromHash = (): WorkspacePageId => {
@@ -773,6 +870,9 @@ export const App = ({
   >([]);
   const [brief, setBrief] = useState<ProjectBrief>(defaultBrief);
   const [busyState, setBusyState] = useState<BusyState>("idle");
+  const [trackedBackgroundTasks, setTrackedBackgroundTasks] = useState<TrackedBackgroundTask[]>(
+    [],
+  );
   const [dashboard, setDashboard] = useState<DashboardResponse>();
   const [dirtySceneIds, setDirtySceneIds] = useState<Set<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
@@ -1039,17 +1139,81 @@ export const App = ({
     }));
   };
 
-  const runAction = async (key: string, busy: BusyState, action: () => Promise<void>) => {
+  const startBackgroundTask = (
+    kind: BackgroundTaskKind,
+    target: BackgroundTaskTarget,
+    options: { id?: string; progress?: number } = {},
+  ) => {
+    const taskId =
+      options.id ?? `${kind}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const taskText = getGenerationTaskText(kind, language);
+    setTrackedBackgroundTasks((current) => [
+      {
+        ...taskText,
+        createdAt: Date.now(),
+        id: taskId,
+        kind,
+        progress: options.progress ?? 12,
+        status: "running",
+        target,
+      },
+      ...current.filter((task) => task.id !== taskId),
+    ]);
+    return taskId;
+  };
+
+  const updateBackgroundTask = (
+    taskId: string,
+    updates: Partial<Pick<TrackedBackgroundTask, "progress" | "status">>,
+  ) => {
+    setTrackedBackgroundTasks((current) =>
+      current.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              ...updates,
+            }
+          : task,
+      ),
+    );
+  };
+
+  const runAction = async (
+    key: string,
+    busy: BusyState,
+    action: () => Promise<void>,
+    options?: {
+      backgroundTask?: {
+        id?: string;
+        kind: BackgroundTaskKind;
+        target: BackgroundTaskTarget;
+      };
+    },
+  ) => {
+    const backgroundTask = options?.backgroundTask;
+    const backgroundTaskId = backgroundTask
+      ? startBackgroundTask(backgroundTask.kind, backgroundTask.target, {
+          id: backgroundTask.id,
+        })
+      : undefined;
     setBusyState(busy);
     setErrors((current) => ({ ...current, [key]: undefined }));
+    let didFail = false;
     try {
       await action();
     } catch (error) {
+      didFail = true;
       setErrors((current) => ({
         ...current,
         [key]: error instanceof Error ? error.message : "Action failed.",
       }));
     } finally {
+      if (backgroundTaskId) {
+        updateBackgroundTask(backgroundTaskId, {
+          progress: 100,
+          status: didFail ? "failed" : "completed",
+        });
+      }
       setBusyState("idle");
     }
   };
@@ -1484,23 +1648,33 @@ export const App = ({
       return;
     }
 
-    void runAction("script", "script", async () => {
-      const generated = await generateScriptStoryboard(project.id, selectedScript.id);
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              scenes: generated.script.scenes,
-              scripts: current.scripts.map((candidate) =>
-                candidate.id === generated.script.id ? generated.script : candidate,
-              ),
-              status: "ready",
-            }
-          : current,
-      );
-      loadProjectScriptIntoStudio(generated.script);
-      refreshProjectHistory();
-    });
+    void runAction(
+      "script",
+      "script",
+      async () => {
+        const generated = await generateScriptStoryboard(project.id, selectedScript.id);
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                scenes: generated.script.scenes,
+                scripts: current.scripts.map((candidate) =>
+                  candidate.id === generated.script.id ? generated.script : candidate,
+                ),
+                status: "ready",
+              }
+            : current,
+        );
+        loadProjectScriptIntoStudio(generated.script);
+        refreshProjectHistory();
+      },
+      {
+        backgroundTask: {
+          kind: "storyboard",
+          target: { flow: "storyboard", page: "studio", section: "create" },
+        },
+      },
+    );
   };
 
   const replaceSceneInState = (updatedScene: StoryboardScene) => {
@@ -1621,51 +1795,61 @@ export const App = ({
       return;
     }
 
-    void runAction("asset", "asset", async () => {
-      const imported = await importAndStructureFiles({
-        files,
-        language,
-        projectId: project?.id,
-      });
-      const importedAssets = imported.assets;
+    void runAction(
+      "asset",
+      "asset",
+      async () => {
+        const imported = await importAndStructureFiles({
+          files,
+          language,
+          projectId: project?.id,
+        });
+        const importedAssets = imported.assets;
 
-      setAssetLibrary((current) => ({
-        ...current,
-        assets: [...current.assets, ...importedAssets],
-        assetSlices: [
-          ...current.assetSlices.filter(
-            (slice) =>
-              !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
-          ),
-          ...imported.assetSlices,
-        ],
-      }));
-      setProject((current) =>
-        current && importedAssets.some((asset) => asset.projectId === current.id)
-          ? {
-              ...current,
-              assets: [
-                ...current.assets,
-                ...importedAssets.filter((asset) => asset.projectId === current.id),
-              ],
-              assetSlices: [
-                ...current.assetSlices.filter(
-                  (slice) =>
-                    !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
-                ),
-                ...imported.assetSlices.filter((slice) =>
-                  importedAssets.some(
-                    (asset) => asset.projectId === current.id && asset.id === slice.assetId,
+        setAssetLibrary((current) => ({
+          ...current,
+          assets: [...current.assets, ...importedAssets],
+          assetSlices: [
+            ...current.assetSlices.filter(
+              (slice) =>
+                !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
+            ),
+            ...imported.assetSlices,
+          ],
+        }));
+        setProject((current) =>
+          current && importedAssets.some((asset) => asset.projectId === current.id)
+            ? {
+                ...current,
+                assets: [
+                  ...current.assets,
+                  ...importedAssets.filter((asset) => asset.projectId === current.id),
+                ],
+                assetSlices: [
+                  ...current.assetSlices.filter(
+                    (slice) =>
+                      !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
                   ),
-                ),
-              ],
-            }
-          : current,
-      );
-      setHasAssetSearchRun(false);
-      setAssetSearchResults([]);
-      setExternalAssetSearchResults([]);
-    });
+                  ...imported.assetSlices.filter((slice) =>
+                    importedAssets.some(
+                      (asset) => asset.projectId === current.id && asset.id === slice.assetId,
+                    ),
+                  ),
+                ],
+              }
+            : current,
+        );
+        setHasAssetSearchRun(false);
+        setAssetSearchResults([]);
+        setExternalAssetSearchResults([]);
+      },
+      {
+        backgroundTask: {
+          kind: "asset-analysis",
+          target: { page: activePage === "assets" ? "assets" : "create", section: activeSection },
+        },
+      },
+    );
   };
 
   const handleSearchAssets = () => {
@@ -1684,36 +1868,46 @@ export const App = ({
   };
 
   const handleProcessAsset = (assetId: string) => {
-    void runAction("asset", "asset", async () => {
-      const processed = await processAssetStructure(assetId);
-      setAssetLibrary((current) => ({
-        assets: current.assets.map((asset) =>
-          asset.id === processed.asset.id ? processed.asset : asset,
-        ),
-        assetSlices: [
-          ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
-          ...processed.slices,
-        ],
-      }));
-      setProject((current) =>
-        current && processed.asset.projectId === current.id
-          ? {
-              ...current,
-              assets: current.assets.map((asset) =>
-                asset.id === processed.asset.id ? processed.asset : asset,
-              ),
-              assetSlices: [
-                ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
-                ...processed.slices,
-              ],
-              assetProcessingEvents: [...current.assetProcessingEvents, ...processed.events],
-              assetProcessingJobs: [...current.assetProcessingJobs, processed.job],
-            }
-          : current,
-      );
-      setAssetSearchResults([]);
-      setHasAssetSearchRun(false);
-    });
+    void runAction(
+      "asset",
+      "asset",
+      async () => {
+        const processed = await processAssetStructure(assetId);
+        setAssetLibrary((current) => ({
+          assets: current.assets.map((asset) =>
+            asset.id === processed.asset.id ? processed.asset : asset,
+          ),
+          assetSlices: [
+            ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
+            ...processed.slices,
+          ],
+        }));
+        setProject((current) =>
+          current && processed.asset.projectId === current.id
+            ? {
+                ...current,
+                assets: current.assets.map((asset) =>
+                  asset.id === processed.asset.id ? processed.asset : asset,
+                ),
+                assetSlices: [
+                  ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
+                  ...processed.slices,
+                ],
+                assetProcessingEvents: [...current.assetProcessingEvents, ...processed.events],
+                assetProcessingJobs: [...current.assetProcessingJobs, processed.job],
+              }
+            : current,
+        );
+        setAssetSearchResults([]);
+        setHasAssetSearchRun(false);
+      },
+      {
+        backgroundTask: {
+          kind: "asset-analysis",
+          target: { page: "assets", section: "assets" },
+        },
+      },
+    );
   };
 
   const handleSearchExternalAssets = async (
@@ -2004,19 +2198,29 @@ export const App = ({
     sourceUrl?: string;
     title: string;
   }) => {
-    void runAction("script", "reference", async () => {
-      const reference = await analyzeReferenceVideo({
-        ...draft,
-        sourceAssetId: draft.sourceAssetId?.trim() || undefined,
-        sourceUrl: draft.sourceUrl?.trim() || undefined,
-      });
-      setReferenceLibrary((current) => mergeReferences([reference], current));
-      if (reference.status === "ready") {
-        setSelectedReferenceIdForScript(reference.id);
-        setSelectedTemplateIdForScript(undefined);
-        setScriptProductionMode("viral-remix");
-      }
-    });
+    void runAction(
+      "script",
+      "reference",
+      async () => {
+        const reference = await analyzeReferenceVideo({
+          ...draft,
+          sourceAssetId: draft.sourceAssetId?.trim() || undefined,
+          sourceUrl: draft.sourceUrl?.trim() || undefined,
+        });
+        setReferenceLibrary((current) => mergeReferences([reference], current));
+        if (reference.status === "ready") {
+          setSelectedReferenceIdForScript(reference.id);
+          setSelectedTemplateIdForScript(undefined);
+          setScriptProductionMode("viral-remix");
+        }
+      },
+      {
+        backgroundTask: {
+          kind: "reference-analysis",
+          target: { page: "inspiration", section: "inspiration" },
+        },
+      },
+    );
   };
 
   const handleCreateReferenceTemplate = () => {
@@ -2031,29 +2235,39 @@ export const App = ({
       return;
     }
 
-    void runAction("script", "reference", async () => {
-      const template = await createReferenceTemplate({
-        category: readyReferences[0]?.category ?? project?.productName ?? brief.productName,
-        referenceIds: readyReferences.map((reference) => reference.id),
-        templateName: `${project?.productName ?? brief.productName} viral template`,
-      });
-      setViralTemplateLibrary((current) => mergeTemplates([template], current));
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              viralTemplates: [
-                ...current.viralTemplates.filter(
-                  (candidate) => candidate.templateId !== template.templateId,
-                ),
-                template,
-              ],
-            }
-          : current,
-      );
-      setSelectedTemplateIdForScript(template.templateId);
-      setScriptProductionMode("template");
-    });
+    void runAction(
+      "script",
+      "reference",
+      async () => {
+        const template = await createReferenceTemplate({
+          category: readyReferences[0]?.category ?? project?.productName ?? brief.productName,
+          referenceIds: readyReferences.map((reference) => reference.id),
+          templateName: `${project?.productName ?? brief.productName} viral template`,
+        });
+        setViralTemplateLibrary((current) => mergeTemplates([template], current));
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                viralTemplates: [
+                  ...current.viralTemplates.filter(
+                    (candidate) => candidate.templateId !== template.templateId,
+                  ),
+                  template,
+                ],
+              }
+            : current,
+        );
+        setSelectedTemplateIdForScript(template.templateId);
+        setScriptProductionMode("template");
+      },
+      {
+        backgroundTask: {
+          kind: "template",
+          target: { page: "inspiration", section: "inspiration" },
+        },
+      },
+    );
   };
 
   const handleExtractTemplateFromScripts = (assetIds: string[]) => {
@@ -2061,20 +2275,30 @@ export const App = ({
       return;
     }
 
-    void runAction("script", "script", async () => {
-      const template = await extractTemplateFromScriptAssets({
-        assetIds,
-        category: project?.productName || brief.productName || undefined,
-        templateName: `${project?.productName || brief.productName || "Script"} reusable template`,
-        apiConfig,
-      });
-      setViralTemplateLibrary((current) => mergeTemplates([template], current));
-      setActiveAssetCategory("template");
-      setAssetSearchQuery("");
-      setHasAssetSearchRun(false);
-      setAssetSearchResults([]);
-      setExternalAssetSearchResults([]);
-    });
+    void runAction(
+      "script",
+      "script",
+      async () => {
+        const template = await extractTemplateFromScriptAssets({
+          assetIds,
+          category: project?.productName || brief.productName || undefined,
+          templateName: `${project?.productName || brief.productName || "Script"} reusable template`,
+          apiConfig,
+        });
+        setViralTemplateLibrary((current) => mergeTemplates([template], current));
+        setActiveAssetCategory("template");
+        setAssetSearchQuery("");
+        setHasAssetSearchRun(false);
+        setAssetSearchResults([]);
+        setExternalAssetSearchResults([]);
+      },
+      {
+        backgroundTask: {
+          kind: "template",
+          target: { page: "assets", section: "assets" },
+        },
+      },
+    );
   };
 
   const handleUseReferenceForScript = (referenceId: string) => {
@@ -2224,11 +2448,21 @@ export const App = ({
       return;
     }
 
-    void runAction("script", "script", async () => {
-      const rewritten = await rewriteScript(project.id, createScriptGenerationRequest());
-      setFallbackProvider(rewritten.fallback.used ? rewritten.fallback.provider : undefined);
-      setScriptDraft(rewritten.scriptText);
-    });
+    void runAction(
+      "script",
+      "script",
+      async () => {
+        const rewritten = await rewriteScript(project.id, createScriptGenerationRequest());
+        setFallbackProvider(rewritten.fallback.used ? rewritten.fallback.provider : undefined);
+        setScriptDraft(rewritten.scriptText);
+      },
+      {
+        backgroundTask: {
+          kind: "script",
+          target: { page: "create", section: "create" },
+        },
+      },
+    );
   };
 
   const handleSaveProjectScript = () => {
@@ -2278,31 +2512,41 @@ export const App = ({
       return;
     }
 
-    void runAction("script", "script", async () => {
-      const generated = await generateScript(project.id, createScriptGenerationRequest());
-      setFallbackProvider(generated.fallback.used ? generated.fallback.provider : undefined);
-      setDashboard(undefined);
-      setScript(generated.script);
-      setScriptDraft(generated.script.narrative);
-      setSelectedSceneId(generated.script.scenes[0]?.id);
-      setDirtySceneIds(new Set());
-      setAssetRecallCandidates([]);
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              scenes: generated.script.scenes,
-              scripts: [...current.scripts, generated.script],
-              status: "ready",
-            }
-          : current,
-      );
-      setIsProjectScriptComposerOpen(false);
-      setProjectDetailTab((current) => (current === "scripts" ? "scripts" : current));
-      if (nextPage) {
-        handlePageChange(nextPage);
-      }
-    });
+    void runAction(
+      "script",
+      "script",
+      async () => {
+        const generated = await generateScript(project.id, createScriptGenerationRequest());
+        setFallbackProvider(generated.fallback.used ? generated.fallback.provider : undefined);
+        setDashboard(undefined);
+        setScript(generated.script);
+        setScriptDraft(generated.script.narrative);
+        setSelectedSceneId(generated.script.scenes[0]?.id);
+        setDirtySceneIds(new Set());
+        setAssetRecallCandidates([]);
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                scenes: generated.script.scenes,
+                scripts: [...current.scripts, generated.script],
+                status: "ready",
+              }
+            : current,
+        );
+        setIsProjectScriptComposerOpen(false);
+        setProjectDetailTab((current) => (current === "scripts" ? "scripts" : current));
+        if (nextPage) {
+          handlePageChange(nextPage);
+        }
+      },
+      {
+        backgroundTask: {
+          kind: "storyboard",
+          target: { flow: "storyboard", page: nextPage ?? "studio", section: "create" },
+        },
+      },
+    );
   };
 
   const handleSceneChange = (updatedScene: StoryboardScene) => {
@@ -2393,34 +2637,54 @@ export const App = ({
   };
 
   const handleRegenerateScene = (scene: StoryboardScene) => {
-    void runAction("studio", "scene", async () => {
-      const regenerated = await regenerateScene(scene.id, {
-        scene: {
-          durationSeconds: scene.durationSeconds,
-          subtitle: scene.subtitle,
-          voiceover: scene.voiceover,
-          visualPrompt: scene.visualPrompt,
-          assetId: scene.assetId ?? null,
+    void runAction(
+      "studio",
+      "scene",
+      async () => {
+        const regenerated = await regenerateScene(scene.id, {
+          scene: {
+            durationSeconds: scene.durationSeconds,
+            subtitle: scene.subtitle,
+            voiceover: scene.voiceover,
+            visualPrompt: scene.visualPrompt,
+            assetId: scene.assetId ?? null,
+          },
+          apiConfig,
+        });
+        replaceSceneInState(regenerated.scene);
+        setTraceEvents((current) => [...current, regenerated.traceEvent]);
+        setDirtySceneIds((current) => {
+          const next = new Set(current);
+          next.delete(scene.id);
+          return next;
+        });
+        setEditingSuggestions([]);
+        setAssetRecallCandidates([]);
+      },
+      {
+        backgroundTask: {
+          kind: "scene-regeneration",
+          target: { flow: "storyboard", page: "studio", section: "create" },
         },
-        apiConfig,
-      });
-      replaceSceneInState(regenerated.scene);
-      setTraceEvents((current) => [...current, regenerated.traceEvent]);
-      setDirtySceneIds((current) => {
-        const next = new Set(current);
-        next.delete(scene.id);
-        return next;
-      });
-      setEditingSuggestions([]);
-      setAssetRecallCandidates([]);
-    });
+      },
+    );
   };
 
   const handleLoadAssetCandidates = (sceneId: string) => {
-    void runAction("studio", "scene", async () => {
-      const recall = await recallSceneAssets(sceneId);
-      setAssetRecallCandidates(recall.candidates);
-    });
+    void runAction(
+      "studio",
+      "scene",
+      async () => {
+        const recall = await recallSceneAssets(sceneId);
+        setAssetRecallCandidates(recall.candidates);
+      },
+      {
+        backgroundTask: {
+          kind: "asset-recall",
+          target: { flow: "storyboard", page: "studio", section: "create" },
+        },
+      },
+    );
   };
 
   const handleApplyAssetCandidate = (assetId: string) => {
@@ -2428,9 +2692,19 @@ export const App = ({
   };
 
   const handleLoadSuggestions = (sceneId: string) => {
-    void runAction("studio", "scene", async () => {
-      setEditingSuggestions(await loadSceneSuggestions(sceneId));
-    });
+    void runAction(
+      "studio",
+      "scene",
+      async () => {
+        setEditingSuggestions(await loadSceneSuggestions(sceneId));
+      },
+      {
+        backgroundTask: {
+          kind: "suggestions",
+          target: { flow: "storyboard", page: "studio", section: "create" },
+        },
+      },
+    );
   };
 
   const handleApplySuggestion = (suggestionId: string) => {
@@ -2438,14 +2712,24 @@ export const App = ({
       return;
     }
 
-    void runAction("studio", "scene", async () => {
-      const applied = await applySceneSuggestion(selectedSceneId, suggestionId);
-      replaceSceneInState(applied.scene);
-      setTraceEvents((current) => [...current, applied.traceEvent]);
-      setEditingSuggestions((current) =>
-        current.filter((suggestion) => suggestion.id !== suggestionId),
-      );
-    });
+    void runAction(
+      "studio",
+      "scene",
+      async () => {
+        const applied = await applySceneSuggestion(selectedSceneId, suggestionId);
+        replaceSceneInState(applied.scene);
+        setTraceEvents((current) => [...current, applied.traceEvent]);
+        setEditingSuggestions((current) =>
+          current.filter((suggestion) => suggestion.id !== suggestionId),
+        );
+      },
+      {
+        backgroundTask: {
+          kind: "suggestions",
+          target: { flow: "storyboard", page: "studio", section: "create" },
+        },
+      },
+    );
   };
 
   const handleDismissSuggestion = (suggestionId: string) => {
@@ -2463,32 +2747,42 @@ export const App = ({
       return;
     }
 
-    void runAction("render", "render", async () => {
-      await persistDirtyScenesForRender();
-      const render = await startRender(project.id, {
-        mediaSettings,
-        videoSettings,
-        simulateFailure: forceRenderFailure,
-      });
-      setDashboard(undefined);
-      setExportResult(undefined);
-      setRenderTask(render.renderTask);
-      setTraceEvents(render.traceEvents);
-      if (render.renderTask.status === "completed") {
-        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
-          navigateToEdit: isProjectStudioMode,
+    void runAction(
+      "render",
+      "render",
+      async () => {
+        await persistDirtyScenesForRender();
+        const render = await startRender(project.id, {
+          mediaSettings,
+          videoSettings,
+          simulateFailure: forceRenderFailure,
         });
-      }
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              renderTasks: [...current.renderTasks, render.renderTask],
-              status: render.renderTask.status === "completed" ? "completed" : "rendering",
-            }
-          : current,
-      );
-    });
+        setDashboard(undefined);
+        setExportResult(undefined);
+        setRenderTask(render.renderTask);
+        setTraceEvents(render.traceEvents);
+        if (render.renderTask.status === "completed") {
+          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
+            navigateToEdit: isProjectStudioMode,
+          });
+        }
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                renderTasks: [...current.renderTasks, render.renderTask],
+                status: render.renderTask.status === "completed" ? "completed" : "rendering",
+              }
+            : current,
+        );
+      },
+      {
+        backgroundTask: {
+          kind: "video",
+          target: { flow: "render", page: "delivery", section: "create" },
+        },
+      },
+    );
   };
 
   const handleRetryRender = () => {
@@ -2499,33 +2793,43 @@ export const App = ({
       return;
     }
 
-    void runAction("render", "render", async () => {
-      await persistDirtyScenesForRender();
-      const render = await retryRenderTask(renderTask.id, {
-        mediaSettings,
-        videoSettings,
-        simulateFailure: false,
-      });
-      setDashboard(undefined);
-      setExportResult(undefined);
-      setForceRenderFailure(false);
-      setRenderTask(render.renderTask);
-      setTraceEvents(render.traceEvents);
-      if (render.renderTask.status === "completed") {
-        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
-          navigateToEdit: isProjectStudioMode,
+    void runAction(
+      "render",
+      "render",
+      async () => {
+        await persistDirtyScenesForRender();
+        const render = await retryRenderTask(renderTask.id, {
+          mediaSettings,
+          videoSettings,
+          simulateFailure: false,
         });
-      }
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              renderTasks: [...current.renderTasks, render.renderTask],
-              status: render.renderTask.status === "completed" ? "completed" : "rendering",
-            }
-          : current,
-      );
-    });
+        setDashboard(undefined);
+        setExportResult(undefined);
+        setForceRenderFailure(false);
+        setRenderTask(render.renderTask);
+        setTraceEvents(render.traceEvents);
+        if (render.renderTask.status === "completed") {
+          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
+            navigateToEdit: isProjectStudioMode,
+          });
+        }
+        setProject((current) =>
+          current
+            ? {
+                ...current,
+                renderTasks: [...current.renderTasks, render.renderTask],
+                status: render.renderTask.status === "completed" ? "completed" : "rendering",
+              }
+            : current,
+        );
+      },
+      {
+        backgroundTask: {
+          kind: "video",
+          target: { flow: "render", page: "delivery", section: "create" },
+        },
+      },
+    );
   };
 
   const handleRefreshRender = () => {
@@ -2661,13 +2965,23 @@ export const App = ({
       return;
     }
 
-    void runAction("smartEdit", "smart-edit", async () => {
-      await persistDirtyScenesForRender();
-      setSmartEditResult(undefined);
-      setSelectedSmartEditSegmentId(undefined);
-      const render = await startSmartEdit(project.id, createSmartEditRequest());
-      applySmartEditRenderSnapshot(render);
-    });
+    void runAction(
+      "smartEdit",
+      "smart-edit",
+      async () => {
+        await persistDirtyScenesForRender();
+        setSmartEditResult(undefined);
+        setSelectedSmartEditSegmentId(undefined);
+        const render = await startSmartEdit(project.id, createSmartEditRequest());
+        applySmartEditRenderSnapshot(render);
+      },
+      {
+        backgroundTask: {
+          kind: "smart-edit",
+          target: { flow: "edit", page: "edit", section: "create" },
+        },
+      },
+    );
   };
 
   const handleRefreshSmartEditSegment = () => {
@@ -2682,49 +2996,59 @@ export const App = ({
       return;
     }
 
-    void runAction("smartEdit", "smart-edit", async () => {
-      const render = await refreshSmartEditSegment(project.id, selectedSegment.sceneId, {
-        apiConfig,
-        currentPlan: smartEditResult.plan,
-        instructions: smartEditInstructions || undefined,
-        locale: language === "zh" ? "zh-CN" : "en-US",
-        mediaSettings,
-        segment: {
-          sceneId: selectedSegment.sceneId,
-          durationSeconds: selectedSegment.durationSeconds,
-          enabled: selectedSegment.enabled,
-          timelineStartSecond: selectedSegment.timelineStartSecond,
-          playbackRate: selectedSegment.playbackRate,
-          captionHidden: selectedSegment.captionHidden,
-          captionStartOffsetSeconds: selectedSegment.captionStartOffsetSeconds,
-          captionDurationSeconds: selectedSegment.captionDurationSeconds,
-          captionTextColor: selectedSegment.captionTextColor,
-          captionTextFontSize: selectedSegment.captionTextFontSize,
-          captionTextPositionYPercent: selectedSegment.captionTextPositionYPercent,
-          voiceoverStartOffsetSeconds: selectedSegment.voiceoverStartOffsetSeconds,
-          voiceoverDurationSeconds: selectedSegment.voiceoverDurationSeconds,
-          voiceoverVolume: selectedSegment.voiceoverVolume,
-          voiceoverVolumeKeyframes: selectedSegment.voiceoverVolumeKeyframes,
-          voiceoverFadeInSeconds: selectedSegment.voiceoverFadeInSeconds,
-          voiceoverFadeOutSeconds: selectedSegment.voiceoverFadeOutSeconds,
-          source: selectedSegment.source,
-          sourceAudioMuted: selectedSegment.sourceAudioMuted,
-          sourceAudioStartOffsetSeconds: selectedSegment.sourceAudioStartOffsetSeconds,
-          sourceAudioDurationSeconds: selectedSegment.sourceAudioDurationSeconds,
-          sourceAudioVolume: selectedSegment.sourceAudioVolume,
-          sourceAudioVolumeKeyframes: selectedSegment.sourceAudioVolumeKeyframes,
-          sourceAudioFadeInSeconds: selectedSegment.sourceAudioFadeInSeconds,
-          sourceAudioFadeOutSeconds: selectedSegment.sourceAudioFadeOutSeconds,
-          subtitle: selectedSegment.subtitle,
-          transition: selectedSegment.transition,
-          voiceover: selectedSegment.voiceover,
+    void runAction(
+      "smartEdit",
+      "smart-edit",
+      async () => {
+        const render = await refreshSmartEditSegment(project.id, selectedSegment.sceneId, {
+          apiConfig,
+          currentPlan: smartEditResult.plan,
+          instructions: smartEditInstructions || undefined,
+          locale: language === "zh" ? "zh-CN" : "en-US",
+          mediaSettings,
+          segment: {
+            sceneId: selectedSegment.sceneId,
+            durationSeconds: selectedSegment.durationSeconds,
+            enabled: selectedSegment.enabled,
+            timelineStartSecond: selectedSegment.timelineStartSecond,
+            playbackRate: selectedSegment.playbackRate,
+            captionHidden: selectedSegment.captionHidden,
+            captionStartOffsetSeconds: selectedSegment.captionStartOffsetSeconds,
+            captionDurationSeconds: selectedSegment.captionDurationSeconds,
+            captionTextColor: selectedSegment.captionTextColor,
+            captionTextFontSize: selectedSegment.captionTextFontSize,
+            captionTextPositionYPercent: selectedSegment.captionTextPositionYPercent,
+            voiceoverStartOffsetSeconds: selectedSegment.voiceoverStartOffsetSeconds,
+            voiceoverDurationSeconds: selectedSegment.voiceoverDurationSeconds,
+            voiceoverVolume: selectedSegment.voiceoverVolume,
+            voiceoverVolumeKeyframes: selectedSegment.voiceoverVolumeKeyframes,
+            voiceoverFadeInSeconds: selectedSegment.voiceoverFadeInSeconds,
+            voiceoverFadeOutSeconds: selectedSegment.voiceoverFadeOutSeconds,
+            source: selectedSegment.source,
+            sourceAudioMuted: selectedSegment.sourceAudioMuted,
+            sourceAudioStartOffsetSeconds: selectedSegment.sourceAudioStartOffsetSeconds,
+            sourceAudioDurationSeconds: selectedSegment.sourceAudioDurationSeconds,
+            sourceAudioVolume: selectedSegment.sourceAudioVolume,
+            sourceAudioVolumeKeyframes: selectedSegment.sourceAudioVolumeKeyframes,
+            sourceAudioFadeInSeconds: selectedSegment.sourceAudioFadeInSeconds,
+            sourceAudioFadeOutSeconds: selectedSegment.sourceAudioFadeOutSeconds,
+            subtitle: selectedSegment.subtitle,
+            transition: selectedSegment.transition,
+            voiceover: selectedSegment.voiceover,
+          },
+          segmentOutputs: smartEditResult.segmentOutputs,
+          targetLanguage: smartEditTargetLanguage.trim() || undefined,
+          videoSettings,
+        });
+        applySmartEditRenderSnapshot(render);
+      },
+      {
+        backgroundTask: {
+          kind: "smart-edit",
+          target: { flow: "edit", page: "edit", section: "create" },
         },
-        segmentOutputs: smartEditResult.segmentOutputs,
-        targetLanguage: smartEditTargetLanguage.trim() || undefined,
-        videoSettings,
-      });
-      applySmartEditRenderSnapshot(render);
-    });
+      },
+    );
   };
 
   const handleExport = () => {
@@ -2821,13 +3145,79 @@ export const App = ({
   const projectStudioPreviewScript = project?.scripts.find(
     (candidate) => candidate.id === projectStudioPreviewScriptId,
   );
+  const hasVideoTaskHistory = trackedBackgroundTasks.some((task) => task.kind === "video");
+  const hasSmartEditTaskHistory = trackedBackgroundTasks.some((task) => task.kind === "smart-edit");
+  const renderBackgroundTask = useMemo<TrackedBackgroundTask | undefined>(() => {
+    const renderTaskKind = isSmartEditTask(renderTask) ? "smart-edit" : "video";
+    const hasMatchingTaskHistory =
+      renderTaskKind === "smart-edit" ? hasSmartEditTaskHistory : hasVideoTaskHistory;
+    if (!renderTask || (!isRenderTaskPollingActive(renderTask) && !hasMatchingTaskHistory)) {
+      return undefined;
+    }
+    const taskText = getGenerationTaskText(renderTaskKind, language);
+    const taskStatus =
+      renderTask.status === "failed"
+        ? "failed"
+        : isRenderTaskPollingActive(renderTask)
+          ? "running"
+          : "completed";
+
+    return {
+      ...taskText,
+      createdAt: Date.parse(renderTask.updatedAt ?? renderTask.createdAt ?? "") || Date.now(),
+      id: `render-task-${renderTask.id}`,
+      kind: renderTaskKind,
+      progress: taskStatus === "completed" ? 100 : renderTask.progress ?? 0,
+      status: taskStatus,
+      target:
+        renderTaskKind === "smart-edit"
+          ? { flow: "edit", page: "edit", section: "create" }
+          : { flow: "render", page: "delivery", section: "create" },
+    };
+  }, [hasSmartEditTaskHistory, hasVideoTaskHistory, language, renderTask]);
+  const backgroundTasks = useMemo<TrackedBackgroundTask[]>(() => {
+    const trackedTasks = renderBackgroundTask
+      ? trackedBackgroundTasks.filter((task) => task.kind !== renderBackgroundTask.kind)
+      : trackedBackgroundTasks;
+    return [renderBackgroundTask, ...trackedTasks]
+      .filter((task): task is TrackedBackgroundTask => Boolean(task))
+      .sort((left, right) => {
+        if (left.status === "running" && right.status !== "running") {
+          return -1;
+        }
+        if (left.status !== "running" && right.status === "running") {
+          return 1;
+        }
+        return right.createdAt - left.createdAt;
+      })
+      .slice(0, 8);
+  }, [renderBackgroundTask, trackedBackgroundTasks]);
+  const handleOpenBackgroundTask = (task: BackgroundTaskItem) => {
+    const trackedTask = backgroundTasks.find((candidate) => candidate.id === task.id);
+    if (!trackedTask) {
+      return;
+    }
+
+    if (trackedTask.target.projectDetailTab) {
+      setProjectDetailTab(trackedTask.target.projectDetailTab);
+    }
+    if (trackedTask.target.flow) {
+      setIsProjectStudioMode(true);
+      setProjectStudioFlow(trackedTask.target.flow);
+    } else {
+      setIsProjectStudioMode(false);
+    }
+    handlePageChange(trackedTask.target.page);
+  };
 
   return (
     <AppShell
       activePage={activePage}
       activeSection={activeSection}
+      backgroundTasks={backgroundTasks}
       copy={text}
       language={language}
+      onBackgroundTaskOpen={handleOpenBackgroundTask}
       onPageChange={handlePageChange}
       onSectionChange={handleSectionChange}
       projectStudioMode={isProjectStudioMode}
