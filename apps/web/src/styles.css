@@ -4180,6 +4180,31 @@ textarea {
   font-size: 0.84rem;
 }
 
+.reference-submit-hint {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 8px;
+  color: #fef3c7;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.reference-submit-hint.ready {
+  border-color: rgba(34, 197, 94, 0.25);
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.reference-submit-hint strong {
+  font-size: 0.86rem;
+}
+
+.reference-submit-hint span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .reference-task-summary-failed {
   border-color: rgba(248, 113, 113, 0.34);
   background: rgba(248, 113, 113, 0.08);
@@ -5025,11 +5050,11 @@ textarea {
 }
 
 .smart-edit-standalone-page {
-  height: 100dvh;
-  min-height: 0;
+  min-height: 100dvh;
   gap: 8px;
-  overflow: hidden;
-  padding: 8px;
+  overflow-x: auto;
+  overflow-y: auto;
+  padding: 8px 8px 88px;
   background: #0d0d0d;
 }
 
@@ -5066,11 +5091,12 @@ textarea {
 
 .smart-edit-standalone-page .smart-edit-panel {
   display: grid;
-  grid-template-rows: 42px minmax(0, 1fr) clamp(220px, 31dvh, 320px);
+  grid-template-rows: 42px minmax(420px, 1fr) 11px auto;
   gap: 8px;
-  min-height: 0;
-  height: calc(100dvh - 66px);
-  overflow: hidden;
+  min-width: 1120px;
+  min-height: calc(100dvh - 74px);
+  height: auto;
+  overflow: visible;
   border: 0;
   border-radius: 0;
   background: #0d0d0d;
@@ -5125,10 +5151,11 @@ textarea {
 
 .smart-edit-standalone-page .smart-edit-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 25vw) minmax(520px, 1fr) minmax(300px, 25vw);
+  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(320px, 380px);
   gap: 8px;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 420px;
+  height: clamp(420px, calc(100dvh - 410px), 680px);
+  overflow: visible;
 }
 
 .smart-edit-standalone-page .smart-edit-bin,
@@ -5139,13 +5166,15 @@ textarea {
   border: 1px solid #282828;
   border-radius: 6px;
   background: #1a1a1a;
-  padding: 12px;
+  padding: 10px;
 }
 
 .smart-edit-standalone-page .smart-edit-bin {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
+  min-width: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -5189,11 +5218,14 @@ textarea {
 
 .smart-edit-standalone-page .smart-edit-preview {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(260px, 1fr) auto;
   align-items: stretch;
   justify-items: stretch;
+  position: relative;
   overflow: hidden;
-  padding: 10px 24px 12px;
+  min-width: 0;
+  height: 100%;
+  padding: 10px 18px 12px;
 }
 
 .smart-edit-standalone-page .smart-edit-preview h3,
@@ -5207,11 +5239,76 @@ textarea {
   align-self: center;
   justify-self: center;
   width: min(100%, 880px);
-  max-height: min(100%, 52dvh);
+  max-height: min(100%, 46dvh);
   aspect-ratio: 16 / 9;
   border-radius: 0;
   background: #000;
   object-fit: contain;
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay {
+  position: absolute;
+  z-index: 4;
+  top: 47%;
+  left: 50%;
+  display: grid;
+  width: min(42%, 240px);
+  aspect-ratio: 9 / 16;
+  place-items: center;
+  border: 1px solid rgba(56, 189, 248, 0.9);
+  color: #e0f2fe;
+  background: rgba(8, 47, 73, 0.16);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.85), 0 16px 48px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay span {
+  max-width: 84%;
+  overflow: hidden;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay button {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #020617;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay button:hover,
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay button:focus-visible {
+  outline: 2px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 2px;
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay .top {
+  top: -9px;
+  left: calc(50% - 9px);
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay .right {
+  top: calc(50% - 9px);
+  right: -9px;
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay .bottom {
+  bottom: -9px;
+  left: calc(50% - 9px);
+}
+
+.smart-edit-standalone-page .smart-edit-preview-transform-overlay .left {
+  top: calc(50% - 9px);
+  left: -9px;
 }
 
 .smart-edit-standalone-page .smart-edit-live-preview {
@@ -5221,8 +5318,41 @@ textarea {
 .smart-edit-standalone-page .smart-edit-inspector {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+  height: 100%;
+  overscroll-behavior: contain;
   overflow-y: auto;
+}
+
+.smart-edit-standalone-page .smart-edit-properties-tabs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  padding: 0 0 8px;
+}
+
+.smart-edit-standalone-page .smart-edit-properties-tabs button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #333;
+  border-radius: 7px;
+  color: #a3a3a3;
+  background: #202020;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.smart-edit-standalone-page .smart-edit-properties-tabs button:hover,
+.smart-edit-standalone-page .smart-edit-properties-tabs button:focus-visible,
+.smart-edit-standalone-page .smart-edit-properties-tabs button.active {
+  border-color: rgba(26, 167, 255, 0.35);
+  color: #38bdf8;
+  background: rgba(26, 167, 255, 0.12);
+  outline: none;
 }
 
 .smart-edit-standalone-page .smart-edit-inspector:has(.empty-state)::before {
@@ -5249,6 +5379,8 @@ textarea {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 8px;
+  min-height: 190px;
+  max-height: 360px;
   overflow: hidden;
   padding: 10px;
 }
@@ -5293,14 +5425,14 @@ textarea {
 }
 
 .smart-edit-standalone-page .smart-edit-track-lane {
-  min-height: 74px;
+  min-height: 58px;
   border: 1px dashed #272727;
   border-radius: 6px;
   background: #171717;
 }
 
 .smart-edit-standalone-page .smart-edit-track-clip {
-  min-height: 62px;
+  min-height: 50px;
   border-color: #333;
   background: #202020;
 }
@@ -5325,7 +5457,9 @@ textarea {
 .smart-edit-standalone-page .smart-edit-opencut-rail button,
 .smart-edit-standalone-page .smart-edit-opencut-panel-toolbar button,
 .smart-edit-standalone-page .smart-edit-opencut-preview-controls button,
-.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button {
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button,
+.smart-edit-standalone-page .smart-edit-editor-chrome button,
+.smart-edit-standalone-page .smart-edit-editor-chrome a {
   display: inline-grid;
   min-width: 34px;
   min-height: 34px;
@@ -5335,6 +5469,7 @@ textarea {
   color: #a3a3a3;
   background: transparent;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .smart-edit-standalone-page .smart-edit-opencut-rail button:hover,
@@ -5345,7 +5480,11 @@ textarea {
 .smart-edit-standalone-page .smart-edit-opencut-preview-controls button:hover,
 .smart-edit-standalone-page .smart-edit-opencut-preview-controls button:focus-visible,
 .smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:hover,
-.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:focus-visible {
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:focus-visible,
+.smart-edit-standalone-page .smart-edit-editor-chrome button:hover,
+.smart-edit-standalone-page .smart-edit-editor-chrome button:focus-visible,
+.smart-edit-standalone-page .smart-edit-editor-chrome a:hover,
+.smart-edit-standalone-page .smart-edit-editor-chrome a:focus-visible {
   border-color: rgba(26, 167, 255, 0.35);
   color: #38bdf8;
   background: rgba(26, 167, 255, 0.12);
@@ -5355,6 +5494,42 @@ textarea {
 .smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
+}
+
+.smart-edit-standalone-page .smart-edit-editor-chrome {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.smart-edit-standalone-page .smart-edit-editor-chrome > span {
+  min-height: 30px;
+  padding: 7px 10px;
+  border: 1px solid #333;
+  border-radius: 999px;
+  color: #a3e635;
+  background: rgba(132, 204, 22, 0.1);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.smart-edit-standalone-page .smart-edit-editor-chrome button,
+.smart-edit-standalone-page .smart-edit-editor-chrome a {
+  grid-auto-flow: column;
+  gap: 6px;
+  min-width: 92px;
+  padding: 0 10px;
+  border-color: #333;
+  color: #f5f5f5;
+  background: #202020;
+  font-weight: 800;
+}
+
+.smart-edit-standalone-page .smart-edit-editor-chrome button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .smart-edit-standalone-page .smart-edit-opencut-panel-toolbar {
@@ -5385,6 +5560,93 @@ textarea {
   color: #f5f5f5;
   background: #202020;
   font-weight: 800;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-tab-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #282828;
+  border-radius: 8px;
+  background: #171717;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-tab-panel h3 {
+  margin: 0;
+  color: #f5f5f5;
+  font-size: 0.92rem;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-tab-panel span {
+  display: block;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 7px;
+  color: #a3a3a3;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.78rem;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-tab-panel label {
+  display: grid;
+  gap: 6px;
+  color: #d4d4d4;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-tab-panel select {
+  min-height: 36px;
+  border: 1px solid #333;
+  border-radius: 7px;
+  color: #f5f5f5;
+  background: #202020;
+}
+
+.smart-edit-draggable-assets {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr;
+}
+
+.smart-edit-draggable-assets button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 7px;
+  color: #e5e5e5;
+  background: #202020;
+  cursor: grab;
+  text-align: left;
+}
+
+.smart-edit-draggable-assets button:active {
+  cursor: grabbing;
+}
+
+.smart-edit-draggable-assets button:hover,
+.smart-edit-draggable-assets button:focus-visible {
+  border-color: rgba(26, 167, 255, 0.4);
+  color: #38bdf8;
+  outline: none;
+}
+
+.smart-edit-draggable-assets strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smart-edit-draggable-assets small {
+  color: #a3a3a3;
+  font-size: 0.68rem;
+  text-transform: uppercase;
 }
 
 .smart-edit-standalone-page .smart-edit-opencut-preview-controls {
@@ -5446,6 +5708,152 @@ textarea {
 .smart-edit-standalone-page .smart-edit-opencut-timeline-tools input[type="range"] {
   width: 140px;
   accent-color: #1aa7ff;
+}
+
+@media (max-width: 1180px) {
+  .smart-edit-standalone-page {
+    overflow-x: hidden;
+    padding: 10px 10px 88px;
+  }
+
+  .smart-edit-standalone-page .smart-edit-panel {
+    min-width: 0;
+  }
+
+  .smart-edit-standalone-page .smart-edit-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .smart-edit-standalone-page .smart-edit-bin,
+  .smart-edit-standalone-page .smart-edit-preview,
+  .smart-edit-standalone-page .smart-edit-inspector {
+    height: auto;
+    min-height: 320px;
+    max-height: min(560px, 70dvh);
+  }
+
+  .smart-edit-standalone-page .smart-edit-preview {
+    min-height: 360px;
+  }
+
+  .smart-edit-standalone-page .smart-edit-opencut-preview-controls,
+  .smart-edit-standalone-page .smart-edit-opencut-timeline-tools {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .smart-edit-standalone-page .smart-edit-opencut-timeline-tools > span:last-child {
+    justify-self: start;
+  }
+}
+
+.smart-edit-bookmark-marker {
+  position: absolute;
+  z-index: 5;
+  top: 2px;
+  width: 11px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #facc15;
+  border-radius: 4px 4px 8px 8px;
+  background: linear-gradient(180deg, #facc15, #f59e0b);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.62);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.smart-edit-bookmark-marker:hover,
+.smart-edit-bookmark-marker:focus-visible {
+  outline: 2px solid rgba(250, 204, 21, 0.5);
+  outline-offset: 2px;
+}
+
+.smart-edit-drop-indicator {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #22c55e;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 18px rgba(34, 197, 94, 0.7);
+  transform: translateX(-50%);
+}
+
+.smart-edit-drop-indicator::after {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #22c55e;
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.smart-edit-track-stack.is-drop-target {
+  border-color: rgba(34, 197, 94, 0.46);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.16);
+}
+
+.smart-edit-panel-resize-handle {
+  display: grid;
+  height: 11px;
+  cursor: row-resize;
+  place-items: center;
+}
+
+.smart-edit-panel-resize-handle::before {
+  width: 82px;
+  height: 3px;
+  border-radius: 999px;
+  background: #333;
+  content: "";
+}
+
+.smart-edit-panel-resize-handle:hover::before,
+.smart-edit-panel-resize-handle:focus-visible::before,
+.smart-edit-panel-resize-handle.dragging::before {
+  background: #38bdf8;
+}
+
+.smart-edit-context-menu {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  min-width: 176px;
+  overflow: hidden;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #171717;
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.45);
+}
+
+.smart-edit-context-menu button {
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid #282828;
+  color: #e5e5e5;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.smart-edit-context-menu button:last-child {
+  border-bottom: 0;
+}
+
+.smart-edit-context-menu button:hover,
+.smart-edit-context-menu button:focus-visible {
+  color: #38bdf8;
+  background: rgba(26, 167, 255, 0.12);
+  outline: none;
 }
 
 .smart-edit-standalone-page .smart-edit-track-stack {
@@ -6966,7 +7374,7 @@ textarea {
   }
 
   .smart-edit-standalone-page {
-    padding: 14px;
+    padding: 14px 14px 88px;
   }
 
   .smart-edit-standalone-header {

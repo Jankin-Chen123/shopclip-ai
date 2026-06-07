@@ -342,6 +342,13 @@ export const ReferenceLibraryPanel = ({
     draft.sourceDeclaration.trim() &&
     draft.title.trim() &&
     draft.category.trim();
+  const missingSubmitFields = [
+    draft.sourceAssetId || draft.sourceUrl?.trim() ? undefined : copy.missingSource,
+    draft.title.trim() ? undefined : copy.missingTitle,
+    draft.sourcePlatform.trim() ? undefined : copy.missingPlatform,
+    draft.category.trim() ? undefined : copy.missingCategory,
+    draft.sourceDeclaration.trim() ? undefined : copy.missingDeclaration,
+  ].filter(Boolean);
   const activeReferences = references.filter(
     (reference) => isPendingReference(reference) && !isStalledReference(reference),
   );
@@ -449,6 +456,17 @@ export const ReferenceLibraryPanel = ({
       >
         {isLoading ? copy.analyzing : copy.analyze}
       </Button>
+      {!canAnalyze ? (
+        <div className="reference-submit-hint" role="note">
+          <strong>{copy.blockedSubmitTitle}</strong>
+          <span>{copy.missingFields(missingSubmitFields.join(", "))}</span>
+        </div>
+      ) : (
+        <div className="reference-submit-hint ready" role="note">
+          <strong>{copy.readyToSubmitTitle}</strong>
+          <span>{copy.readyToSubmitBody}</span>
+        </div>
+      )}
       {error ? (
         <p className="inline-error" role="alert">
           {error}

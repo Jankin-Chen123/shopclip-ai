@@ -34,6 +34,7 @@ import {
 } from "../features/inspiration/InspirationPanel";
 import {
   SmartEditPanel,
+  addSmartEditTimelineMediaElement,
   addSmartEditTimelineTextElement,
   addSmartEditTimelineVoiceElement,
   importSmartEditSrtCaptionsToTimeline,
@@ -5308,6 +5309,31 @@ Second imported caption`,
     expect(nextPlan.targetDurationSeconds).toBe(4);
   });
 
+  it("adds a dragged media asset as an independent smart edit timeline element", () => {
+    const nextPlan = addSmartEditTimelineMediaElement(
+      makeMinimalSmartEditPlan(),
+      makeAsset({
+        id: "asset-video",
+        name: "Cup demo.mp4",
+        type: "video",
+        url: "https://cdn.example.test/cup-demo.mp4",
+      }),
+      3.24,
+      "drop",
+    );
+
+    const element = nextPlan.timeline?.elements.find((candidate) => candidate.id === "media-asset-video-drop");
+    expect(nextPlan.timeline?.tracks.some((track) => track.id === "media-video")).toBe(true);
+    expect(element).toMatchObject({
+      durationSeconds: 4,
+      kind: "video",
+      label: "Cup demo.mp4",
+      sourceUrl: "https://cdn.example.test/cup-demo.mp4",
+      startSecond: 3.2,
+      trackId: "media-video",
+    });
+  });
+
   it("updates independent text material style on the smart edit timeline", () => {
     const plan = addSmartEditTimelineTextElement(
       {
@@ -6055,7 +6081,7 @@ Second imported caption`,
     expect(closeSmartEditTimelineGapAtPlayhead(closed, 1)).toBe(closed);
   });
 
-  it("renders smart edit as an editor workspace with status, settings, and grouped inspector", () => {
+  it("renders smart edit as an OpenCut-aligned editor workspace with status, asset tabs, and grouped inspector", () => {
     const markup = renderToStaticMarkup(
       <SmartEditPanel
         assets={[
@@ -6247,9 +6273,26 @@ Second imported caption`,
     );
 
     expect(markup).toContain("smart-edit-status-strip");
+    expect(markup).toContain("OpenCut aligned editor");
+    expect(markup).toContain("Video editor");
+    expect(markup).toContain("Shortcuts");
+    expect(markup).toContain("Export");
+    expect(markup).toContain("Preview transform handles");
+    expect(markup).toContain("Move selected clip up");
+    expect(markup).toContain("Add bookmark");
+    expect(markup).toContain("Remove nearest bookmark");
+    expect(markup).toContain("Draggable media assets");
+    expect(markup).toContain("draggable=\"true\"");
+    expect(markup).toContain("Resize timeline panel");
     expect(markup).toContain("smart-edit-bin");
     expect(markup).toContain("Clips");
     expect(markup).toContain("Media");
+    expect(markup).toContain("Sounds");
+    expect(markup).toContain("Text");
+    expect(markup).toContain("Stickers");
+    expect(markup).toContain("Effects");
+    expect(markup).toContain("Captions");
+    expect(markup).toContain("Settings");
     expect(markup).toContain("Enabled cut");
     expect(markup).toContain("4s");
     expect(markup).toContain("Selected segment");
@@ -6258,7 +6301,9 @@ Second imported caption`,
     expect(markup).toContain("Cup demo.mp4");
     expect(markup).toContain("Audio");
     expect(markup).toContain("tech-pulse");
-    expect(markup).toContain("Edit settings");
+    expect(markup).not.toContain("Edit settings");
+    expect(markup).toContain("Property groups");
+    expect(markup).toContain("Clip");
     expect(markup).toContain("Timing and source");
     expect(markup).toContain("Visual transform");
     expect(markup).toContain("Scale");

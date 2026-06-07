@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { UIEvent as ReactUIEvent } from "react";
@@ -26,7 +27,6 @@ import {
   Film,
   Folder,
   Headphones,
-  Loader2,
   ListVideo,
   Maximize2,
   Music2,
@@ -35,7 +35,6 @@ import {
   Eye,
   EyeOff,
   Lock,
-  RefreshCw,
   RotateCcw,
   RotateCw,
   Scissors,
@@ -91,6 +90,42 @@ const MAX_PLAN_HISTORY_LENGTH = 40;
 const TIMELINE_SNAP_SECONDS = 0.1;
 const TIMELINE_EDGE_SNAP_SECONDS = 0.2;
 const ENABLE_ADVANCED_VISUAL_CONTROLS = false;
+
+type SmartEditAssetTab = "media" | "sounds" | "text" | "stickers" | "effects" | "captions" | "settings";
+
+type SmartEditTimelineBookmark = {
+  id: string;
+  label: string;
+  second: number;
+};
+
+type SmartEditContextMenuState = {
+  clipId?: string;
+  segmentId?: string;
+  x: number;
+  y: number;
+};
+
+type SmartEditPanelResizeState = {
+  startClientY: number;
+  startHeight: number;
+};
+
+const smartEditAssetTabs: Array<{
+  id: SmartEditAssetTab;
+  label: string;
+  icon: typeof Folder;
+}> = [
+  { id: "media", label: "Media", icon: Folder },
+  { id: "sounds", label: "Sounds", icon: Headphones },
+  { id: "text", label: "Text", icon: Text },
+  { id: "stickers", label: "Stickers", icon: Smile },
+  { id: "effects", label: "Effects", icon: Scissors },
+  { id: "captions", label: "Captions", icon: ListVideo },
+  { id: "settings", label: "Settings", icon: SlidersHorizontal },
+];
+
+const SMART_EDIT_TIMELINE_HEIGHT_STORAGE_KEY = "shopclip-smart-edit-timeline-height";
 
 export const smartEditTimelineKeyboardNudgeSeconds = (
   key: string,
@@ -2746,6 +2781,47 @@ export const addSmartEditTimelineTextElement = (
   );
 };
 
+export const addSmartEditTimelineMediaElement = (
+  plan: SmartEditPlan,
+  asset: AssetMetadata,
+  playheadSecond: number,
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  if (asset.type !== "video" && asset.type !== "image") {
+    return plan;
+  }
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const startSecond = clampTimelineStart(snapTimelineSeconds(playheadSecond));
+  const isImage = asset.type === "image";
+  const trackId = "media-video";
+  const element: SmartEditTimelineElement = {
+    detachedAudio: false,
+    durationSeconds: isImage ? 3 : 4,
+    hidden: false,
+    id: `media-${asset.id}-${token}`,
+    kind: "video",
+    label: asset.name,
+    muted: false,
+    playbackRate: 1,
+    sourceUrl: asset.url,
+    startSecond,
+    trackId,
+    trimStartSecond: 0,
+  };
+  return withUpdatedTimelineElements(
+    plan,
+    [...baseTimeline.elements, element],
+    ensureTimelineTrack(baseTimeline, {
+      hidden: false,
+      id: trackId,
+      kind: "video",
+      label: "Media video",
+      locked: false,
+      muted: false,
+    }),
+  );
+};
+
 export const detachSmartEditSourceAudioToTimelineElement = (
   plan: SmartEditPlan,
   segmentId: string,
@@ -5318,24 +5394,16 @@ export const SmartEditPanel = ({
   assets,
   assetSlices,
   copy,
-  disabled,
   error,
-  instructions,
   isEditing,
   isRefreshing,
   mediaSettings,
-  onInstructionsChange,
   onMediaSettingsChange,
   onPlanChange,
-  onRefreshSegment,
   onSelectedSegmentChange,
-  onStartSmartEdit,
   renderTask,
   result,
   selectedSegmentId,
-  targetLanguage,
-  traceEvents,
-  onTargetLanguageChange,
 }: SmartEditPanelProps) => {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const suppressTrimClickRef = useRef(false);
@@ -5351,6 +5419,7 @@ export const SmartEditPanel = ({
   const [selectedTrackClipId, setSelectedTrackClipId] = useState<string | undefined>();
   const [selectedTrackClipIds, setSelectedTrackClipIds] = useState<string[]>([]);
   const [smartEditClipboard, setSmartEditClipboard] = useState<SmartEditClipboard | undefined>();
+  const [activeAssetTab, setActiveAssetTab] = useState<SmartEditAssetTab>("media");
   const [trackClipMoveDrag, setTrackClipMoveDrag] = useState<TrackClipMoveDragState | undefined>();
   const [trackClipTrimDrag, setTrackClipTrimDrag] = useState<TrackClipTrimDragState | undefined>();
   const [playheadDrag, setPlayheadDrag] = useState<PlayheadDragState | undefined>();
@@ -5362,6 +5431,17 @@ export const SmartEditPanel = ({
   const [previewRange, setPreviewRange] = useState<TimelinePreviewRangeState>({});
   const [previewRangeLoopEnabled, setPreviewRangeLoopEnabled] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const [timelineBookmarks, setTimelineBookmarks] = useState<SmartEditTimelineBookmark[]>([]);
+  const [timelineContextMenu, setTimelineContextMenu] = useState<SmartEditContextMenuState | undefined>();
+  const [timelineDropPreviewSecond, setTimelineDropPreviewSecond] = useState<number | undefined>();
+  const [timelinePanelHeight, setTimelinePanelHeight] = useState(() => {
+    if (typeof window === "undefined") {
+      return 250;
+    }
+    const storedHeight = Number(window.localStorage.getItem(SMART_EDIT_TIMELINE_HEIGHT_STORAGE_KEY));
+    return Number.isFinite(storedHeight) ? Math.max(190, Math.min(360, storedHeight)) : 250;
+  });
+  const [panelResize, setPanelResize] = useState<SmartEditPanelResizeState | undefined>();
   const [srtImportText, setSrtImportText] = useState("");
   const [srtImportMessage, setSrtImportMessage] = useState<string | undefined>();
   const [srtExportMessage, setSrtExportMessage] = useState<string | undefined>();
@@ -5380,6 +5460,9 @@ export const SmartEditPanel = ({
       setTrackBoxSelectDrag(undefined);
       setTimelineMoveDrag(undefined);
       setTrimDrag(undefined);
+      setTimelineBookmarks([]);
+      setTimelineContextMenu(undefined);
+      setTimelineDropPreviewSecond(undefined);
       setSmartEditClipboard(undefined);
       setPlayheadSeconds(0);
       setPreviewRange({});
@@ -5389,6 +5472,33 @@ export const SmartEditPanel = ({
       setSrtExportMessage(undefined);
     }
   }, [historyPlanId, plan?.id]);
+  useEffect(() => {
+    if (!panelResize) {
+      return;
+    }
+    const handlePointerMove = (event: PointerEvent) => {
+      const nextHeight = Math.max(
+        190,
+        Math.min(360, panelResize.startHeight - (event.clientY - panelResize.startClientY)),
+      );
+      setTimelinePanelHeight(nextHeight);
+    };
+    const handlePointerUp = () => {
+      setPanelResize(undefined);
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [panelResize]);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SMART_EDIT_TIMELINE_HEIGHT_STORAGE_KEY, String(Math.round(timelinePanelHeight)));
+  }, [timelinePanelHeight]);
   const sortedSegments = useMemo(
     () => [...(plan?.segments ?? [])].sort((left, right) => left.order - right.order),
     [plan],
@@ -5488,6 +5598,118 @@ export const SmartEditPanel = ({
       Math.abs(current - nextSecond) > 0.05 ? nextSecond : current,
     );
     scrollPlayheadIntoView(nextSecond);
+  };
+  const selectedTransform = selectedSegment ? transformForSegment(selectedSegment) : undefined;
+  const addTimelineBookmarkAtPlayhead = () => {
+    const second = snapTimelineSeconds(boundedPlayheadSeconds);
+    setTimelineBookmarks((current) => {
+      if (current.some((bookmark) => Math.abs(bookmark.second - second) < TIMELINE_SNAP_SECONDS)) {
+        return current;
+      }
+      return [
+        ...current,
+        {
+          id: `bookmark-${Date.now()}`,
+          label: formatTimelineTime(second),
+          second,
+        },
+      ].sort((left, right) => left.second - right.second);
+    });
+  };
+  const removeNearestTimelineBookmark = () => {
+    setTimelineBookmarks((current) => {
+      if (current.length === 0) {
+        return current;
+      }
+      const nearest = current.reduce((closest, bookmark) =>
+        Math.abs(bookmark.second - boundedPlayheadSeconds) < Math.abs(closest.second - boundedPlayheadSeconds)
+          ? bookmark
+          : closest,
+      );
+      return current.filter((bookmark) => bookmark.id !== nearest.id);
+    });
+  };
+  const openTimelineContextMenu = (
+    event: ReactMouseEvent,
+    params: { clipId?: string; segmentId?: string } = {},
+  ) => {
+    event.preventDefault();
+    if (params.clipId) {
+      setSelectedTrackClipId(params.clipId);
+      setSelectedTrackClipIds([params.clipId]);
+    }
+    if (params.segmentId) {
+      setSelectedSegmentIds([params.segmentId]);
+      onSelectedSegmentChange(params.segmentId);
+    }
+    setTimelineContextMenu({
+      ...params,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+  const closeTimelineContextMenu = () => setTimelineContextMenu(undefined);
+  const nudgeSelectedTransform = (delta: { offsetXPercent?: number; offsetYPercent?: number }) => {
+    updateSelectedSegment((segment) => {
+      const transform = transformForSegment(segment);
+      return {
+        ...segment,
+        transform: {
+          ...transform,
+          offsetXPercent: clampPercentOffset(transform.offsetXPercent + (delta.offsetXPercent ?? 0)),
+          offsetYPercent: clampPercentOffset(transform.offsetYPercent + (delta.offsetYPercent ?? 0)),
+        },
+      };
+    });
+  };
+  const assetDropSecondForEvent = (event: ReactDragEvent<HTMLElement>): number => {
+    const stackElement = event.currentTarget.closest(".smart-edit-track-stack") as HTMLElement | null;
+    const targetElement = stackElement?.querySelector(".smart-edit-track-clips") as HTMLElement | null;
+    const rect = targetElement?.getBoundingClientRect();
+    if (!rect || !Number.isFinite(rect.left)) {
+      return boundedPlayheadSeconds;
+    }
+    const x = Math.max(0, event.clientX - rect.left + (targetElement?.scrollLeft ?? 0));
+    return clampTimelineStart(snapTimelineSeconds(x / timelinePixelsPerSecond));
+  };
+  const handleAssetDragStart = (event: ReactDragEvent, assetId: string) => {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/x-shopclip-asset-id", assetId);
+    event.dataTransfer.setData("text/plain", assetId);
+  };
+  const handleTimelineAssetDragOver = (event: ReactDragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("application/x-shopclip-asset-id")) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setTimelineDropPreviewSecond(assetDropSecondForEvent(event));
+  };
+  const handleTimelineAssetDrop = (event: ReactDragEvent<HTMLElement>) => {
+    const assetId = event.dataTransfer.getData("application/x-shopclip-asset-id");
+    if (!assetId || !plan) {
+      return;
+    }
+    const asset = assets.find((candidate) => candidate.id === assetId);
+    if (!asset) {
+      return;
+    }
+    event.preventDefault();
+    const dropSecond = assetDropSecondForEvent(event);
+    const nextPlan = addSmartEditTimelineMediaElement(plan, asset, dropSecond);
+    if (nextPlan === plan) {
+      return;
+    }
+    const addedElement = nextPlan.timeline?.elements.at(-1);
+    commitPlanChange(nextPlan, { label: "Drop media asset" });
+    if (addedElement) {
+      setSelectedTrackClipId(addedElement.id);
+      setSelectedTrackClipIds([addedElement.id]);
+      setSelectedSegmentIds([]);
+      onSelectedSegmentChange(undefined);
+    }
+    setPlayheadAndSeekPreview(dropSecond);
+    setTimelineDropPreviewSecond(undefined);
   };
   const togglePreviewPlayback = (): boolean => {
     const preview = previewRef.current;
@@ -7949,46 +8171,43 @@ export const SmartEditPanel = ({
     >
       <div className="panel-heading smart-edit-heading">
         <nav className="smart-edit-opencut-rail" aria-label="OpenCut tools">
-          <button className="active" type="button" aria-label="Media">
-            <Folder size={18} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label="Audio">
-            <Headphones size={18} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label="Text">
-            <Text size={18} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label="Stickers">
-            <Smile size={18} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label="Effects">
-            <Scissors size={18} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label="Properties">
-            <SlidersHorizontal size={18} aria-hidden="true" />
-          </button>
+          {smartEditAssetTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                aria-label={tab.label}
+                className={activeAssetTab === tab.id ? "active" : undefined}
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveAssetTab(tab.id)}
+              >
+                <Icon size={18} aria-hidden="true" />
+              </button>
+            );
+          })}
         </nav>
         <div>
-          <p className="eyebrow">{copy.step}</p>
-          <h2 id="smart-edit-title">{copy.title}</h2>
-          <p>{copy.intro}</p>
+          <p className="eyebrow">OpenCut aligned editor</p>
+          <h2 id="smart-edit-title">Video editor</h2>
+          <p>{sortedSegments.length} clips - {formatTimelineTime(timelineDurationSeconds)} timeline</p>
         </div>
-        <div className="smart-edit-actions">
-          <Button
-            disabled={disabled || isEditing}
-            icon={isEditing ? <Loader2 className="spin" size={18} /> : <Scissors size={18} />}
-            onClick={onStartSmartEdit}
-            variant="primary"
-          >
-            {isEditing ? copy.generating : copy.start}
-          </Button>
-          <Button
-            disabled={disabled || isRefreshing || !result || !selectedSegment}
-            icon={isRefreshing ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
-            onClick={onRefreshSegment}
-          >
-            {isRefreshing ? copy.refreshing : copy.refresh}
-          </Button>
+        <div className="smart-edit-editor-chrome" aria-label="Editor actions">
+          <span>{isEditing || isRefreshing ? "Rendering" : "Ready"}</span>
+          <button type="button" aria-label="Keyboard shortcuts">
+            <ListVideo size={16} aria-hidden="true" />
+            Shortcuts
+          </button>
+          {result?.exportUrl ? (
+            <a href={result.exportUrl} download>
+              <Download size={16} aria-hidden="true" />
+              Export
+            </a>
+          ) : (
+            <button type="button" disabled>
+              <Download size={16} aria-hidden="true" />
+              Export
+            </button>
+          )}
         </div>
       </div>
 
@@ -8032,54 +8251,10 @@ export const SmartEditPanel = ({
         </div>
       </div>
 
-      <details className="smart-edit-settings-panel">
-        <summary>
-          <span>
-            <strong>{copy.editSettings}</strong>
-            <small>{copy.instructions}</small>
-          </span>
-        </summary>
-        <div className="smart-edit-controls">
-          <label>
-            {copy.targetLanguage}
-            <input
-              placeholder="zh-CN / en-US"
-              value={targetLanguage}
-              onChange={(event) => onTargetLanguageChange(event.target.value)}
-            />
-          </label>
-          <label>
-            {copy.bgm}
-            <select
-              value={mediaSettings.bgmTrack}
-              onChange={(event) =>
-                onMediaSettingsChange({
-                  ...mediaSettings,
-                  bgmTrack: event.target.value as MediaSettings["bgmTrack"],
-                })
-              }
-            >
-              <option value="none">None</option>
-              <option value="creator-pop">Creator pop</option>
-              <option value="soft-lift">Soft lift</option>
-              <option value="tech-pulse">Tech pulse</option>
-            </select>
-          </label>
-          <label className="smart-edit-instructions">
-            {copy.instructions}
-            <textarea
-              rows={2}
-              value={instructions}
-              onChange={(event) => onInstructionsChange(event.target.value)}
-            />
-          </label>
-        </div>
-      </details>
-
       <div className="smart-edit-grid">
         <aside className="smart-edit-bin" aria-label="Edit media bin">
           <div className="smart-edit-opencut-panel-toolbar">
-            <strong>Media</strong>
+            <strong>{smartEditAssetTabs.find((tab) => tab.id === activeAssetTab)?.label ?? "Media"}</strong>
             <span>
               <button type="button" aria-label="List view">
                 <ListVideo size={16} aria-hidden="true" />
@@ -8093,52 +8268,123 @@ export const SmartEditPanel = ({
               </button>
             </span>
           </div>
-          <div className="smart-edit-bin-header">
-            <div>
-              <h3>Clips</h3>
-              <span>{sortedSegments.length} timeline clips</span>
-            </div>
-            <strong>{formatTimelineTime(timelineDurationSeconds)}</strong>
-          </div>
-          <div className="smart-edit-clip-bin-list" role="list">
-            {sortedSegments.length > 0 ? (
-              sortedSegments.map((segment) => {
-                const segmentStart = timedTimelineSegments.find(
-                  (candidate) => candidate.segment.id === segment.id,
-                )?.startSecond;
-                return (
-                  <button
-                    aria-current={selectedSegment?.id === segment.id ? "true" : undefined}
-                    className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
-                      selectedSegmentIdSet.has(segment.id) ? "selected" : ""
-                    }`.trim()}
-                    key={segment.id}
-                    onClick={(event) => selectTimelineSegment(segment.id, event)}
-                    type="button"
-                  >
-                    <span>{String(segment.order).padStart(2, "0")}</span>
-                    <strong>{segment.subtitle || sourceLabel(segment, assets)}</strong>
-                    <small>
-                      {formatTimelineTime(segmentStart ?? 0)} / {segment.durationSeconds.toFixed(1)}s
-                    </small>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="empty-state compact">
-                <strong>{copy.emptyTitle}</strong>
-                <span>{copy.emptyBody}</span>
+          {activeAssetTab === "media" ? (
+            <>
+              <div className="smart-edit-bin-header">
+                <div>
+                  <h3>Clips</h3>
+                  <span>{sortedSegments.length} timeline clips</span>
+                </div>
+                <strong>{formatTimelineTime(timelineDurationSeconds)}</strong>
               </div>
-            )}
-          </div>
-          <div className="smart-edit-bin-assets">
-            <h3>Media</h3>
-            <div>
-              <span>{assets.filter((asset) => asset.type === "video").length} video</span>
-              <span>{assets.filter((asset) => asset.type === "image").length} image</span>
-              <span>{assetSlices.length} slices</span>
+              <div className="smart-edit-clip-bin-list" role="list">
+                {sortedSegments.length > 0 ? (
+                  sortedSegments.map((segment) => {
+                    const segmentStart = timedTimelineSegments.find(
+                      (candidate) => candidate.segment.id === segment.id,
+                    )?.startSecond;
+                    return (
+                      <button
+                        aria-current={selectedSegment?.id === segment.id ? "true" : undefined}
+                        className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
+                          selectedSegmentIdSet.has(segment.id) ? "selected" : ""
+                        }`.trim()}
+                        key={segment.id}
+                        onClick={(event) => selectTimelineSegment(segment.id, event)}
+                        type="button"
+                      >
+                        <span>{String(segment.order).padStart(2, "0")}</span>
+                        <strong>{segment.subtitle || sourceLabel(segment, assets)}</strong>
+                        <small>
+                          {formatTimelineTime(segmentStart ?? 0)} / {segment.durationSeconds.toFixed(1)}s
+                        </small>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state compact">
+                    <strong>{copy.emptyTitle}</strong>
+                    <span>{copy.emptyBody}</span>
+                  </div>
+                )}
+              </div>
+              <div className="smart-edit-bin-assets">
+                <h3>Media inventory</h3>
+                <div>
+                  <span>{assets.filter((asset) => asset.type === "video").length} video</span>
+                  <span>{assets.filter((asset) => asset.type === "image").length} image</span>
+                  <span>{assetSlices.length} slices</span>
+                </div>
+                <div className="smart-edit-draggable-assets" aria-label="Draggable media assets">
+                  {assets
+                    .filter((asset) => asset.type === "video" || asset.type === "image")
+                    .slice(0, 12)
+                    .map((asset) => (
+                      <button
+                        draggable
+                        key={asset.id}
+                        type="button"
+                        onDragStart={(event) => handleAssetDragStart(event, asset.id)}
+                      >
+                        <strong>{asset.name}</strong>
+                        <small>{asset.type}</small>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </>
+          ) : null}
+          {activeAssetTab === "sounds" ? (
+            <div className="smart-edit-opencut-tab-panel">
+              <h3>Project audio</h3>
+              <label>
+                {copy.bgm}
+                <select
+                  value={mediaSettings.bgmTrack}
+                  onChange={(event) =>
+                    onMediaSettingsChange({
+                      ...mediaSettings,
+                      bgmTrack: event.target.value as MediaSettings["bgmTrack"],
+                    })
+                  }
+                >
+                  <option value="none">None</option>
+                  <option value="creator-pop">Creator pop</option>
+                  <option value="soft-lift">Soft lift</option>
+                  <option value="tech-pulse">Tech pulse</option>
+                </select>
+              </label>
+              <span>{trackSegments.find((track) => track.id === "bgm")?.segments.length ?? 0} BGM timeline item</span>
+              <span>{trackSegments.find((track) => track.id === "voice")?.segments.length ?? 0} voice clips</span>
             </div>
-          </div>
+          ) : null}
+          {activeAssetTab === "text" || activeAssetTab === "captions" ? (
+            <div className="smart-edit-opencut-tab-panel">
+              <h3>{activeAssetTab === "captions" ? "Captions" : "Text"}</h3>
+              <span>{trackSegments.find((track) => track.id === "caption")?.segments.length ?? 0} caption clips</span>
+              <span>{selectedSegment?.subtitle ? "Selected text clip available" : "Select a caption clip to edit text"}</span>
+            </div>
+          ) : null}
+          {activeAssetTab === "effects" ? (
+            <div className="smart-edit-opencut-tab-panel">
+              <h3>Effects</h3>
+              <span>{selectedSegment?.visualEffects?.length ?? 0} effects on selected clip</span>
+              <span>Use the inspector to adjust effect amount and keyframes.</span>
+            </div>
+          ) : null}
+          {activeAssetTab === "stickers" ? (
+            <div className="smart-edit-opencut-tab-panel">
+              <h3>Stickers</h3>
+              <span>No sticker media has been added to this project.</span>
+            </div>
+          ) : null}
+          {activeAssetTab === "settings" ? (
+            <div className="smart-edit-opencut-tab-panel">
+              <h3>Canvas settings</h3>
+              <span>Timeline duration {formatTimelineTime(timelineDurationSeconds)}</span>
+              <span>{enabledDurationSeconds}s enabled clip duration</span>
+            </div>
+          ) : null}
         </aside>
 
         <div className="smart-edit-preview">
@@ -8184,6 +8430,42 @@ export const SmartEditPanel = ({
               <span>{copy.noPreview}</span>
             </div>
           )}
+          {selectedSegment && selectedTransform ? (
+            <div
+              aria-label="Preview transform handles"
+              className="smart-edit-preview-transform-overlay"
+              style={{
+                opacity: selectedTransform.opacity,
+                transform: `translate(${selectedTransform.offsetXPercent}%, ${selectedTransform.offsetYPercent}%) rotate(${selectedTransform.rotateDegrees}deg) scale(${selectedTransform.scale})`,
+              }}
+            >
+              <button
+                aria-label="Move selected clip up"
+                className="top"
+                type="button"
+                onClick={() => nudgeSelectedTransform({ offsetYPercent: -5 })}
+              />
+              <button
+                aria-label="Move selected clip right"
+                className="right"
+                type="button"
+                onClick={() => nudgeSelectedTransform({ offsetXPercent: 5 })}
+              />
+              <button
+                aria-label="Move selected clip down"
+                className="bottom"
+                type="button"
+                onClick={() => nudgeSelectedTransform({ offsetYPercent: 5 })}
+              />
+              <button
+                aria-label="Move selected clip left"
+                className="left"
+                type="button"
+                onClick={() => nudgeSelectedTransform({ offsetXPercent: -5 })}
+              />
+              <span>{selectedSegment.subtitle || sourceLabel(selectedSegment, assets)}</span>
+            </div>
+          ) : null}
           <div className="smart-edit-opencut-preview-controls" aria-label="Preview controls">
             <code>{formatTimelineTime(boundedPlayheadSeconds)}</code>
             <span>/</span>
@@ -8228,6 +8510,47 @@ export const SmartEditPanel = ({
 
         <div className="smart-edit-inspector">
           <h3>{copy.inspector}</h3>
+          <div className="smart-edit-properties-tabs" aria-label="Property groups">
+            {[
+              {
+                id: "clip",
+                label: "Clip",
+                active: !!selectedSegment && (!selectedTrackClip || selectedTrackClip.trackId === "video"),
+              },
+              {
+                id: "audio",
+                label: "Audio",
+                active:
+                  selectedTrackClip?.trackId === "sourceAudio" ||
+                  selectedTrackClip?.trackId === "voice" ||
+                  selectedTrackClip?.trackId === "bgm",
+              },
+              {
+                id: "text",
+                label: "Text",
+                active: selectedTrackClip?.trackId === "caption",
+              },
+              {
+                id: "effects",
+                label: "Effects",
+                active: !!selectedSegment?.visualEffects?.length,
+              },
+              {
+                id: "state",
+                label: "State",
+                active: selectedBatchSegments.length > 1,
+              },
+            ].map((tab) => (
+              <button
+                aria-pressed={tab.active}
+                className={tab.active ? "active" : undefined}
+                key={tab.id}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
           {selectedTrackClip && selectedSegment && plan ? (
             <section className="smart-edit-inspector-section track-clip-inspector">
               <h4>{copy.trackClipInspector}</h4>
@@ -10339,6 +10662,16 @@ export const SmartEditPanel = ({
                   {formatTimelineTime(tick)}
                 </span>
               ))}
+              {timelineBookmarks.map((bookmark) => (
+                <button
+                  aria-label={`Go to bookmark ${bookmark.label}`}
+                  className="smart-edit-bookmark-marker"
+                  key={bookmark.id}
+                  style={{ left: bookmark.second * timelinePixelsPerSecond }}
+                  type="button"
+                  onClick={() => setPlayheadAndSeekPreview(bookmark.second)}
+                />
+              ))}
             </div>
             <div
               className={`timeline-playhead ${playheadDrag ? "dragging" : ""}`.trim()}
@@ -10396,6 +10729,11 @@ export const SmartEditPanel = ({
                   onPointerCancel={() => setTimelineMoveDrag(undefined)}
                   onPointerDown={(event) => startTimelineMoveDrag(event, segment.id)}
                   onPointerUp={finishTimelineMoveDrag}
+                  onContextMenu={(event) =>
+                    openTimelineContextMenu(event, {
+                      segmentId: segment.id,
+                    })
+                  }
                 >
                   <button
                     aria-label={copy.trimIn}
@@ -10455,8 +10793,35 @@ export const SmartEditPanel = ({
         )}
       </div>
 
+      <div
+        aria-label="Resize timeline panel"
+        className={`smart-edit-panel-resize-handle ${panelResize ? "dragging" : ""}`.trim()}
+        role="separator"
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          setPanelResize({
+            startClientY: event.clientY,
+            startHeight: timelinePanelHeight,
+          });
+        }}
+      />
+
       {trackSegments.length > 0 ? (
-        <div className="smart-edit-track-stack" aria-label={copy.trackStack}>
+        <div
+          className={`smart-edit-track-stack ${
+            timelineDropPreviewSecond !== undefined ? "is-drop-target" : ""
+          }`.trim()}
+          aria-label={copy.trackStack}
+          style={{ height: timelinePanelHeight }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setTimelineDropPreviewSecond(undefined);
+            }
+          }}
+          onDragOver={handleTimelineAssetDragOver}
+          onDrop={handleTimelineAssetDrop}
+        >
           <div className="smart-edit-opencut-timeline-tools" aria-label="Timeline tools">
             <span>
               <button type="button" aria-label="Select">
@@ -10474,8 +10839,14 @@ export const SmartEditPanel = ({
               <button type="button" aria-label="Delete selected" onClick={removeSelectedTrackClip}>
                 <Trash2 size={16} aria-hidden="true" />
               </button>
+              <button type="button" aria-label="Add bookmark" onClick={addTimelineBookmarkAtPlayhead}>
+                <Plus size={16} aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="Remove nearest bookmark" onClick={removeNearestTimelineBookmark}>
+                <Trash2 size={16} aria-hidden="true" />
+              </button>
             </span>
-            <strong>Main scene</strong>
+            <strong>{timelineBookmarks.length > 0 ? `${timelineBookmarks.length} bookmarks` : "Main scene"}</strong>
             <span>
               <button type="button" aria-label="Zoom out" onClick={() => setTimelineZoom((current) => Math.max(0.5, Number((current - 0.25).toFixed(2))))}>
                 <ZoomOut size={16} aria-hidden="true" />
@@ -10523,6 +10894,23 @@ export const SmartEditPanel = ({
                     {formatTimelineTime(tick)}
                   </span>
                 ))}
+                {timelineBookmarks.map((bookmark) => (
+                  <button
+                    aria-label={`Go to bookmark ${bookmark.label}`}
+                    className="smart-edit-bookmark-marker"
+                    key={`track-${bookmark.id}`}
+                    style={{ left: bookmark.second * timelinePixelsPerSecond }}
+                    type="button"
+                    onClick={() => setPlayheadAndSeekPreview(bookmark.second)}
+                  />
+                ))}
+                {timelineDropPreviewSecond !== undefined ? (
+                  <span
+                    aria-hidden="true"
+                    className="smart-edit-drop-indicator"
+                    style={{ left: timelineDropPreviewSecond * timelinePixelsPerSecond }}
+                  />
+                ) : null}
                 <span
                   aria-hidden="true"
                   className={`smart-edit-track-playhead ${playheadDrag ? "dragging" : ""}`.trim()}
@@ -10640,6 +11028,13 @@ export const SmartEditPanel = ({
                     className="smart-edit-track-playhead lane-playhead"
                     style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
                   />
+                  {timelineDropPreviewSecond !== undefined ? (
+                    <span
+                      aria-hidden="true"
+                      className="smart-edit-drop-indicator lane-drop-indicator"
+                      style={{ left: timelineDropPreviewSecond * timelinePixelsPerSecond }}
+                    />
+                  ) : null}
                   {normalizedPreviewRange ? (
                     <div
                       aria-hidden="true"
@@ -10726,6 +11121,12 @@ export const SmartEditPanel = ({
                       onPointerDown={(event) => startTrackClipMoveDrag(event, segment)}
                       onPointerMove={updateTrackClipMoveDrag}
                       onPointerUp={finishTrackClipMoveDrag}
+                      onContextMenu={(event) =>
+                        openTimelineContextMenu(event, {
+                          clipId: segment.id,
+                          segmentId: segment.segmentId,
+                        })
+                      }
                     >
                       {segment.trackId !== "bgm" ? (
                         <button
@@ -10796,17 +11197,79 @@ export const SmartEditPanel = ({
         </div>
       ) : null}
 
-      {traceEvents.length > 0 ? (
-        <div className="smart-edit-trace">
-          <h3>{copy.traceTitle}</h3>
-          {traceEvents.map((event) => (
-            <article key={event.id}>
-              <strong>{event.step}</strong>
-              <span>{event.message}</span>
-            </article>
-          ))}
+      {timelineContextMenu ? (
+        <div
+          className="smart-edit-context-menu"
+          role="menu"
+          style={{
+            left: timelineContextMenu.x,
+            top: timelineContextMenu.y,
+          }}
+        >
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              splitAtPlayhead();
+              closeTimelineContextMenu();
+            }}
+          >
+            Split at playhead
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              if (timelineContextMenu.clipId) {
+                duplicateSelectedTimelineMaterials();
+              } else {
+                duplicateSelectedSegment();
+              }
+              closeTimelineContextMenu();
+            }}
+          >
+            Duplicate
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              copySelectedSegmentsToLocalClipboard();
+              closeTimelineContextMenu();
+            }}
+          >
+            Copy
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              addTimelineBookmarkAtPlayhead();
+              closeTimelineContextMenu();
+            }}
+          >
+            Add bookmark
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              if (timelineContextMenu.clipId) {
+                removeSelectedTrackClip();
+              } else {
+                removeSelectedSegment();
+              }
+              closeTimelineContextMenu();
+            }}
+          >
+            Delete
+          </button>
+          <button role="menuitem" type="button" onClick={closeTimelineContextMenu}>
+            Close
+          </button>
         </div>
       ) : null}
+
     </section>
   );
 };

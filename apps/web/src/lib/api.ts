@@ -235,7 +235,7 @@ export const updateProjectBrief = async (
 
 export const listProjects = async (): Promise<ProjectSummary[]> => {
   const response = await requestJson<{ projects: ProjectSummary[] }>("/projects");
-  return response.projects;
+  return Array.isArray(response.projects) ? response.projects : [];
 };
 
 export const deleteProject = async (

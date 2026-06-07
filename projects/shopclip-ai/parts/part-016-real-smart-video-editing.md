@@ -238,6 +238,61 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/api build`
+
+## 2026-06-07 OpenCut Alignment Pass 1
+
+- Scope:
+  - This is an OpenCut gap-fill pass, not a full OpenCut migration.
+  - Preserved the current usable timeline, preview, inspector, smart-edit render metadata, and backend entrypoints.
+  - Removed the visible AI/storyboard-specific editor controls from the standalone editing workspace: the top-level generate/refresh buttons, instruction panel, target-language field, and trace event panel no longer render inside `SmartEditPanel`.
+- OpenCut alignment:
+  - Replaced the decorative editor rail with a real asset-tab state modeled after OpenCut's assets panel: Media, Sounds, Text, Stickers, Effects, Captions, and Settings.
+  - Added editor chrome actions for ready/rendering status, shortcuts, and export.
+  - Converted the left asset panel into tab-specific content while keeping Media mapped to the existing selectable clip list.
+  - Added OpenCut-style property group tabs above the existing inspector forms so the panel now has a registry-like surface without replacing current editable controls.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "renders smart edit as an OpenCut-aligned editor workspace"` passed.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web build` passed. Build output: `index-WiVrUa5u.css` and `index-DcBnJuyL.js`.
+- Known remaining OpenCut gaps:
+  - Real media drag/drop from asset tabs to timeline.
+  - Timeline bookmarks, richer snapping indicators, and context menus.
+  - Preview transform handles and overlay interaction layer.
+  - Full resizable panel persistence and eventual evaluation of `EditorCore`, CanvasRenderer, WASM/export integration.
+
+## 2026-06-07 OpenCut Alignment Pass 2
+
+- Scope:
+  - Continued the gap-fill path without replacing the current timeline, preview, inspector, or backend smart-edit flow.
+- OpenCut alignment:
+  - Added timeline bookmark state, toolbar controls for adding/removing bookmarks, and clickable bookmark markers on both the main timeline ruler and track-stack ruler.
+  - Added a timeline context menu surface for split, duplicate, copy, bookmark, delete, and close actions. The menu reuses existing selected segment/material actions.
+  - Added preview transform handles as an overlay bound to the selected segment transform. Direction handles nudge the selected clip using existing transform editing logic.
+  - Preserved the current preview video renderer instead of introducing OpenCut CanvasRenderer/WASM.
+- Adjacent test cleanup:
+  - Restored project portfolio search affordance copy and reference breakdown disabled-field guidance so the existing web test suite can validate those screens again.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "renders smart edit as an OpenCut-aligned editor workspace"` passed.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx` passed: 160 tests.
+  - `corepack pnpm --filter @shopclip/web build` passed. Build output: `index-DsQvguyJ.css` and `index-BY4SLPqC.js`.
+
+## 2026-06-07 OpenCut Alignment Pass 3
+
+- Scope:
+  - Continued low-risk OpenCut gap filling while preserving the current SmartEdit timeline, preview, inspector, and ffmpeg backend.
+- OpenCut alignment:
+  - Added draggable Media inventory entries for image/video project assets.
+  - Added `addSmartEditTimelineMediaElement` so dropped image/video assets become independent timeline elements on a `media-video` track.
+  - Added drag-over/drop handling on the multi-track timeline and a green drop indicator aligned to the snapped timeline second.
+  - Added a draggable timeline panel resize handle and persisted the timeline height in `localStorage`.
+- High-risk module evaluation:
+  - Wrote `projects/shopclip-ai/decisions/2026-06-07-opencut-core-renderer-wasm-evaluation.md`.
+  - Decision: do not introduce OpenCut `EditorCore`, CanvasRenderer, or WASM/export stack now; keep backend ffmpeg export and continue gap-fill modularization.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "dragged media asset|OpenCut-aligned editor workspace"` passed: 2 focused tests.
+  - `corepack pnpm --filter @shopclip/web build` passed. Build output: `index-DcHjq0Jj.css` and `index-DZ-OJjrk.js`.
   - `corepack pnpm --filter @shopclip/web build`
   - `corepack pnpm --filter @shopclip/api lint`
   - `corepack pnpm --filter @shopclip/web lint`
@@ -2373,3 +2428,22 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - When a project studio render finishes while the user is in the render step, the UI now switches directly to the edit step with the timeline already populated.
 - Verification:
   - `corepack pnpm --filter @shopclip/web typecheck`
+
+## 2026-06-07 Smart Edit Layout Visibility Batch
+
+- Scope:
+  - Fixes the standalone Smart Edit workspace being over-compressed so panels, inspector controls, preview, and timeline can disappear or become unreadable.
+  - Keeps the OpenCut-inspired three-zone editor layout on desktop while allowing local panel scrolling and page scrolling instead of hiding overflow.
+- Fix:
+  - Changed the standalone editor page from fixed `100dvh` with hidden overflow to a minimum-height page with vertical scrolling and bottom padding for the floating background task bar.
+  - Reworked the Smart Edit panel grid rows so the resize handle and timeline occupy separate rows instead of forcing the timeline into the main workspace row.
+  - Added usable desktop minimums for the media bin, preview, inspector, and timeline, with internal scrolling for media/inspector/timeline content.
+  - Reduced the persisted timeline panel default from `310px` to `250px` and clamped user resizing to `190px..360px` so the timeline cannot consume the editor viewport.
+  - Added a narrow-screen standalone editor fallback that stacks the three work areas vertically instead of squeezing all columns into unreadable widths.
+  - Hardened `listProjects()` so a malformed or missing project list response returns `[]` instead of crashing the production project page while checking the build preview.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Production preview smoke at `http://127.0.0.1:4175/` loaded without page errors after the `listProjects()` guard.
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

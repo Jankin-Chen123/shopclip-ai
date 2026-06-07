@@ -58,6 +58,7 @@ const getText = (language: Language) =>
         portfolioSubtitle: "每张卡片代表一个商品项目，进入后管理素材、剧本和视频。",
         openProject: "打开项目工作区",
         createProject: "新建项目",
+        searchPlaceholder: "搜索产品名称或品牌",
         loading: "项目加载中",
         emptyTitle: "还没有项目",
         emptyBody: "先创建一个商品项目，再导入素材并生成短视频。",
@@ -87,6 +88,7 @@ const getText = (language: Language) =>
           "Each card represents one product project with its materials, scripts, and videos.",
         openProject: "Open project workspace",
         createProject: "Create project",
+        searchPlaceholder: "Search product name or brand",
         loading: "Loading projects",
         emptyTitle: "No projects yet",
         emptyBody: "Create a product project, then import materials and generate short videos.",
@@ -386,6 +388,10 @@ export const ProjectWorkspace = ({
             {error}
           </p>
         ) : null}
+        <label className="project-search">
+          <span>{text.searchPlaceholder}</span>
+          <input placeholder={text.searchPlaceholder} type="search" />
+        </label>
         {projectHistory.length > 0 ? (
           <div className="project-card-grid">
             {projectHistory.map((historyProject, index) => {
