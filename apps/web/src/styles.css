@@ -4785,9 +4785,10 @@ textarea {
 }
 
 .smart-edit-standalone-page {
-  height: 100dvh;
+  min-height: 100dvh;
   gap: 10px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 12px;
 }
 
@@ -4813,10 +4814,10 @@ textarea {
 
 .smart-edit-standalone-page .smart-edit-panel {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) minmax(132px, 0.34fr);
+  grid-template-rows: auto auto auto minmax(420px, auto) auto;
   gap: 8px;
-  height: calc(100dvh - 108px);
-  overflow: hidden;
+  min-height: calc(100dvh - 108px);
+  overflow: visible;
   padding: 10px;
 }
 
@@ -4867,8 +4868,8 @@ textarea {
   grid-template-columns: minmax(200px, 245px) minmax(420px, 1fr) minmax(280px, 330px);
   gap: 10px;
   align-items: stretch;
-  min-height: 0;
-  overflow: hidden;
+  min-height: min(520px, calc(100dvh - 330px));
+  overflow: visible;
 }
 
 .smart-edit-standalone-page .smart-edit-bin,
@@ -4881,7 +4882,7 @@ textarea {
 
 .smart-edit-standalone-page .smart-edit-bin,
 .smart-edit-standalone-page .smart-edit-inspector {
-  height: 100%;
+  height: auto;
   max-height: none;
   overflow: auto;
 }
@@ -4912,7 +4913,7 @@ textarea {
 .smart-edit-standalone-page .smart-edit-preview {
   display: grid;
   grid-template-rows: auto minmax(0, 0.74fr) auto minmax(0, 1fr);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .smart-edit-standalone-page .smart-edit-preview video {
@@ -4971,7 +4972,7 @@ textarea {
 .smart-edit-standalone-page .smart-edit-track-stack {
   display: grid;
   gap: 6px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .smart-edit-standalone-page .smart-edit-track-row,
