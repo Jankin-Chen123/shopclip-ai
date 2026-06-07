@@ -5073,7 +5073,7 @@ textarea {
   box-shadow: none;
 }
 
-.smart-edit-standalone-header span {
+.smart-edit-standalone-header > span {
   display: none;
 }
 
