@@ -260,7 +260,7 @@ const owningVideoElementForTimelineElement = (
 
 const planWithPersistentVideoElementSegments = (plan: SmartEditPlan): SmartEditPlan => {
   const videoElements = persistentVideoTimelineElements(plan);
-  if (videoElements.length <= 1) {
+  if (videoElements.length === 0) {
     return plan;
   }
 

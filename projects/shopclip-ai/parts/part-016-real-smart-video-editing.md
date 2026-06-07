@@ -2241,3 +2241,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts`
+
+## 2026-06-07 Single Materialized Scene Export Batch
+
+- Scope:
+  - Backend export consistency fix for the rendered-scene materialization workflow.
+  - Ensures the smart edit ffmpeg composer can export a timeline after the user materializes only one rendered scene.
+- Fix:
+  - Updated `planWithPersistentVideoElementSegments` so one independent video timeline material is enough to become the executable export segment.
+  - This preserves the intended materialized-scene behavior where the original derived segment is disabled to avoid duplicate output.
+  - Adjusted the existing persistent-timeline bridge test to the corrected single-video conversion behavior.
+  - Added a regression test covering one materialized video/audio/text timeline group with the original segment disabled.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`
+  - `git diff --check -- apps/api/src/providers/renderer/smartEditComposer.ts apps/api/src/providers/renderer/smartEditComposer.test.ts`

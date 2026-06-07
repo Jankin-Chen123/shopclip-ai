@@ -435,7 +435,7 @@ describe("smart edit composer", () => {
     await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("0:00:01.00,0:00:02.10");
 
     const sourceAudioCommand = commands.find((entry) =>
-      entry.args.some((arg) => arg.endsWith("source-audio-segment-video-padded.wav")),
+      entry.args.some((arg) => arg.endsWith("source-audio-persisted-video-padded.wav")),
     );
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
     expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=750:all=1");
@@ -538,6 +538,127 @@ describe("smart edit composer", () => {
     expect(
       commands.some((entry) => entry.args.some((arg) => arg.endsWith("timeline-gap-2.mp4"))),
     ).toBe(true);
+  });
+
+  it("renders a single materialized scene timeline element when its original segment is disabled", async () => {
+    const exportRoot = await makeWorkdir();
+    process.env.RENDER_EXPORT_DIR = exportRoot;
+    const { composeSmartEditToStorage } = await import("./smartEditComposer.js");
+    const { storageProvider } = createStorageProvider();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const plan = createPlan();
+    plan.segments = [
+      {
+        ...plan.segments[0]!,
+        enabled: false,
+        source: {
+          endSecond: 5,
+          kind: "generated-scene-clip",
+          sceneClipAudioUrl: dataAudio,
+          sceneClipUrl: dataVideo,
+          sceneClipVideoOnlyUrl: dataVideo,
+          startSecond: 1,
+        },
+      },
+    ];
+    plan.targetDurationSeconds = 3;
+    plan.timeline = {
+      scale: 1,
+      durationSeconds: 3,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "audio-source", kind: "audio", label: "Source audio", locked: false, muted: false },
+        { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: false,
+          durationSeconds: 3,
+          hidden: false,
+          id: "video-materialized-one",
+          kind: "video",
+          label: "Materialized video",
+          linkedGroupId: "materialized-one",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          sourceUrl: dataVideo,
+          startSecond: 0,
+          trackId: "video-main",
+          trimEndSecond: 4,
+          trimStartSecond: 1,
+        },
+        {
+          audioFadeInSeconds: 0.2,
+          audioFadeOutSeconds: 0.3,
+          audioVolume: 0.7,
+          detachedAudio: true,
+          durationSeconds: 3,
+          hidden: false,
+          id: "audio-materialized-one",
+          kind: "audio",
+          label: "Materialized audio",
+          linkedGroupId: "materialized-one",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          sourceUrl: dataAudio,
+          startSecond: 0,
+          trackId: "audio-source",
+          trimEndSecond: 4,
+          trimStartSecond: 1,
+        },
+        {
+          detachedAudio: false,
+          durationSeconds: 2.5,
+          hidden: false,
+          id: "text-materialized-one",
+          kind: "text",
+          label: "Materialized caption",
+          muted: false,
+          playbackRate: 1,
+          sceneId: "scene-1",
+          startSecond: 0.25,
+          text: "Materialized caption",
+          trackId: "text-copy",
+        },
+      ],
+    };
+
+    const result = await composeSmartEditToStorage("project-smart-edit", plan, assets, {
+      command: "ffmpeg-test",
+      storageProvider,
+      ttsCommand: "espeak-test",
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        await writeCommandOutput(args, `output:${commands.length}`);
+      },
+    });
+
+    expect(result.segmentOutputs.map((output) => output.segmentId)).toEqual([
+      "video-materialized-one",
+    ]);
+    const rawVideoCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("video-materialized-one-raw.mp4")),
+    );
+    expect(rawVideoCommand?.args).toEqual(expect.arrayContaining(["-ss", "1", "-t", "3"]));
+
+    const subtitleCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.includes("video-materialized-one.ass")),
+    );
+    const subtitlePath = subtitleCommand?.args
+      .find((arg) => arg.includes("video-materialized-one.ass"))
+      ?.match(/filename='([^']+)'/)?.[1]
+      ?.replace(/\\:/gu, ":");
+    expect(subtitlePath).toBeTruthy();
+    await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("Materialized caption");
+
+    const sourceAudioCommand = commands.find((entry) =>
+      entry.args.some((arg) => arg.endsWith("source-audio-video-materialized-one-padded.wav")),
+    );
+    expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:4");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("volume=0.700");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:3");
   });
 
   it("keeps derived timeline video elements segment-backed", async () => {
