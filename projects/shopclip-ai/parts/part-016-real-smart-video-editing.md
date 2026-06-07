@@ -2310,3 +2310,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
   - `apps/web/node_modules/.bin/vitest.CMD run src/app/App.test.tsx -t "materializes rendered scene captions with timeline text styles"`
   - Note: full `apps/web/src/app/App.test.tsx` currently has two unrelated legacy UI text assertion failures (`Search product name or brand`, `Complete required fields`); the new focused Smart Edit test passes.
+
+## 2026-06-07 Default Render Audio Batch
+
+- Scope:
+  - Aligns the server-side video model provider with the product requirement that rendered scene clips include audio by default.
+  - Keeps ffmpeg materialization useful without relying on the web client to always send `generateAudio: true`.
+- Fix:
+  - Changed Seedance provider default video settings so `generate_audio` defaults to `true` unless `AI_VIDEO_GENERATE_AUDIO=false` is explicitly configured.
+  - Updated the Seedance provider regression test to assert no-request-settings renders submit `generate_audio: true`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/seedanceRenderer.test.ts`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/sceneClipMaterializer.test.ts`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`

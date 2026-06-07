@@ -145,7 +145,7 @@ describe("Seedance renderer provider", () => {
       ratio: "9:16",
       resolution: "720p",
       duration: 4,
-      generate_audio: false,
+      generate_audio: true,
       watermark: false,
     });
     expect(requestBody.content[0].type).toBe("text");

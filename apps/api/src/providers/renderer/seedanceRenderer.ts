@@ -122,7 +122,7 @@ const getSeedanceConfig = (): SeedanceConfig | undefined => {
 const getDefaultVideoSettings = (): SeedanceVideoSettings => ({
   ratio: parseRatioEnv(),
   resolution: parseResolutionEnv(),
-  generateAudio: parseBooleanEnv("AI_VIDEO_GENERATE_AUDIO", false),
+  generateAudio: parseBooleanEnv("AI_VIDEO_GENERATE_AUDIO", true),
   watermark: parseBooleanEnv("AI_VIDEO_WATERMARK", false),
   seed: parseNumberEnv("AI_VIDEO_SEED"),
 });
