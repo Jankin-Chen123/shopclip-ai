@@ -32,6 +32,12 @@
   --danger: #fb7185;
   --shadow-strong: 0 24px 72px rgba(0, 0, 0, 0.38);
   --shadow-soft: 0 18px 46px rgba(0, 0, 0, 0.24);
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1.2);
+  --interactive-glow: 0 18px 42px rgba(236, 72, 153, 0.18), 0 0 0 1px rgba(34, 211, 238, 0.08);
 }
 
 * {
@@ -7697,4 +7703,317 @@ a,
 .project-detail-tabs button:hover,
 .project-studio-flow-item:hover {
   color: #bae6fd;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popover-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes task-progress-shine {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(110%);
+  }
+}
+
+.workspace-page {
+  animation: page-enter var(--motion-slow) var(--ease-standard);
+  will-change: opacity, transform;
+}
+
+.button,
+.nav-list a,
+.sidebar-footer,
+.flow-tabs button,
+.asset-browser-tabs button,
+.creation-stepper button,
+.project-detail-tabs button,
+.settings-language-options button,
+.settings-segmented-control button,
+.project-studio-flow-item,
+.asset-prep-upload,
+.asset-prep-library-button,
+.asset-import-button,
+.project-card,
+.page-card,
+.project-history-item,
+.asset-card,
+.external-asset-card,
+.asset-search-result,
+.scene-card,
+.project-library-card,
+.project-script-card,
+.project-studio-script-card,
+.project-video-card,
+.background-task-trigger,
+.background-task-item {
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    background var(--motion-normal) var(--ease-standard),
+    border-color var(--motion-normal) var(--ease-standard),
+    box-shadow var(--motion-normal) var(--ease-standard),
+    opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-emphasis);
+}
+
+.button:hover:not(:disabled),
+.nav-list a:hover,
+.sidebar-footer:hover,
+.flow-tabs button:hover,
+.asset-browser-tabs button:hover,
+.creation-stepper button:hover,
+.project-detail-tabs button:hover,
+.settings-language-options button:hover,
+.settings-segmented-control button:hover,
+.project-studio-flow-item:hover {
+  transform: translateY(-1px);
+}
+
+.button:active:not(:disabled),
+.nav-list a:active,
+.sidebar-footer:active,
+.flow-tabs button:active,
+.asset-browser-tabs button:active,
+.creation-stepper button:active,
+.project-detail-tabs button:active,
+.settings-language-options button:active,
+.settings-segmented-control button:active,
+.project-studio-flow-item:active,
+.asset-import-button:active,
+.asset-prep-library-button:active,
+.background-task-trigger:active,
+.background-task-item:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.button-primary:hover:not(:disabled),
+.concept-top-cta:hover:not(:disabled),
+.creation-main .button-primary:hover:not(:disabled) {
+  box-shadow:
+    0 20px 48px rgba(236, 72, 153, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.button-secondary:hover:not(:disabled),
+.button-ghost:hover:not(:disabled),
+.button-danger:hover:not(:disabled) {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
+}
+
+.nav-list a:hover,
+.sidebar-footer:hover,
+.flow-tabs button:hover,
+.asset-browser-tabs button:hover,
+.creation-stepper button:hover,
+.project-detail-tabs button:hover,
+.settings-language-options button:hover,
+.settings-segmented-control button:hover {
+  border-color: rgba(34, 211, 238, 0.38);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+}
+
+.nav-list a.active,
+.sidebar-footer.active,
+.flow-tabs button.active,
+.asset-browser-tabs button.active,
+.creation-stepper button.active,
+.project-detail-tabs button.active,
+.settings-language-options button.active,
+.settings-segmented-control button.active,
+.project-studio-flow-item.active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 36px rgba(236, 72, 153, 0.16);
+}
+
+.page-card:hover,
+.project-card:hover,
+.project-card:focus-visible,
+.project-history-item:hover,
+.asset-card:hover,
+.external-asset-card:hover,
+.asset-search-result:hover,
+.scene-card:hover,
+.project-library-card:hover,
+.project-script-card:hover,
+.project-script-card:focus-visible,
+.project-studio-script-card:hover,
+.project-studio-script-card:focus-visible,
+.project-video-card:hover,
+.project-video-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--interactive-glow);
+}
+
+.asset-card.is-selected,
+.external-asset-card.is-selected,
+.scene-card.selected,
+.project-history-item.active,
+.project-script-card.active,
+.project-studio-script-card.active {
+  box-shadow:
+    var(--interactive-glow),
+    inset 0 0 0 1px rgba(236, 72, 153, 0.18);
+}
+
+.asset-card-frame,
+.asset-prep-thumb-media,
+.asset-prep-library-preview-frame,
+.project-card-media,
+.project-video-preview video {
+  transition:
+    border-color var(--motion-normal) var(--ease-standard),
+    box-shadow var(--motion-normal) var(--ease-standard),
+    filter var(--motion-normal) var(--ease-standard),
+    transform var(--motion-normal) var(--ease-standard);
+}
+
+.asset-card:hover .asset-card-frame,
+.project-card:hover .project-card-media,
+.project-video-card:hover .project-video-preview video,
+.asset-prep-card:hover .asset-prep-thumb-media {
+  filter: saturate(1.08) contrast(1.03);
+  transform: scale(1.012);
+}
+
+.asset-prep-upload:hover,
+.asset-prep-upload:focus-within,
+.asset-prep-library-button:hover,
+.asset-prep-library-button:focus-visible,
+.asset-import-button:hover,
+.asset-import-button:focus-visible {
+  border-color: rgba(34, 211, 238, 0.64);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.24),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.12);
+  transform: translateY(-2px);
+}
+
+.background-task-trigger:hover,
+.background-task-trigger:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(34, 211, 238, 0.16) inset;
+}
+
+.background-task-popover {
+  transform-origin: top right;
+  animation: popover-enter var(--motion-normal) var(--ease-standard);
+}
+
+.background-task-trigger-progress,
+.background-task-item-running .background-task-progress {
+  position: relative;
+}
+
+.background-task-trigger-progress::after,
+.background-task-item-running .background-task-progress::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.32), transparent);
+  animation: task-progress-shine 1.35s linear infinite;
+}
+
+.background-task-item:hover,
+.background-task-item:focus-visible {
+  transform: translateX(-2px);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+input,
+textarea,
+select {
+  transition:
+    background var(--motion-normal) var(--ease-standard),
+    border-color var(--motion-normal) var(--ease-standard),
+    box-shadow var(--motion-normal) var(--ease-standard);
+}
+
+input:hover,
+textarea:hover,
+select:hover {
+  border-color: rgba(203, 213, 225, 0.34);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(34, 211, 238, 0.56);
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 238, 0.12),
+    0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.skip-link,
+.project-modal,
+.asset-detail-popover,
+.project-card-name-editor input {
+  transition:
+    opacity var(--motion-normal) var(--ease-standard),
+    transform var(--motion-normal) var(--ease-standard),
+    border-color var(--motion-normal) var(--ease-standard),
+    box-shadow var(--motion-normal) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-page,
+  .background-task-popover,
+  .background-task-trigger-progress::after,
+  .background-task-item-running .background-task-progress::after {
+    animation: none !important;
+  }
+
+  .button,
+  .nav-list a,
+  .sidebar-footer,
+  .flow-tabs button,
+  .asset-browser-tabs button,
+  .creation-stepper button,
+  .project-detail-tabs button,
+  .settings-language-options button,
+  .settings-segmented-control button,
+  .project-studio-flow-item,
+  .asset-prep-upload,
+  .asset-prep-library-button,
+  .asset-import-button,
+  .project-card,
+  .page-card,
+  .project-history-item,
+  .asset-card,
+  .external-asset-card,
+  .asset-search-result,
+  .scene-card,
+  .project-library-card,
+  .project-script-card,
+  .project-studio-script-card,
+  .project-video-card,
+  .background-task-trigger,
+  .background-task-item {
+    transform: none !important;
+  }
 }
