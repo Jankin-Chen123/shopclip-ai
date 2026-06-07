@@ -592,6 +592,11 @@ a {
   gap: 8px;
   width: min(360px, calc(100vw - 36px));
   pointer-events: none;
+  user-select: none;
+}
+
+.background-task-bar.is-dragging {
+  cursor: grabbing;
 }
 
 .background-task-trigger,
@@ -616,7 +621,12 @@ a {
     linear-gradient(135deg, rgba(34, 211, 238, 0.14), rgba(236, 72, 153, 0.12)),
     rgba(10, 14, 24, 0.94);
   box-shadow: var(--shadow-soft);
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+}
+
+.background-task-trigger:active {
+  cursor: grabbing;
 }
 
 .background-task-trigger:hover,

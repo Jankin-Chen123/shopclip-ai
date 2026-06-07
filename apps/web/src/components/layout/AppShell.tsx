@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -307,6 +307,21 @@ const BackgroundTaskBar = ({
   tasks: BackgroundTaskItem[];
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | undefined>();
+  const dragStateRef = useRef<
+    | {
+        height: number;
+        offsetX: number;
+        offsetY: number;
+        startX: number;
+        startY: number;
+        width: number;
+      }
+    | undefined
+  >(undefined);
+  const didDragRef = useRef(false);
+  const latestPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
+  const taskBarRef = useRef<HTMLDivElement | null>(null);
   const runningTasks = tasks.filter((task) => task.status === "running");
 
   const runningCount = runningTasks.length;
@@ -338,13 +353,150 @@ const BackgroundTaskBar = ({
           running: "Running",
         };
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const fallbackWidth = Math.min(360, Math.max(260, window.innerWidth - 36));
+    const fallbackPosition = {
+      x: Math.max(12, window.innerWidth - fallbackWidth - 18),
+      y: 18,
+    };
+
+    try {
+      const storedPosition = window.localStorage.getItem("shopclip-background-task-position");
+      if (storedPosition) {
+        const parsedPosition = JSON.parse(storedPosition) as { x?: unknown; y?: unknown };
+        if (typeof parsedPosition.x === "number" && typeof parsedPosition.y === "number") {
+          setPosition({
+            x: Math.max(8, Math.min(window.innerWidth - 80, parsedPosition.x)),
+            y: Math.max(8, Math.min(window.innerHeight - 52, parsedPosition.y)),
+          });
+          return;
+        }
+      }
+    } catch {
+      // Ignore invalid persisted positions and fall back to the default top-right placement.
+    }
+
+    setPosition(fallbackPosition);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !position) {
+      return;
+    }
+
+    const handleResize = () => {
+      const rect = taskBarRef.current?.getBoundingClientRect();
+      const width = rect?.width ?? 260;
+      const height = rect?.height ?? 60;
+      setPosition((current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          x: Math.max(8, Math.min(window.innerWidth - width - 8, current.x)),
+          y: Math.max(8, Math.min(window.innerHeight - height - 8, current.y)),
+        };
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [position]);
+
+  const persistPosition = (nextPosition: { x: number; y: number }) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem("shopclip-background-task-position", JSON.stringify(nextPosition));
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const rect = taskBarRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+
+    dragStateRef.current = {
+      height: rect.height,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      startX: event.clientX,
+      startY: event.clientY,
+      width: rect.width,
+    };
+    didDragRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || typeof window === "undefined") {
+      return;
+    }
+
+    const nextPosition = {
+      x: Math.max(8, Math.min(window.innerWidth - dragState.width - 8, event.clientX - dragState.offsetX)),
+      y: Math.max(8, Math.min(window.innerHeight - dragState.height - 8, event.clientY - dragState.offsetY)),
+    };
+    didDragRef.current =
+      didDragRef.current ||
+      Math.abs(event.clientX - dragState.startX) > 3 ||
+      Math.abs(event.clientY - dragState.startY) > 3;
+    latestPositionRef.current = nextPosition;
+    setPosition(nextPosition);
+  };
+
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragStateRef.current = undefined;
+    const latestPosition = latestPositionRef.current ?? position;
+    if (latestPosition) {
+      persistPosition(latestPosition);
+    }
+    window.setTimeout(() => {
+      didDragRef.current = false;
+    }, 0);
+  };
+
   return (
-    <div className={`background-task-bar ${isOpen ? "is-open" : ""}`}>
+    <div
+      className={`background-task-bar ${isOpen ? "is-open" : ""} ${dragStateRef.current ? "is-dragging" : ""}`}
+      onPointerCancel={handlePointerEnd}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      ref={taskBarRef}
+      style={
+        position
+          ? {
+              bottom: "auto",
+              left: `${position.x}px`,
+              right: "auto",
+              top: `${position.y}px`,
+            }
+          : undefined
+      }
+    >
       <button
         aria-expanded={isOpen}
         aria-label={copyText.buttonLabel}
         className="background-task-trigger"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => {
+          if (didDragRef.current) {
+            return;
+          }
+          setIsOpen((current) => !current);
+        }}
         type="button"
       >
         <span className={`background-task-indicator ${runningCount > 0 ? "is-running" : ""}`}>
