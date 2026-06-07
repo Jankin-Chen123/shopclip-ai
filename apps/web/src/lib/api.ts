@@ -107,7 +107,19 @@ export interface AssetRecallCandidate {
 export type UserApiConfig = NonNullable<InspirationGenerateRequest["apiConfig"]>;
 export type StockProviderConfig = ExternalAssetProviderConfig;
 
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
+const apiBaseUrl = (
+  import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:4000/api" : "/api")
+).replace(/\/+$/u, "");
+
+const absoluteApiBaseUrl = (): string => {
+  const baseWithSlash = `${apiBaseUrl}/`;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(baseWithSlash)) {
+    return baseWithSlash;
+  }
+  const origin =
+    typeof window === "undefined" ? "http://localhost:4000" : window.location.origin;
+  return new URL(baseWithSlash, origin).toString();
+};
 
 export const getAssetContentUrl = (assetId: string): string =>
   `${apiBaseUrl}/assets/${encodeURIComponent(assetId)}/content`;
@@ -116,7 +128,7 @@ export const resolveApiDownloadUrl = (url: string): string => {
   if (/^[a-z][a-z0-9+.-]*:/i.test(url)) {
     return url;
   }
-  return new URL(url, apiBaseUrl).toString();
+  return new URL(url, absoluteApiBaseUrl()).toString();
 };
 
 const parseResponseBody = async (response: Response): Promise<unknown> => {
