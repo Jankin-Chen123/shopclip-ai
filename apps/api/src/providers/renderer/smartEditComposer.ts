@@ -398,6 +398,10 @@ const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartE
         nextSegment.sourceAudioVolume = sourceAudioElement.audioVolume ?? segment.sourceAudioVolume;
         nextSegment.sourceAudioVolumeKeyframes =
           sourceAudioElement.audioVolumeKeyframes ?? segment.sourceAudioVolumeKeyframes;
+        nextSegment.sourceAudioFadeInSeconds =
+          sourceAudioElement.audioFadeInSeconds ?? segment.sourceAudioFadeInSeconds;
+        nextSegment.sourceAudioFadeOutSeconds =
+          sourceAudioElement.audioFadeOutSeconds ?? segment.sourceAudioFadeOutSeconds;
         nextSegment.source = {
           ...nextSegment.source,
           ...(sourceAudioElement.sourceUrl ? { sceneClipAudioUrl: sourceAudioElement.sourceUrl } : {}),
@@ -412,6 +416,9 @@ const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartE
           nextSegment,
         );
         nextSegment.captionDurationSeconds = captionElement.durationSeconds;
+        nextSegment.captionTextColor = captionElement.textColor;
+        nextSegment.captionTextFontSize = captionElement.textFontSize;
+        nextSegment.captionTextPositionYPercent = captionElement.textPositionYPercent;
         nextSegment.subtitle = captionElement.text?.trim() || captionElement.label || segment.subtitle;
       }
 
@@ -425,6 +432,10 @@ const planWithPersistentTimelineElementOverrides = (plan: SmartEditPlan): SmartE
         nextSegment.voiceoverVolume = voiceElement.audioVolume ?? segment.voiceoverVolume;
         nextSegment.voiceoverVolumeKeyframes =
           voiceElement.audioVolumeKeyframes ?? segment.voiceoverVolumeKeyframes;
+        nextSegment.voiceoverFadeInSeconds =
+          voiceElement.audioFadeInSeconds ?? segment.voiceoverFadeInSeconds;
+        nextSegment.voiceoverFadeOutSeconds =
+          voiceElement.audioFadeOutSeconds ?? segment.voiceoverFadeOutSeconds;
         nextSegment.voiceover = voiceElement.text?.trim() || voiceElement.label || segment.voiceover;
       }
 
@@ -1167,10 +1178,16 @@ const createSegmentVideo = async ({
   await writeFile(
     subtitleAssPath,
     buildSubtitleAss(subtitleText, {
+      color: segment.captionTextColor,
       endSecond: Math.min(normalizeDuration(segment), captionStartSecond + captionDurationSeconds),
-      fontSize: Math.max(24, Math.round(dimensions.height * (42 / 1280))),
+      fontSize:
+        segment.captionTextFontSize ??
+        Math.max(24, Math.round(dimensions.height * (42 / 1280))),
       height: dimensions.height,
-      marginV: Math.max(48, Math.round(dimensions.height * (96 / 1280))),
+      marginV:
+        segment.captionTextPositionYPercent === undefined
+          ? Math.max(48, Math.round(dimensions.height * (96 / 1280)))
+          : Math.max(0, Math.round(dimensions.height * (segment.captionTextPositionYPercent / 100))),
       startSecond: captionStartSecond,
       width: dimensions.width,
     }),

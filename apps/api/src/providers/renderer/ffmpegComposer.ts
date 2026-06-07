@@ -60,6 +60,17 @@ const escapeAssText = (text: string): string =>
     .replace(/[{}]/gu, "")
     .trim();
 
+const cssHexColorToAss = (color: string | undefined): string => {
+  const normalized = color?.trim().match(/^#([0-9a-fA-F]{6})$/u)?.[1];
+  if (!normalized) {
+    return "&H00FFFFFF";
+  }
+  const red = normalized.slice(0, 2);
+  const green = normalized.slice(2, 4);
+  const blue = normalized.slice(4, 6);
+  return `&H00${blue}${green}${red}`.toUpperCase();
+};
+
 const subtitleFontFamily = (): string =>
   process.env.FFMPEG_SUBTITLE_FONT_FAMILY?.trim() ||
   process.env.RENDER_SUBTITLE_FONT_FAMILY?.trim() ||
@@ -80,6 +91,7 @@ export const buildSubtitleFilter = (subtitleAssPath: string): string => {
 export const buildSubtitleAss = (
   subtitle: string,
   options: {
+    color?: string;
     endSecond?: number;
     fontSize?: number;
     height?: number;
@@ -112,7 +124,7 @@ export const buildSubtitleAss = (
     "",
     "[V4+ Styles]",
     "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    `Style: Default,${subtitleFontFamily()},${fontSize},&H00FFFFFF,&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},0`,
+    `Style: Default,${subtitleFontFamily()},${fontSize},${cssHexColorToAss(options.color)},&H000000FF,&HDD000000,&H99000000,0,0,0,0,100,100,0,0,3,3,0,2,48,48,${marginV},0`,
     "",
     "[Events]",
     "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",

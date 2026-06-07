@@ -407,6 +407,9 @@ describe("smart edit composer", () => {
           segmentId: "segment-video",
           startSecond: 1.5,
           text: "Timeline caption",
+          textColor: "#112233",
+          textFontSize: 50,
+          textPositionYPercent: 20,
           trackId: "text-copy",
           trimStartSecond: 0,
         },
@@ -433,11 +436,17 @@ describe("smart edit composer", () => {
     expect(subtitlePath).toBeTruthy();
     await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("Timeline caption");
     await expect(readFile(subtitlePath!, "utf8")).resolves.toContain("0:00:01.00,0:00:02.10");
+    await expect(readFile(subtitlePath!, "utf8")).resolves.toContain(
+      "Style: Default,Noto Sans CJK SC,50,&H00332211",
+    );
+    await expect(readFile(subtitlePath!, "utf8")).resolves.toContain(",48,48,256,0");
 
     const sourceAudioCommand = commands.find((entry) =>
       entry.args.some((arg) => arg.endsWith("source-audio-persisted-video-padded.wav")),
     );
     expect(sourceAudioCommand?.args.join(" ")).toContain("atrim=1:2.5");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("afade=t=in:st=0:d=0.25");
+    expect(sourceAudioCommand?.args.join(" ")).toContain("afade=t=out:st=1.15:d=0.35");
     expect(sourceAudioCommand?.args.join(" ")).toContain("adelay=750:all=1");
     expect(sourceAudioCommand?.args.join(" ")).toContain("apad,atrim=0:4");
   });

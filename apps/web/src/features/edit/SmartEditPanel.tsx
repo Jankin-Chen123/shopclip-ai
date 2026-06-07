@@ -4916,6 +4916,9 @@ export const moveSmartEditTrackClipOnTimeline = (
               captionDurationSeconds: targetElement.durationSeconds,
               captionHidden: targetElement.hidden,
               captionStartOffsetSeconds: nextOffset,
+              captionTextColor: targetElement.textColor,
+              captionTextFontSize: targetElement.textFontSize,
+              captionTextPositionYPercent: targetElement.textPositionYPercent,
               subtitle: targetElement.text?.trim() || targetElement.label || segment.subtitle,
             };
           }

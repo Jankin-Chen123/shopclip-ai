@@ -2273,3 +2273,21 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
+
+## 2026-06-07 Timeline Export Field Coverage Batch
+
+- Scope:
+  - Backend export consistency fix for the video, audio, and subtitle editing demo.
+  - Ensures timeline material edits survive the persistent-element bridge before ffmpeg composition.
+- Fix:
+  - Added segment-level caption style fields for text color, font size, and vertical position to the shared Smart Edit schemas.
+  - Propagated source-audio fade in/out from persistent timeline audio elements into executable smart-edit segments.
+  - Propagated caption style fields from persistent timeline text elements into segment subtitle rendering.
+  - Propagated voiceover fade in/out from persistent timeline voice elements into executable smart-edit segments.
+  - Extended ASS subtitle generation so segment captions can render custom color and position, not only default lower-third styling.
+  - Kept web-side segment synchronization aligned when moving caption track clips on the timeline.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`
