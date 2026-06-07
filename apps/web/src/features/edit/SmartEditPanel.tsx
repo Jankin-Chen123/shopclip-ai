@@ -4243,6 +4243,89 @@ export const removeSmartEditTimelineElementsFromTimeline = (
   );
 };
 
+export const cutSmartEditTimelineElementsInRange = (
+  plan: SmartEditPlan,
+  range: { endSecond: number; startSecond: number },
+  elementIds?: string[],
+  editMode: SmartEditTimelineEditMode = "magnetic",
+  token = String(Date.now()),
+): SmartEditPlan => {
+  const baseTimeline = plan.timeline ?? buildSmartEditTimeline(plan);
+  const lockedTrackIds = new Set(
+    baseTimeline.tracks.filter((track) => track.locked).map((track) => track.id),
+  );
+  const explicitIds = elementIds && elementIds.length > 0
+    ? expandedPersistentTimelineElementIds(baseTimeline, elementIds)
+    : undefined;
+  const rangeStart = snapTimelineSeconds(Math.min(range.startSecond, range.endSecond));
+  const rangeEnd = snapTimelineSeconds(Math.max(range.startSecond, range.endSecond));
+  if (rangeEnd - rangeStart < MIN_SMART_EDIT_CLIP_SECONDS) {
+    return plan;
+  }
+  const removedGaps: SmartEditRippleGap[] = [];
+  let changed = false;
+  const nextElements = baseTimeline.elements.flatMap((element) => {
+    const elementEnd = snapTimelineSeconds(element.startSecond + element.durationSeconds);
+    const isEditableKind = element.kind === "audio" || element.kind === "text" || element.kind === "video";
+    const shouldCut =
+      isEditableKind &&
+      !isDerivedTimelineElement(element) &&
+      !lockedTrackIds.has(element.trackId) &&
+      (explicitIds ? explicitIds.has(element.id) : true) &&
+      intervalsOverlap(rangeStart, rangeEnd, element.startSecond, elementEnd);
+    if (!shouldCut) {
+      return [element];
+    }
+    const cutStart = Math.max(element.startSecond, rangeStart);
+    const cutEnd = Math.min(elementEnd, rangeEnd);
+    if (cutEnd - cutStart < MIN_SMART_EDIT_CLIP_SECONDS) {
+      return [element];
+    }
+    const retained: SmartEditTimelineElement[] = [];
+    const leftDuration = snapTimelineSeconds(cutStart - element.startSecond);
+    const rightDuration = snapTimelineSeconds(elementEnd - cutEnd);
+    if (leftDuration >= MIN_SMART_EDIT_CLIP_SECONDS) {
+      retained.push(...trimPersistentTimelineElementAtSecond(element, cutStart, "left"));
+    }
+    if (rightDuration >= MIN_SMART_EDIT_CLIP_SECONDS) {
+      retained.push(
+        ...trimPersistentTimelineElementAtSecond(element, cutEnd, "right").map((rightElement) => ({
+          ...rightElement,
+          id: `${element.id}-range-${token}`,
+          label: `${element.label} (range cut)`,
+        })),
+      );
+    }
+    changed = true;
+    return retained;
+  });
+  if (!changed) {
+    return plan;
+  }
+  const rippleGaps: SmartEditRippleGap[] = [
+    {
+      endSecond: rangeEnd,
+      startSecond: rangeStart,
+    },
+  ];
+  const rippledElements =
+    editMode === "ripple"
+      ? shiftTimelineElementsByRippleGaps(nextElements, rippleGaps)
+      : nextElements;
+  const nextSegments =
+    editMode === "ripple"
+      ? shiftSegmentsByRippleGaps(plan.segments, rippleGaps)
+      : plan.segments;
+  return withUpdatedTimelineElements(
+    {
+      ...plan,
+      segments: nextSegments,
+    },
+    rippledElements,
+    baseTimeline.tracks,
+  );
+};
+
 export const moveSmartEditTimelineElementsOnTimeline = (
   plan: SmartEditPlan,
   elementIds: string[],
@@ -7115,6 +7198,28 @@ export const SmartEditPanel = ({
     onSelectedSegmentChange(undefined);
   };
 
+  const cutTimelineMaterialsInPreviewRange = () => {
+    if (!plan || !normalizedPreviewRange) {
+      return;
+    }
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    const nextPlan = cutSmartEditTimelineElementsInRange(
+      plan,
+      normalizedPreviewRange,
+      selectedTimelineMaterialIds.length > 0 ? selectedTimelineMaterialIds : undefined,
+      timelineEditMode,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    commitPlanChange(nextPlan, { label: `Cut preview range (${timelineEditMode})` });
+    setSelectedTrackClipId(undefined);
+    setSelectedTrackClipIds([]);
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
+    setPlayheadAndSeekPreview(normalizedPreviewRange.startSecond);
+  };
+
   const alignSelectedTimelineMaterialsToPlayhead = (edge: "start" | "end") => {
     if (!plan) {
       return;
@@ -9571,6 +9676,13 @@ export const SmartEditPanel = ({
             onClick={selectTrackClipsInPreviewRange}
           >
             {copy.selectPreviewRange}
+          </Button>
+          <Button
+            disabled={!normalizedPreviewRange}
+            icon={<Scissors size={16} />}
+            onClick={cutTimelineMaterialsInPreviewRange}
+          >
+            {copy.cutPreviewRange}
           </Button>
           <Button
             disabled={previewRange.inSecond === undefined && previewRange.outSecond === undefined}

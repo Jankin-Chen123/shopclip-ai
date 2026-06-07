@@ -2210,3 +2210,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts apps/web/src/styles.css projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`
+
+## 2026-06-07 Preview Range Cut Batch
+
+- Scope:
+  - Builds on the preview In/Out range workflow for the narrowed video, audio, and subtitle editing demo.
+  - Adds a CutCap/OpenCut-style range deletion operation for independent timeline materials produced from rendered scene clips.
+- Fix:
+  - Added `cutSmartEditTimelineElementsInRange` to remove the selected preview range from unlocked independent video, audio, and subtitle/text timeline materials.
+  - Range cuts preserve material portions before and after the range; video/audio portions keep source trim offsets aligned with their original media.
+  - The timeline toolbar now exposes a Cut range action beside Select range.
+  - If independent materials are selected, the action cuts only those selected materials; otherwise it cuts all unlocked independent video/audio/text materials intersecting the preview range.
+  - Ripple mode shifts later timeline elements and segment starts by the removed preview range; other edit modes keep existing timeline positions.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts`
