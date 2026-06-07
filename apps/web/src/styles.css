@@ -305,6 +305,15 @@ a {
   padding: 24px;
 }
 
+.workspace-shell-immersive {
+  display: block;
+}
+
+.workspace-main-immersive {
+  min-height: 100dvh;
+  padding: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -4710,6 +4719,71 @@ textarea {
   gap: 18px;
 }
 
+.smart-edit-standalone-page {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 18px;
+  min-height: 100dvh;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(236, 72, 153, 0.1), transparent 34%),
+    linear-gradient(225deg, rgba(34, 211, 238, 0.08), transparent 46%),
+    #080a10;
+}
+
+.smart-edit-standalone-header {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(8, 12, 20, 0.86);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.smart-edit-standalone-header span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(34, 211, 238, 0.26);
+  border-radius: 6px;
+  color: #a7f3d0;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.smart-edit-standalone-header h1 {
+  margin: 10px 0 6px;
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+}
+
+.smart-edit-standalone-header p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.smart-edit-standalone-page .smart-edit-panel {
+  min-width: 0;
+  border-color: rgba(34, 211, 238, 0.18);
+  background:
+    linear-gradient(135deg, rgba(12, 18, 30, 0.92), rgba(8, 12, 20, 0.96)),
+    rgba(8, 12, 20, 0.94);
+}
+
+.smart-edit-standalone-page .smart-edit-heading > div:first-child {
+  display: none;
+}
+
+.smart-edit-standalone-page .smart-edit-heading {
+  justify-content: flex-end;
+}
+
 .smart-edit-heading {
   align-items: flex-start;
   display: flex;
@@ -6213,6 +6287,18 @@ textarea {
 
   .workspace-main {
     padding: 16px;
+  }
+
+  .workspace-main-immersive {
+    padding: 0;
+  }
+
+  .smart-edit-standalone-page {
+    padding: 14px;
+  }
+
+  .smart-edit-standalone-header {
+    display: grid;
   }
 
   .topbar,

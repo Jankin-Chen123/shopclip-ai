@@ -11,7 +11,6 @@ import {
   ListChecks,
   Loader2,
   Lightbulb,
-  Scissors,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -30,7 +29,10 @@ export type WorkspacePageId =
   | "dashboard";
 
 export type WorkspaceSectionId = "assets" | "inspiration" | "settings" | "create";
-export type CreationPageId = Exclude<WorkspacePageId, "assets" | "inspiration" | "settings">;
+export type CreationPageId = Exclude<
+  WorkspacePageId,
+  "assets" | "inspiration" | "settings" | "edit"
+>;
 
 export interface WorkspacePage {
   id: WorkspacePageId;
@@ -80,11 +82,6 @@ export const workspacePages: CreationWorkspacePage[] = [
     icon: Download,
   },
   {
-    id: "edit",
-    accent: "violet",
-    icon: Scissors,
-  },
-  {
     id: "dashboard",
     accent: "blue",
     icon: BarChart3,
@@ -119,6 +116,7 @@ interface AppShellProps {
   onBackgroundTaskOpen?: (task: BackgroundTaskItem) => void;
   onPageChange: (page: WorkspacePageId) => void;
   onSectionChange: (section: WorkspaceSectionId) => void;
+  immersivePage?: boolean;
   projectStudioMode?: boolean;
 }
 
@@ -129,6 +127,7 @@ export const AppShell = ({
   children,
   copy,
   language,
+  immersivePage = false,
   onBackgroundTaskOpen,
   onPageChange,
   onSectionChange,
@@ -165,10 +164,11 @@ export const AppShell = ({
   };
 
   return (
-    <div className="workspace-shell">
+    <div className={`workspace-shell ${immersivePage ? "workspace-shell-immersive" : ""}`.trim()}>
       <a className="skip-link" href="#workspace-content">
         {copy.app.skipLink}
       </a>
+      {!immersivePage ? (
       <aside className="sidebar" aria-label="Workspace navigation">
         <div className="brand">
           <span className="brand-icon" aria-hidden="true">
@@ -220,9 +220,10 @@ export const AppShell = ({
           <span>{getSectionText("settings").label}</span>
         </button>
       </aside>
+      ) : null}
 
-      <main className="workspace-main" id="workspace-content">
-        {showTopbar ? (
+      <main className={`workspace-main ${immersivePage ? "workspace-main-immersive" : ""}`.trim()} id="workspace-content">
+        {!immersivePage && showTopbar ? (
           <header className="topbar">
             {activeSection === "create" ? (
               <nav className="flow-tabs" aria-label="Creation workflow">
@@ -252,7 +253,7 @@ export const AppShell = ({
             )}
           </header>
         ) : null}
-        {activeSection === "create" && activePage !== "project" && !projectStudioMode ? (
+        {!immersivePage && activeSection === "create" && activePage !== "project" && !projectStudioMode ? (
           <nav className="creation-stepper" aria-label="Creation progress">
             {workspacePages.map((page, index) => {
               const Icon = page.icon;

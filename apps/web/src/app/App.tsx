@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Film, FileText, ListVideo } from "lucide-react";
+import { ArrowLeft, Download, Film, FileText, ListVideo } from "lucide-react";
 import type {
   AssetMetadata,
   AssetSlice,
@@ -344,7 +344,6 @@ const creationPageIds: CreationPageId[] = [
   "create",
   "studio",
   "delivery",
-  "edit",
   "dashboard",
 ];
 
@@ -1687,6 +1686,12 @@ export const App = ({
     setProjectDetailTab("videos");
     handlePageChange("project");
     refreshProjectHistory();
+  };
+
+  const handleBackToProjectVideoLibrary = () => {
+    setIsProjectStudioMode(false);
+    setProjectDetailTab("videos");
+    handlePageChange("project");
   };
 
   const handleProjectStudioFlowChange = (flow: ProjectStudioFlow) => {
@@ -3320,12 +3325,41 @@ export const App = ({
     handlePageChange(trackedTask.target.page);
   };
 
+  const smartEditPanel = (
+    <SmartEditPanel
+      assets={studioAssets}
+      assetSlices={smartEditAssetSlices}
+      copy={text.smartEdit}
+      disabled={!project || scenes.length === 0 || busyState !== "idle"}
+      error={errors.smartEdit}
+      instructions={smartEditInstructions}
+      isEditing={(busyState === "smart-edit" || isSmartEditTaskRunning) && !smartEditResult}
+      isRefreshing={
+        (busyState === "smart-edit" || isSmartEditTaskRunning) && Boolean(smartEditResult)
+      }
+      mediaSettings={mediaSettings}
+      renderTask={renderTask}
+      result={smartEditResult}
+      selectedSegmentId={selectedSmartEditSegmentId}
+      targetLanguage={smartEditTargetLanguage}
+      traceEvents={traceEvents}
+      onInstructionsChange={setSmartEditInstructions}
+      onMediaSettingsChange={setMediaSettings}
+      onPlanChange={handleSmartEditPlanChange}
+      onRefreshSegment={handleRefreshSmartEditSegment}
+      onSelectedSegmentChange={setSelectedSmartEditSegmentId}
+      onStartSmartEdit={handleStartSmartEdit}
+      onTargetLanguageChange={setSmartEditTargetLanguage}
+    />
+  );
+
   return (
     <AppShell
       activePage={activePage}
       activeSection={activeSection}
       backgroundTasks={backgroundTasks}
       copy={text}
+      immersivePage={activePage === "edit"}
       language={language}
       onBackgroundTaskOpen={handleOpenBackgroundTask}
       onPageChange={handlePageChange}
@@ -3710,34 +3744,6 @@ export const App = ({
                 />
               ) : null}
 
-              {activePage === "edit" ? (
-                <SmartEditPanel
-                  assets={studioAssets}
-                  assetSlices={smartEditAssetSlices}
-                  copy={text.smartEdit}
-                  disabled={!project || scenes.length === 0 || busyState !== "idle"}
-                  error={errors.smartEdit}
-                  instructions={smartEditInstructions}
-                  isEditing={(busyState === "smart-edit" || isSmartEditTaskRunning) && !smartEditResult}
-                  isRefreshing={
-                    (busyState === "smart-edit" || isSmartEditTaskRunning) && Boolean(smartEditResult)
-                  }
-                  mediaSettings={mediaSettings}
-                  renderTask={renderTask}
-                  result={smartEditResult}
-                  selectedSegmentId={selectedSmartEditSegmentId}
-                  targetLanguage={smartEditTargetLanguage}
-                  traceEvents={traceEvents}
-                  onInstructionsChange={setSmartEditInstructions}
-                  onMediaSettingsChange={setMediaSettings}
-                  onPlanChange={handleSmartEditPlanChange}
-                  onRefreshSegment={handleRefreshSmartEditSegment}
-                  onSelectedSegmentChange={setSelectedSmartEditSegmentId}
-                  onStartSmartEdit={handleStartSmartEdit}
-                  onTargetLanguageChange={setSmartEditTargetLanguage}
-                />
-              ) : null}
-
               {activePage === "dashboard" ? (
                 <DashboardPanel
                   copy={text.dashboard}
@@ -3749,6 +3755,30 @@ export const App = ({
                 />
               ) : null}
             </div>
+          </section>
+        ) : null}
+
+        {activePage === "edit" ? (
+          <section className="smart-edit-standalone-page" aria-label={text.smartEdit.title}>
+            <header className="smart-edit-standalone-header">
+              <div>
+                <span>{language === "zh" ? "\u72ec\u7acb\u526a\u8f91\u9875" : "Standalone editor"}</span>
+                <h1>{language === "zh" ? "\u667a\u80fd\u526a\u8f91" : "Smart edit"}</h1>
+                <p>
+                  {language === "zh"
+                    ? "\u4ece\u89c6\u9891\u5e93\u9009\u4e2d\u5355\u4e2a\u89c6\u9891\u540e\uff0c\u5728\u8fd9\u4e2a\u72ec\u7acb\u9875\u9762\u5b8c\u6210\u526a\u8f91\u3001\u9884\u89c8\u548c\u7247\u6bb5\u8c03\u6574\u3002"
+                    : "Edit, preview, and refine the selected video from the video library in this standalone workspace."}
+                </p>
+              </div>
+              <Button
+                icon={<ArrowLeft size={18} />}
+                onClick={handleBackToProjectVideoLibrary}
+                variant="secondary"
+              >
+                {language === "zh" ? "\u8fd4\u56de\u89c6\u9891\u5e93" : "Back to video library"}
+              </Button>
+            </header>
+            {smartEditPanel}
           </section>
         ) : null}
       </div>
