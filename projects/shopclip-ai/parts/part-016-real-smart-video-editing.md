@@ -2493,3 +2493,16 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-07 Project Library Modal Portal Centering Batch
+
+- Scope:
+  - Fixes project partition video-library preview dialogs and script-library detail dialogs still opening away from the viewport center after the CSS-only centering attempt.
+- Fix:
+  - Moved the shared `ProjectModal` render target to `document.body` through a React portal so animated or transformed workspace containers can no longer redefine the modal's fixed positioning context.
+  - Changed the project modal backdrop to a viewport-level grid centering layer and raised its z-index above floating workspace controls.
+  - Kept modal width and max-height constrained to the viewport so long content scrolls inside the centered dialog.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

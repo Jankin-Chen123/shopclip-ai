@@ -8544,9 +8544,10 @@ button.project-video-link {
 
 .project-modal-backdrop {
   position: fixed;
-  z-index: 80;
+  z-index: 120;
   inset: 0;
-  display: block;
+  display: grid;
+  place-items: center;
   overflow: auto;
   padding: 28px;
   background: rgba(0, 0, 0, 0.68);
@@ -8554,9 +8555,7 @@ button.project-video-link {
 }
 
 .project-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
+  position: relative;
   width: min(980px, calc(100vw - 56px));
   max-height: min(860px, calc(100dvh - 56px));
   overflow: auto;
@@ -8567,7 +8566,6 @@ button.project-video-link {
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 220px),
     var(--surface);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.46);
-  transform: translate(-50%, -50%);
 }
 
 .project-modal:has(.project-video-preview) {

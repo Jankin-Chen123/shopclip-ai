@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { ProjectBrief, ProjectSummary, RenderTask, ScriptResult } from "@shopclip/shared";
 import {
   ArrowLeft,
@@ -1062,13 +1063,17 @@ export const ProjectModal = ({
   children: ReactNode;
   onClose: () => void;
   title: string;
-}) => (
-  <div className="project-modal-backdrop" role="presentation">
-    <section className="project-modal" role="dialog" aria-modal="true" aria-label={title}>
-      <button aria-label="Close" className="project-modal-close" onClick={onClose} type="button">
-        <X size={18} aria-hidden="true" />
-      </button>
-      {children}
-    </section>
-  </div>
-);
+}) => {
+  const modal = (
+    <div className="project-modal-backdrop" role="presentation">
+      <section className="project-modal" role="dialog" aria-modal="true" aria-label={title}>
+        <button aria-label="Close" className="project-modal-close" onClick={onClose} type="button">
+          <X size={18} aria-hidden="true" />
+        </button>
+        {children}
+      </section>
+    </div>
+  );
+
+  return typeof document === "undefined" ? modal : createPortal(modal, document.body);
+};
