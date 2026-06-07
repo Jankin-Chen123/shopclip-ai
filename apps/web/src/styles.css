@@ -4995,6 +4995,46 @@ textarea {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.timeline-range-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--muted);
+  font-size: 0.76rem;
+  padding: 0 10px;
+}
+
+.timeline-range-label strong {
+  min-width: 0;
+  color: var(--text);
+}
+
+.timeline-preview-range,
+.smart-edit-preview-range {
+  position: absolute;
+  top: 28px;
+  bottom: 8px;
+  z-index: 1;
+  border-left: 1px solid rgba(59, 130, 246, 0.72);
+  border-right: 1px solid rgba(59, 130, 246, 0.72);
+  background: rgba(59, 130, 246, 0.08);
+  pointer-events: none;
+}
+
+.smart-edit-preview-range {
+  top: 0;
+  bottom: 0;
+}
+
+.smart-edit-preview-range-ruler {
+  top: 0;
+  bottom: 0;
+}
+
 .timeline-playhead {
   position: absolute;
   top: 0;

@@ -2194,3 +2194,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`
+
+## 2026-06-07 Timeline Preview Range Batch
+
+- Scope:
+  - Coherent preview-range workflow improvement for the narrowed video, audio, and subtitle editing demo.
+  - Adds In/Out range operations expected in CutCap/OpenCut-style editors before batch edits or focused playback.
+- Fix:
+  - Added preview-range state and normalization for the Smart Edit timeline.
+  - Added Set In / Set Out / Loop range / Select range / Clear range controls to the timeline toolbar.
+  - Added `I` and `O` keyboard shortcuts to set range points from the current playhead.
+  - Rendered the preview range on the storyboard timeline, ruler, and multi-track lanes.
+  - Preview playback starts from the range start when the playhead is outside the active range and loops inside the range when enabled.
+  - Selecting the range chooses unlocked video, audio, and subtitle clips that overlap the preview range.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts apps/web/src/styles.css projects/shopclip-ai/parts/part-016-real-smart-video-editing.md`

@@ -519,6 +519,15 @@ type SmartEditTimelineInterval = {
 
 type SmartEditTrackId = "video" | "caption" | "sourceAudio" | "voice" | "bgm";
 
+const smartEditTrackOrder = (trackId: SmartEditTrackId): number =>
+  ({
+    bgm: 4,
+    caption: 1,
+    sourceAudio: 2,
+    video: 0,
+    voice: 3,
+  })[trackId];
+
 const smartEditTrackIdForTimelineTrack = (
   track: Pick<SmartEditTimeline["tracks"][number], "id" | "kind">,
 ): SmartEditTrackId =>
@@ -2157,7 +2166,7 @@ export const pasteSmartEditTimelineClipboardAtPlayhead = (
 
 export type SmartEditTimelineEditMode = "magnetic" | "insert" | "overwrite" | "ripple";
 
-type SmartEditTrackSegment = {
+export type SmartEditTrackSegment = {
   id: string;
   segmentId?: string;
   trackId: SmartEditTrackId;
@@ -2203,7 +2212,7 @@ type SmartEditTimelineTrackPatch = Partial<
   Pick<SmartEditTimeline["tracks"][number], "hidden" | "locked" | "muted">
 >;
 
-type SmartEditTrack = {
+export type SmartEditTrack = {
   id: SmartEditTrackId;
   segments: SmartEditTrackSegment[];
 };
@@ -2234,6 +2243,11 @@ type TrackClipTrimDragState = {
   pointerId: number;
   startClientX: number;
   trackClip: SmartEditTrackSegment;
+};
+
+export type TimelinePreviewRangeState = {
+  inSecond?: number;
+  outSecond?: number;
 };
 
 type PlayheadDragState = {
@@ -4053,6 +4067,50 @@ export const selectSmartEditTimelineElementIdsInBox = (
     .map((element) => element.id);
 };
 
+export const normalizedSmartEditPreviewRange = (
+  range: TimelinePreviewRangeState,
+  durationSeconds: number,
+): { endSecond: number; startSecond: number } | undefined => {
+  if (range.inSecond === undefined || range.outSecond === undefined) {
+    return undefined;
+  }
+  const duration = Math.max(0, snapTimelineSeconds(durationSeconds));
+  const startSecond = Math.min(
+    duration,
+    Math.max(0, snapTimelineSeconds(Math.min(range.inSecond, range.outSecond))),
+  );
+  const endSecond = Math.min(
+    duration,
+    Math.max(0, snapTimelineSeconds(Math.max(range.inSecond, range.outSecond))),
+  );
+  return endSecond - startSecond >= MIN_SMART_EDIT_CLIP_SECONDS
+    ? { endSecond, startSecond }
+    : undefined;
+};
+
+export const selectSmartEditTrackClipIdsInRange = (
+  tracks: SmartEditTrack[],
+  range: { endSecond: number; startSecond: number },
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean = () => false,
+): string[] =>
+  tracks
+    .flatMap((track) => track.segments)
+    .filter((trackClip) => !isTrackLocked(trackClip.trackId))
+    .filter((trackClip) =>
+      intervalsOverlap(
+        range.startSecond,
+        range.endSecond,
+        trackClip.startSecond,
+        snapTimelineSeconds(trackClip.startSecond + trackClip.durationSeconds),
+      ),
+    )
+    .sort((left, right) =>
+      left.trackId === right.trackId
+        ? left.startSecond - right.startSecond
+        : smartEditTrackOrder(left.trackId) - smartEditTrackOrder(right.trackId),
+    )
+    .map((trackClip) => trackClip.id);
+
 export const selectSmartEditTimelineElementIds = (plan: SmartEditPlan): string[] => {
   const timeline = plan.timeline ?? buildSmartEditTimeline(plan);
   const trackOrder = new Map(timeline.tracks.map((track, index) => [track.id, index]));
@@ -5025,6 +5083,8 @@ export const SmartEditPanel = ({
   const [timelineEditMode, setTimelineEditMode] = useState<SmartEditTimelineEditMode>("magnetic");
   const [trimDrag, setTrimDrag] = useState<TrimDragState | undefined>();
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
+  const [previewRange, setPreviewRange] = useState<TimelinePreviewRangeState>({});
+  const [previewRangeLoopEnabled, setPreviewRangeLoopEnabled] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [srtImportText, setSrtImportText] = useState("");
   const [srtImportMessage, setSrtImportMessage] = useState<string | undefined>();
@@ -5046,6 +5106,8 @@ export const SmartEditPanel = ({
       setTrimDrag(undefined);
       setSmartEditClipboard(undefined);
       setPlayheadSeconds(0);
+      setPreviewRange({});
+      setPreviewRangeLoopEnabled(false);
       setSrtImportText("");
       setSrtImportMessage(undefined);
       setSrtExportMessage(undefined);
@@ -5081,6 +5143,13 @@ export const SmartEditPanel = ({
   const boundedPlayheadSeconds = Math.min(playheadSeconds, timelineDurationSeconds);
   const timelinePixelsPerSecond = TIMELINE_BASE_PX_PER_SECOND * timelineZoom;
   const timelineWidth = Math.max(720, timelineDurationSeconds * timelinePixelsPerSecond);
+  const normalizedPreviewRange = useMemo(
+    () => normalizedSmartEditPreviewRange(previewRange, timelineDurationSeconds),
+    [previewRange, timelineDurationSeconds],
+  );
+  const previewRangeLabel = normalizedPreviewRange
+    ? `${formatTimelineTime(normalizedPreviewRange.startSecond)}-${formatTimelineTime(normalizedPreviewRange.endSecond)}`
+    : copy.previewRangeNotSet;
   const setPreviewCurrentTime = (seconds: number) => {
     const preview = previewRef.current;
     if (!preview || !Number.isFinite(preview.duration)) {
@@ -5141,7 +5210,15 @@ export const SmartEditPanel = ({
       return false;
     }
     if (preview.paused) {
-      setPreviewCurrentTime(boundedPlayheadSeconds);
+      const range = normalizedPreviewRange;
+      const startSecond =
+        range &&
+        (boundedPlayheadSeconds < range.startSecond - 0.001 ||
+          boundedPlayheadSeconds >= range.endSecond - 0.001)
+          ? range.startSecond
+          : boundedPlayheadSeconds;
+      setPlayheadSeconds(startSecond);
+      setPreviewCurrentTime(startSecond);
       void preview.play();
     } else {
       preview.pause();
@@ -7005,6 +7082,39 @@ export const SmartEditPanel = ({
     onSelectedSegmentChange(undefined);
   };
 
+  const setPreviewRangePoint = (point: "in" | "out") => {
+    const nextSecond = Math.min(timelineDurationSeconds, Math.max(0, boundedPlayheadSeconds));
+    setPreviewRange((current) => ({
+      ...current,
+      [point === "in" ? "inSecond" : "outSecond"]: nextSecond,
+    }));
+  };
+
+  const clearPreviewRange = () => {
+    setPreviewRange({});
+    setPreviewRangeLoopEnabled(false);
+  };
+
+  const selectTrackClipsInPreviewRange = () => {
+    if (!normalizedPreviewRange) {
+      return;
+    }
+    const selectedIds = selectSmartEditTrackClipIdsInRange(
+      trackSegments,
+      normalizedPreviewRange,
+      isTimelineTrackLocked,
+    );
+    if (selectedIds.length === 0) {
+      setSelectedTrackClipId(undefined);
+      setSelectedTrackClipIds([]);
+      return;
+    }
+    setSelectedTrackClipId(selectedIds.at(-1));
+    setSelectedTrackClipIds(selectedIds);
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
+  };
+
   const alignSelectedTimelineMaterialsToPlayhead = (edge: "start" | "end") => {
     if (!plan) {
       return;
@@ -7457,6 +7567,16 @@ export const SmartEditPanel = ({
           jumpPlayheadToEditPoint("next");
           return;
         }
+        if (!isCommandKey && event.key.toLowerCase() === "i") {
+          event.preventDefault();
+          setPreviewRangePoint("in");
+          return;
+        }
+        if (!isCommandKey && event.key.toLowerCase() === "o") {
+          event.preventDefault();
+          setPreviewRangePoint("out");
+          return;
+        }
         if (event.key === "Escape") {
           event.preventDefault();
           clearMultiSelection();
@@ -7614,7 +7734,17 @@ export const SmartEditPanel = ({
                 setPlayheadFromPreviewTime(event.currentTarget.currentTime);
               }}
               onTimeUpdate={(event) => {
-                setPlayheadFromPreviewTime(event.currentTarget.currentTime);
+                const currentTime = event.currentTarget.currentTime;
+                if (
+                  previewRangeLoopEnabled &&
+                  normalizedPreviewRange &&
+                  currentTime >= normalizedPreviewRange.endSecond - 0.025
+                ) {
+                  event.currentTarget.currentTime = normalizedPreviewRange.startSecond;
+                  setPlayheadFromPreviewTime(normalizedPreviewRange.startSecond);
+                  return;
+                }
+                setPlayheadFromPreviewTime(currentTime);
               }}
               onKeyDown={(event) => {
                 if (event.key === " ") {
@@ -9415,6 +9545,41 @@ export const SmartEditPanel = ({
           <strong>{formatTimelineTime(boundedPlayheadSeconds)}</strong>
           <Button
             disabled={!plan}
+            onClick={() => setPreviewRangePoint("in")}
+          >
+            {copy.setPreviewIn}
+          </Button>
+          <Button
+            disabled={!plan}
+            onClick={() => setPreviewRangePoint("out")}
+          >
+            {copy.setPreviewOut}
+          </Button>
+          <span className="timeline-range-label">
+            {copy.previewRange}: <strong>{previewRangeLabel}</strong>
+          </span>
+          <Button
+            disabled={!normalizedPreviewRange}
+            onClick={() => setPreviewRangeLoopEnabled((current) => !current)}
+            variant={previewRangeLoopEnabled ? "primary" : "secondary"}
+          >
+            {previewRangeLoopEnabled ? copy.loopPreviewRangeOn : copy.loopPreviewRange}
+          </Button>
+          <Button
+            disabled={!normalizedPreviewRange}
+            icon={<Check size={16} />}
+            onClick={selectTrackClipsInPreviewRange}
+          >
+            {copy.selectPreviewRange}
+          </Button>
+          <Button
+            disabled={previewRange.inSecond === undefined && previewRange.outSecond === undefined}
+            onClick={clearPreviewRange}
+          >
+            {copy.clearPreviewRange}
+          </Button>
+          <Button
+            disabled={!plan}
             icon={<Check size={16} />}
             onClick={selectTrackClipsAtPlayhead}
           >
@@ -9733,6 +9898,20 @@ export const SmartEditPanel = ({
               onPointerMove={updatePlayheadDrag}
               onPointerUp={finishPlayheadDrag}
             />
+            {normalizedPreviewRange ? (
+              <div
+                aria-hidden="true"
+                className="timeline-preview-range"
+                style={{
+                  left: normalizedPreviewRange.startSecond * timelinePixelsPerSecond,
+                  width: Math.max(
+                    4,
+                    (normalizedPreviewRange.endSecond - normalizedPreviewRange.startSecond) *
+                      timelinePixelsPerSecond,
+                  ),
+                }}
+              />
+            ) : null}
             <div className="timeline-track" style={{ width: timelineWidth }}>
               {timedTimelineSegments.map(({ segment, startSecond }) => (
                 <article
@@ -9862,6 +10041,20 @@ export const SmartEditPanel = ({
                   className={`smart-edit-track-playhead ${playheadDrag ? "dragging" : ""}`.trim()}
                   style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
                 />
+                {normalizedPreviewRange ? (
+                  <div
+                    aria-hidden="true"
+                    className="smart-edit-preview-range smart-edit-preview-range-ruler"
+                    style={{
+                      left: normalizedPreviewRange.startSecond * timelinePixelsPerSecond,
+                      width: Math.max(
+                        4,
+                        (normalizedPreviewRange.endSecond - normalizedPreviewRange.startSecond) *
+                          timelinePixelsPerSecond,
+                      ),
+                    }}
+                  />
+                ) : null}
               </div>
             </div>
           </section>
@@ -9960,6 +10153,20 @@ export const SmartEditPanel = ({
                     className="smart-edit-track-playhead lane-playhead"
                     style={{ left: boundedPlayheadSeconds * timelinePixelsPerSecond }}
                   />
+                  {normalizedPreviewRange ? (
+                    <div
+                      aria-hidden="true"
+                      className="smart-edit-preview-range"
+                      style={{
+                        left: normalizedPreviewRange.startSecond * timelinePixelsPerSecond,
+                        width: Math.max(
+                          4,
+                          (normalizedPreviewRange.endSecond - normalizedPreviewRange.startSecond) *
+                            timelinePixelsPerSecond,
+                        ),
+                      }}
+                    />
+                  ) : null}
                   {trackBoxSelectTrackIdSet.has(track.id) && trackBoxSelectDrag ? (
                     <span
                       className="smart-edit-track-box-selection"
