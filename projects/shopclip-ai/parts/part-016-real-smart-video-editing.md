@@ -2534,3 +2534,15 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-08 Smart Edit Transform Overlay Hide Batch
+
+- Scope:
+  - Removes the blue transform handle box that still covered the standalone Smart Edit preview surface.
+- Fix:
+  - Hid the standalone-page `.smart-edit-preview-transform-overlay` visual layer.
+  - Kept the inspector's visual transform numeric controls available for scale, rotation, offset, and opacity editing.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

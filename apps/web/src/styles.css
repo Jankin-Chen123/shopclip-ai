@@ -5265,19 +5265,7 @@ textarea {
 }
 
 .smart-edit-standalone-page .smart-edit-preview-transform-overlay {
-  position: absolute;
-  z-index: 4;
-  top: 44%;
-  left: 50%;
-  display: grid;
-  width: min(42%, 240px);
-  aspect-ratio: 9 / 16;
-  place-items: center;
-  border: 1px solid rgba(56, 189, 248, 0.9);
-  color: #e0f2fe;
-  background: rgba(8, 47, 73, 0.16);
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.85), 0 16px 48px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
+  display: none;
 }
 
 .smart-edit-standalone-page .smart-edit-preview-transform-overlay span {
