@@ -350,6 +350,34 @@ const creationPageIds: CreationPageId[] = [
 const isCreationPage = (page: WorkspacePageId): page is CreationPageId =>
   creationPageIds.includes(page as CreationPageId);
 
+const workspacePageOrder: WorkspacePageId[] = [
+  "assets",
+  "inspiration",
+  "project",
+  "create",
+  "studio",
+  "delivery",
+  "dashboard",
+  "edit",
+  "settings",
+];
+
+type PageTransitionDirection = "forward" | "backward" | "neutral";
+
+const getPageTransitionDirection = (
+  previousPage: WorkspacePageId,
+  nextPage: WorkspacePageId,
+): PageTransitionDirection => {
+  const previousIndex = workspacePageOrder.indexOf(previousPage);
+  const nextIndex = workspacePageOrder.indexOf(nextPage);
+
+  if (previousIndex === -1 || nextIndex === -1 || previousIndex === nextIndex) {
+    return "neutral";
+  }
+
+  return nextIndex > previousIndex ? "forward" : "backward";
+};
+
 type BusyState =
   | "idle"
   | "project"
@@ -852,6 +880,8 @@ export const App = ({
   const [activePage, setActivePage] = useState<WorkspacePageId>(
     () => initialPage ?? pageFromHash(),
   );
+  const [pageTransitionDirection, setPageTransitionDirection] =
+    useState<PageTransitionDirection>("neutral");
   const [activeAssetCategory, setActiveAssetCategory] = useState<AssetCategory>("image");
   const [apiConfig, setApiConfig] = useState<UserApiConfig>(() => getStoredApiConfig());
   const [stockProviderConfigs, setStockProviderConfigs] = useState<StockProviderConfig[]>(() =>
@@ -995,11 +1025,18 @@ export const App = ({
     projectDetailTab: activePage === "project" ? projectDetailTab : undefined,
     section: activeSection,
   });
+  const updateActivePage = useCallback((nextPage: WorkspacePageId) => {
+    setActivePage((previousPage) => {
+      setPageTransitionDirection(getPageTransitionDirection(previousPage, nextPage));
+      return nextPage;
+    });
+  }, []);
+
   useEffect(() => {
-    const handleHashChange = () => setActivePage(pageFromHash());
+    const handleHashChange = () => updateActivePage(pageFromHash());
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
+  }, [updateActivePage]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -1021,7 +1058,7 @@ export const App = ({
     if (page !== "studio" && page !== "delivery") {
       setIsProjectStudioMode(false);
     }
-    setActivePage(page);
+    updateActivePage(page);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `#${page}`);
     }
@@ -3366,7 +3403,10 @@ export const App = ({
       onSectionChange={handleSectionChange}
       projectStudioMode={isProjectStudioMode}
     >
-      <div className={`workspace-grid workspace-page page-${activePage}`}>
+      <div
+        className={`workspace-grid workspace-page workspace-page-${pageTransitionDirection} page-${activePage}`}
+        key={`${activePage}-${isProjectStudioMode ? projectStudioFlow : "standard"}`}
+      >
         {activePage === "assets" ? (
           <section className="asset-workspace" aria-label={text.assets.title}>
             <AssetsPanel
@@ -3394,10 +3434,10 @@ export const App = ({
               onSearchQueryChange={setAssetSearchQuery}
               onUploadAsset={handleUploadAsset}
               searchQuery={assetSearchQuery}
-              stockProviderConfigs={stockProviderConfigs}
-              externalSearchResults={activeExternalAssetSearchResults}
-              searchResults={activeAssetSearchResults}
-              templates={scriptTemplateLibrary}
+              stockProviderConfigs={stockProviderConfigs ?? []}
+              externalSearchResults={activeExternalAssetSearchResults ?? []}
+              searchResults={activeAssetSearchResults ?? []}
+              templates={scriptTemplateLibrary ?? []}
             />
           </section>
         ) : null}

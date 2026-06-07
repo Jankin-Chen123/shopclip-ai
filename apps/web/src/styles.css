@@ -9122,6 +9122,54 @@ a,
   }
 }
 
+@keyframes page-enter-forward {
+  from {
+    opacity: 0;
+    transform: translateX(18px) translateY(4px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0) scale(1);
+  }
+}
+
+@keyframes page-enter-backward {
+  from {
+    opacity: 0;
+    transform: translateX(-18px) translateY(4px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0) scale(1);
+  }
+}
+
+@keyframes shell-control-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes section-piece-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes popover-enter {
   from {
     opacity: 0;
@@ -9145,8 +9193,42 @@ a,
 }
 
 .workspace-page {
-  animation: page-enter var(--motion-slow) var(--ease-standard);
+  animation: page-enter var(--motion-normal) var(--ease-standard);
   will-change: opacity, transform;
+}
+
+.workspace-page-forward {
+  animation-name: page-enter-forward;
+}
+
+.workspace-page-backward {
+  animation-name: page-enter-backward;
+}
+
+.topbar,
+.creation-stepper {
+  animation: shell-control-enter var(--motion-normal) var(--ease-standard);
+}
+
+.workspace-page > section,
+.workspace-page > .smart-edit-standalone-page,
+.creation-main > .panel,
+.creation-main > .studio-panel,
+.creation-main > .script-storyboard-workspace,
+.creation-main > .studio-return-bar,
+.creation-main > .project-script-selector-panel {
+  animation: section-piece-enter var(--motion-normal) var(--ease-standard) both;
+  will-change: opacity, transform;
+}
+
+.workspace-page > section:nth-child(2),
+.creation-main > :nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.workspace-page > section:nth-child(3),
+.creation-main > :nth-child(3) {
+  animation-delay: 70ms;
 }
 
 .button,
@@ -9387,6 +9469,15 @@ select:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .workspace-page,
+  .workspace-page > section,
+  .workspace-page > .smart-edit-standalone-page,
+  .creation-main > .panel,
+  .creation-main > .studio-panel,
+  .creation-main > .script-storyboard-workspace,
+  .creation-main > .studio-return-bar,
+  .creation-main > .project-script-selector-panel,
+  .topbar,
+  .creation-stepper,
   .background-task-popover,
   .background-task-trigger-progress::after,
   .background-task-item-running .background-task-progress::after {
@@ -9419,6 +9510,7 @@ select:focus {
   .project-video-card,
   .background-task-trigger,
   .background-task-item {
+    transition: none !important;
     transform: none !important;
   }
 }
