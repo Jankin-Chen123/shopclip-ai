@@ -306,6 +306,161 @@ describe("smart edit API flow", () => {
     ).toBe("image-asset");
   });
 
+  it("recomposes an existing smart edit currentPlan without replanning or dropping timeline edits", async () => {
+    const plannerCalls: unknown[] = [];
+    const composerPlans: SmartEditPlan[] = [];
+    const app = createApp({
+      smartEditPlanner: async (input) => {
+        plannerCalls.push(input);
+        return {
+          fallback: {
+            provider: "unexpected-planner",
+            used: false,
+          },
+          plan: planFromScenes(input.project.id, input.scenes, input.assets[0]?.id ?? "asset-fallback"),
+        };
+      },
+      smartEditComposer: async (projectId, plan) => {
+        composerPlans.push(plan);
+        return {
+          exportId: "export-current-plan",
+          localUrl: `/api/render-exports/${projectId}/export-current-plan/export.mp4`,
+          objectKey: `projects/${projectId}/smart-edits/export-current-plan/export.mp4`,
+          outputPath: "/tmp/export-current-plan.mp4",
+          publicUrl: `https://storage.example.test/${projectId}/export-current-plan.mp4`,
+          segmentOutputs: plan.segments
+            .filter((segment) => segment.enabled)
+            .map((segment) => ({
+              objectKey: `projects/${projectId}/smart-edits/export-current-plan/segments/${segment.id}.mp4`,
+              outputPath: `/tmp/${segment.id}.mp4`,
+              publicUrl: `https://storage.example.test/${projectId}/segments/${segment.id}.mp4`,
+              sceneId: segment.sceneId,
+              segmentId: segment.id,
+            })),
+        };
+      },
+    });
+
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server?.once("listening", () => resolve()));
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Current plan smart edit",
+        productName: "Desk Lamp",
+        audience: "home office buyers",
+        sellingPoints: ["soft light"],
+        tone: "calm",
+        style: "clean demo",
+        targetDurationSeconds: 8,
+      }),
+    });
+    expect(created.status).toBe(201);
+
+    const asset = await request<{ asset: AssetMetadata }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/assets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          name: "lamp.png",
+          mimeType: "image/png",
+          sizeBytes: 64,
+          tags: ["hero"],
+          url: "https://cdn.example.test/lamp.png",
+        }),
+      },
+    );
+    expect(asset.status).toBe(201);
+
+    const generated = await request<{ script: { scenes: StoryboardScene[] } }>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/generate-script`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          assetIds: [asset.body.asset.id],
+          keywords: ["soft light"],
+          materials: [],
+        }),
+      },
+    );
+    expect(generated.status).toBe(201);
+
+    const currentPlan = planFromScenes(
+      created.body.project.id,
+      generated.body.script.scenes.slice(0, 1),
+      asset.body.asset.id,
+    );
+    currentPlan.timeline = {
+      durationSeconds: currentPlan.segments[0]!.durationSeconds,
+      scale: 1,
+      tracks: [
+        { hidden: false, id: "video-main", kind: "video", label: "Video", locked: false, muted: false },
+        { hidden: false, id: "text-copy", kind: "text", label: "Text", locked: false, muted: false },
+      ],
+      elements: [
+        {
+          detachedAudio: false,
+          durationSeconds: currentPlan.segments[0]!.durationSeconds,
+          hidden: false,
+          id: "current-plan-video",
+          kind: "video",
+          label: "Current plan video",
+          muted: false,
+          playbackRate: 1,
+          sceneId: currentPlan.segments[0]!.sceneId,
+          segmentId: currentPlan.segments[0]!.id,
+          sourceUrl: "https://cdn.example.test/lamp.png",
+          startSecond: 0,
+          trackId: "video-main",
+          trimStartSecond: 0,
+        },
+        {
+          detachedAudio: false,
+          durationSeconds: 2,
+          hidden: false,
+          id: "current-plan-edited-text",
+          kind: "text",
+          label: "Edited caption",
+          muted: false,
+          playbackRate: 1,
+          sceneId: currentPlan.segments[0]!.sceneId,
+          startSecond: 1,
+          text: "Edited caption",
+          trackId: "text-copy",
+        },
+      ],
+    };
+
+    const smartEdit = await request<RenderSnapshot>(
+      baseUrl,
+      `/api/projects/${created.body.project.id}/smart-edit`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          currentPlan,
+          locale: "zh-CN",
+          targetLanguage: "zh-CN",
+        }),
+      },
+    );
+    expect(smartEdit.status).toBe(202);
+
+    const completed = await waitForRenderTask(baseUrl, smartEdit.body.renderTask.id);
+    expect(completed.renderTask.status).toBe("completed");
+    expect(plannerCalls).toHaveLength(0);
+    expect(composerPlans).toHaveLength(1);
+    expect(
+      composerPlans[0]?.timeline?.elements.some((element) => element.id === "current-plan-edited-text"),
+    ).toBe(true);
+    expect(completed.traceEvents.some((event) => event.step === "smart-edit-plan-current")).toBe(true);
+  });
+
   it("applies the latest materialized Seedance scene clips before smart edit composition", async () => {
     vi.stubEnv("VIDEO_RENDER_PROVIDER_MODE", "seedance");
     vi.stubEnv("AI_VIDEO_API_KEY", "video-key");

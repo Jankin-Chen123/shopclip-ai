@@ -840,6 +840,7 @@ export const SmartEditRequestSchema = z.object({
     watermark: false,
   }),
   segments: z.array(SmartEditSegmentOverrideSchema).max(40).default([]),
+  currentPlan: z.lazy(() => SmartEditPlanSchema).optional(),
   instructions: z.string().trim().max(2000).optional(),
 });
 

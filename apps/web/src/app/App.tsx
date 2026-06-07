@@ -2363,6 +2363,7 @@ export const App = ({
       instructions: smartEditInstructions || undefined,
       locale: language === "zh" ? "zh-CN" : "en-US",
       mediaSettings,
+      currentPlan: smartEditResult?.plan,
       segments:
         smartEditResult?.plan.segments.map((segment) => ({
           sceneId: segment.sceneId,

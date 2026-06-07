@@ -1675,32 +1675,42 @@ const runSmartEditJob = async ({
   );
 
   let plannerResult: Awaited<ReturnType<SmartEditPlanner>>;
-  try {
-    plannerResult = await smartEditPlanner({
-      apiConfig: requestData.apiConfig,
-      assets: project.assets,
-      assetSlices: project.assetSlices,
-      project,
-      request: requestData,
-      scenes: project.scenes,
-    });
-  } catch (error) {
-    await store.updateRenderTask(
-      renderTaskId,
-      {
-        errorMessage: smartEditFailureMessage(error, "Smart edit planning failed."),
-        progress: 100,
-        status: "failed",
+  if (requestData.currentPlan) {
+    plannerResult = {
+      fallback: {
+        provider: "current-plan",
+        used: false,
       },
-      [
+      plan: requestData.currentPlan,
+    };
+  } else {
+    try {
+      plannerResult = await smartEditPlanner({
+        apiConfig: requestData.apiConfig,
+        assets: project.assets,
+        assetSlices: project.assetSlices,
+        project,
+        request: requestData,
+        scenes: project.scenes,
+      });
+    } catch (error) {
+      await store.updateRenderTask(
+        renderTaskId,
         {
+          errorMessage: smartEditFailureMessage(error, "Smart edit planning failed."),
+          progress: 100,
           status: "failed",
-          step: "smart-edit-plan-failed",
-          message: smartEditFailureMessage(error, "Smart edit planning failed."),
         },
-      ],
-    );
-    return;
+        [
+          {
+            status: "failed",
+            step: "smart-edit-plan-failed",
+            message: smartEditFailureMessage(error, "Smart edit planning failed."),
+          },
+        ],
+      );
+      return;
+    }
   }
   const materializedPlan = applyLatestSceneMaterialsToSmartEditPlan(
     plannerResult.plan,
@@ -1708,15 +1718,23 @@ const runSmartEditJob = async ({
   );
   plannerResult = {
     ...plannerResult,
-    plan: withSmartEditTimeline(materializedPlan.plan),
+    plan: requestData.currentPlan?.timeline
+      ? materializedPlan.plan
+      : withSmartEditTimeline(materializedPlan.plan),
   };
   const planningTraceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [
     {
       status: plannerResult.fallback.used ? "retrying" : "completed",
-      step: plannerResult.fallback.used ? "smart-edit-plan-fallback" : "smart-edit-plan-model",
-      message: plannerResult.fallback.used
-        ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
-        : `Smart edit planned by ${plannerResult.fallback.provider}.`,
+      step: requestData.currentPlan
+        ? "smart-edit-plan-current"
+        : plannerResult.fallback.used
+          ? "smart-edit-plan-fallback"
+          : "smart-edit-plan-model",
+      message: requestData.currentPlan
+        ? "Smart edit reused the current edited timeline plan for ffmpeg composition."
+        : plannerResult.fallback.used
+          ? `Smart edit used local planning fallback: ${plannerResult.fallback.reason ?? "unknown reason"}`
+          : `Smart edit planned by ${plannerResult.fallback.provider}.`,
     },
     ...(materializedPlan.appliedCount > 0
       ? [

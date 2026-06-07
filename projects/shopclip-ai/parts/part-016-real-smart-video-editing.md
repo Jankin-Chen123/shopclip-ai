@@ -2256,3 +2256,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `apps/api/node_modules/.bin/vitest.CMD run src/providers/renderer/smartEditComposer.test.ts`
   - `git diff --check -- apps/api/src/providers/renderer/smartEditComposer.ts apps/api/src/providers/renderer/smartEditComposer.test.ts`
+
+## 2026-06-07 Current Plan Recompose Batch
+
+- Scope:
+  - End-to-end request contract fix for preserving Smart Edit timeline edits during recomposition.
+  - Ensures materialized scene clips, preview-range cuts, independent subtitle edits, and source-audio edits are sent back to the API when the user starts Smart Edit again.
+- Fix:
+  - Extended `SmartEditRequestSchema` with optional `currentPlan`.
+  - The web app now sends the latest `smartEditResult.plan` when starting Smart Edit from an existing edited result.
+  - The API reuses `currentPlan` directly for ffmpeg composition instead of calling the planner again and overwriting timeline edits.
+  - The current-plan path preserves existing `timeline` data instead of rebuilding derived timeline elements.
+  - Added an API flow regression test proving current-plan recomposition skips the planner and keeps edited timeline elements.
+- Verification:
+  - `corepack pnpm --filter @shopclip/shared build`
+  - `corepack pnpm --filter @shopclip/api typecheck`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
