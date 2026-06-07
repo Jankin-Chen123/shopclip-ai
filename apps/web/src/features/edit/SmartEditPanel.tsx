@@ -8047,6 +8047,55 @@ export const SmartEditPanel = ({
       </details>
 
       <div className="smart-edit-grid">
+        <aside className="smart-edit-bin" aria-label="Edit media bin">
+          <div className="smart-edit-bin-header">
+            <div>
+              <h3>Clips</h3>
+              <span>{sortedSegments.length} timeline clips</span>
+            </div>
+            <strong>{formatTimelineTime(timelineDurationSeconds)}</strong>
+          </div>
+          <div className="smart-edit-clip-bin-list" role="list">
+            {sortedSegments.length > 0 ? (
+              sortedSegments.map((segment) => {
+                const segmentStart = timedTimelineSegments.find(
+                  (candidate) => candidate.segment.id === segment.id,
+                )?.startSecond;
+                return (
+                  <button
+                    aria-current={selectedSegment?.id === segment.id ? "true" : undefined}
+                    className={`${selectedSegment?.id === segment.id ? "active" : ""} ${
+                      selectedSegmentIdSet.has(segment.id) ? "selected" : ""
+                    }`.trim()}
+                    key={segment.id}
+                    onClick={(event) => selectTimelineSegment(segment.id, event)}
+                    type="button"
+                  >
+                    <span>{String(segment.order).padStart(2, "0")}</span>
+                    <strong>{segment.subtitle || sourceLabel(segment, assets)}</strong>
+                    <small>
+                      {formatTimelineTime(segmentStart ?? 0)} / {segment.durationSeconds.toFixed(1)}s
+                    </small>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="empty-state compact">
+                <strong>{copy.emptyTitle}</strong>
+                <span>{copy.emptyBody}</span>
+              </div>
+            )}
+          </div>
+          <div className="smart-edit-bin-assets">
+            <h3>Media</h3>
+            <div>
+              <span>{assets.filter((asset) => asset.type === "video").length} video</span>
+              <span>{assets.filter((asset) => asset.type === "image").length} image</span>
+              <span>{assetSlices.length} slices</span>
+            </div>
+          </div>
+        </aside>
+
         <div className="smart-edit-preview">
           <h3>{copy.previewTitle}</h3>
           {result?.previewUrl ? (

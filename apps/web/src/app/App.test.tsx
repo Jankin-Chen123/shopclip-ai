@@ -6247,6 +6247,9 @@ Second imported caption`,
     );
 
     expect(markup).toContain("smart-edit-status-strip");
+    expect(markup).toContain("smart-edit-bin");
+    expect(markup).toContain("Clips");
+    expect(markup).toContain("Media");
     expect(markup).toContain("Enabled cut");
     expect(markup).toContain("4s");
     expect(markup).toContain("Selected segment");
@@ -6287,6 +6290,16 @@ Second imported caption`,
     expect(markup).toContain("Selected");
     expect(markup).toContain("smart-edit-track-ruler");
     expect(markup).toContain("smart-edit-track-playhead");
+  });
+
+  it("uses a three-zone editing layout for smart edit", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(
+      /\.smart-edit-grid\s*\{[^}]*grid-template-columns:\s*minmax\(220px,\s*280px\) minmax\(420px,\s*1fr\) minmax\(300px,\s*360px\);/s,
+    );
+    expect(styles).toMatch(/\.smart-edit-bin\s*\{[^}]*max-height:\s*min\(760px,\s*calc\(100dvh - 210px\)\);/s);
+    expect(styles).toMatch(/\.smart-edit-track-row\s*\{[^}]*grid-template-columns:\s*minmax\(118px,\s*150px\) minmax\(0,\s*1fr\);/s);
   });
 
   it("parses reference script assets into readable preview sections", () => {

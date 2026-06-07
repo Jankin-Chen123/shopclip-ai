@@ -4830,11 +4830,12 @@ textarea {
 
 .smart-edit-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 1.05fr) minmax(280px, 0.95fr);
+  grid-template-columns: minmax(220px, 280px) minmax(420px, 1fr) minmax(300px, 360px);
   gap: 16px;
   align-items: start;
 }
 
+.smart-edit-bin,
 .smart-edit-preview,
 .smart-edit-inspector,
 .smart-edit-timeline,
@@ -4844,6 +4845,135 @@ textarea {
   border-radius: 8px;
   background: rgba(8, 10, 16, 0.56);
   padding: 14px;
+}
+
+.smart-edit-timeline,
+.smart-edit-track-stack {
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.045), transparent 170px),
+    rgba(7, 10, 16, 0.72);
+}
+
+.smart-edit-bin {
+  display: grid;
+  gap: 14px;
+  max-height: min(760px, calc(100dvh - 210px));
+  overflow: hidden;
+}
+
+.smart-edit-bin-header,
+.smart-edit-bin-assets {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.smart-edit-bin-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.smart-edit-bin-header div,
+.smart-edit-bin-assets div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.smart-edit-bin-header h3,
+.smart-edit-bin-assets h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.smart-edit-bin-header span,
+.smart-edit-bin-header strong,
+.smart-edit-bin-assets span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.smart-edit-clip-bin-list {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.smart-edit-clip-bin-list button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-areas:
+    "index title"
+    "index meta";
+  gap: 3px 9px;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.5);
+  cursor: pointer;
+  text-align: left;
+}
+
+.smart-edit-clip-bin-list button:hover,
+.smart-edit-clip-bin-list button:focus-visible,
+.smart-edit-clip-bin-list button.active {
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(14, 116, 144, 0.18);
+  outline: none;
+}
+
+.smart-edit-clip-bin-list button.selected:not(.active) {
+  border-color: rgba(244, 114, 182, 0.52);
+}
+
+.smart-edit-clip-bin-list button span {
+  grid-area: index;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 7px;
+  color: #67e8f9;
+  background: rgba(8, 145, 178, 0.16);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.smart-edit-clip-bin-list button strong {
+  grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+}
+
+.smart-edit-clip-bin-list button small {
+  grid-area: meta;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.smart-edit-bin-assets {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.smart-edit-bin-assets div {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.smart-edit-bin-assets span {
+  min-height: 34px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  text-align: center;
 }
 
 .smart-edit-preview h3,
@@ -4857,7 +4987,7 @@ textarea {
 
 .smart-edit-preview video {
   width: 100%;
-  max-height: 520px;
+  max-height: min(560px, 58dvh);
   border-radius: 8px;
   background: #080808;
   object-fit: contain;
@@ -4884,7 +5014,7 @@ textarea {
 .smart-edit-live-frame {
   position: relative;
   display: grid;
-  min-height: 260px;
+  min-height: clamp(220px, 34dvh, 360px);
   overflow: hidden;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -4920,7 +5050,7 @@ textarea {
 .smart-edit-inspector {
   display: grid;
   gap: 12px;
-  max-height: 650px;
+  max-height: min(760px, calc(100dvh - 210px));
   overflow: auto;
 }
 
@@ -5199,6 +5329,12 @@ textarea {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0 2px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px) 0 0 / 34px
+      100%,
+    rgba(2, 6, 23, 0.28);
 }
 
 .timeline-ruler {
@@ -5412,14 +5548,14 @@ textarea {
 
 .smart-edit-track-row {
   display: grid;
-  grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+  grid-template-columns: minmax(118px, 150px) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
 }
 
 .smart-edit-track-ruler-row {
   display: grid;
-  grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+  grid-template-columns: minmax(118px, 150px) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
 }
@@ -5503,7 +5639,7 @@ textarea {
 .smart-edit-track-lane {
   position: relative;
   min-width: 100%;
-  min-height: 74px;
+  min-height: 82px;
 }
 
 .smart-edit-track-playhead {
@@ -5548,6 +5684,7 @@ textarea {
   z-index: 2;
   display: grid;
   grid-template-rows: auto minmax(18px, 1fr) auto;
+  min-height: 74px;
   gap: 4px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
