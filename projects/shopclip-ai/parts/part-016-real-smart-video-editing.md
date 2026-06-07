@@ -2225,3 +2225,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts`
+
+## 2026-06-07 Rendered Scene Materialization Batch
+
+- Scope:
+  - Connects rendered scene clip materials more directly into the narrowed video, audio, and subtitle editing demo.
+  - Makes ffmpeg-materialized scene video, separated source audio, waveform metadata, and storyboard text usable as independent timeline clips.
+- Fix:
+  - Added `materializeSmartEditRenderedSegmentsToTimelineElements` to convert enabled rendered scenes into independent video, source-audio, and text timeline materials.
+  - Materialized video/audio clips keep their original source trim, playback rate, audio fades, volume, keyframes, and waveform data.
+  - Materialized subtitle/text clips preserve storyboard copy, caption timing, and visibility.
+  - Materialized video/audio pairs receive a linked group so movement and trim operations can keep scene media aligned.
+  - Added a timeline toolbar action, `素材化分镜`, which materializes selected renderable segments or all renderable segments when no segment subset is selected.
+  - Original derived segments are disabled after materialization to avoid duplicate final export content.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `git diff --check -- apps/web/src/features/edit/SmartEditPanel.tsx apps/web/src/app/i18n.ts`

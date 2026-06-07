@@ -2924,6 +2924,180 @@ export const detachSmartEditSceneVideoToTimelineElement = (
   );
 };
 
+export const materializeSmartEditRenderedSegmentsToTimelineElements = (
+  plan: SmartEditPlan,
+  segmentIds?: string[],
+  token = `${Date.now()}`,
+): SmartEditPlan => {
+  const selectedIds = segmentIds && segmentIds.length > 0 ? new Set(segmentIds) : undefined;
+  const materializedSegments = plan.segments
+    .filter((segment) => segment.enabled)
+    .filter((segment) => !selectedIds || selectedIds.has(segment.id))
+    .filter((segment) => segment.source.sceneClipVideoOnlyUrl || segment.source.sceneClipUrl);
+  if (materializedSegments.length === 0) {
+    return plan;
+  }
+
+  const materializedIdSet = new Set(materializedSegments.map((segment) => segment.id));
+  const disabledPlan = withRebuiltTimeline({
+    ...plan,
+    segments: plan.segments.map((segment) =>
+      materializedIdSet.has(segment.id)
+        ? {
+            ...segment,
+            enabled: false,
+          }
+        : segment,
+    ),
+  });
+  const baseTimeline = disabledPlan.timeline ?? buildSmartEditTimeline(disabledPlan);
+  const nextElements = [...baseTimeline.elements];
+  for (const segment of materializedSegments) {
+    const segmentStartSecond = segmentTimelineBaseStart(plan, segment.id);
+    const playbackRate = clampPlaybackRate(segment.playbackRate ?? 1);
+    const sourceStart = segment.source.startSecond ?? 0;
+    const sourceUrl = segment.source.sceneClipVideoOnlyUrl ?? segment.source.sceneClipUrl;
+    const trimEndSecond =
+      segment.source.endSecond === undefined
+        ? sourceStart + segment.durationSeconds * playbackRate
+        : segment.source.endSecond;
+    const linkedGroupId = segment.source.sceneClipAudioUrl
+      ? `materialized-scene-${segment.id}-${token}`
+      : undefined;
+    if (sourceUrl) {
+      nextElements.push({
+        detachedAudio: false,
+        durationSeconds: segment.durationSeconds,
+        hidden: false,
+        id: `video-${segment.id}-${token}`,
+        kind: "video",
+        label: `Scene ${segment.order} video`,
+        linkedGroupId,
+        muted: false,
+        playbackRate,
+        sceneId: segment.sceneId,
+        sourceDurationSeconds: Math.max(MIN_SMART_EDIT_CLIP_SECONDS, trimEndSecond - sourceStart),
+        sourceUrl,
+        startSecond: segmentStartSecond,
+        trackId: "video-main",
+        trimEndSecond,
+        trimStartSecond: sourceStart,
+        visualEffects: segment.visualEffects,
+      });
+    }
+    if (segment.source.sceneClipAudioUrl) {
+      const sourceAudioOffsetSeconds = clampInSegmentOffset(
+        segment.sourceAudioStartOffsetSeconds ?? 0,
+        segment.durationSeconds,
+      );
+      const sourceAudioDurationSeconds = clipDurationWithinSegment(
+        segment.sourceAudioDurationSeconds,
+        sourceAudioOffsetSeconds,
+        segment.durationSeconds,
+      );
+      const audioTrimEndSecond =
+        segment.source.endSecond === undefined
+          ? sourceStart + sourceAudioDurationSeconds * playbackRate
+          : Math.min(segment.source.endSecond, sourceStart + sourceAudioDurationSeconds * playbackRate);
+      nextElements.push({
+        audioFadeInSeconds: segment.sourceAudioFadeInSeconds ?? 0,
+        audioFadeOutSeconds: segment.sourceAudioFadeOutSeconds ?? 0,
+        audioVolume: segment.sourceAudioVolume ?? 1,
+        audioVolumeKeyframes: audioVolumeKeyframes(
+          segment.sourceAudioVolumeKeyframes,
+          sourceAudioDurationSeconds,
+        ),
+        audioWaveform: segment.source.sceneClipAudioWaveform,
+        detachedAudio: true,
+        durationSeconds: sourceAudioDurationSeconds,
+        hidden: false,
+        id: `source-audio-${segment.id}-${token}`,
+        kind: "audio",
+        label: `Scene ${segment.order} audio`,
+        linkedGroupId,
+        muted: segment.sourceAudioMuted ?? false,
+        playbackRate,
+        sceneId: segment.sceneId,
+        sourceDurationSeconds:
+          segment.source.endSecond !== undefined
+            ? Math.max(MIN_SMART_EDIT_CLIP_SECONDS, segment.source.endSecond - sourceStart)
+            : undefined,
+        sourceUrl: segment.source.sceneClipAudioUrl,
+        startSecond: snapTimelineSeconds(segmentStartSecond + sourceAudioOffsetSeconds),
+        trackId: "audio-source",
+        trimEndSecond: audioTrimEndSecond,
+        trimStartSecond: sourceStart,
+      });
+    }
+    if (segment.subtitle.trim()) {
+      const captionOffsetSeconds = clampInSegmentOffset(
+        segment.captionStartOffsetSeconds ?? 0,
+        segment.durationSeconds,
+      );
+      const captionDurationSeconds = clipDurationWithinSegment(
+        segment.captionDurationSeconds,
+        captionOffsetSeconds,
+        segment.durationSeconds,
+      );
+      nextElements.push({
+        detachedAudio: false,
+        durationSeconds: captionDurationSeconds,
+        hidden: segment.captionHidden ?? false,
+        id: `text-${segment.id}-${token}`,
+        kind: "text",
+        label: segment.subtitle,
+        muted: false,
+        playbackRate: 1,
+        sceneId: segment.sceneId,
+        segmentId: segment.id,
+        startSecond: snapTimelineSeconds(segmentStartSecond + captionOffsetSeconds),
+        text: segment.subtitle,
+        trackId: "text-copy",
+        trimStartSecond: 0,
+      });
+    }
+  }
+
+  return withUpdatedTimelineElements(
+    disabledPlan,
+    nextElements,
+    ensureTimelineTrack(
+      {
+        ...baseTimeline,
+        tracks: ensureTimelineTrack(
+          {
+            ...baseTimeline,
+            tracks: ensureTimelineTrack(baseTimeline, {
+              hidden: false,
+              id: "video-main",
+              kind: "video",
+              label: "Video",
+              locked: false,
+              muted: false,
+            }),
+          },
+          {
+            hidden: false,
+            id: "audio-source",
+            kind: "audio",
+            label: "Source audio",
+            locked: false,
+            muted: false,
+          },
+        ),
+      },
+      {
+        hidden: false,
+        id: "text-copy",
+        kind: "text",
+        label: "Text",
+        locked: false,
+        muted: false,
+      },
+    ),
+  );
+};
+
 export const updateSmartEditTimelineElement = (
   plan: SmartEditPlan,
   elementId: string,
@@ -5202,6 +5376,15 @@ export const SmartEditPanel = ({
   );
   const selectedSegment =
     sortedSegments.find((segment) => segment.id === selectedSegmentId) ?? sortedSegments[0];
+  const materializableSegments = useMemo(
+    () =>
+      sortedSegments.filter(
+        (segment) =>
+          segment.enabled &&
+          Boolean(segment.source.sceneClipVideoOnlyUrl || segment.source.sceneClipUrl),
+      ),
+    [sortedSegments],
+  );
   useEffect(() => {
     if (!selectedSegment) {
       setSelectedSegmentIds([]);
@@ -5646,6 +5829,37 @@ export const SmartEditPanel = ({
       setSelectedSegmentIds([]);
       onSelectedSegmentChange(undefined);
     }
+  };
+
+  const materializeRenderedScenes = () => {
+    if (!plan || materializableSegments.length === 0) {
+      return;
+    }
+    const token = String(Date.now());
+    const selectedMaterializableIds = materializableSegments
+      .filter((segment) => selectedSegmentIds.includes(segment.id))
+      .map((segment) => segment.id);
+    const targetSegmentIds =
+      selectedMaterializableIds.length > 0
+        ? selectedMaterializableIds
+        : materializableSegments.map((segment) => segment.id);
+    const nextPlan = materializeSmartEditRenderedSegmentsToTimelineElements(
+      plan,
+      targetSegmentIds,
+      token,
+    );
+    if (nextPlan === plan) {
+      return;
+    }
+    const addedIds =
+      nextPlan.timeline?.elements
+        .map((element) => element.id)
+        .filter((id) => id.endsWith(`-${token}`)) ?? [];
+    commitPlanChange(nextPlan, { label: "Materialize rendered scenes" });
+    setSelectedTrackClipIds(addedIds);
+    setSelectedTrackClipId(addedIds.at(-1));
+    setSelectedSegmentIds([]);
+    onSelectedSegmentChange(undefined);
   };
 
   const undoPlanChange = () => {
@@ -9766,6 +9980,13 @@ export const SmartEditPanel = ({
             onClick={addTextElementAtPlayhead}
           >
             {copy.addTextClip}
+          </Button>
+          <Button
+            disabled={!plan || materializableSegments.length === 0}
+            icon={<Film size={16} />}
+            onClick={materializeRenderedScenes}
+          >
+            {copy.materializeRenderedScenes}
           </Button>
           <Button
             disabled={!smartEditClipboard}
