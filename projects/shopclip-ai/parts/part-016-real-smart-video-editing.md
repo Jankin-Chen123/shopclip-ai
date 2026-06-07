@@ -2447,3 +2447,20 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web build`
   - Production preview smoke at `http://127.0.0.1:4175/` loaded without page errors after the `listProjects()` guard.
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-07 Smart Edit Full Content Restore Batch
+
+- Scope:
+  - User requested the Smart Edit workspace content be restored and no longer compressed into the viewport.
+  - Prioritizes full visibility and natural page scrolling over fitting the whole editor into one screen.
+- Fix:
+  - Restored the standalone Smart Edit header eyebrow/body text and enlarged the page spacing.
+  - Removed fixed viewport compression from the main Smart Edit panel and three-column grid.
+  - Changed media bin, preview, inspector, and timeline panels from clipped/scroll-trapped containers to natural-height content sections.
+  - Restored preview title/help text, segment live preview, timeline header, and Smart Edit status summary visibility.
+  - Raised timeline default height to `420px` and resize range to `280px..640px`.
+  - Removed narrow-screen `max-height` clipping so sections stack and show their content instead of cutting it off.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

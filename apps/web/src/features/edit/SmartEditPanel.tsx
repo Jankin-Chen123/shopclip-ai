@@ -5436,10 +5436,10 @@ export const SmartEditPanel = ({
   const [timelineDropPreviewSecond, setTimelineDropPreviewSecond] = useState<number | undefined>();
   const [timelinePanelHeight, setTimelinePanelHeight] = useState(() => {
     if (typeof window === "undefined") {
-      return 250;
+      return 420;
     }
     const storedHeight = Number(window.localStorage.getItem(SMART_EDIT_TIMELINE_HEIGHT_STORAGE_KEY));
-    return Number.isFinite(storedHeight) ? Math.max(190, Math.min(360, storedHeight)) : 250;
+    return Number.isFinite(storedHeight) ? Math.max(280, Math.min(640, storedHeight)) : 420;
   });
   const [panelResize, setPanelResize] = useState<SmartEditPanelResizeState | undefined>();
   const [srtImportText, setSrtImportText] = useState("");
@@ -5478,8 +5478,8 @@ export const SmartEditPanel = ({
     }
     const handlePointerMove = (event: PointerEvent) => {
       const nextHeight = Math.max(
-        190,
-        Math.min(360, panelResize.startHeight - (event.clientY - panelResize.startClientY)),
+        280,
+        Math.min(640, panelResize.startHeight - (event.clientY - panelResize.startClientY)),
       );
       setTimelinePanelHeight(nextHeight);
     };
