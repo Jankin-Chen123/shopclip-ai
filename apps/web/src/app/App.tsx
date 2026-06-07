@@ -989,6 +989,11 @@ export const App = ({
         : activePage === "settings"
           ? "settings"
           : "create";
+  const getCurrentBackgroundTaskTarget = (): BackgroundTaskTarget => ({
+    page: activePage,
+    projectDetailTab: activePage === "project" ? projectDetailTab : undefined,
+    section: activeSection,
+  });
   useEffect(() => {
     const handleHashChange = () => setActivePage(pageFromHash());
     window.addEventListener("hashchange", handleHashChange);
@@ -1186,13 +1191,13 @@ export const App = ({
       backgroundTask?: {
         id?: string;
         kind: BackgroundTaskKind;
-        target: BackgroundTaskTarget;
+        target?: BackgroundTaskTarget;
       };
     },
   ) => {
     const backgroundTask = options?.backgroundTask;
     const backgroundTaskId = backgroundTask
-      ? startBackgroundTask(backgroundTask.kind, backgroundTask.target, {
+      ? startBackgroundTask(backgroundTask.kind, backgroundTask.target ?? getCurrentBackgroundTaskTarget(), {
           id: backgroundTask.id,
         })
       : undefined;
@@ -1671,7 +1676,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "storyboard",
-          target: { flow: "storyboard", page: "studio", section: "create" },
         },
       },
     );
@@ -1846,7 +1850,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "asset-analysis",
-          target: { page: activePage === "assets" ? "assets" : "create", section: activeSection },
         },
       },
     );
@@ -1904,7 +1907,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "asset-analysis",
-          target: { page: "assets", section: "assets" },
         },
       },
     );
@@ -2217,7 +2219,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "reference-analysis",
-          target: { page: "inspiration", section: "inspiration" },
         },
       },
     );
@@ -2264,7 +2265,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "template",
-          target: { page: "inspiration", section: "inspiration" },
         },
       },
     );
@@ -2295,7 +2295,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "template",
-          target: { page: "assets", section: "assets" },
         },
       },
     );
@@ -2459,7 +2458,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "script",
-          target: { page: "create", section: "create" },
         },
       },
     );
@@ -2543,7 +2541,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "storyboard",
-          target: { flow: "storyboard", page: nextPage ?? "studio", section: "create" },
         },
       },
     );
@@ -2664,7 +2661,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "scene-regeneration",
-          target: { flow: "storyboard", page: "studio", section: "create" },
         },
       },
     );
@@ -2681,7 +2677,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "asset-recall",
-          target: { flow: "storyboard", page: "studio", section: "create" },
         },
       },
     );
@@ -2701,7 +2696,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "suggestions",
-          target: { flow: "storyboard", page: "studio", section: "create" },
         },
       },
     );
@@ -2726,7 +2720,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "suggestions",
-          target: { flow: "storyboard", page: "studio", section: "create" },
         },
       },
     );
@@ -2779,7 +2772,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "video",
-          target: { flow: "render", page: "delivery", section: "create" },
         },
       },
     );
@@ -2826,7 +2818,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "video",
-          target: { flow: "render", page: "delivery", section: "create" },
         },
       },
     );
@@ -2978,7 +2969,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "smart-edit",
-          target: { flow: "edit", page: "edit", section: "create" },
         },
       },
     );
@@ -3045,7 +3035,6 @@ export const App = ({
       {
         backgroundTask: {
           kind: "smart-edit",
-          target: { flow: "edit", page: "edit", section: "create" },
         },
       },
     );
@@ -3155,6 +3144,7 @@ export const App = ({
       return undefined;
     }
     const taskText = getGenerationTaskText(renderTaskKind, language);
+    const trackedRenderTask = trackedBackgroundTasks.find((task) => task.kind === renderTaskKind);
     const taskStatus =
       renderTask.status === "failed"
         ? "failed"
@@ -3169,12 +3159,18 @@ export const App = ({
       kind: renderTaskKind,
       progress: taskStatus === "completed" ? 100 : renderTask.progress ?? 0,
       status: taskStatus,
-      target:
-        renderTaskKind === "smart-edit"
-          ? { flow: "edit", page: "edit", section: "create" }
-          : { flow: "render", page: "delivery", section: "create" },
+      target: trackedRenderTask?.target ?? getCurrentBackgroundTaskTarget(),
     };
-  }, [hasSmartEditTaskHistory, hasVideoTaskHistory, language, renderTask]);
+  }, [
+    activePage,
+    activeSection,
+    hasSmartEditTaskHistory,
+    hasVideoTaskHistory,
+    language,
+    projectDetailTab,
+    renderTask,
+    trackedBackgroundTasks,
+  ]);
   const backgroundTasks = useMemo<TrackedBackgroundTask[]>(() => {
     const trackedTasks = renderBackgroundTask
       ? trackedBackgroundTasks.filter((task) => task.kind !== renderBackgroundTask.kind)
@@ -3201,12 +3197,7 @@ export const App = ({
     if (trackedTask.target.projectDetailTab) {
       setProjectDetailTab(trackedTask.target.projectDetailTab);
     }
-    if (trackedTask.target.flow) {
-      setIsProjectStudioMode(true);
-      setProjectStudioFlow(trackedTask.target.flow);
-    } else {
-      setIsProjectStudioMode(false);
-    }
+    setIsProjectStudioMode(false);
     handlePageChange(trackedTask.target.page);
   };
 
