@@ -8517,7 +8517,7 @@ button.project-video-link {
 .project-video-preview video {
   display: block;
   width: 100%;
-  max-height: min(62vh, 620px);
+  max-height: min(62dvh, 620px);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #020617;
@@ -8546,17 +8546,19 @@ button.project-video-link {
   position: fixed;
   z-index: 80;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: block;
+  overflow: auto;
   padding: 28px;
   background: rgba(0, 0, 0, 0.68);
   backdrop-filter: blur(10px);
 }
 
 .project-modal {
-  position: relative;
-  width: min(980px, 100%);
-  max-height: min(860px, calc(100vh - 56px));
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(980px, calc(100vw - 56px));
+  max-height: min(860px, calc(100dvh - 56px));
   overflow: auto;
   padding: 28px;
   border: 1px solid var(--border);
@@ -8565,6 +8567,15 @@ button.project-video-link {
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 220px),
     var(--surface);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.46);
+  transform: translate(-50%, -50%);
+}
+
+.project-modal:has(.project-video-preview) {
+  width: min(1080px, calc(100vw - 56px));
+}
+
+.project-modal:has(.project-script-detail) {
+  width: min(980px, calc(100vw - 56px));
 }
 
 .project-modal-close {
