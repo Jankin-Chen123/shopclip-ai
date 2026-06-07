@@ -6273,8 +6273,8 @@ Second imported caption`,
     );
 
     expect(markup).toContain("smart-edit-status-strip");
-    expect(markup).toContain("OpenCut aligned editor");
-    expect(markup).toContain("Video editor");
+    expect(markup).not.toContain("OpenCut aligned editor");
+    expect(markup).not.toContain("Video editor");
     expect(markup).toContain("Shortcuts");
     expect(markup).toContain("Export");
     expect(markup).toContain("Preview transform handles");

@@ -2506,3 +2506,19 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-08 Smart Edit Header Simplification Batch
+
+- Scope:
+  - Removes the standalone Smart Edit explanatory header area and the internal OpenCut title block highlighted by the user.
+  - Tightens the top editor layout so the OpenCut tool rail, status, shortcuts, export, status cards, and editing workspace move upward without overlapping the back action.
+- Fix:
+  - Removed the standalone page title/description copy from the Smart Edit route.
+  - Removed the `OpenCut aligned editor / Video editor / clips timeline` block from the Smart Edit panel heading.
+  - Changed the standalone header into a top-right floating back action and reserved right-side space in the editor heading.
+  - Reduced heading/status/grid gaps for a denser editor-first layout.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

@@ -8053,7 +8053,7 @@ export const SmartEditPanel = ({
   return (
     <section
       className="panel smart-edit-panel"
-      aria-labelledby="smart-edit-title"
+      aria-label="Smart edit timeline editor"
       onKeyDown={(event) => {
         const isCommandKey = event.ctrlKey || event.metaKey;
         if (isTextEditingTarget(event.target)) {
@@ -8186,11 +8186,6 @@ export const SmartEditPanel = ({
             );
           })}
         </nav>
-        <div>
-          <p className="eyebrow">OpenCut aligned editor</p>
-          <h2 id="smart-edit-title">Video editor</h2>
-          <p>{sortedSegments.length} clips - {formatTimelineTime(timelineDurationSeconds)} timeline</p>
-        </div>
         <div className="smart-edit-editor-chrome" aria-label="Editor actions">
           <span>{isEditing || isRefreshing ? "Rendering" : "Ready"}</span>
           <button type="button" aria-label="Keyboard shortcuts">

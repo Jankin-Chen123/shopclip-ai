@@ -3801,15 +3801,6 @@ export const App = ({
         {activePage === "edit" ? (
           <section className="smart-edit-standalone-page" aria-label={text.smartEdit.title}>
             <header className="smart-edit-standalone-header">
-              <div>
-                <span>{language === "zh" ? "\u72ec\u7acb\u526a\u8f91\u9875" : "Standalone editor"}</span>
-                <h1>{language === "zh" ? "\u667a\u80fd\u526a\u8f91" : "Smart edit"}</h1>
-                <p>
-                  {language === "zh"
-                    ? "\u4ece\u89c6\u9891\u5e93\u9009\u4e2d\u5355\u4e2a\u89c6\u9891\u540e\uff0c\u5728\u8fd9\u4e2a\u72ec\u7acb\u9875\u9762\u5b8c\u6210\u526a\u8f91\u3001\u9884\u89c8\u548c\u7247\u6bb5\u8c03\u6574\u3002"
-                    : "Edit, preview, and refine the selected video from the video library in this standalone workspace."}
-                </p>
-              </div>
               <Button
                 icon={<ArrowLeft size={18} />}
                 onClick={handleBackToProjectVideoLibrary}
