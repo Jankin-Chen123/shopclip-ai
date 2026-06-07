@@ -2338,3 +2338,25 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - `corepack pnpm --filter @shopclip/api typecheck`
   - `apps/api/node_modules/.bin/vitest.CMD run src/smart-edit-flow.test.ts`
+
+## 2026-06-07 Live Smart Edit Chain Validation
+
+- Scope:
+  - Live server validation on `shopclip.site` infrastructure using the configured Seedance/Ark video model, `/usr/bin/ffmpeg`, COS storage, and the production API process.
+  - Proves the narrowed video/audio/subtitle Smart Edit demo path with real rendered scene material.
+- Evidence:
+  - Server revision: `9a7fa63`.
+  - Project: `cmq3k1ine0000whhrlbv7x4v9`.
+  - Source render task: `259a9efd-26f8-4dad-93ee-cb2246b7068c`.
+  - Smart Edit task: `63336ba8-33ad-44aa-b941-af075e23d4b2`.
+  - Final export: `https://shopclip-standard-1436426026.cos.ap-beijing.myqcloud.com/projects/cmq3k1ine0000whhrlbv7x4v9/smart-edits/497b76ba-715c-4e14-bc6d-822c84b477ab/export.mp4`.
+  - Render polling completed after six polls; Smart Edit completed after two polls.
+  - Rendered scene materialization produced `videoOnlyUrl`, `audioUrl`, non-empty waveform buckets, and text `Fold flat in one move`.
+  - Smart Edit trace events included `smart-edit-plan-current`, `smart-edit-scene-materials-applied`, `smart-edit-ffmpeg-compose-started`, and `smart-edit-ffmpeg-compose`.
+  - Smart Edit result retained independent timeline materials:
+    - Video element `live-video-material`: `startSecond: 0.2`, `durationSeconds: 3.2`, `trimStartSecond: 0.4`, `trimEndSecond: 4`, `playbackRate: 1.25`, source refreshed to COS `scene-1-video-only.mp4`.
+    - Audio element `live-audio-material`: `startSecond: 0.2`, `durationSeconds: 3.2`, `trimStartSecond: 0.4`, `trimEndSecond: 4`, `playbackRate: 1.25`, `audioVolume: 0.8`, `audioFadeInSeconds: 0.2`, `audioFadeOutSeconds: 0.2`, source refreshed to COS `scene-1-audio.m4a`, waveform retained.
+    - Text element `live-text-material`: `text: Edited live caption`, `startSecond: 0.6`, `durationSeconds: 2.2`, `textColor: #ffcc00`, `textFontSize: 48`, `textPositionYPercent: 18`.
+- Verification:
+  - Executed a temporary live validation script on the server against `http://127.0.0.1:4000`.
+  - Temporary local and server scripts were deleted after completion.
