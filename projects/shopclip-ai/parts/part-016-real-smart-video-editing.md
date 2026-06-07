@@ -2464,3 +2464,18 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-07 Smart Edit Overlap Repair Batch
+
+- Scope:
+  - Fixes the Smart Edit workspace becoming visually scrambled after the full-content restore.
+  - The timeline toolbar and track rows were overlapping the media bin, preview, and inspector instead of appearing below them.
+- Fix:
+  - Replaced the standalone Smart Edit panel's fixed grid-row layout with a vertical flex layout so major sections flow in order: heading, status, three-column workspace, resize handle, timeline.
+  - Changed the timeline panel inline sizing from fixed `height` to `minHeight`, allowing it to grow with track content instead of overlaying or clipping the editor.
+  - Kept preview transform handles inside the preview card by restoring preview overflow containment and adding a reasonable video max height.
+  - Removed the later standalone timeline grid-row override that forced the track stack back into a compressed row model.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

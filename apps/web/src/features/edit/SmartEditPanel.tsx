@@ -10813,7 +10813,7 @@ export const SmartEditPanel = ({
             timelineDropPreviewSecond !== undefined ? "is-drop-target" : ""
           }`.trim()}
           aria-label={copy.trackStack}
-          style={{ height: timelinePanelHeight }}
+          style={{ minHeight: timelinePanelHeight }}
           onDragLeave={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
               setTimelineDropPreviewSecond(undefined);

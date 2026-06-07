@@ -5095,8 +5095,8 @@ textarea {
 }
 
 .smart-edit-standalone-page .smart-edit-panel {
-  display: grid;
-  grid-template-rows: auto auto 11px auto;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-width: 1240px;
   min-height: 0;
@@ -5237,7 +5237,7 @@ textarea {
   align-items: stretch;
   justify-items: stretch;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   min-width: 0;
   height: auto;
   padding: 14px 20px 16px;
@@ -5258,7 +5258,7 @@ textarea {
   align-self: center;
   justify-self: center;
   width: min(100%, 880px);
-  max-height: none;
+  max-height: min(620px, 62dvh);
   aspect-ratio: 16 / 9;
   border-radius: 0;
   background: #000;
@@ -5268,7 +5268,7 @@ textarea {
 .smart-edit-standalone-page .smart-edit-preview-transform-overlay {
   position: absolute;
   z-index: 4;
-  top: 47%;
+  top: 44%;
   left: 50%;
   display: grid;
   width: min(42%, 240px);
@@ -5421,7 +5421,7 @@ textarea {
 
 .smart-edit-standalone-page .smart-edit-track-stack {
   display: grid;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   gap: 12px;
   min-height: 280px;
   max-height: none;
@@ -5901,7 +5901,7 @@ textarea {
 }
 
 .smart-edit-standalone-page .smart-edit-track-stack {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
 }
 
 .smart-edit-standalone-page .smart-edit-track-stack > .timeline-header {
