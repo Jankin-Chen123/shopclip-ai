@@ -2360,3 +2360,16 @@ Add a real Step 05 video editing stage that uses the existing structured asset/s
 - Verification:
   - Executed a temporary live validation script on the server against `http://127.0.0.1:4000`.
   - Temporary local and server scripts were deleted after completion.
+
+## 2026-06-07 Auto Seed Editor After Render Batch
+
+- Scope:
+  - Removes the required manual Smart Edit click after a normal model video render completes.
+  - Automatically places the ffmpeg-separated video, audio, and text scene materials into the Smart Edit timeline.
+- Fix:
+  - Added a web-side source-render seeding helper that converts completed non-Smart-Edit render tasks into a Smart Edit result.
+  - Reused the existing rendered-scene materialization logic so the generated timeline contains independent video, source-audio, and text elements while disabling the original generated-scene segments.
+  - Wired the helper into render polling, render refresh, completed render start/retry responses, material refresh, and project reload.
+  - When a project studio render finishes while the user is in the render step, the UI now switches directly to the edit step with the timeline already populated.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`

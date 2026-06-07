@@ -32,7 +32,10 @@ import {
 import { AssetPrepPanel, type AssetPrepSnapshot } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
-import { SmartEditPanel } from "../features/edit/SmartEditPanel";
+import {
+  SmartEditPanel,
+  materializeSmartEditRenderedSegmentsToTimelineElements,
+} from "../features/edit/SmartEditPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import {
@@ -558,6 +561,114 @@ const smartEditResultFromRenderSnapshot = (
   };
 };
 
+export const createSmartEditResultFromCompletedSourceRender = ({
+  language,
+  mediaSettings,
+  renderTask,
+  scenes,
+  targetLanguage,
+  traceEvents,
+}: {
+  language: Language;
+  mediaSettings: MediaSettings;
+  renderTask: RenderTask;
+  scenes: StoryboardScene[];
+  targetLanguage?: string;
+  traceEvents: TraceEvent[];
+}): SmartEditResult | undefined => {
+  if (renderTask.status !== "completed" || isSmartEditTask(renderTask)) {
+    return undefined;
+  }
+
+  const readyClips = (renderTask.sceneClips ?? [])
+    .filter((clip) => clip.status === "completed" && Boolean(clip.videoUrl))
+    .sort((left, right) => left.order - right.order);
+  if (readyClips.length === 0) {
+    return undefined;
+  }
+
+  const sceneById = new Map(scenes.map((scene) => [scene.id, scene]));
+  const segments = readyClips.map((clip) => {
+    const scene = sceneById.get(clip.sceneId);
+    const durationSeconds =
+      scene?.durationSeconds ?? clip.material?.audioWaveform?.durationSeconds ?? 4;
+    const subtitle = (clip.material?.text || clip.subtitle || scene?.subtitle || scene?.voiceover || "")
+      .trim()
+      .slice(0, 2000);
+    const voiceover = (scene?.voiceover || clip.subtitle || subtitle).trim().slice(0, 2000);
+
+    return {
+      assetTags: [],
+      captionHidden: false,
+      captionStartOffsetSeconds: 0,
+      durationSeconds,
+      enabled: true,
+      id: `source-render-${renderTask.id}-scene-${clip.sceneId}`,
+      order: clip.order,
+      playbackRate: 1,
+      rationale:
+        language === "zh"
+          ? "渲染完成后自动拆解为可剪辑的视频、音频和字幕素材。"
+          : "Automatically materialized after rendering for video, audio, and subtitle editing.",
+      sceneId: clip.sceneId,
+      source: {
+        kind: "generated-scene-clip" as const,
+        sceneClipAudioUrl: clip.material?.audioUrl,
+        sceneClipAudioWaveform: clip.material?.audioWaveform,
+        sceneClipUrl: clip.videoUrl!,
+        sceneClipVideoOnlyUrl: clip.material?.videoOnlyUrl,
+      },
+      sourceAudioMuted: false,
+      sourceAudioStartOffsetSeconds: 0,
+      subtitle: subtitle || (language === "zh" ? `分镜 ${clip.order}` : `Scene ${clip.order}`),
+      timelineStartSecond: 0,
+      transition: clip.order === 1 ? ("cut" as const) : ("fade" as const),
+      voiceover: voiceover || subtitle || (language === "zh" ? `分镜 ${clip.order}` : `Scene ${clip.order}`),
+      voiceoverStartOffsetSeconds: 0,
+    };
+  });
+  const targetDurationSeconds = Math.max(
+    1,
+    segments.reduce((sum, segment) => sum + segment.durationSeconds, 0),
+  );
+  const plan: SmartEditPlan = {
+    audio: {
+      bgmTrack: renderTask.mediaSettings?.bgmTrack ?? mediaSettings.bgmTrack,
+      targetLanguage: targetLanguage?.trim() || (language === "zh" ? "zh-CN" : "en-US"),
+      voice: renderTask.mediaSettings?.ttsVoice ?? mediaSettings.ttsVoice,
+    },
+    createdAt: new Date().toISOString(),
+    id: `source-render-${renderTask.id}-auto-edit-plan`,
+    projectId: renderTask.projectId,
+    segments,
+    strategy:
+      language === "zh"
+        ? "自动把已渲染分镜拆解为剪辑区素材。"
+        : "Automatically seed the editor with materialized rendered scenes.",
+    targetDurationSeconds,
+  };
+  const materializedPlan = materializeSmartEditRenderedSegmentsToTimelineElements(
+    plan,
+    segments.map((segment) => segment.id),
+    renderTask.updatedAt.replace(/[^a-zA-Z0-9]/gu, ""),
+  );
+  const firstClipUrl = readyClips[0]?.videoUrl;
+  const previewUrl = renderTask.previewUrl ?? renderTask.exportUrl ?? firstClipUrl;
+  const exportUrl = renderTask.exportUrl ?? renderTask.previewUrl ?? firstClipUrl;
+  if (!previewUrl || !exportUrl) {
+    return undefined;
+  }
+
+  return {
+    exportUrl,
+    plan: materializedPlan,
+    previewUrl,
+    renderTaskId: renderTask.id,
+    segmentOutputs: [],
+    traceEvents,
+  };
+};
+
 type PreparedAssetBucketId = "hero" | "scene" | "demo" | "brand";
 
 export const getPreparedAssetsByBucket = (
@@ -797,6 +908,34 @@ export const App = ({
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `#${page}`);
     }
+  };
+
+  const seedSmartEditFromSourceRender = (
+    sourceRenderTask: RenderTask,
+    sourceTraceEvents: TraceEvent[],
+    options: { navigateToEdit?: boolean } = {},
+  ): boolean => {
+    const seededResult = createSmartEditResultFromCompletedSourceRender({
+      language,
+      mediaSettings,
+      renderTask: sourceRenderTask,
+      scenes,
+      targetLanguage: smartEditTargetLanguage,
+      traceEvents: sourceTraceEvents,
+    });
+    if (!seededResult) {
+      return false;
+    }
+
+    setSmartEditResult(seededResult);
+    setSelectedSmartEditSegmentId(seededResult.plan.segments[0]?.id);
+    setExportResult(undefined);
+    if (options.navigateToEdit) {
+      setIsProjectStudioMode(true);
+      setProjectStudioFlow("edit");
+      handlePageChange("edit");
+    }
+    return true;
   };
 
   const handleSectionChange = (section: WorkspaceSectionId) => {
@@ -1066,6 +1205,10 @@ export const App = ({
           setSmartEditResult(smartEdit);
           setSelectedSmartEditSegmentId(smartEdit.plan.segments[0]?.id);
           setExportResult(undefined);
+        } else if (render.renderTask.status === "completed") {
+          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
+            navigateToEdit: isProjectStudioMode || activePage === "delivery",
+          });
         }
         if (
           render.renderTask.status === "failed" &&
@@ -1111,7 +1254,16 @@ export const App = ({
       window.clearTimeout(firstSync);
       window.clearInterval(interval);
     };
-  }, [renderTask?.id, renderTask?.status]);
+  }, [
+    activePage,
+    isProjectStudioMode,
+    language,
+    mediaSettings,
+    renderTask?.id,
+    renderTask?.status,
+    scenes,
+    smartEditTargetLanguage,
+  ]);
 
   useEffect(() => {
     setProjectStudioPreviewScriptId(undefined);
@@ -1173,10 +1325,7 @@ export const App = ({
     setRenderTask(studioBaseRender);
     setTraceEvents([]);
     if (
-      studioBaseRender &&
-      isSmartEditTask(studioBaseRender) &&
-      latestSmartEditRender?.id === studioBaseRender.id &&
-      latestSmartEditRender.smartEditPlan &&
+      latestSmartEditRender?.smartEditPlan &&
       latestSmartEditRender.exportUrl &&
       latestSmartEditRender.previewUrl
     ) {
@@ -1190,8 +1339,18 @@ export const App = ({
       });
       setSelectedSmartEditSegmentId(latestSmartEditRender.smartEditPlan.segments[0]?.id);
     } else {
-      setSmartEditResult(undefined);
-      setSelectedSmartEditSegmentId(undefined);
+      const seededResult = studioBaseRender
+        ? createSmartEditResultFromCompletedSourceRender({
+            language,
+            mediaSettings,
+            renderTask: studioBaseRender,
+            scenes: latestScript?.scenes ?? loadedProject.scenes,
+            targetLanguage: smartEditTargetLanguage,
+            traceEvents: [],
+          })
+        : undefined;
+      setSmartEditResult(seededResult);
+      setSelectedSmartEditSegmentId(seededResult?.plan.segments[0]?.id);
     }
     setDashboard(undefined);
     setExportResult(undefined);
@@ -1257,6 +1416,9 @@ export const App = ({
       const render = await loadRenderTask(renderTaskId);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
+      if (render.renderTask.status === "completed") {
+        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents);
+      }
       setProject((current) =>
         current
           ? {
@@ -2272,6 +2434,11 @@ export const App = ({
       setExportResult(undefined);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
+      if (render.renderTask.status === "completed") {
+        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
+          navigateToEdit: isProjectStudioMode,
+        });
+      }
       setProject((current) =>
         current
           ? {
@@ -2304,6 +2471,11 @@ export const App = ({
       setForceRenderFailure(false);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
+      if (render.renderTask.status === "completed") {
+        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
+          navigateToEdit: isProjectStudioMode,
+        });
+      }
       setProject((current) =>
         current
           ? {
@@ -2324,6 +2496,11 @@ export const App = ({
       const render = await loadRenderTask(renderTask.id);
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
+      if (render.renderTask.status === "completed") {
+        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
+          navigateToEdit: isProjectStudioMode || activePage === "delivery",
+        });
+      }
     });
   };
 
