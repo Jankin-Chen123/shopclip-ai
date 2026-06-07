@@ -5311,6 +5311,151 @@ textarea {
   background: #172333;
 }
 
+.smart-edit-standalone-page .smart-edit-opencut-rail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 42px;
+  padding: 3px 4px;
+  border: 1px solid #282828;
+  border-radius: 8px;
+  background: #171717;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-rail button,
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar button,
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls button,
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button {
+  display: inline-grid;
+  min-width: 34px;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #a3a3a3;
+  background: transparent;
+  cursor: pointer;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-rail button:hover,
+.smart-edit-standalone-page .smart-edit-opencut-rail button:focus-visible,
+.smart-edit-standalone-page .smart-edit-opencut-rail button.active,
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar button:hover,
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar button:focus-visible,
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls button:hover,
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls button:focus-visible,
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:hover,
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:focus-visible {
+  border-color: rgba(26, 167, 255, 0.35);
+  color: #38bdf8;
+  background: rgba(26, 167, 255, 0.12);
+  outline: none;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar > strong {
+  color: #f5f5f5;
+  font-size: 0.92rem;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar > span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-panel-toolbar .smart-edit-opencut-import {
+  grid-auto-flow: column;
+  gap: 6px;
+  min-width: 84px;
+  padding: 0 10px;
+  border-color: #333;
+  color: #f5f5f5;
+  background: #202020;
+  font-weight: 800;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  color: #8d8d8d;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls code:first-child {
+  color: #1aa7ff;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls code {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls button:first-of-type {
+  justify-self: center;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-preview-controls button:nth-of-type(2) {
+  min-width: 58px;
+  color: #f5f5f5;
+  background: #262626;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 42px;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools > span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools > span:last-child {
+  justify-self: end;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools > strong {
+  min-height: 32px;
+  padding: 6px 18px;
+  border: 1px solid #333;
+  border-radius: 999px;
+  color: #f5f5f5;
+  background: #2b2b2b;
+  font-size: 0.86rem;
+}
+
+.smart-edit-standalone-page .smart-edit-opencut-timeline-tools input[type="range"] {
+  width: 140px;
+  accent-color: #1aa7ff;
+}
+
+.smart-edit-standalone-page .smart-edit-track-stack {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.smart-edit-standalone-page .smart-edit-track-stack > .timeline-header {
+  display: none;
+}
+
 .smart-edit-heading {
   align-items: flex-start;
   display: flex;
