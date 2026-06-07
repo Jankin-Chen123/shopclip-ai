@@ -6503,6 +6503,17 @@ Second imported caption`,
     );
   });
 
+  it("keeps the asset import dialog centered in the viewport", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(
+      /\.asset-import-backdrop\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*min-height:\s*100dvh;[^}]*align-items:\s*center;[^}]*justify-items:\s*center;[^}]*place-items:\s*center;/s,
+    );
+    expect(styles).toMatch(
+      /\.asset-import-dialog\s*\{[^}]*width:\s*min\(540px,\s*calc\(100vw - 40px\)\);[^}]*max-height:\s*min\(680px,\s*calc\(100dvh - 40px\)\);[^}]*margin:\s*auto;[^}]*overflow:\s*auto;/s,
+    );
+  });
+
   it("uses one import entry for every asset category", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
 

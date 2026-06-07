@@ -1972,7 +1972,8 @@ export const AssetsPanel = ({
           )
         : null}
 
-      {isImportOpen ? (
+      {isImportOpen
+        ? renderPreviewOverlay(
         <div className="asset-import-backdrop" role="presentation">
           <section
             aria-labelledby="asset-import-title"
@@ -2037,8 +2038,9 @@ export const AssetsPanel = ({
               </Button>
             </div>
           </section>
-        </div>
-      ) : null}
+        </div>,
+          )
+        : null}
     </section>
   );
 };

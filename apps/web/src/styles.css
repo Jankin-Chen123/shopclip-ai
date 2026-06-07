@@ -2766,8 +2766,13 @@ textarea {
   inset: 0;
   z-index: 80;
   display: grid;
+  min-height: 100dvh;
+  align-items: center;
+  justify-items: center;
   place-items: center;
   padding: 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(10px);
 }
@@ -3032,7 +3037,10 @@ textarea {
 .asset-import-dialog {
   display: grid;
   gap: 16px;
-  width: min(540px, 100%);
+  width: min(540px, calc(100vw - 40px));
+  max-height: min(680px, calc(100dvh - 40px));
+  margin: auto;
+  overflow: auto;
   padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
