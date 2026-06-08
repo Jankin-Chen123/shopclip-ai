@@ -9,11 +9,31 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `85fa0b7 Extract resizable material batch guard`.
+- Latest deployed optimization commit: `f180341 Honor locked tracks in trim previews`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `f180341`:
+  - Passed `isTimelineTrackLocked` into `buildSmartEditTrackClipTrimPreview` from `apps/web/src/features/edit/SmartEditPanel.tsx`.
+  - Reused `canResizeSelectedSmartEditTimelineMaterials` inside the trim-preview builder so selected trim previews now follow the same scene-material, bgm, and locked-track eligibility as the actual trim commit path.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` proving locked track clips stay out of selected trim previews.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3095 lines.
+    - `SmartEditTrackDerivedState.ts`: 422 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because the locked voice clip was still included in trim previews.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 16 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 427 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-jl6c0Gu_.js` at 605.21 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `f1803416de3b9256047da5d3c0e17d81055a37f7`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `85fa0b7`:
   - Extracted selected Smart Edit timeline material batch resize eligibility into `canResizeSelectedSmartEditTimelineMaterials` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that guard in `selectResizableSmartEditTimelineMaterialIdsOrUndefined`, leaving the selector focused on the multi-selection and ID-return contract.
