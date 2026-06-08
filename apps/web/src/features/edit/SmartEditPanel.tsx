@@ -42,6 +42,10 @@ import {
   sortSmartEditPlanSegments,
 } from "./SmartEditSegmentDerivedState";
 import {
+  retainSmartEditSelectionIds,
+  toggleSmartEditSelectionId,
+} from "./SmartEditSelectionUtils";
+import {
   selectSmartEditTrackIdsInMarquee,
   smartEditSyncedScrollLeft,
   type SmartEditTrackId,
@@ -374,11 +378,13 @@ export const SmartEditPanel = ({
       setSelectedSegmentIds([]);
       return;
     }
-    setSelectedSegmentIds((current) => {
-      const validIds = new Set(sortedSegments.map((segment) => segment.id));
-      const next = current.filter((id) => validIds.has(id));
-      return next.length > 0 ? next : [selectedSegment.id];
-    });
+    setSelectedSegmentIds((current) =>
+      retainSmartEditSelectionIds({
+        fallbackId: selectedSegment.id,
+        selectedIds: current,
+        validIds: sortedSegments.map((segment) => segment.id),
+      }),
+    );
   }, [selectedSegment, sortedSegments]);
   const selectedPreviewMedia = previewMediaForSegment(selectedSegment, assets);
   const selectedSlices = selectedSegment?.source.assetId
@@ -886,17 +892,13 @@ export const SmartEditPanel = ({
       }
     }
     if (isToggle) {
-      setSelectedSegmentIds((current) => {
-        const currentSet = new Set(current);
-        if (currentSet.has(segmentId) && currentSet.size > 1) {
-          currentSet.delete(segmentId);
-        } else {
-          currentSet.add(segmentId);
-        }
-        return sortedSegments
-          .map((segment) => segment.id)
-          .filter((id) => currentSet.has(id));
-      });
+      setSelectedSegmentIds((current) =>
+        toggleSmartEditSelectionId({
+          currentIds: current,
+          orderedIds: sortedSegments.map((segment) => segment.id),
+          targetId: segmentId,
+        }),
+      );
       clearSelectedTrackClips();
       onSelectedSegmentChange(segmentId);
       return;
@@ -926,15 +928,13 @@ export const SmartEditPanel = ({
       }
     }
     if (event?.ctrlKey || event?.metaKey) {
-      setSelectedTrackClipIds((current) => {
-        const currentSet = new Set(current);
-        if (currentSet.has(trackClip.id) && currentSet.size > 1) {
-          currentSet.delete(trackClip.id);
-        } else {
-          currentSet.add(trackClip.id);
-        }
-        return trackClips.map((candidate) => candidate.id).filter((id) => currentSet.has(id));
-      });
+      setSelectedTrackClipIds((current) =>
+        toggleSmartEditSelectionId({
+          currentIds: current,
+          orderedIds: trackClips.map((candidate) => candidate.id),
+          targetId: trackClip.id,
+        }),
+      );
       setSelectedTrackClipId(trackClip.id);
       clearSelectedSegments();
       return;

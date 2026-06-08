@@ -9,12 +9,15 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Deployed optimization commit before this local follow-up: `ff23fb45 Refactor ShopClip project structure and sync audit`.
+- Latest deployed optimization commit before this local follow-up: `b87d7908 Tidy Smart Edit selection handlers`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
 - Current local follow-up cleanup after the deployed commit:
+  - Extracted reusable Smart Edit selection helpers into `apps/web/src/features/edit/SmartEditSelectionUtils.ts`.
+  - Replaced repeated inline ordered-selection filtering/toggle logic in `apps/web/src/features/edit/SmartEditPanel.tsx`.
+  - Added focused tests in `apps/web/src/features/edit/SmartEditSelectionUtils.test.ts`.
   - Continued consolidating Smart Edit track-clip selection state updates in `apps/web/src/features/edit/SmartEditPanel.tsx`.
   - Added local helpers for segment selection updates so repeated `setSelectedSegmentIds` and `onSelectedSegmentChange` pairs now share one path.
   - Added a local guard helper for selected editable timeline material IDs so timeline material commands share the same empty-selection return path.
@@ -24,6 +27,8 @@
   - `App.tsx`: 2871 lines.
   - `router.ts`: 2325 lines.
   - Verification for the follow-up: `corepack pnpm --filter @shopclip/web typecheck`, `corepack pnpm --filter @shopclip/web lint`, and `corepack pnpm --filter @shopclip/web test -- src/app/App.test.tsx` all passed during incremental checks.
+  - Verification for this local selection-helper cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditSelectionUtils.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. An initial full `corepack pnpm test` run hit a transient Windows temp-file lock in `realMediaProcessing.test.ts`; the targeted rerun and subsequent full rerun both passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-D59HmPy1.js` at 604.01 kB minified.
   - Full gate before packaging the follow-up: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` all passed. The build still reports the existing Vite chunk-size warning for `assets/index-CvIUgH3H.js` at 603.90 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
