@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
+  RenderTask,
+  SmartEditPlan,
   ScriptResult,
   StoryboardScene,
 } from "@shopclip/shared";
@@ -7,11 +9,34 @@ import type {
 import type { ProjectSnapshot } from "../lib/api";
 import {
   selectCurrentBackgroundTaskTarget,
+  selectLoadedProjectWorkspaceState,
   selectWorkspaceAssetRefreshAction,
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
 
 const sceneWithId = (id: string): StoryboardScene => ({ id }) as StoryboardScene;
+
+const scriptWithScenes = (id: string, scenes: StoryboardScene[]): ScriptResult =>
+  ({
+    id,
+    narrative: `${id} narrative`,
+    scenes,
+  }) as ScriptResult;
+
+const smartEditPlan = (segmentId: string): SmartEditPlan =>
+  ({
+    id: `plan-${segmentId}`,
+    segments: [{ id: segmentId }],
+  }) as SmartEditPlan;
+
+const renderTask = (patch: Partial<RenderTask>): RenderTask =>
+  ({
+    id: "render-1",
+    provider: "ffmpeg",
+    status: "completed",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...patch,
+  }) as RenderTask;
 
 describe("selectCurrentBackgroundTaskTarget", () => {
   it("keeps the project detail tab only for project page tasks", () => {
@@ -142,5 +167,72 @@ describe("selectWorkspaceAssetRefreshAction", () => {
         activePage: "project",
       }),
     ).toEqual({ type: "none" });
+  });
+});
+
+describe("selectLoadedProjectWorkspaceState", () => {
+  it("uses the latest script for the initial script draft and selected scene", () => {
+    const firstScript = scriptWithScenes("script-1", [sceneWithId("scene-from-first-script")]);
+    const latestScript = scriptWithScenes("script-2", [sceneWithId("scene-from-latest-script")]);
+
+    const state = selectLoadedProjectWorkspaceState({
+      language: "en",
+      mediaSettings: {
+        aspectRatio: "9:16",
+        bgmTrack: "uplifting",
+        targetDurationSeconds: 30,
+        ttsVoice: "alloy",
+      },
+      project: {
+        scenes: [sceneWithId("project-scene")],
+        scripts: [firstScript, latestScript],
+        renderTasks: [],
+      } as ProjectSnapshot,
+      smartEditTargetLanguage: "en-US",
+    });
+
+    expect(state.latestScript).toBe(latestScript);
+    expect(state.scriptDraft).toBe("script-2 narrative");
+    expect(state.selectedSceneId).toBe("scene-from-latest-script");
+  });
+
+  it("prefers the latest completed smart edit render over a source render seed", () => {
+    const olderSmartEdit = renderTask({
+      id: "smart-edit-1",
+      exportUrl: "https://example.test/old.mp4",
+      previewUrl: "https://example.test/old-preview.mp4",
+      provider: "smart-edit-ffmpeg",
+      smartEditPlan: smartEditPlan("old-segment"),
+    });
+    const latestSmartEdit = renderTask({
+      id: "smart-edit-2",
+      exportUrl: "https://example.test/new.mp4",
+      previewUrl: "https://example.test/new-preview.mp4",
+      provider: "smart-edit-ffmpeg",
+      smartEditPlan: smartEditPlan("new-segment"),
+      smartEditSegmentOutputs: [{ segmentId: "new-segment", videoUrl: "https://example.test/new.mp4" }],
+    });
+
+    const state = selectLoadedProjectWorkspaceState({
+      language: "en",
+      mediaSettings: {
+        aspectRatio: "9:16",
+        bgmTrack: "uplifting",
+        targetDurationSeconds: 30,
+        ttsVoice: "alloy",
+      },
+      project: {
+        scenes: [sceneWithId("project-scene")],
+        scripts: [],
+        renderTasks: [olderSmartEdit, latestSmartEdit],
+      } as ProjectSnapshot,
+      smartEditTargetLanguage: "en-US",
+    });
+
+    expect(state.smartEditResult?.renderTaskId).toBe("smart-edit-2");
+    expect(state.smartEditResult?.segmentOutputs).toEqual([
+      { segmentId: "new-segment", videoUrl: "https://example.test/new.mp4" },
+    ]);
+    expect(state.selectedSmartEditSegmentId).toBe("new-segment");
   });
 });

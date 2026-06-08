@@ -1,7 +1,9 @@
 import type {
   AssetMetadata,
   AssetSlice,
+  RenderTask,
   ReferenceVideo,
+  SmartEditResult,
   ScriptResult,
   StoryboardScene,
   ViralTemplate,
@@ -9,7 +11,7 @@ import type {
 
 import { assetMatchesCategory, type AssetCategory } from "../features/assets/AssetCategoryTabs";
 import type { WorkspacePageId } from "../components/layout/AppShell";
-import type { AssetLibraryCategory, ProjectSnapshot } from "../lib/api";
+import type { AssetLibraryCategory, MediaSettings, ProjectSnapshot } from "../lib/api";
 import {
   getCreationAssetLibraryRefreshCategory,
   hasActivePendingReferenceAnalysis,
@@ -21,6 +23,12 @@ import {
   getPreparedAssetsByBucket,
   getReferenceScriptAssets,
 } from "./AppProjectAssetUtils";
+import {
+  createSmartEditResultFromCompletedSourceRender,
+  selectLatestCompletedSmartEditTask,
+  selectStudioBaseRenderTask,
+} from "./AppRenderUtils";
+import type { Language } from "./i18n";
 import type { BackgroundTaskTarget } from "./useBackgroundTaskTracker";
 
 type AssetLibrarySnapshot = {
@@ -36,6 +44,15 @@ export type WorkspaceAssetRefreshAction =
   | { type: "asset"; category: AssetLibraryCategory }
   | { type: "reference"; includeTemplates: true }
   | { type: "none" };
+
+export type LoadedProjectWorkspaceState = {
+  latestScript: ScriptResult | undefined;
+  scriptDraft: string;
+  selectedSceneId: string | undefined;
+  selectedSmartEditSegmentId: string | undefined;
+  smartEditResult: SmartEditResult | undefined;
+  studioBaseRender: RenderTask | undefined;
+};
 
 export const selectCurrentBackgroundTaskTarget = ({
   flow,
@@ -69,6 +86,53 @@ export const selectWorkspaceAssetRefreshAction = ({
   return creationAssetLibraryRefreshCategory
     ? { type: "asset", category: creationAssetLibraryRefreshCategory }
     : { type: "none" };
+};
+
+export const selectLoadedProjectWorkspaceState = ({
+  language,
+  mediaSettings,
+  project,
+  smartEditTargetLanguage,
+}: {
+  language: Language;
+  mediaSettings: MediaSettings;
+  project: ProjectSnapshot;
+  smartEditTargetLanguage: string;
+}): LoadedProjectWorkspaceState => {
+  const latestScript = project.scripts.at(-1);
+  const studioBaseRender = selectStudioBaseRenderTask(project.renderTasks);
+  const latestSmartEditRender = selectLatestCompletedSmartEditTask(project.renderTasks);
+  const smartEditResult =
+    latestSmartEditRender?.smartEditPlan &&
+    latestSmartEditRender.exportUrl &&
+    latestSmartEditRender.previewUrl
+      ? {
+          exportUrl: latestSmartEditRender.exportUrl,
+          plan: latestSmartEditRender.smartEditPlan,
+          previewUrl: latestSmartEditRender.previewUrl,
+          renderTaskId: latestSmartEditRender.id,
+          segmentOutputs: latestSmartEditRender.smartEditSegmentOutputs ?? [],
+          traceEvents: [],
+        }
+      : studioBaseRender
+        ? createSmartEditResultFromCompletedSourceRender({
+            language,
+            mediaSettings,
+            renderTask: studioBaseRender,
+            scenes: latestScript?.scenes ?? project.scenes,
+            targetLanguage: smartEditTargetLanguage,
+            traceEvents: [],
+          })
+        : undefined;
+
+  return {
+    latestScript,
+    scriptDraft: latestScript?.narrative ?? "",
+    selectedSceneId: latestScript?.scenes[0]?.id ?? project.scenes[0]?.id,
+    selectedSmartEditSegmentId: smartEditResult?.plan.segments[0]?.id,
+    smartEditResult,
+    studioBaseRender,
+  };
 };
 
 export const selectWorkspaceScenes = (

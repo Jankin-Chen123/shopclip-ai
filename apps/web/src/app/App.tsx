@@ -132,6 +132,7 @@ import {
   selectCreationUsableAssets,
   selectCurrentBackgroundTaskTarget,
   selectHasPendingReferences,
+  selectLoadedProjectWorkspaceState,
   selectPreparedProjectAssetsByBucket,
   selectScriptReferenceAssets,
   selectScriptReferenceLibrary,
@@ -150,7 +151,6 @@ import {
   isSmartEditTask,
   needsSceneClipMaterialRefresh,
   selectInvalidSeedanceSceneDuration,
-  selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
   smartEditResultFromRenderSnapshot,
 } from "./AppRenderUtils";
@@ -762,49 +762,26 @@ export const App = ({
     });
 
   const applyLoadedProject = (loadedProject: ProjectSnapshot) => {
-    const latestScript = loadedProject.scripts.at(-1);
-    const studioBaseRender = selectStudioBaseRenderTask(loadedProject.renderTasks);
-    const latestSmartEditRender = selectLatestCompletedSmartEditTask(loadedProject.renderTasks);
+    const loadedWorkspaceState = selectLoadedProjectWorkspaceState({
+      language,
+      mediaSettings,
+      project: loadedProject,
+      smartEditTargetLanguage,
+    });
     setProject(loadedProject);
     setProjectDetailTab("overview");
     setIsProjectScriptComposerOpen(false);
     resetProjectStudioMode();
     setBrief(createBriefFromProject(loadedProject));
-    setScript(latestScript);
-    setScriptDraft(latestScript?.narrative ?? "");
+    setScript(loadedWorkspaceState.latestScript);
+    setScriptDraft(loadedWorkspaceState.scriptDraft);
     setScriptProductionMode("automatic");
     setSelectedReferenceIdForScript(undefined);
     setSelectedTemplateIdForScript(undefined);
-    setRenderTask(studioBaseRender);
+    setRenderTask(loadedWorkspaceState.studioBaseRender);
     setTraceEvents([]);
-    if (
-      latestSmartEditRender?.smartEditPlan &&
-      latestSmartEditRender.exportUrl &&
-      latestSmartEditRender.previewUrl
-    ) {
-      setSmartEditResult({
-        exportUrl: latestSmartEditRender.exportUrl,
-        plan: latestSmartEditRender.smartEditPlan,
-        previewUrl: latestSmartEditRender.previewUrl,
-        renderTaskId: latestSmartEditRender.id,
-        segmentOutputs: latestSmartEditRender.smartEditSegmentOutputs ?? [],
-        traceEvents: [],
-      });
-      setSelectedSmartEditSegmentId(latestSmartEditRender.smartEditPlan.segments[0]?.id);
-    } else {
-      const seededResult = studioBaseRender
-        ? createSmartEditResultFromCompletedSourceRender({
-            language,
-            mediaSettings,
-            renderTask: studioBaseRender,
-            scenes: latestScript?.scenes ?? loadedProject.scenes,
-            targetLanguage: smartEditTargetLanguage,
-            traceEvents: [],
-          })
-        : undefined;
-      setSmartEditResult(seededResult);
-      setSelectedSmartEditSegmentId(seededResult?.plan.segments[0]?.id);
-    }
+    setSmartEditResult(loadedWorkspaceState.smartEditResult);
+    setSelectedSmartEditSegmentId(loadedWorkspaceState.selectedSmartEditSegmentId);
     setDashboard(undefined);
     setExportResult(undefined);
     resetAssetSearch();
@@ -813,7 +790,7 @@ export const App = ({
     setAssetPrepSnapshot(
       createAssetPrepSnapshotFromProjectAssets(loadedProject.assets, loadedProject.prepKeywords),
     );
-    setSelectedSceneId(latestScript?.scenes[0]?.id ?? loadedProject.scenes[0]?.id);
+    setSelectedSceneId(loadedWorkspaceState.selectedSceneId);
     setDirtySceneIds(new Set());
   };
 
