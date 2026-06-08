@@ -133,6 +133,7 @@ import {
   replaceProjectRenderTask,
   replaceProjectScene,
   replaceProjectScenes,
+  replaceProjectScenesAcrossScripts,
   replaceProjectScript,
   replaceProjectScriptStoryboard,
   upsertProjectRenderTask,
@@ -978,20 +979,7 @@ export const App = ({
           }
         : current,
     );
-    setProject((current) =>
-      current
-        ? {
-            ...current,
-            scenes: updatedScenes,
-            scripts: current.scripts.map((currentScript) => ({
-              ...currentScript,
-              scenes: updatedScenes.filter((scene) =>
-                currentScript.scenes.some((scriptScene) => scriptScene.id === scene.id),
-              ),
-            })),
-          }
-        : current,
-    );
+    setProject((current) => replaceProjectScenesAcrossScripts(current, updatedScenes));
   };
 
   const persistDirtyScenesForRender = async () => {

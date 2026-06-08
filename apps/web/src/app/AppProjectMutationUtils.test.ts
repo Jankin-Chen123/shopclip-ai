@@ -20,6 +20,7 @@ import {
   removeProjectAssets,
   replaceProjectScriptStoryboard,
   replaceProjectRenderTaskProgress,
+  replaceProjectScenesAcrossScripts,
   replaceProcessedProjectAsset,
   upsertProjectRenderTask,
   upsertProjectAsset,
@@ -130,6 +131,37 @@ describe("replaceProjectScriptStoryboard", () => {
 
   it("preserves an undefined project", () => {
     expect(replaceProjectScriptStoryboard(undefined, script("script-new", []))).toBeUndefined();
+  });
+});
+
+describe("replaceProjectScenesAcrossScripts", () => {
+  it("replaces project scenes and syncs matching script scene versions", () => {
+    const project = {
+      scenes: [scene("scene-1"), scene("scene-2")],
+      scripts: [
+        script("script-1", [scene("scene-1"), scene("scene-3")]),
+        script("script-2", [scene("scene-2")]),
+      ],
+    } as ProjectSnapshot;
+    const updatedScenes = [
+      { ...scene("scene-1"), subtitle: "Updated one" },
+      { ...scene("scene-2"), subtitle: "Updated two" },
+      { ...scene("scene-ignored"), subtitle: "Not in scripts" },
+    ];
+
+    const nextProject = replaceProjectScenesAcrossScripts(project, updatedScenes);
+
+    expect(nextProject?.scenes).toEqual(updatedScenes);
+    expect(nextProject?.scripts[0]?.scenes).toEqual([
+      expect.objectContaining({ id: "scene-1", subtitle: "Updated one" }),
+    ]);
+    expect(nextProject?.scripts[1]?.scenes).toEqual([
+      expect.objectContaining({ id: "scene-2", subtitle: "Updated two" }),
+    ]);
+  });
+
+  it("preserves an undefined project", () => {
+    expect(replaceProjectScenesAcrossScripts(undefined, [scene("scene-1")])).toBeUndefined();
   });
 });
 

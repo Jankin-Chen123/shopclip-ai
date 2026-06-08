@@ -276,6 +276,23 @@ export const replaceProjectScenes = (
       }
     : project;
 
+export const replaceProjectScenesAcrossScripts = (
+  project: ProjectSnapshot | undefined,
+  scenes: StoryboardScene[],
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        scenes,
+        scripts: project.scripts.map((script) => ({
+          ...script,
+          scenes: scenes.filter((scene) =>
+            script.scenes.some((scriptScene) => scriptScene.id === scene.id),
+          ),
+        })),
+      }
+    : project;
+
 export const replaceProjectScene = (
   project: ProjectSnapshot | undefined,
   scene: StoryboardScene,
