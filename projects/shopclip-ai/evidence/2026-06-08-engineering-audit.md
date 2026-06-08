@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `a56a75e Extract project prep keyword mutation`.
+- Latest deployed optimization commit: `b25ab16 Extract project reference removal mutation`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `b25ab16`:
+  - Extracted reference-deletion project snapshot cleanup from `apps/web/src/app/App.tsx` into `removeProjectReferenceResources` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Replaced the largest remaining inline project update in `handleDeleteReferences` while keeping reference library, asset library, active script, asset-prep, search results, selected reference/template, and current project modal state updates in `App.tsx`.
+  - Extended `apps/web/src/app/AppProjectMutationUtils.test.ts` coverage for deleted assets, slices, processing events/jobs, reference videos, viral templates, project scenes, script scenes, and undefined project preservation.
+  - Current file sizes:
+    - `App.tsx`: 2588 lines.
+    - `AppProjectMutationUtils.ts`: 376 lines.
+    - `AppProjectMutationUtils.test.ts`: 570 lines.
+    - `AppWorkspaceDerivedState.ts`: 189 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `removeProjectReferenceResources` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 28 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 482 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-5nwyaol8.js` at 606.02 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `b25ab16df574c272eddf3106816cd0907561a7a6`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `a56a75e`:
   - Extracted project prep-keyword synchronization from `apps/web/src/app/App.tsx` into `replaceProjectPrepKeywords` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced the inline project update after `updateProjectPrep` while keeping debounced API persistence and error swallowing behavior in `App.tsx`.
