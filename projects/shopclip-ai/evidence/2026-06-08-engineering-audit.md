@@ -126,6 +126,13 @@
     - Server HEAD: `2bd6f281a85f492a98d24789cc69167aa11c2b9d`.
     - Server API health and `https://shopclip.site/health`: returned `status: ok`.
     - `https://shopclip.site/#project` and `https://shopclip.site/#studio`: loaded without browser console errors, failed requests, or 4xx/5xx responses.
+- Current local follow-up cleanup after the deployed commit:
+  - Extracted repeated Smart Edit keyframe upsert filtering/sorting logic from `apps/web/src/features/edit/SmartEditPanel.tsx` into `upsertSmartEditKeyframeAtTime` in `apps/web/src/features/edit/SmartEditSegmentUtils.ts`.
+  - Reused the helper for visual transform keyframes, visual effect amount keyframes, segment audio volume keyframes, and standalone timeline element audio volume keyframes.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditSegmentUtils.test.ts` for sorted insertion and near-time keyframe replacement.
+  - `SmartEditPanel.tsx`: 3079 lines after this follow-up.
+  - Verification for this local keyframe cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditSegmentUtils.test.ts src/app/App.test.tsx`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-7mnE7Cm0.js` at 604.85 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.

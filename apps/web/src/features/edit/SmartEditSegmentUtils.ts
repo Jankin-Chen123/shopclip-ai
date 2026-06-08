@@ -132,6 +132,22 @@ export const visualKeyframesForSegment = (segment: SmartEditSegment) =>
 export const visualEffectKeyframes = (effect: SmartEditVisualEffect) =>
   [...(effect.keyframes ?? [])].sort((left, right) => left.timeSecond - right.timeSecond);
 
+export const upsertSmartEditKeyframeAtTime = <Keyframe extends { timeSecond: number }>({
+  keyframe,
+  keyframes,
+  toleranceSeconds = 0.05,
+}: {
+  keyframe: Keyframe;
+  keyframes: Keyframe[];
+  toleranceSeconds?: number;
+}): Keyframe[] =>
+  [
+    ...keyframes.filter(
+      (candidate) => Math.abs(candidate.timeSecond - keyframe.timeSecond) > toleranceSeconds,
+    ),
+    keyframe,
+  ].sort((left, right) => left.timeSecond - right.timeSecond);
+
 export const audioVolumeKeyframes = (
   keyframes: SmartEditAudioVolumeKeyframe[] | undefined,
   durationSeconds: number,

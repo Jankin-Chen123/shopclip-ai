@@ -23,6 +23,7 @@ import {
   previewMediaForSegment,
   transformForSegment,
   trimSegmentSource,
+  upsertSmartEditKeyframeAtTime,
   visualEffectKeyframes,
   visualEffectLabel,
   visualEffectsForSegment,
@@ -1090,21 +1091,18 @@ export const SmartEditPanel = ({
     );
     const token = `${Date.now()}`;
     commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
-      const keyframes = visualKeyframesForSegment(segment).filter(
-        (keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05,
-      );
       return {
         ...segment,
-        visualKeyframes: [
-          ...keyframes,
-          {
+        visualKeyframes: upsertSmartEditKeyframeAtTime({
+          keyframe: {
             easing: "linear" as const,
             effects: effectsForSegment(segment),
             id: `${segment.id}-visual-kf-${token}`,
             timeSecond,
             transform: transformForSegment(segment),
           },
-        ].sort((left, right) => left.timeSecond - right.timeSecond),
+          keyframes: visualKeyframesForSegment(segment),
+        }),
       };
     }), { label: "Add visual keyframe" });
   };
@@ -1206,18 +1204,16 @@ export const SmartEditPanel = ({
         }
         return {
           ...effect,
-          keyframes: [
-            ...visualEffectKeyframes(effect).filter(
-              (keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05,
-            ),
-            {
+          keyframes: upsertSmartEditKeyframeAtTime({
+            keyframe: {
               easing: "linear" as const,
               id: `${effect.id}-amount-kf-${token}`,
               param: "amount" as const,
               timeSecond,
               value: effect.params.amount,
             },
-          ].sort((left, right) => left.timeSecond - right.timeSecond),
+            keyframes: visualEffectKeyframes(effect),
+          }),
         };
       }),
     })), { label: "Add effect amount keyframe" });
@@ -1272,38 +1268,36 @@ export const SmartEditPanel = ({
     const token = `${Date.now()}`;
     commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
       if (trackId === "sourceAudio") {
-        const keyframes = audioVolumeKeyframes(
-          segment.sourceAudioVolumeKeyframes,
-          clipDurationSeconds,
-        ).filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05);
         return {
           ...segment,
-          sourceAudioVolumeKeyframes: [
-            ...keyframes,
-            {
+          sourceAudioVolumeKeyframes: upsertSmartEditKeyframeAtTime({
+            keyframe: {
               easing: "linear" as const,
               id: `${segment.id}-source-volume-kf-${token}`,
               timeSecond,
               volume: clampAudioVolume(segment.sourceAudioVolume ?? 1),
             },
-          ].sort((left, right) => left.timeSecond - right.timeSecond),
+            keyframes: audioVolumeKeyframes(
+              segment.sourceAudioVolumeKeyframes,
+              clipDurationSeconds,
+            ),
+          }),
         };
       }
-      const keyframes = audioVolumeKeyframes(
-        segment.voiceoverVolumeKeyframes,
-        clipDurationSeconds,
-      ).filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05);
       return {
         ...segment,
-        voiceoverVolumeKeyframes: [
-          ...keyframes,
-          {
+        voiceoverVolumeKeyframes: upsertSmartEditKeyframeAtTime({
+          keyframe: {
             easing: "linear" as const,
             id: `${segment.id}-voice-volume-kf-${token}`,
             timeSecond,
             volume: clampAudioVolume(segment.voiceoverVolume ?? 1),
           },
-        ].sort((left, right) => left.timeSecond - right.timeSecond),
+          keyframes: audioVolumeKeyframes(
+            segment.voiceoverVolumeKeyframes,
+            clipDurationSeconds,
+          ),
+        }),
       };
     }), { label: "Add audio volume keyframe" });
   };
@@ -1343,20 +1337,19 @@ export const SmartEditPanel = ({
       selectedTimelineElement.durationSeconds,
     );
     const token = `${Date.now()}`;
-    const keyframes = audioVolumeKeyframes(
-      selectedTimelineElement.audioVolumeKeyframes,
-      selectedTimelineElement.durationSeconds,
-    ).filter((keyframe) => Math.abs(keyframe.timeSecond - timeSecond) > 0.05);
     updateSelectedTimelineElement({
-      audioVolumeKeyframes: [
-        ...keyframes,
-        {
+      audioVolumeKeyframes: upsertSmartEditKeyframeAtTime({
+        keyframe: {
           easing: "linear" as const,
           id: `${selectedTimelineElement.id}-volume-kf-${token}`,
           timeSecond,
           volume: clampAudioVolume(selectedTimelineElement.audioVolume ?? 1),
         },
-      ].sort((left, right) => left.timeSecond - right.timeSecond),
+        keyframes: audioVolumeKeyframes(
+          selectedTimelineElement.audioVolumeKeyframes,
+          selectedTimelineElement.durationSeconds,
+        ),
+      }),
     });
   };
 
