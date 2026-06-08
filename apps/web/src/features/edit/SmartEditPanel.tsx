@@ -72,6 +72,7 @@ import { SmartEditTrackStack } from "./SmartEditTrackStack";
 import {
   buildSmartEditTrackClipDragPreview,
   buildSmartEditTrackClipTrimPreview,
+  canMoveSelectedSmartEditTimelineMaterials,
   buildSmartEditTrackEditPoints,
   canRelinkSmartEditTimelineElement,
   findSmartEditTrackClip,
@@ -1968,7 +1969,7 @@ export const SmartEditPanel = ({
         : [];
     const nextPlan =
       selectedMoveIds.length > 1 &&
-      selectedBatchTrackClips.every((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
+      canMoveSelectedSmartEditTimelineMaterials(selectedBatchTrackClips, isTimelineTrackLocked)
         ? moveSmartEditTimelineElementsOnTimeline(
             plan,
             selectedMoveIds,

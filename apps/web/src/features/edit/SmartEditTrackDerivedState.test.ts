@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
+  canMoveSelectedSmartEditTimelineMaterials,
   hasSmartEditTimelineTextMaterials,
   selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined,
@@ -226,6 +227,34 @@ describe("SmartEditTrackDerivedState", () => {
         isTrackLocked,
       ),
     ).toBeUndefined();
+  });
+
+  it("reports whether a selected timeline material batch can move together", () => {
+    const isTrackLocked = (trackId: string) => trackId === "voice";
+
+    expect(
+      canMoveSelectedSmartEditTimelineMaterials(
+        [
+          trackClip("caption-1"),
+          trackClip("bgm-1", { trackId: "bgm" }),
+        ],
+        isTrackLocked,
+      ),
+    ).toBe(true);
+
+    expect(
+      canMoveSelectedSmartEditTimelineMaterials(
+        [trackClip("caption-1"), trackClip("scene-caption", { segmentId: "scene-1" })],
+        isTrackLocked,
+      ),
+    ).toBe(false);
+
+    expect(
+      canMoveSelectedSmartEditTimelineMaterials(
+        [trackClip("caption-1"), trackClip("voice-1", { trackId: "voice" })],
+        isTrackLocked,
+      ),
+    ).toBe(false);
   });
 
   it("selects the alignment anchor for selected timeline materials", () => {
