@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `268ec45 Extract project render task mutations`.
+- Latest deployed optimization commit: `7482129 Extract render progress project mutations`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `7482129`:
+  - Extracted render progress/export project mutation logic from `apps/web/src/app/App.tsx` into `replaceProjectRenderTaskProgress` and `markProjectRenderTaskExported` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Replaced inline project updates in render polling and project export paths while keeping local render task, trace, export result, error, and Smart Edit state changes in `App.tsx`.
+  - Extended `apps/web/src/app/AppProjectMutationUtils.test.ts` coverage for polling progress replacement, preserving project status until render completion, marking exported render tasks, writing export/preview URLs, and completing the project on export.
+  - Current file sizes:
+    - `App.tsx`: 2508 lines.
+    - `AppProjectMutationUtils.ts`: 257 lines.
+    - `AppProjectMutationUtils.test.ts`: 309 lines.
+    - `AppWorkspaceDerivedState.ts`: 169 lines.
+    - `SmartEditPanel.tsx`: 2981 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `replaceProjectRenderTaskProgress` and `markProjectRenderTaskExported` were not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 16 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 470 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-qPkzsJcF.js` at 605.99 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `74821292d851bdcd3549b0e5857d7974b2f3e1ff`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `268ec45`:
   - Extracted repeated project render task mutation logic from `apps/web/src/app/App.tsx` into `appendProjectRenderTask` and `upsertProjectRenderTask` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced three inline render task project updates in start render, retry render, and Smart Edit render snapshot paths while keeping dashboard, export, render task, trace, and Smart Edit UI state changes in `App.tsx`.
