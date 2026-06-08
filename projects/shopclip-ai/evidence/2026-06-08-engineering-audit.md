@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `69a55e3 Extract selected segment update helper`.
+- Latest deployed optimization commit: `2788e31 Extract movable material id selector`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `2788e31`:
+  - Extracted movable Smart Edit timeline material ID selection into `selectMovableSmartEditTimelineMaterialIdsOrUndefined` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` so the selected-track-clip move command no longer filters selected clips and maps IDs inline.
+  - Kept the panel responsible for plan guards, timeline edit mode, playhead context, and command history labels.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for movable standalone materials, scene material exclusion, locked track exclusion, and no-movable-selection fallback.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3090 lines.
+    - `SmartEditTrackDerivedState.ts`: 387 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `selectMovableSmartEditTimelineMaterialIdsOrUndefined` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 10 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 421 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-Bn8uVKGg.js` at 605.10 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `2788e3121df67214b7464134b4ab56af6b5c522a`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `69a55e3`:
   - Extracted selected Smart Edit segment batch-update logic into `updateSelectedSmartEditSegments` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
   - Reused that helper in `apps/web/src/features/edit/SmartEditPanel.tsx` so the panel no longer builds the selected ID `Set` and maps `plan.segments` inline for batch edits.
