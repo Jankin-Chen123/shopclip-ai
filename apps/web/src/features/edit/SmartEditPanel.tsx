@@ -21,7 +21,6 @@ import {
   defaultVisualEffectAmount,
   effectsForSegment,
   previewMediaForSegment,
-  sourceLabel,
   transformForSegment,
   trimSegmentSource,
   visualEffectKeyframes,
@@ -33,10 +32,12 @@ import {
 import {
   materializableSmartEditSegments,
   selectSmartEditSegment,
+  selectSmartEditAssetSlicesForSegment,
   selectSmartEditSegmentIdByOffset,
   selectedSmartEditSegmentIndex,
   selectSmartEditSegmentsById,
   selectSmartEditSegmentIdsWithToken,
+  smartEditPreviewSegmentLabel,
   smartEditEnabledDurationSeconds,
   smartEditSelectedSourceLabel,
   smartEditTimelineDurationSeconds,
@@ -388,9 +389,7 @@ export const SmartEditPanel = ({
     );
   }, [selectedSegment, sortedSegments]);
   const selectedPreviewMedia = previewMediaForSegment(selectedSegment, assets);
-  const selectedSlices = selectedSegment?.source.assetId
-    ? assetSlices.filter((slice) => slice.assetId === selectedSegment.source.assetId)
-    : [];
+  const selectedSlices = selectSmartEditAssetSlicesForSegment(assetSlices, selectedSegment);
   const enabledDurationSeconds = smartEditEnabledDurationSeconds(sortedSegments);
   const timelineDurationSeconds = smartEditTimelineDurationSeconds(sortedSegments);
   const boundedPlayheadSeconds = Math.min(playheadSeconds, timelineDurationSeconds);
@@ -2787,9 +2786,7 @@ export const SmartEditPanel = ({
     trimAtPlayhead,
     undoPlanChange,
   };
-  const selectedSegmentLabel = selectedSegment
-    ? selectedSegment.subtitle || sourceLabel(selectedSegment, assets)
-    : "-";
+  const selectedSegmentLabel = smartEditPreviewSegmentLabel(selectedSegment, assets);
   const handlePanelKeyDown = (event: ReactKeyboardEvent<HTMLElement>) =>
     handleSmartEditKeyboardShortcut(
       event,

@@ -1,4 +1,4 @@
-import type { AssetMetadata, SmartEditPlan, SmartEditSegment } from "@shopclip/shared";
+import type { AssetMetadata, AssetSlice, SmartEditPlan, SmartEditSegment } from "@shopclip/shared";
 
 import { sourceLabel } from "./SmartEditSegmentUtils";
 import { timelineDurationForSegments } from "./SmartEditTimelineOperations";
@@ -70,6 +70,20 @@ export const smartEditSelectedSourceLabel = (
   selectedSegment: SmartEditSegment | undefined,
   assets: AssetMetadata[],
 ): string => (selectedSegment ? sourceLabel(selectedSegment, assets) : "-");
+
+export const smartEditPreviewSegmentLabel = (
+  selectedSegment: SmartEditSegment | undefined,
+  assets: AssetMetadata[],
+): string =>
+  selectedSegment ? selectedSegment.subtitle || sourceLabel(selectedSegment, assets) : "-";
+
+export const selectSmartEditAssetSlicesForSegment = (
+  assetSlices: AssetSlice[],
+  selectedSegment: SmartEditSegment | undefined,
+): AssetSlice[] =>
+  selectedSegment?.source.assetId
+    ? assetSlices.filter((slice) => slice.assetId === selectedSegment.source.assetId)
+    : [];
 
 export const selectSmartEditSegmentIdsWithToken = (
   segments: SmartEditSegment[],
