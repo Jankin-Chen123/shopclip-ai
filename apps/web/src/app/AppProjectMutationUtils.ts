@@ -228,6 +228,17 @@ export const upsertProjectViralTemplate = (
       }
     : project;
 
+export const replaceProjectPrepKeywords = (
+  project: ProjectSnapshot | undefined,
+  updatedProject: Pick<ProjectSnapshot, "id" | "prepKeywords">,
+): ProjectSnapshot | undefined =>
+  project?.id === updatedProject.id
+    ? {
+        ...project,
+        prepKeywords: updatedProject.prepKeywords,
+      }
+    : project;
+
 export const replaceProcessedProjectAsset = (
   project: ProjectSnapshot | undefined,
   processed: {

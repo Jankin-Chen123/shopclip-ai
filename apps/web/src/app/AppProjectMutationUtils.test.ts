@@ -22,6 +22,7 @@ import {
   replaceProjectScriptStoryboard,
   replaceProjectRenderTaskProgress,
   replaceProjectScenesAcrossScripts,
+  replaceProjectPrepKeywords,
   replaceProcessedProjectAsset,
   upsertProjectRenderTask,
   upsertProjectAsset,
@@ -341,6 +342,45 @@ describe("upsertProjectViralTemplate", () => {
   it("preserves an undefined project", () => {
     expect(
       upsertProjectViralTemplate(undefined, viralTemplate("template-1", "New")),
+    ).toBeUndefined();
+  });
+});
+
+describe("replaceProjectPrepKeywords", () => {
+  it("replaces prep keywords for the matching project", () => {
+    const project = {
+      id: "project-1",
+      prepKeywords: ["old"],
+    } as ProjectSnapshot;
+
+    const nextProject = replaceProjectPrepKeywords(project, {
+      id: "project-1",
+      prepKeywords: ["new", "keywords"],
+    });
+
+    expect(nextProject?.prepKeywords).toEqual(["new", "keywords"]);
+  });
+
+  it("leaves the project unchanged when the updated project id does not match", () => {
+    const project = {
+      id: "project-1",
+      prepKeywords: ["old"],
+    } as ProjectSnapshot;
+
+    expect(
+      replaceProjectPrepKeywords(project, {
+        id: "project-2",
+        prepKeywords: ["new"],
+      }),
+    ).toBe(project);
+  });
+
+  it("preserves an undefined project", () => {
+    expect(
+      replaceProjectPrepKeywords(undefined, {
+        id: "project-1",
+        prepKeywords: ["new"],
+      }),
     ).toBeUndefined();
   });
 });

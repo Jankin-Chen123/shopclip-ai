@@ -130,6 +130,7 @@ import {
   replaceProjectRenderTaskProgress,
   removeProjectScript,
   replaceProcessedProjectAsset,
+  replaceProjectPrepKeywords,
   replaceProjectRenderTask,
   replaceProjectScene,
   replaceProjectScenes,
@@ -498,11 +499,7 @@ export const App = ({
     const timeoutId = window.setTimeout(() => {
       void updateProjectPrep(projectId, { keywords })
         .then((updatedProject) => {
-          setProject((current) =>
-            current?.id === updatedProject.id
-              ? { ...current, prepKeywords: updatedProject.prepKeywords }
-              : current,
-          );
+          setProject((current) => replaceProjectPrepKeywords(current, updatedProject));
         })
         .catch(() => undefined);
     }, 300);
