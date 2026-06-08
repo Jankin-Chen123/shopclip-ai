@@ -9,11 +9,31 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `13d5171 Extract resizable material selector`.
+- Latest deployed optimization commit: `621cf23 Extract movable material batch guard`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `621cf23`:
+  - Extracted selected Smart Edit timeline material batch move eligibility into `canMoveSelectedSmartEditTimelineMaterials` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that guard in `apps/web/src/features/edit/SmartEditPanel.tsx` so the selected-batch timeline move path no longer embeds segment-material and locked-track checks inline.
+  - Kept the panel responsible for selected batch lookup, drag preview timing, move command dispatch, and command history labels.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for movable multi-track batches, scene material exclusion, and locked track exclusion.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3093 lines.
+    - `SmartEditTrackDerivedState.ts`: 417 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 14 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 425 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-BRMEWD-Q.js` at 605.20 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `621cf237fb6fac35284ffe1776f412429257de47`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `13d5171`:
   - Extracted resizable Smart Edit timeline material ID selection into `selectResizableSmartEditTimelineMaterialIdsOrUndefined` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` so the trim-track-clip edge command no longer performs its own multi-select resize eligibility checks inline.
