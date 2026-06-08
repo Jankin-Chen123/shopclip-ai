@@ -137,6 +137,7 @@ import {
   selectScriptReferenceAssets,
   selectScriptReferenceLibrary,
   selectScriptTemplateLibrary,
+  selectRenderedSmartEditSceneSegments,
   selectSmartEditAssetSlices,
   selectStudioAssets,
   selectWorkspaceScenes,
@@ -2105,36 +2106,11 @@ export const App = ({
   };
 
   const createSmartEditRequest = () => {
-    const renderedSceneSegments =
-      !smartEditResult && renderTask?.status === "completed" && renderTask.sceneClips
-        ? renderTask.sceneClips
-            .filter((clip) => clip.videoUrl)
-            .map((clip) => {
-              const scene = scenes.find((candidate) => candidate.id === clip.sceneId);
-              return {
-                sceneId: clip.sceneId,
-                durationSeconds: scene?.durationSeconds ?? 4,
-                enabled: true,
-                timelineStartSecond: 0,
-                playbackRate: 1,
-                sourceAudioMuted: false,
-                sourceAudioStartOffsetSeconds: 0,
-                captionHidden: false,
-                captionStartOffsetSeconds: 0,
-                voiceoverStartOffsetSeconds: 0,
-                source: {
-                  kind: "generated-scene-clip" as const,
-                  sceneClipAudioUrl: clip.material?.audioUrl,
-                  sceneClipAudioWaveform: clip.material?.audioWaveform,
-                  sceneClipUrl: clip.videoUrl,
-                  sceneClipVideoOnlyUrl: clip.material?.videoOnlyUrl,
-                },
-                subtitle: clip.material?.text || clip.subtitle,
-                transition: clip.order === 1 ? ("cut" as const) : ("fade" as const),
-                voiceover: scene?.voiceover || clip.subtitle,
-              };
-            })
-        : [];
+    const renderedSceneSegments = selectRenderedSmartEditSceneSegments(
+      renderTask,
+      scenes,
+      smartEditResult,
+    );
     return {
       apiConfig,
       instructions: smartEditInstructions || undefined,

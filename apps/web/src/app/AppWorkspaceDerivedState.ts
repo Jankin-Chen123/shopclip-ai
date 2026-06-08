@@ -2,7 +2,10 @@ import type {
   AssetMetadata,
   AssetSlice,
   ReferenceVideo,
+  RenderTask,
   ScriptResult,
+  SmartEditRequest,
+  SmartEditResult,
   StoryboardScene,
   ViralTemplate,
 } from "@shopclip/shared";
@@ -44,6 +47,44 @@ export const selectWorkspaceScenes = (
   script: ScriptResult | undefined,
   project: ProjectSnapshot | undefined,
 ): StoryboardScene[] => script?.scenes ?? project?.scenes ?? [];
+
+export const selectRenderedSmartEditSceneSegments = (
+  renderTask: RenderTask | undefined,
+  scenes: StoryboardScene[],
+  smartEditResult: SmartEditResult | undefined,
+): SmartEditRequest["segments"] => {
+  if (smartEditResult || renderTask?.status !== "completed" || !renderTask.sceneClips) {
+    return [];
+  }
+
+  return renderTask.sceneClips
+    .filter((clip) => clip.videoUrl)
+    .map((clip) => {
+      const scene = scenes.find((candidate) => candidate.id === clip.sceneId);
+      return {
+        sceneId: clip.sceneId,
+        durationSeconds: scene?.durationSeconds ?? 4,
+        enabled: true,
+        timelineStartSecond: 0,
+        playbackRate: 1,
+        sourceAudioMuted: false,
+        sourceAudioStartOffsetSeconds: 0,
+        captionHidden: false,
+        captionStartOffsetSeconds: 0,
+        voiceoverStartOffsetSeconds: 0,
+        source: {
+          kind: "generated-scene-clip" as const,
+          sceneClipAudioUrl: clip.material?.audioUrl,
+          sceneClipAudioWaveform: clip.material?.audioWaveform,
+          sceneClipUrl: clip.videoUrl,
+          sceneClipVideoOnlyUrl: clip.material?.videoOnlyUrl,
+        },
+        subtitle: clip.material?.text || clip.subtitle,
+        transition: clip.order === 1 ? ("cut" as const) : ("fade" as const),
+        voiceover: scene?.voiceover || clip.subtitle,
+      };
+    });
+};
 
 export const selectActiveAssetCategoryAssets = (
   assets: AssetMetadata[],
