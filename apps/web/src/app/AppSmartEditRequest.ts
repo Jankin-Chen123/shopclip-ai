@@ -1,10 +1,55 @@
 import type {
+  MediaSettings,
   RenderTask,
   SmartEditPlan,
   SmartEditRequest,
   SmartEditResult,
   StoryboardScene,
+  VideoGenerationSettings,
 } from "@shopclip/shared";
+
+import type { Language } from "./i18n";
+import type { UserApiConfig } from "../lib/api";
+
+interface SmartEditRequestInput {
+  apiConfig: UserApiConfig;
+  instructions: string;
+  language: Language;
+  mediaSettings: MediaSettings;
+  renderTask: RenderTask | undefined;
+  scenes: StoryboardScene[];
+  smartEditResult: SmartEditResult | undefined;
+  targetLanguage: string;
+  videoSettings: VideoGenerationSettings;
+}
+
+export const createSmartEditRequestPayload = ({
+  apiConfig,
+  instructions,
+  language,
+  mediaSettings,
+  renderTask,
+  scenes,
+  smartEditResult,
+  targetLanguage,
+  videoSettings,
+}: SmartEditRequestInput): SmartEditRequest => {
+  const renderedSceneSegments = selectRenderedSmartEditSceneSegments(
+    renderTask,
+    scenes,
+    smartEditResult,
+  );
+  return {
+    apiConfig,
+    instructions: instructions || undefined,
+    locale: language === "zh" ? "zh-CN" : "en-US",
+    mediaSettings,
+    currentPlan: smartEditResult?.plan,
+    segments: selectSmartEditPlanSegmentOverrides(smartEditResult?.plan) ?? renderedSceneSegments,
+    targetLanguage: targetLanguage.trim() || undefined,
+    videoSettings,
+  };
+};
 
 export const selectRenderedSmartEditSceneSegments = (
   renderTask: RenderTask | undefined,

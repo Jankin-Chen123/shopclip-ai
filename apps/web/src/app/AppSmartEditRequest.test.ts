@@ -1,17 +1,34 @@
 import { describe, expect, it } from "vitest";
 import type {
+  MediaSettings,
   RenderTask,
   SmartEditPlan,
   SmartEditResult,
   StoryboardScene,
+  VideoGenerationSettings,
 } from "@shopclip/shared";
 
+import type { UserApiConfig } from "../lib/api";
 import {
+  createSmartEditRequestPayload,
   selectRenderedSmartEditSceneSegments,
   selectSmartEditPlanSegmentOverrides,
 } from "./AppSmartEditRequest";
 
 const sceneWithId = (id: string): StoryboardScene => ({ id }) as StoryboardScene;
+const apiConfig = {} as UserApiConfig;
+const mediaSettings: MediaSettings = {
+  bgmTrack: "creator-pop",
+  subtitleStyle: "clean-lower-third",
+  subtitlesEnabled: true,
+  ttsVoice: "clear-host",
+};
+const videoSettings: VideoGenerationSettings = {
+  generateAudio: true,
+  ratio: "9:16",
+  resolution: "720p",
+  watermark: false,
+};
 
 describe("selectRenderedSmartEditSceneSegments", () => {
   it("maps completed rendered scene clips into Smart Edit segment overrides", () => {
@@ -239,5 +256,114 @@ describe("selectSmartEditPlanSegmentOverrides", () => {
 
   it("returns undefined when there is no active Smart Edit plan", () => {
     expect(selectSmartEditPlanSegmentOverrides(undefined)).toBeUndefined();
+  });
+});
+
+describe("createSmartEditRequestPayload", () => {
+  it("builds a localized Smart Edit request from rendered scene clips", () => {
+    const request = createSmartEditRequestPayload({
+      apiConfig,
+      instructions: "Tighten pacing",
+      language: "zh",
+      mediaSettings,
+      renderTask: {
+        status: "completed",
+        sceneClips: [
+          {
+            sceneId: "scene-1",
+            order: 1,
+            subtitle: "Clip subtitle",
+            videoUrl: "https://cdn.example.test/scene-1.mp4",
+          },
+        ],
+      } as RenderTask,
+      scenes: [
+        {
+          ...sceneWithId("scene-1"),
+          durationSeconds: 5,
+          voiceover: "Scene voiceover",
+        },
+      ],
+      smartEditResult: undefined,
+      targetLanguage: " en-US ",
+      videoSettings,
+    });
+
+    expect(request).toMatchObject({
+      apiConfig,
+      currentPlan: undefined,
+      instructions: "Tighten pacing",
+      locale: "zh-CN",
+      mediaSettings,
+      targetLanguage: "en-US",
+      videoSettings,
+    });
+    expect(request.segments).toEqual([
+      expect.objectContaining({
+        durationSeconds: 5,
+        sceneId: "scene-1",
+        subtitle: "Clip subtitle",
+        transition: "cut",
+        voiceover: "Scene voiceover",
+      }),
+    ]);
+  });
+
+  it("prefers active Smart Edit plan segment overrides over rendered scene clips", () => {
+    const plan = {
+      segments: [
+        {
+          sceneId: "scene-plan",
+          durationSeconds: 6,
+          enabled: true,
+          timelineStartSecond: 2,
+          playbackRate: 1,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipUrl: "https://cdn.example.test/plan.mp4",
+          },
+          sourceAudioMuted: false,
+          sourceAudioStartOffsetSeconds: 0,
+          subtitle: "Plan subtitle",
+          transition: "fade",
+          voiceover: "Plan voiceover",
+        },
+      ],
+    } as SmartEditPlan;
+
+    const request = createSmartEditRequestPayload({
+      apiConfig,
+      instructions: "",
+      language: "en",
+      mediaSettings,
+      renderTask: {
+        status: "completed",
+        sceneClips: [
+          {
+            sceneId: "scene-rendered",
+            order: 1,
+            subtitle: "Rendered subtitle",
+            videoUrl: "https://cdn.example.test/rendered.mp4",
+          },
+        ],
+      } as RenderTask,
+      scenes: [sceneWithId("scene-rendered")],
+      smartEditResult: { plan } as SmartEditResult,
+      targetLanguage: "   ",
+      videoSettings,
+    });
+
+    expect(request.currentPlan).toBe(plan);
+    expect(request.instructions).toBeUndefined();
+    expect(request.locale).toBe("en-US");
+    expect(request.targetLanguage).toBeUndefined();
+    expect(request.segments).toEqual([
+      expect.objectContaining({
+        sceneId: "scene-plan",
+        subtitle: "Plan subtitle",
+      }),
+    ]);
   });
 });

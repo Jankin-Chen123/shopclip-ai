@@ -142,8 +142,7 @@ import {
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
 import {
-  selectRenderedSmartEditSceneSegments,
-  selectSmartEditPlanSegmentOverrides,
+  createSmartEditRequestPayload,
 } from "./AppSmartEditRequest";
 import {
   createSmartEditResultFromCompletedSourceRender,
@@ -2109,21 +2108,17 @@ export const App = ({
   };
 
   const createSmartEditRequest = () => {
-    const renderedSceneSegments = selectRenderedSmartEditSceneSegments(
+    return createSmartEditRequestPayload({
+      apiConfig,
+      instructions: smartEditInstructions,
+      language,
+      mediaSettings,
       renderTask,
       scenes,
       smartEditResult,
-    );
-    return {
-      apiConfig,
-      instructions: smartEditInstructions || undefined,
-      locale: language === "zh" ? "zh-CN" : "en-US",
-      mediaSettings,
-      currentPlan: smartEditResult?.plan,
-      segments: selectSmartEditPlanSegmentOverrides(smartEditResult?.plan) ?? renderedSceneSegments,
-      targetLanguage: smartEditTargetLanguage.trim() || undefined,
+      targetLanguage: smartEditTargetLanguage,
       videoSettings,
-    };
+    });
   };
 
   const applySmartEditRenderSnapshot = (render: RenderSnapshot) => {
