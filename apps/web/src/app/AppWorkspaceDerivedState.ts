@@ -4,6 +4,7 @@ import type {
   ReferenceVideo,
   RenderTask,
   ScriptResult,
+  SmartEditPlan,
   SmartEditRequest,
   SmartEditResult,
   StoryboardScene,
@@ -85,6 +86,40 @@ export const selectRenderedSmartEditSceneSegments = (
       };
     });
 };
+
+export const selectSmartEditPlanSegmentOverrides = (
+  plan: SmartEditPlan | undefined,
+): SmartEditRequest["segments"] | undefined =>
+  plan?.segments.map((segment) => ({
+    sceneId: segment.sceneId,
+    durationSeconds: segment.durationSeconds,
+    enabled: segment.enabled,
+    timelineStartSecond: segment.timelineStartSecond,
+    playbackRate: segment.playbackRate,
+    captionHidden: segment.captionHidden,
+    captionStartOffsetSeconds: segment.captionStartOffsetSeconds,
+    captionDurationSeconds: segment.captionDurationSeconds,
+    captionTextColor: segment.captionTextColor,
+    captionTextFontSize: segment.captionTextFontSize,
+    captionTextPositionYPercent: segment.captionTextPositionYPercent,
+    voiceoverStartOffsetSeconds: segment.voiceoverStartOffsetSeconds,
+    voiceoverDurationSeconds: segment.voiceoverDurationSeconds,
+    voiceoverVolume: segment.voiceoverVolume,
+    voiceoverVolumeKeyframes: segment.voiceoverVolumeKeyframes,
+    voiceoverFadeInSeconds: segment.voiceoverFadeInSeconds,
+    voiceoverFadeOutSeconds: segment.voiceoverFadeOutSeconds,
+    source: segment.source,
+    sourceAudioMuted: segment.sourceAudioMuted,
+    sourceAudioStartOffsetSeconds: segment.sourceAudioStartOffsetSeconds,
+    sourceAudioDurationSeconds: segment.sourceAudioDurationSeconds,
+    sourceAudioVolume: segment.sourceAudioVolume,
+    sourceAudioVolumeKeyframes: segment.sourceAudioVolumeKeyframes,
+    sourceAudioFadeInSeconds: segment.sourceAudioFadeInSeconds,
+    sourceAudioFadeOutSeconds: segment.sourceAudioFadeOutSeconds,
+    subtitle: segment.subtitle,
+    transition: segment.transition,
+    voiceover: segment.voiceover,
+  }));
 
 export const selectActiveAssetCategoryAssets = (
   assets: AssetMetadata[],

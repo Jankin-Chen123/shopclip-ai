@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { RenderTask, ScriptResult, SmartEditResult, StoryboardScene } from "@shopclip/shared";
+import type {
+  RenderTask,
+  ScriptResult,
+  SmartEditPlan,
+  SmartEditResult,
+  StoryboardScene,
+} from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
 import {
   selectCurrentBackgroundTaskTarget,
   selectRenderedSmartEditSceneSegments,
+  selectSmartEditPlanSegmentOverrides,
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
 
@@ -231,5 +238,95 @@ describe("selectRenderedSmartEditSceneSegments", () => {
         undefined,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("selectSmartEditPlanSegmentOverrides", () => {
+  it("maps editable Smart Edit plan segment fields into request overrides", () => {
+    const plan = {
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          order: 1,
+          enabled: false,
+          durationSeconds: 6,
+          timelineStartSecond: 1,
+          playbackRate: 1.25,
+          captionHidden: true,
+          captionStartOffsetSeconds: 0.5,
+          captionDurationSeconds: 5,
+          captionTextColor: "#ffffff",
+          captionTextFontSize: 28,
+          captionTextPositionYPercent: 76,
+          voiceoverStartOffsetSeconds: 0.25,
+          voiceoverDurationSeconds: 4.5,
+          voiceoverVolume: 0.8,
+          voiceoverVolumeKeyframes: [
+            { id: "voice-kf-1", timeSecond: 0, volume: 0.2 },
+          ],
+          voiceoverFadeInSeconds: 0.3,
+          voiceoverFadeOutSeconds: 0.4,
+          source: {
+            kind: "generated-scene-clip",
+            sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+          },
+          sourceAudioMuted: true,
+          sourceAudioStartOffsetSeconds: 0.75,
+          sourceAudioDurationSeconds: 3.5,
+          sourceAudioVolume: 0.6,
+          sourceAudioVolumeKeyframes: [
+            { id: "source-kf-1", timeSecond: 0, volume: 0.3 },
+          ],
+          sourceAudioFadeInSeconds: 0.2,
+          sourceAudioFadeOutSeconds: 0.5,
+          subtitle: "Segment subtitle",
+          transition: "fade",
+          voiceover: "Segment voiceover",
+          assetTags: ["unused-request-field"],
+          rationale: "Unused request field",
+        },
+      ],
+    } as SmartEditPlan;
+
+    expect(selectSmartEditPlanSegmentOverrides(plan)).toEqual([
+      {
+        sceneId: "scene-1",
+        durationSeconds: 6,
+        enabled: false,
+        timelineStartSecond: 1,
+        playbackRate: 1.25,
+        captionHidden: true,
+        captionStartOffsetSeconds: 0.5,
+        captionDurationSeconds: 5,
+        captionTextColor: "#ffffff",
+        captionTextFontSize: 28,
+        captionTextPositionYPercent: 76,
+        voiceoverStartOffsetSeconds: 0.25,
+        voiceoverDurationSeconds: 4.5,
+        voiceoverVolume: 0.8,
+        voiceoverVolumeKeyframes: [{ id: "voice-kf-1", timeSecond: 0, volume: 0.2 }],
+        voiceoverFadeInSeconds: 0.3,
+        voiceoverFadeOutSeconds: 0.4,
+        source: {
+          kind: "generated-scene-clip",
+          sceneClipUrl: "https://cdn.example.test/scene-1.mp4",
+        },
+        sourceAudioMuted: true,
+        sourceAudioStartOffsetSeconds: 0.75,
+        sourceAudioDurationSeconds: 3.5,
+        sourceAudioVolume: 0.6,
+        sourceAudioVolumeKeyframes: [{ id: "source-kf-1", timeSecond: 0, volume: 0.3 }],
+        sourceAudioFadeInSeconds: 0.2,
+        sourceAudioFadeOutSeconds: 0.5,
+        subtitle: "Segment subtitle",
+        transition: "fade",
+        voiceover: "Segment voiceover",
+      },
+    ]);
+  });
+
+  it("returns undefined when there is no active Smart Edit plan", () => {
+    expect(selectSmartEditPlanSegmentOverrides(undefined)).toBeUndefined();
   });
 });
