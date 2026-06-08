@@ -93,6 +93,10 @@ import {
   type SmartEditTimelineToolbarState,
 } from "./SmartEditTimelineToolbar";
 import {
+  selectSmartEditMaterializationTargetSegmentIds,
+  selectSmartEditMaterializedTimelineElementIds,
+} from "./SmartEditMaterialization";
+import {
   addSmartEditTimelineBookmark,
   removeNearestSmartEditTimelineBookmark,
   type SmartEditTimelineBookmark,
@@ -811,13 +815,10 @@ export const SmartEditPanel = ({
       return;
     }
     const token = String(Date.now());
-    const selectedMaterializableIds = materializableSegments
-      .filter((segment) => selectedSegmentIds.includes(segment.id))
-      .map((segment) => segment.id);
-    const targetSegmentIds =
-      selectedMaterializableIds.length > 0
-        ? selectedMaterializableIds
-        : materializableSegments.map((segment) => segment.id);
+    const targetSegmentIds = selectSmartEditMaterializationTargetSegmentIds({
+      materializableSegments,
+      selectedSegmentIds,
+    });
     const nextPlan = materializeSmartEditRenderedSegmentsToTimelineElements(
       plan,
       targetSegmentIds,
@@ -826,10 +827,10 @@ export const SmartEditPanel = ({
     if (nextPlan === plan) {
       return;
     }
-    const addedIds =
-      nextPlan.timeline?.elements
-        .map((element) => element.id)
-        .filter((id) => id.endsWith(`-${token}`)) ?? [];
+    const addedIds = selectSmartEditMaterializedTimelineElementIds({
+      elements: nextPlan.timeline?.elements,
+      token,
+    });
     commitPlanChange(nextPlan, { label: "Materialize rendered scenes" });
     selectTimelineMaterialIds(addedIds);
   };
