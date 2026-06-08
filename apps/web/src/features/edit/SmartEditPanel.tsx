@@ -87,6 +87,7 @@ import {
   selectEditableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined as selectEditableTimelineMaterialIdsOrUndefined,
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
+  selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineElementIdsWithToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
@@ -1647,8 +1648,9 @@ export const SmartEditPanel = ({
               : "Trim selected materials left at playhead",
         });
         setSelectedTrackClipIds(
-          selectedTimelineMaterialIds.filter((id) =>
-            nextPlan.timeline?.elements.some((element) => element.id === id),
+          selectExistingSmartEditTimelineElementIds(
+            nextPlan.timeline?.elements,
+            selectedTimelineMaterialIds,
           ),
         );
         return;

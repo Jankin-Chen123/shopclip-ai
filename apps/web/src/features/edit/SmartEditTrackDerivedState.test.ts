@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
+import type { SmartEditTimelineElement } from "./SmartEditTimelineTypes";
 import {
   buildSmartEditTrackClipTrimPreview,
   canMoveSelectedSmartEditTimelineMaterials,
@@ -12,6 +13,7 @@ import {
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectRemovableSmartEditTimelineMaterialIds,
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
+  selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
@@ -29,6 +31,16 @@ const trackClip = (
     trackId: "caption",
     ...patch,
   }) as SmartEditTrackSegment;
+
+const timelineElement = (id: string): SmartEditTimelineElement =>
+  ({
+    durationSeconds: 1,
+    id,
+    kind: "text",
+    startSecond: 0,
+    text: id,
+    trackId: "text-copy",
+  }) as SmartEditTimelineElement;
 
 describe("SmartEditTrackDerivedState", () => {
   it("selects only standalone caption timeline material ids", () => {
@@ -337,6 +349,19 @@ describe("SmartEditTrackDerivedState", () => {
     expect(selectSmartEditTimelineMaterialAlignAnchorSecond(trackClips, "start")).toBe(1.1);
     expect(selectSmartEditTimelineMaterialAlignAnchorSecond(trackClips, "end")).toBe(6.5);
     expect(selectSmartEditTimelineMaterialAlignAnchorSecond([], "start")).toBeUndefined();
+  });
+
+  it("keeps requested timeline element ids that still exist", () => {
+    expect(
+      selectExistingSmartEditTimelineElementIds(
+        [timelineElement("caption-2"), timelineElement("caption-1")],
+        ["caption-1", "missing", "caption-2"],
+      ),
+    ).toEqual(["caption-1", "caption-2"]);
+
+    expect(
+      selectExistingSmartEditTimelineElementIds(undefined, ["caption-1"]),
+    ).toEqual([]);
   });
 
   it("prefers editable timeline materials when choosing clipboard copy content", () => {
