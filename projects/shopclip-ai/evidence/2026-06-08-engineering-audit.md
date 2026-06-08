@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `23ac77c Extract track clip derived state`.
+- Latest deployed optimization commit: `d76e333 Extract workspace asset refresh selection`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `d76e333`:
+  - Extracted the workspace asset/reference refresh decision from `apps/web/src/app/App.tsx` into `selectWorkspaceAssetRefreshAction` in `apps/web/src/app/AppWorkspaceDerivedState.ts`.
+  - Replaced the inline `activePage` / `activeAssetCategory` branching in `App.tsx` with a small action dispatch while keeping the actual refresh calls and React state ownership in `App.tsx`.
+  - Added `apps/web/src/app/AppWorkspaceDerivedState.test.ts` coverage for template reference refresh, non-template asset refresh, inspiration all-asset refresh, create-page refresh, and project-page no-op behavior.
+  - Current file sizes:
+    - `App.tsx`: 2810 lines.
+    - `AppWorkspaceDerivedState.ts`: 125 lines.
+    - `AppWorkspaceDerivedState.test.ts`: 146 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+    - `SmartEditTrackDerivedState.ts`: 45 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppWorkspaceDerivedState.test.ts` failed before implementation because `selectWorkspaceAssetRefreshAction` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppWorkspaceDerivedState.test.ts` passed, 11 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 452 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-B1jCFlXj.js` at 605.81 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `d76e3332c745f415b1980ff492f5330578e1944c`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `23ac77c`:
   - Extracted track-clip-specific derived state into `apps/web/src/features/edit/SmartEditTrackClipDerivedState.ts`.
   - Moved track clip flattening, edit-point construction, snap-point construction, selected clip batch selection, clip lookup, playhead clip selection, drag preview, and trim preview out of `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
