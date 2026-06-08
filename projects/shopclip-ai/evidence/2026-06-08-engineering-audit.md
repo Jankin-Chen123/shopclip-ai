@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `f9161ef Extract editable material selection helper`.
+- Latest deployed optimization commit: `9b1d45b Extract selected segment id selector`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `9b1d45b`:
+  - Extracted selected Smart Edit segment ID fallback into `selectSmartEditSegmentIdsOrUndefined` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
+  - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` for duplicate-selected-segments and paste-selected-segments-at-playhead command guards.
+  - Kept the remaining `selectedBatchSegments` membership `Set` logic local because it is a different update-filtering use case.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditSegmentDerivedState.test.ts` for non-empty ID selection and empty batch fallback.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3088 lines.
+    - `SmartEditSegmentDerivedState.ts`: 106 lines.
+    - `SmartEditTrackDerivedState.ts`: 381 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` failed before implementation because `selectSmartEditSegmentIdsOrUndefined` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` passed, 8 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 418 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-B6g6IBdm.js` at 605.11 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `9b1d45b788cc27a851f0082dce9ca23a9402504e`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `f9161ef`:
   - Extracted editable timeline material ID fallback into `selectEditableSmartEditTimelineMaterialIdsOrUndefined` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that selector from `selectSmartEditClipboardCopySelection` and the Smart Edit panel's timeline material commands.
