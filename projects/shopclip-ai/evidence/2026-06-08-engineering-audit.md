@@ -9,7 +9,7 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit before this local follow-up: `9278a846 Move Smart Edit request selectors`.
+- Latest deployed optimization commit before this local follow-up: `30205d94 Extract Smart Edit request payload builder`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
@@ -82,11 +82,16 @@
   - Split the corresponding tests from `apps/web/src/app/AppWorkspaceDerivedState.test.ts` into `apps/web/src/app/AppSmartEditRequest.test.ts`, leaving workspace-derived-state tests focused on workspace/page selectors.
   - Verification for this local Smart Edit request module cleanup: `corepack pnpm --filter @shopclip/web test -- src/app/AppSmartEditRequest.test.ts src/app/AppWorkspaceDerivedState.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
   - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-fXfWNSVo.js` at 604.35 kB minified.
-- Current local follow-up cleanup after the deployed commit:
+- Recent deployed cleanup at `30205d94`:
   - Extracted full Smart Edit request payload assembly from `apps/web/src/app/App.tsx` into `createSmartEditRequestPayload` in `apps/web/src/app/AppSmartEditRequest.ts`.
   - Added request-level coverage in `apps/web/src/app/AppSmartEditRequest.test.ts` for rendered segment fallback, active plan override priority, locale selection, instruction empty fallback, and target-language trimming.
   - Verification for this local Smart Edit request payload cleanup: `corepack pnpm --filter @shopclip/web test -- src/app/AppSmartEditRequest.test.ts src/app/AppWorkspaceDerivedState.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
   - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-BjmEquNf.js` at 604.62 kB minified.
+- Current local follow-up cleanup after the deployed commit:
+  - Extracted Seedance per-scene duration validation from `apps/web/src/app/App.tsx` into `selectInvalidSeedanceSceneDuration` in `apps/web/src/app/AppRenderUtils.ts`.
+  - Added focused boundary coverage in `apps/web/src/app/AppRenderUtils.test.ts` for empty scene lists, valid 4s and 12s limits, below-limit scenes, above-limit scenes, and first-invalid-scene selection.
+  - Verification for this local render-utils cleanup: `corepack pnpm --filter @shopclip/web test -- src/app/AppRenderUtils.test.ts src/app/App.test.tsx`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-DlZ85_rg.js` at 604.63 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.

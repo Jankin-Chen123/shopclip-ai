@@ -149,6 +149,7 @@ import {
   isRenderTaskPollingActive,
   isSmartEditTask,
   needsSceneClipMaterialRefresh,
+  selectInvalidSeedanceSceneDuration,
   selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
   smartEditResultFromRenderSnapshot,
@@ -158,6 +159,7 @@ export {
   hasCompletedSceneClips,
   isRenderTaskPollingActive,
   needsSceneClipMaterialRefresh,
+  selectInvalidSeedanceSceneDuration,
   selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
 } from "./AppRenderUtils";
@@ -1055,9 +1057,7 @@ export const App = ({
   };
 
   const validateSeedanceSceneDurations = () => {
-    const invalidScene = scenes.find(
-      (scene) => scene.durationSeconds < 4 || scene.durationSeconds > 12,
-    );
+    const invalidScene = selectInvalidSeedanceSceneDuration(scenes);
     if (!invalidScene) {
       return true;
     }

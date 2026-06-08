@@ -34,6 +34,11 @@ export const needsSceneClipMaterialRefresh = (renderTask: RenderTask | undefined
     (clip) => clip.status === "completed" && Boolean(clip.videoUrl) && !clip.material,
   ) === true;
 
+export const selectInvalidSeedanceSceneDuration = (
+  scenes: StoryboardScene[],
+): StoryboardScene | undefined =>
+  scenes.find((scene) => scene.durationSeconds < 4 || scene.durationSeconds > 12);
+
 const hasSceneClipAudioMaterial = (renderTask: RenderTask | undefined): boolean =>
   hasCompletedSceneClips(renderTask) &&
   renderTask?.sceneClips?.some((clip) => Boolean(clip.material?.audioUrl)) === true;
