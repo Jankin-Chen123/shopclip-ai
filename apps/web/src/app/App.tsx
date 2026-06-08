@@ -125,6 +125,7 @@ import {
   removeProjectRenderTask,
   removeProjectAssets,
   removeProjectScript,
+  replaceProcessedProjectAsset,
   replaceProjectRenderTask,
   replaceProjectScene,
   replaceProjectScenes,
@@ -1133,22 +1134,7 @@ export const App = ({
             ...processed.slices,
           ],
         }));
-        setProject((current) =>
-          current && processed.asset.projectId === current.id
-            ? {
-                ...current,
-                assets: current.assets.map((asset) =>
-                  asset.id === processed.asset.id ? processed.asset : asset,
-                ),
-                assetSlices: [
-                  ...current.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
-                  ...processed.slices,
-                ],
-                assetProcessingEvents: [...current.assetProcessingEvents, ...processed.events],
-                assetProcessingJobs: [...current.assetProcessingJobs, processed.job],
-              }
-            : current,
-        );
+        setProject((current) => replaceProcessedProjectAsset(current, processed));
         resetAssetSearch();
       },
       {

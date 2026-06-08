@@ -1,5 +1,7 @@
 import type {
   AssetMetadata,
+  AssetProcessingEvent,
+  AssetProcessingJob,
   AssetSlice,
   RenderTask,
   ScriptResult,
@@ -107,6 +109,30 @@ export const upsertProjectAsset = (
     ? {
         ...project,
         assets: [...project.assets.filter((candidate) => candidate.id !== asset.id), asset],
+    }
+    : project;
+
+export const replaceProcessedProjectAsset = (
+  project: ProjectSnapshot | undefined,
+  processed: {
+    asset: AssetMetadata;
+    events: AssetProcessingEvent[];
+    job: AssetProcessingJob;
+    slices: AssetSlice[];
+  },
+): ProjectSnapshot | undefined =>
+  belongsToProject(project, processed.asset)
+    ? {
+        ...project,
+        assets: project.assets.map((asset) =>
+          asset.id === processed.asset.id ? processed.asset : asset,
+        ),
+        assetSlices: [
+          ...project.assetSlices.filter((slice) => slice.assetId !== processed.asset.id),
+          ...processed.slices,
+        ],
+        assetProcessingEvents: [...project.assetProcessingEvents, ...processed.events],
+        assetProcessingJobs: [...project.assetProcessingJobs, processed.job],
       }
     : project;
 

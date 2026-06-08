@@ -1,16 +1,28 @@
 import { describe, expect, it } from "vitest";
-import type { AssetMetadata, AssetSlice, ScriptResult, StoryboardScene } from "@shopclip/shared";
+import type {
+  AssetMetadata,
+  AssetProcessingEvent,
+  AssetProcessingJob,
+  AssetSlice,
+  ScriptResult,
+  StoryboardScene,
+} from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
 import {
   appendProjectAsset,
   mergeImportedProjectAssets,
   removeProjectAssets,
+  replaceProcessedProjectAsset,
   upsertProjectAsset,
 } from "./AppProjectMutationUtils";
 
 const asset = (id: string): AssetMetadata => ({ id }) as AssetMetadata;
 const slice = (id: string, assetId: string): AssetSlice => ({ id, assetId }) as AssetSlice;
+const processingEvent = (id: string, assetId: string): AssetProcessingEvent =>
+  ({ id, assetId }) as AssetProcessingEvent;
+const processingJob = (id: string, assetId: string): AssetProcessingJob =>
+  ({ id, assetId }) as AssetProcessingJob;
 const scene = (id: string, assetId?: string): StoryboardScene =>
   ({ id, assetId }) as StoryboardScene;
 
@@ -146,6 +158,65 @@ describe("mergeImportedProjectAssets", () => {
         assets: [{ ...asset("asset-elsewhere"), projectId: "project-2" }],
         assetSlices: [slice("slice-elsewhere", "asset-elsewhere")],
         project,
+      }),
+    ).toBe(project);
+  });
+});
+
+describe("replaceProcessedProjectAsset", () => {
+  it("replaces the processed asset, refreshes its slices, and appends processing records", () => {
+    const project = {
+      id: "project-1",
+      assets: [
+        { ...asset("asset-1"), name: "Old" },
+        { ...asset("asset-2"), name: "Keep" },
+      ],
+      assetSlices: [slice("slice-old", "asset-1"), slice("slice-keep", "asset-2")],
+      assetProcessingEvents: [processingEvent("event-old", "asset-1")],
+      assetProcessingJobs: [processingJob("job-old", "asset-1")],
+    } as ProjectSnapshot;
+
+    const nextProject = replaceProcessedProjectAsset(project, {
+      asset: { ...asset("asset-1"), name: "Processed", projectId: "project-1" },
+      events: [processingEvent("event-new", "asset-1")],
+      job: processingJob("job-new", "asset-1"),
+      slices: [slice("slice-new-a", "asset-1"), slice("slice-new-b", "asset-1")],
+    });
+
+    expect(nextProject?.assets).toEqual([
+      expect.objectContaining({ id: "asset-1", name: "Processed" }),
+      expect.objectContaining({ id: "asset-2", name: "Keep" }),
+    ]);
+    expect(nextProject?.assetSlices.map((candidate) => candidate.id)).toEqual([
+      "slice-keep",
+      "slice-new-a",
+      "slice-new-b",
+    ]);
+    expect(nextProject?.assetProcessingEvents.map((candidate) => candidate.id)).toEqual([
+      "event-old",
+      "event-new",
+    ]);
+    expect(nextProject?.assetProcessingJobs.map((candidate) => candidate.id)).toEqual([
+      "job-old",
+      "job-new",
+    ]);
+  });
+
+  it("leaves the project unchanged when the processed asset belongs elsewhere", () => {
+    const project = {
+      id: "project-1",
+      assets: [asset("asset-1")],
+      assetSlices: [slice("slice-old", "asset-1")],
+      assetProcessingEvents: [],
+      assetProcessingJobs: [],
+    } as ProjectSnapshot;
+
+    expect(
+      replaceProcessedProjectAsset(project, {
+        asset: { ...asset("asset-2"), projectId: "project-2" },
+        events: [processingEvent("event-new", "asset-2")],
+        job: processingJob("job-new", "asset-2"),
+        slices: [slice("slice-new", "asset-2")],
       }),
     ).toBe(project);
   });
