@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `7482129 Extract render progress project mutations`.
+- Latest deployed optimization commit: `fe33a4e Extract project script storyboard mutation`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `fe33a4e`:
+  - Extracted project script storyboard mutation logic from `apps/web/src/app/App.tsx` into `replaceProjectScriptStoryboard` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Replaced inline project updates after generating storyboard for an existing script while keeping studio script loading and project history refresh behavior in `App.tsx`.
+  - Extended `apps/web/src/app/AppProjectMutationUtils.test.ts` coverage for replacing an existing script storyboard, promoting storyboard scenes to project scenes, marking the project ready, and preserving an undefined project.
+  - Current file sizes:
+    - `App.tsx`: 2498 lines.
+    - `AppProjectMutationUtils.ts`: 271 lines.
+    - `AppProjectMutationUtils.test.ts`: 335 lines.
+    - `AppWorkspaceDerivedState.ts`: 169 lines.
+    - `SmartEditPanel.tsx`: 2981 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `replaceProjectScriptStoryboard` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 18 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 472 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-CAjiBLQy.js` at 605.99 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `fe33a4e2d02b9742020e43c71270206a236a7f9d`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `7482129`:
   - Extracted render progress/export project mutation logic from `apps/web/src/app/App.tsx` into `replaceProjectRenderTaskProgress` and `markProjectRenderTaskExported` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced inline project updates in render polling and project export paths while keeping local render task, trace, export result, error, and Smart Edit state changes in `App.tsx`.
