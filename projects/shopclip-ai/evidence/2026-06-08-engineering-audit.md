@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `9c1e923 Extract project scene sync mutation`.
+- Latest deployed optimization commit: `59b9217 Extract project template mutation`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `59b9217`:
+  - Extracted project viral-template upsert logic from `apps/web/src/app/App.tsx` into `upsertProjectViralTemplate` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Replaced the inline project update in `handleApplyScriptTemplate` while keeping template-library merge, selected template state, and script production mode changes in `App.tsx`.
+  - Extended `apps/web/src/app/AppProjectMutationUtils.test.ts` coverage for replacing an existing template by `templateId`, appending a new template, and preserving an undefined project.
+  - Current file sizes:
+    - `App.tsx`: 2619 lines.
+    - `AppProjectMutationUtils.ts`: 328 lines.
+    - `AppProjectMutationUtils.test.ts`: 459 lines.
+    - `AppWorkspaceDerivedState.ts`: 189 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `upsertProjectViralTemplate` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 23 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 477 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DCt8BcXT.js` at 606.02 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `59b92171057d3783d763718a7a59a023196dc7ce`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `9c1e923`:
   - Extracted project scene/script scene synchronization logic from `apps/web/src/app/App.tsx` into `replaceProjectScenesAcrossScripts` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced inline project updates in `replaceScenesInState` while keeping local script scene updates and dirty-scene reset behavior in `App.tsx`.
