@@ -89,6 +89,7 @@ import {
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
+  selectSmartEditTimelineElementIdsByExactToken,
   selectSmartEditTimelineElementIdsWithToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined,
@@ -1561,12 +1562,11 @@ export const SmartEditPanel = ({
         splitToken,
       );
       if (nextPlan) {
-        const rightElementIds =
-          nextPlan.timeline?.elements
-            .map((element) => element.id)
-            .filter((id) =>
-              selectedTimelineMaterialIds.some((sourceId) => id === `${sourceId}-split-${splitToken}`),
-            ) ?? [];
+        const rightElementIds = selectSmartEditTimelineElementIdsByExactToken(
+          nextPlan.timeline?.elements,
+          selectedTimelineMaterialIds,
+          `split-${splitToken}`,
+        );
         commitPlanChange(nextPlan, { label: "Split selected materials at playhead" });
         if (rightElementIds.length > 0) {
           selectTrackClipIds(rightElementIds, rightElementIds[0]);

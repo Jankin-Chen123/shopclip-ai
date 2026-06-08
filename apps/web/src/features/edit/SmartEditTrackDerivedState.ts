@@ -229,6 +229,15 @@ export const selectSmartEditTimelineElementIdsWithToken = (
     ?.map((element) => element.id)
     .filter((id) => sourceIds.some((sourceId) => id.startsWith(`${sourceId}-${token}-`))) ?? [];
 
+export const selectSmartEditTimelineElementIdsByExactToken = (
+  elements: SmartEditTimelineElement[] | undefined,
+  sourceIds: string[],
+  token: string,
+): string[] =>
+  elements
+    ?.map((element) => element.id)
+    .filter((id) => sourceIds.some((sourceId) => id === `${sourceId}-${token}`)) ?? [];
+
 export const selectExistingSmartEditTimelineElementIds = (
   elements: SmartEditTimelineElement[] | undefined,
   sourceIds: string[],

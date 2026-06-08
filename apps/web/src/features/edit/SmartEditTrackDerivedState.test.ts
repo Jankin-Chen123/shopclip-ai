@@ -15,6 +15,7 @@ import {
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
   selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
+  selectSmartEditTimelineElementIdsByExactToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
   smartEditTimelineTextMaterialCount,
@@ -361,6 +362,25 @@ describe("SmartEditTrackDerivedState", () => {
 
     expect(
       selectExistingSmartEditTimelineElementIds(undefined, ["caption-1"]),
+    ).toEqual([]);
+  });
+
+  it("selects timeline element ids that exactly match generated source-token ids", () => {
+    expect(
+      selectSmartEditTimelineElementIdsByExactToken(
+        [
+          timelineElement("caption-1-split-token"),
+          timelineElement("caption-1-split-token-extra"),
+          timelineElement("caption-2-split-token"),
+          timelineElement("caption-3-split-token"),
+        ],
+        ["caption-2", "caption-1"],
+        "split-token",
+      ),
+    ).toEqual(["caption-1-split-token", "caption-2-split-token"]);
+
+    expect(
+      selectSmartEditTimelineElementIdsByExactToken(undefined, ["caption-1"], "split-token"),
     ).toEqual([]);
   });
 
