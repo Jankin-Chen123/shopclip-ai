@@ -2,6 +2,8 @@ import type {
   AssetMetadata,
   AssetSlice,
   ReferenceVideo,
+  ScriptResult,
+  StoryboardScene,
   ViralTemplate,
 } from "@shopclip/shared";
 
@@ -37,6 +39,11 @@ export const selectCurrentBackgroundTaskTarget = ({
   projectDetailTab: page === "project" ? projectDetailTab : undefined,
   section,
 });
+
+export const selectWorkspaceScenes = (
+  script: ScriptResult | undefined,
+  project: ProjectSnapshot | undefined,
+): StoryboardScene[] => script?.scenes ?? project?.scenes ?? [];
 
 export const selectActiveAssetCategoryAssets = (
   assets: AssetMetadata[],

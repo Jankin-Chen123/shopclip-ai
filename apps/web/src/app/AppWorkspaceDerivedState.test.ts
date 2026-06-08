@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { ScriptResult, StoryboardScene } from "@shopclip/shared";
 
-import { selectCurrentBackgroundTaskTarget } from "./AppWorkspaceDerivedState";
+import type { ProjectSnapshot } from "../lib/api";
+import {
+  selectCurrentBackgroundTaskTarget,
+  selectWorkspaceScenes,
+} from "./AppWorkspaceDerivedState";
+
+const sceneWithId = (id: string): StoryboardScene => ({ id }) as StoryboardScene;
 
 describe("selectCurrentBackgroundTaskTarget", () => {
   it("keeps the project detail tab only for project page tasks", () => {
@@ -55,5 +62,34 @@ describe("selectCurrentBackgroundTaskTarget", () => {
       projectDetailTab: undefined,
       section: "create",
     });
+  });
+});
+
+describe("selectWorkspaceScenes", () => {
+  it("uses the active script scenes before the project scenes", () => {
+    const project = {
+      scenes: [sceneWithId("project-scene")],
+    } as ProjectSnapshot;
+    const script = {
+      scenes: [sceneWithId("script-scene")],
+    } as ScriptResult;
+
+    expect(selectWorkspaceScenes(script, project).map((scene) => scene.id)).toEqual([
+      "script-scene",
+    ]);
+  });
+
+  it("falls back to project scenes when there is no active script", () => {
+    const project = {
+      scenes: [sceneWithId("project-scene")],
+    } as ProjectSnapshot;
+
+    expect(selectWorkspaceScenes(undefined, project).map((scene) => scene.id)).toEqual([
+      "project-scene",
+    ]);
+  });
+
+  it("returns an empty scene list without script or project scenes", () => {
+    expect(selectWorkspaceScenes(undefined, undefined)).toEqual([]);
   });
 });

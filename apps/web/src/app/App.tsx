@@ -139,6 +139,7 @@ import {
   selectScriptTemplateLibrary,
   selectSmartEditAssetSlices,
   selectStudioAssets,
+  selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
 import {
   createSmartEditResultFromCompletedSourceRender,
@@ -342,7 +343,7 @@ export const App = ({
     renderTask,
   });
 
-  const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
+  const scenes = useMemo(() => selectWorkspaceScenes(script, project), [project, script]);
   const activeAssets = useMemo(
     () => selectActiveAssetCategoryAssets(assetLibrary.assets, activeAssetCategory),
     [activeAssetCategory, assetLibrary.assets],
