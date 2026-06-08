@@ -414,7 +414,7 @@ const BackgroundTaskBar = ({
     window.localStorage.setItem("shopclip-background-task-position", JSON.stringify(nextPosition));
   };
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) {
       return;
     }
@@ -436,7 +436,7 @@ const BackgroundTaskBar = ({
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     const dragState = dragStateRef.current;
     if (!dragState || typeof window === "undefined") {
       return;
@@ -448,13 +448,13 @@ const BackgroundTaskBar = ({
     };
     didDragRef.current =
       didDragRef.current ||
-      Math.abs(event.clientX - dragState.startX) > 3 ||
-      Math.abs(event.clientY - dragState.startY) > 3;
+      Math.abs(event.clientX - dragState.startX) > 8 ||
+      Math.abs(event.clientY - dragState.startY) > 8;
     latestPositionRef.current = nextPosition;
     setPosition(nextPosition);
   };
 
-  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -471,10 +471,6 @@ const BackgroundTaskBar = ({
   return (
     <div
       className={`background-task-bar ${isOpen ? "is-open" : ""} ${dragStateRef.current ? "is-dragging" : ""}`}
-      onPointerCancel={handlePointerEnd}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerEnd}
       ref={taskBarRef}
       style={
         position
@@ -491,6 +487,10 @@ const BackgroundTaskBar = ({
         aria-expanded={isOpen}
         aria-label={copyText.buttonLabel}
         className="background-task-trigger"
+        onPointerCancel={handlePointerEnd}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
         onClick={() => {
           if (didDragRef.current) {
             return;

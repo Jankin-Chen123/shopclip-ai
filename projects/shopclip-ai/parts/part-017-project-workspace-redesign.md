@@ -41,3 +41,15 @@
 
 - 当前项目卡片列表沿用 `GET /api/projects` 的 `ProjectSummary`，该 summary 只有素材数和场景数，没有真实脚本数、视频数和封面 URL；前端先用已有字段推导卡片信息。后续如果要完全精确展示图 1 的脚本数、视频数和商品封面，应扩展 `ProjectSummary` 后端合同。
 - “添加剧本”和“生成视频”复用原有页面级模块，未拆成完全嵌入式弹层；后续可以按用户体验继续收敛为项目详情右侧内联编辑。
+## 2026-06-08 Background Task Popover Click Repair Batch
+
+- Scope:
+  - Fixes the draggable background task bar not opening reliably, and task list items being hard to click after the bar was made draggable.
+- Fix:
+  - Moved pointer drag handling from the entire task bar container to the task bar trigger button only.
+  - This prevents the opened task popover and task buttons from being treated as drag targets.
+  - Increased the drag detection threshold from 3px to 8px so normal clicks are less likely to be suppressed as drags.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
