@@ -77,7 +77,6 @@ import {
   buildSmartEditTrackEditPoints,
   findSmartEditTrackClip,
   hasSmartEditTimelineTextMaterials,
-  isSmartEditTimelineTrackLocked,
   selectRemovableSmartEditTimelineMaterialIds,
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
   selectSelectedSmartEditTrackClipBatchIds,
@@ -92,9 +91,12 @@ import {
   selectSmartEditTrackClipIdsAtSecond,
   selectSmartEditTrackClipsById,
   smartEditTimelineTextMaterialCount,
+} from "./SmartEditTrackDerivedState";
+import {
+  isSmartEditTimelineTrackLocked,
   smartEditTimelineTrackIdForTrack,
   smartEditTrackPresentationState,
-} from "./SmartEditTrackDerivedState";
+} from "./SmartEditTrackPresentationState";
 import {
   canRelinkSmartEditTimelineElement,
   findSelectedSmartEditTimelineElement,
