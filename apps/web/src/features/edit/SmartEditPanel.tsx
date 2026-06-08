@@ -82,6 +82,7 @@ import {
   selectRemovableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined as selectEditableTimelineMaterialIdsOrUndefined,
+  selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineElementIdsWithToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
@@ -1021,18 +1022,19 @@ export const SmartEditPanel = ({
   };
 
   const moveSelectedTrackClips = (deltaSeconds: number) => {
-    if (!plan || selectedBatchTrackClips.length < 1) {
+    if (!plan) {
       return;
     }
-    const movableClips = selectedBatchTrackClips.filter(
-      (trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId),
+    const movableClipIds = selectMovableSmartEditTimelineMaterialIdsOrUndefined(
+      selectedBatchTrackClips,
+      isTimelineTrackLocked,
     );
-    if (movableClips.length < 1) {
+    if (!movableClipIds) {
       return;
     }
     const nextPlan = moveSmartEditTimelineElementsOnTimeline(
       plan,
-      movableClips.map((trackClip) => trackClip.id),
+      movableClipIds,
       deltaSeconds,
       timelineEditMode,
       boundedPlayheadSeconds,

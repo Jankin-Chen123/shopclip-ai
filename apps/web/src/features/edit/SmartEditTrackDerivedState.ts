@@ -77,6 +77,12 @@ export const selectEditableSmartEditTimelineMaterialIdsOrUndefined = (
   return selectedTimelineMaterialIds.length > 0 ? selectedTimelineMaterialIds : undefined;
 };
 
+export const selectMovableSmartEditTimelineMaterialIdsOrUndefined = (
+  trackClips: SmartEditTrackSegment[],
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean,
+): string[] | undefined =>
+  selectEditableSmartEditTimelineMaterialIdsOrUndefined(trackClips, isTrackLocked);
+
 export const selectSmartEditTrackClipIdsAtSecond = ({
   isTrackLocked,
   playheadSecond,
