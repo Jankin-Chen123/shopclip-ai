@@ -190,6 +190,43 @@ export const removeProjectAssets = (
       }
     : project;
 
+export const removeProjectReferenceResources = (
+  project: ProjectSnapshot | undefined,
+  {
+    deletedAssetIds,
+    deletedReferenceIds,
+    deletedTemplateIds,
+  }: {
+    deletedAssetIds: Set<string>;
+    deletedReferenceIds: Set<string>;
+    deletedTemplateIds: Set<string>;
+  },
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        assets: project.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
+        assetSlices: project.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
+        assetProcessingEvents: project.assetProcessingEvents.filter(
+          (event) => !deletedAssetIds.has(event.assetId),
+        ),
+        assetProcessingJobs: project.assetProcessingJobs.filter(
+          (job) => !deletedAssetIds.has(job.assetId),
+        ),
+        referenceVideos: project.referenceVideos.filter(
+          (reference) => !deletedReferenceIds.has(reference.id),
+        ),
+        viralTemplates: project.viralTemplates.filter(
+          (template) => !deletedTemplateIds.has(template.templateId),
+        ),
+        scenes: clearSceneAssetReferences(project.scenes, deletedAssetIds),
+        scripts: project.scripts.map((currentScript) => ({
+          ...currentScript,
+          scenes: clearSceneAssetReferences(currentScript.scenes, deletedAssetIds),
+        })),
+      }
+    : project;
+
 export const appendProjectAsset = (
   project: ProjectSnapshot | undefined,
   asset: AssetMetadata,

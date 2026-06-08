@@ -5,6 +5,7 @@ import type {
   AssetProcessingJob,
   AssetSlice,
   Project,
+  ReferenceVideo,
   RenderTask,
   ScriptResult,
   StoryboardScene,
@@ -19,6 +20,7 @@ import {
   mergeImportedProjectAssets,
   markProjectRenderTaskExported,
   removeProjectAssets,
+  removeProjectReferenceResources,
   replaceProjectScriptStoryboard,
   replaceProjectRenderTaskProgress,
   replaceProjectScenesAcrossScripts,
@@ -45,6 +47,7 @@ const renderTask = (
 ): RenderTask => ({ id, status }) as RenderTask;
 const viralTemplate = (templateId: string, title: string): ViralTemplate =>
   ({ templateId, title }) as ViralTemplate;
+const referenceVideo = (id: string): ReferenceVideo => ({ id }) as ReferenceVideo;
 
 describe("removeProjectAssets", () => {
   it("removes assets and slices while clearing scene asset references", () => {
@@ -79,6 +82,74 @@ describe("removeProjectAssets", () => {
 
   it("preserves an undefined project", () => {
     expect(removeProjectAssets(undefined, new Set(["asset-delete"]))).toBeUndefined();
+  });
+});
+
+describe("removeProjectReferenceResources", () => {
+  it("removes deleted reference resources and clears scene asset references", () => {
+    const project = {
+      assets: [asset("asset-keep"), asset("asset-delete")],
+      assetSlices: [slice("slice-keep", "asset-keep"), slice("slice-delete", "asset-delete")],
+      assetProcessingEvents: [
+        processingEvent("event-keep", "asset-keep"),
+        processingEvent("event-delete", "asset-delete"),
+      ],
+      assetProcessingJobs: [
+        processingJob("job-keep", "asset-keep"),
+        processingJob("job-delete", "asset-delete"),
+      ],
+      referenceVideos: [referenceVideo("reference-keep"), referenceVideo("reference-delete")],
+      viralTemplates: [
+        viralTemplate("template-keep", "Keep"),
+        viralTemplate("template-delete", "Delete"),
+      ],
+      scenes: [scene("scene-keep", "asset-keep"), scene("scene-delete", "asset-delete")],
+      scripts: [
+        script("script-1", [
+          scene("script-scene-keep", "asset-keep"),
+          scene("script-scene-delete", "asset-delete"),
+        ]),
+      ],
+    } as ProjectSnapshot;
+
+    const nextProject = removeProjectReferenceResources(project, {
+      deletedAssetIds: new Set(["asset-delete"]),
+      deletedReferenceIds: new Set(["reference-delete"]),
+      deletedTemplateIds: new Set(["template-delete"]),
+    });
+
+    expect(nextProject?.assets.map((candidate) => candidate.id)).toEqual(["asset-keep"]);
+    expect(nextProject?.assetSlices.map((candidate) => candidate.id)).toEqual(["slice-keep"]);
+    expect(nextProject?.assetProcessingEvents.map((candidate) => candidate.id)).toEqual([
+      "event-keep",
+    ]);
+    expect(nextProject?.assetProcessingJobs.map((candidate) => candidate.id)).toEqual([
+      "job-keep",
+    ]);
+    expect(nextProject?.referenceVideos.map((candidate) => candidate.id)).toEqual([
+      "reference-keep",
+    ]);
+    expect(nextProject?.viralTemplates.map((candidate) => candidate.templateId)).toEqual([
+      "template-keep",
+    ]);
+    expect(nextProject?.scenes).toEqual([
+      expect.objectContaining({ id: "scene-keep", assetId: "asset-keep" }),
+      expect.objectContaining({ id: "scene-delete", assetId: undefined }),
+    ]);
+    expect(nextProject?.scripts[0]?.scenes).toEqual([
+      expect.objectContaining({ id: "script-scene-keep", assetId: "asset-keep" }),
+      expect.objectContaining({ id: "script-scene-delete", assetId: undefined }),
+    ]);
+  });
+
+  it("preserves an undefined project", () => {
+    expect(
+      removeProjectReferenceResources(undefined, {
+        deletedAssetIds: new Set(["asset-delete"]),
+        deletedReferenceIds: new Set(["reference-delete"]),
+        deletedTemplateIds: new Set(["template-delete"]),
+      }),
+    ).toBeUndefined();
   });
 });
 

@@ -125,6 +125,7 @@ import {
   appendProjectRenderTask,
   markProjectRenderTaskExported,
   mergeImportedProjectAssets,
+  removeProjectReferenceResources,
   removeProjectRenderTask,
   removeProjectAssets,
   replaceProjectRenderTaskProgress,
@@ -1480,40 +1481,11 @@ export const App = ({
         assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
       }));
       setProject((current) =>
-        current
-          ? {
-              ...current,
-              assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
-              assetSlices: current.assetSlices.filter(
-                (slice) => !deletedAssetIds.has(slice.assetId),
-              ),
-              assetProcessingEvents: current.assetProcessingEvents.filter(
-                (event) => !deletedAssetIds.has(event.assetId),
-              ),
-              assetProcessingJobs: current.assetProcessingJobs.filter(
-                (job) => !deletedAssetIds.has(job.assetId),
-              ),
-              referenceVideos: current.referenceVideos.filter(
-                (reference) => !deletedReferenceIds.has(reference.id),
-              ),
-              viralTemplates: current.viralTemplates.filter(
-                (template) => !deletedTemplateIds.has(template.templateId),
-              ),
-              scenes: current.scenes.map((scene) =>
-                scene.assetId && deletedAssetIds.has(scene.assetId)
-                  ? { ...scene, assetId: undefined }
-                  : scene,
-              ),
-              scripts: current.scripts.map((currentScript) => ({
-                ...currentScript,
-                scenes: currentScript.scenes.map((scene) =>
-                  scene.assetId && deletedAssetIds.has(scene.assetId)
-                    ? { ...scene, assetId: undefined }
-                    : scene,
-                ),
-              })),
-            }
-          : current,
+        removeProjectReferenceResources(current, {
+          deletedAssetIds,
+          deletedReferenceIds,
+          deletedTemplateIds,
+        }),
       );
       setScript((current) =>
         current
