@@ -29,3 +29,28 @@ export const toggleSmartEditSelectionId = ({
   }
   return orderedIds.filter((id) => currentIdSet.has(id));
 };
+
+export const selectSmartEditSelectionRangeIdsOrUndefined = ({
+  orderedIds,
+  selectedIds,
+  targetId,
+}: {
+  orderedIds: string[];
+  selectedIds: string[];
+  targetId: string;
+}): string[] | undefined => {
+  const anchorId = selectedIds[selectedIds.length - 1];
+  if (!anchorId) {
+    return undefined;
+  }
+
+  const anchorIndex = orderedIds.indexOf(anchorId);
+  const targetIndex = orderedIds.indexOf(targetId);
+  if (anchorIndex < 0 || targetIndex < 0) {
+    return undefined;
+  }
+
+  const start = Math.min(anchorIndex, targetIndex);
+  const end = Math.max(anchorIndex, targetIndex);
+  return orderedIds.slice(start, end + 1);
+};

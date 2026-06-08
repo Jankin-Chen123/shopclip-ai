@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   retainSmartEditSelectionIds,
+  selectSmartEditSelectionRangeIdsOrUndefined,
   toggleSmartEditSelectionId,
 } from "./SmartEditSelectionUtils";
 
@@ -44,5 +45,49 @@ describe("SmartEditSelectionUtils", () => {
         targetId: "clip-1",
       }),
     ).toEqual(["clip-1"]);
+  });
+
+  it("selects an ordered range from the last selected id to the target id", () => {
+    expect(
+      selectSmartEditSelectionRangeIdsOrUndefined({
+        orderedIds: ["clip-1", "clip-2", "clip-3", "clip-4"],
+        selectedIds: ["clip-1", "clip-3"],
+        targetId: "clip-2",
+      }),
+    ).toEqual(["clip-2", "clip-3"]);
+
+    expect(
+      selectSmartEditSelectionRangeIdsOrUndefined({
+        orderedIds: ["clip-1", "clip-2", "clip-3", "clip-4"],
+        selectedIds: ["clip-3"],
+        targetId: "clip-4",
+      }),
+    ).toEqual(["clip-3", "clip-4"]);
+  });
+
+  it("returns undefined when a range anchor or target is missing", () => {
+    expect(
+      selectSmartEditSelectionRangeIdsOrUndefined({
+        orderedIds: ["clip-1", "clip-2"],
+        selectedIds: [],
+        targetId: "clip-2",
+      }),
+    ).toBeUndefined();
+
+    expect(
+      selectSmartEditSelectionRangeIdsOrUndefined({
+        orderedIds: ["clip-1", "clip-2"],
+        selectedIds: ["missing"],
+        targetId: "clip-2",
+      }),
+    ).toBeUndefined();
+
+    expect(
+      selectSmartEditSelectionRangeIdsOrUndefined({
+        orderedIds: ["clip-1", "clip-2"],
+        selectedIds: ["clip-1"],
+        targetId: "missing",
+      }),
+    ).toBeUndefined();
   });
 });
