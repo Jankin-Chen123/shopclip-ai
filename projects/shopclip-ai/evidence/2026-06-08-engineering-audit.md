@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `9b1d45b Extract selected segment id selector`.
+- Latest deployed optimization commit: `69a55e3 Extract selected segment update helper`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `69a55e3`:
+  - Extracted selected Smart Edit segment batch-update logic into `updateSelectedSmartEditSegments` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
+  - Reused that helper in `apps/web/src/features/edit/SmartEditPanel.tsx` so the panel no longer builds the selected ID `Set` and maps `plan.segments` inline for batch edits.
+  - Kept the panel responsible for plan guards, rebuilt timeline wrapping, and command history commit labels.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditSegmentDerivedState.test.ts` for updating only selected segments and preserving the original segment list for empty batch selection.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3088 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `SmartEditTrackDerivedState.ts`: 381 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` failed before implementation because `updateSelectedSmartEditSegments` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` passed, 10 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 420 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-CEplRwB0.js` at 605.15 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `69a55e3b6f2bae8a78501521ede0f8f8b71b43fe`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `9b1d45b`:
   - Extracted selected Smart Edit segment ID fallback into `selectSmartEditSegmentIdsOrUndefined` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
   - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` for duplicate-selected-segments and paste-selected-segments-at-playhead command guards.
