@@ -634,6 +634,8 @@ export const SmartEditPanel = ({
     hasSmartEditTimelineTextMaterials(selectedBatchTrackClips);
   const selectedTextTimelineMaterialCount =
     smartEditTimelineTextMaterialCount(selectedBatchTrackClips);
+  const isTimelineTrackLocked = (trackId: SmartEditTrackId): boolean =>
+    isSmartEditTimelineTrackLocked(plan, trackId);
   const trackClipDragPreview = useMemo(
     () =>
       buildSmartEditTrackClipDragPreview({
@@ -650,6 +652,7 @@ export const SmartEditPanel = ({
     () =>
       buildSmartEditTrackClipTrimPreview({
         boundedPlayheadSeconds,
+        isTrackLocked: isTimelineTrackLocked,
         selectedBatchTrackClips,
         selectedTrackClipIdSet,
         selectedTrackClipIds,
@@ -659,6 +662,7 @@ export const SmartEditPanel = ({
       }),
     [
       boundedPlayheadSeconds,
+      isTimelineTrackLocked,
       selectedBatchTrackClips,
       selectedTrackClipIdSet,
       selectedTrackClipIds,
@@ -702,8 +706,6 @@ export const SmartEditPanel = ({
   const timelineTrackIdForTrack = smartEditTimelineTrackIdForTrack;
   const trackPresentationState = (track: SmartEditTrack) =>
     smartEditTrackPresentationState({ plan, track });
-  const isTimelineTrackLocked = (trackId: SmartEditTrackId): boolean =>
-    isSmartEditTimelineTrackLocked(plan, trackId);
   const commandHistoryLabel = (label: string): string =>
     formatSmartEditCommandHistoryLabel(label, copy.historyActions);
 

@@ -367,6 +367,7 @@ export const buildSmartEditTrackClipDragPreview = ({
 
 export const buildSmartEditTrackClipTrimPreview = ({
   boundedPlayheadSeconds,
+  isTrackLocked,
   selectedBatchTrackClips,
   selectedTrackClipIdSet,
   selectedTrackClipIds,
@@ -375,6 +376,7 @@ export const buildSmartEditTrackClipTrimPreview = ({
   trackSegments,
 }: {
   boundedPlayheadSeconds: number;
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean;
   selectedBatchTrackClips: SmartEditTrackSegment[];
   selectedTrackClipIdSet: Set<string>;
   selectedTrackClipIds: string[];
@@ -392,9 +394,7 @@ export const buildSmartEditTrackClipTrimPreview = ({
       : [];
   const sourceClips =
     selectedResizeIds.length > 1 &&
-    selectedBatchTrackClips.every(
-      (selectedClip) => !selectedClip.segmentId && selectedClip.trackId !== "bgm",
-    )
+    canResizeSelectedSmartEditTimelineMaterials(selectedBatchTrackClips, isTrackLocked)
       ? selectedBatchTrackClips
       : [trackClipTrimDrag.trackClip];
   const snapPoints = [

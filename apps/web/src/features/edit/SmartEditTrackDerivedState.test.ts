@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
+  buildSmartEditTrackClipTrimPreview,
   canMoveSelectedSmartEditTimelineMaterials,
   canResizeSelectedSmartEditTimelineMaterials,
   hasSmartEditTimelineTextMaterials,
@@ -291,6 +292,40 @@ describe("SmartEditTrackDerivedState", () => {
         isTrackLocked,
       ),
     ).toBe(false);
+  });
+
+  it("keeps locked track clips out of selected trim previews", () => {
+    const captionClip = trackClip("caption-1", {
+      durationSeconds: 2,
+      startSecond: 1,
+    });
+    const lockedVoiceClip = trackClip("voice-1", {
+      durationSeconds: 3,
+      startSecond: 2,
+      trackId: "voice",
+    });
+
+    expect(
+      buildSmartEditTrackClipTrimPreview({
+        boundedPlayheadSeconds: 0,
+        isTrackLocked: (trackId) => trackId === "voice",
+        selectedBatchTrackClips: [captionClip, lockedVoiceClip],
+        selectedTrackClipIdSet: new Set(["caption-1", "voice-1"]),
+        selectedTrackClipIds: ["caption-1", "voice-1"],
+        timelinePixelsPerSecond: 10,
+        trackClipTrimDrag: {
+          currentClientX: 20,
+          edge: "out",
+          pointerId: 1,
+          startClientX: 0,
+          trackClip: captionClip,
+        },
+        trackSegments: [
+          { id: "caption", segments: [captionClip] },
+          { id: "voice", segments: [lockedVoiceClip] },
+        ],
+      }).map((preview) => preview.id),
+    ).toEqual(["caption-1"]);
   });
 
   it("selects the alignment anchor for selected timeline materials", () => {
