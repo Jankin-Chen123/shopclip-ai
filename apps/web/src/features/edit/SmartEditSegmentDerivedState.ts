@@ -35,6 +35,13 @@ export const selectSmartEditSegmentsById = (
 ): SmartEditSegment[] =>
   sortedSegments.filter((segment) => selectedSegmentIdSet.has(segment.id));
 
+export const selectSmartEditSegmentIdsOrUndefined = (
+  segments: Array<Pick<SmartEditSegment, "id">>,
+): string[] | undefined => {
+  const ids = segments.map((segment) => segment.id);
+  return ids.length > 0 ? ids : undefined;
+};
+
 export const selectSmartEditSegmentIdByOffset = ({
   offset,
   selectedSegment,

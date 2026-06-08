@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   selectSmartEditAssetSlicesForSegment,
   selectSmartEditSegmentIdByOffset,
+  selectSmartEditSegmentIdsOrUndefined,
   smartEditPreviewSegmentLabel,
 } from "./SmartEditSegmentDerivedState";
 
@@ -66,6 +67,17 @@ describe("SmartEditSegmentDerivedState", () => {
         sortedSegments: [],
       }),
     ).toBeUndefined();
+  });
+
+  it("returns selected segment ids only when a batch has segments", () => {
+    expect(
+      selectSmartEditSegmentIdsOrUndefined([
+        segment("scene-1"),
+        segment("scene-2"),
+      ]),
+    ).toEqual(["scene-1", "scene-2"]);
+
+    expect(selectSmartEditSegmentIdsOrUndefined([])).toBeUndefined();
   });
 
   it("uses subtitle as the preview segment label when present", () => {

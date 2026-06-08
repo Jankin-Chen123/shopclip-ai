@@ -35,6 +35,7 @@ import {
   selectSmartEditSegment,
   selectSmartEditAssetSlicesForSegment,
   selectSmartEditSegmentIdByOffset,
+  selectSmartEditSegmentIdsOrUndefined,
   selectedSmartEditSegmentIndex,
   selectSmartEditSegmentsById,
   selectSmartEditSegmentIdsWithToken,
@@ -2638,11 +2639,14 @@ export const SmartEditPanel = ({
   };
 
   const duplicateSelectedSegments = () => {
-    if (!plan || selectedBatchSegments.length === 0) {
+    if (!plan) {
+      return;
+    }
+    const selectedIds = selectSmartEditSegmentIdsOrUndefined(selectedBatchSegments);
+    if (!selectedIds) {
       return;
     }
     const duplicateToken = `batch-${Date.now()}`;
-    const selectedIds = selectedBatchSegments.map((segment) => segment.id);
     const nextPlan = duplicateSmartEditSegmentsOnTimeline(plan, selectedIds, duplicateToken);
     commitPlanChange(nextPlan, { label: "Duplicate selected clips" });
     const duplicateIds = selectSmartEditSegmentIdsWithToken(
@@ -2656,11 +2660,14 @@ export const SmartEditPanel = ({
   };
 
   const pasteSelectedSegmentsAtPlayhead = () => {
-    if (!plan || selectedBatchSegments.length === 0) {
+    if (!plan) {
+      return;
+    }
+    const selectedIds = selectSmartEditSegmentIdsOrUndefined(selectedBatchSegments);
+    if (!selectedIds) {
       return;
     }
     const duplicateToken = `paste-${Date.now()}`;
-    const selectedIds = selectedBatchSegments.map((segment) => segment.id);
     const nextPlan = pasteSmartEditSegmentsAtPlayhead(
       plan,
       selectedIds,
