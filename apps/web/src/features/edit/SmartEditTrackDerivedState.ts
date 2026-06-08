@@ -113,6 +113,13 @@ export const selectSmartEditTimelineTextMaterialIds = (
     .filter((trackClip) => isSmartEditTextTimelineMaterial(trackClip))
     .map((trackClip) => trackClip.id);
 
+export const selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined = (
+  trackClips: SmartEditTrackSegment[],
+): string[] | undefined => {
+  const textMaterialIds = selectSmartEditTimelineTextMaterialIds(trackClips);
+  return textMaterialIds.length >= 2 ? textMaterialIds : undefined;
+};
+
 export type SmartEditClipboardCopySelection =
   | {
       ids: string[];

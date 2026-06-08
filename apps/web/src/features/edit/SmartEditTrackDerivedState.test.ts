@@ -5,6 +5,7 @@ import {
   hasSmartEditTimelineTextMaterials,
   selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined,
+  selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined,
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectRemovableSmartEditTimelineMaterialIds,
   selectSmartEditClipboardCopySelection,
@@ -57,6 +58,24 @@ describe("SmartEditTrackDerivedState", () => {
 
     expect(smartEditTimelineTextMaterialCount(trackClips)).toBe(0);
     expect(hasSmartEditTimelineTextMaterials(trackClips)).toBe(false);
+  });
+
+  it("returns mergeable text timeline material ids only when at least two text materials are selected", () => {
+    expect(
+      selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined([
+        trackClip("caption-1"),
+        trackClip("caption-2"),
+        trackClip("scene-caption", { segmentId: "scene-1" }),
+        trackClip("voice-material", { trackId: "voice" }),
+      ]),
+    ).toEqual(["caption-1", "caption-2"]);
+
+    expect(
+      selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined([
+        trackClip("caption-1"),
+        trackClip("voice-material", { trackId: "voice" }),
+      ]),
+    ).toBeUndefined();
   });
 
   it("selects removable standalone timeline material ids only when the whole batch is removable", () => {

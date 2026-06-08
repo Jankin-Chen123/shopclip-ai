@@ -87,7 +87,7 @@ import {
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineElementIdsWithToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
-  selectSmartEditTimelineTextMaterialIds,
+  selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined,
   selectSmartEditTrackClipIdsAtSecond,
   selectSmartEditTrackClipsById,
   selectSplitSmartEditTextElementIds,
@@ -2629,8 +2629,8 @@ export const SmartEditPanel = ({
       return;
     }
     const selectedTimelineTextMaterialIds =
-      selectSmartEditTimelineTextMaterialIds(selectedBatchTrackClips);
-    if (selectedTimelineTextMaterialIds.length < 2) {
+      selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined(selectedBatchTrackClips);
+    if (!selectedTimelineTextMaterialIds) {
       return;
     }
     const nextPlan = mergeSmartEditTimelineTextElements(plan, selectedTimelineTextMaterialIds);
