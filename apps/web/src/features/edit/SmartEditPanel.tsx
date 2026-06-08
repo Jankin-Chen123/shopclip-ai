@@ -111,6 +111,7 @@ import {
   duplicateSmartEditSegmentOnTimeline,
   duplicateSmartEditSegmentsOnTimeline,
   duplicateSmartEditTimelineElementsOnTimeline,
+  formatSmartEditCommandHistoryLabel,
   materializeSmartEditRenderedSegmentsToTimelineElements,
   mergeSmartEditTimelineTextElements,
   moveSmartEditSegmentOnTimelineWithMode,
@@ -254,6 +255,7 @@ export {
   duplicateSmartEditSegmentsOnTimeline,
   duplicateSmartEditTimelineElementsOnTimeline,
   exportSmartEditTimelineCaptionsToSrt,
+  formatSmartEditCommandHistoryLabel,
   importSmartEditSrtCaptionsToTimeline,
   materializeSmartEditRenderedSegmentsToTimelineElements,
   mergeSmartEditTimelineTextElements,
@@ -701,9 +703,7 @@ export const SmartEditPanel = ({
   const isTimelineTrackLocked = (trackId: SmartEditTrackId): boolean =>
     isSmartEditTimelineTrackLocked(plan, trackId);
   const commandHistoryLabel = (label: string): string =>
-    Object.prototype.hasOwnProperty.call(copy.historyActions, label)
-      ? copy.historyActions[label as keyof typeof copy.historyActions]
-      : label;
+    formatSmartEditCommandHistoryLabel(label, copy.historyActions);
 
   const commitPlanChange = (
     nextPlan: SmartEditPlan,

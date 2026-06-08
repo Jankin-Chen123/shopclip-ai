@@ -38,6 +38,14 @@ export class SmartEditCommandHistory {
 export const createSmartEditCommandHistory = (): SmartEditCommandHistory =>
   new SmartEditCommandHistory();
 
+export const formatSmartEditCommandHistoryLabel = (
+  label: string,
+  historyActions: Record<string, string>,
+): string =>
+  Object.prototype.hasOwnProperty.call(historyActions, label)
+    ? historyActions[label]!
+    : label;
+
 export const applySmartEditCommandHistoryUndo = (
   history: SmartEditCommandHistory,
   currentPlan: SmartEditPlan,

@@ -2,6 +2,7 @@ export {
   applySmartEditCommandHistoryRedo,
   applySmartEditCommandHistoryUndo,
   createSmartEditCommandHistory,
+  formatSmartEditCommandHistoryLabel,
   SmartEditCommandHistory,
 } from "./SmartEditCommandHistory";
 export type { SmartEditCommandHistoryEntry } from "./SmartEditCommandHistory";

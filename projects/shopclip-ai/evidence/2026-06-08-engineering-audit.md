@@ -9,7 +9,7 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit before this local follow-up: `3290baa6 Extract Smart Edit segment display state`.
+- Latest deployed optimization commit before this local follow-up: `97ed769b Extract Smart Edit track material state`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
@@ -44,12 +44,19 @@
   - `SmartEditPanel.tsx`: 3099 lines after the follow-up.
   - Verification for this local derived-state cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditSegmentDerivedState.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
   - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-DHMi_bSY.js` at 604.15 kB minified.
-- Current local follow-up cleanup after the deployed commit:
+- Recent deployed cleanup at `97ed769b`:
   - Extracted selected text timeline material counting into `smartEditTimelineTextMaterialCount` and `hasSmartEditTimelineTextMaterials` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Added focused tests in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts`.
   - `SmartEditPanel.tsx`: 3098 lines after the follow-up.
   - Verification for this local track-derived-state cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditTrackDerivedState.test.ts src/features/edit/SmartEditSegmentDerivedState.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
   - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-DydsKih6.js` at 604.16 kB minified.
+- Current local follow-up cleanup after the deployed commit:
+  - Extracted command-history label formatting into `formatSmartEditCommandHistoryLabel` in `apps/web/src/features/edit/SmartEditCommandHistory.ts`.
+  - Re-exported the formatter through `apps/web/src/features/edit/SmartEditTimelineOperations.ts`.
+  - Added focused tests in `apps/web/src/features/edit/SmartEditCommandHistory.test.ts`.
+  - `SmartEditPanel.tsx`: 3098 lines after the follow-up.
+  - Verification for this local command-history cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditCommandHistory.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-BA__XTub.js` at 604.17 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.
