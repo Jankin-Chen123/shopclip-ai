@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `7d365425 Extract single project asset mutations`.
+- Latest deployed optimization commit: `ab2086f Extract imported project asset merge`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `ab2086f`:
+  - Extracted imported project asset/slice merge logic from `apps/web/src/app/App.tsx` into `mergeImportedProjectAssets` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Replaced the inline batch import project update for assets and slices while keeping asset library updates, search reset, and background task behavior in `App.tsx`.
+  - Extended `apps/web/src/app/AppProjectMutationUtils.test.ts` coverage for merging project-owned imported assets, replacing slices for imported asset ids, filtering out assets from other projects, and preserving projects when no imported asset belongs to them.
+  - Current file sizes:
+    - `App.tsx`: 2736 lines.
+    - `AppProjectMutationUtils.ts`: 169 lines.
+    - `AppProjectMutationUtils.test.ts`: 152 lines.
+    - `AppWorkspaceDerivedState.ts`: 189 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `mergeImportedProjectAssets` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 7 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 461 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-4N9AcSkT.js` at 606.18 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `ab2086fc3ca3e367674b2966218f584a634cf95a`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `7d365425`:
   - Extracted single project asset append/upsert mutations from `apps/web/src/app/App.tsx` into `appendProjectAsset` and `upsertProjectAsset` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced repeated project asset updates in upload, external asset import, and reference-to-script-library import paths.
