@@ -35,6 +35,26 @@ export const selectSmartEditSegmentsById = (
 ): SmartEditSegment[] =>
   sortedSegments.filter((segment) => selectedSegmentIdSet.has(segment.id));
 
+export const selectSmartEditSegmentIdByOffset = ({
+  offset,
+  selectedSegment,
+  sortedSegments,
+}: {
+  offset: number;
+  selectedSegment: SmartEditSegment | undefined;
+  sortedSegments: SmartEditSegment[];
+}): string | undefined => {
+  if (sortedSegments.length === 0) {
+    return undefined;
+  }
+  const currentIndex = Math.max(
+    0,
+    sortedSegments.findIndex((segment) => segment.id === selectedSegment?.id),
+  );
+  const nextIndex = Math.max(0, Math.min(sortedSegments.length - 1, currentIndex + offset));
+  return sortedSegments[nextIndex]?.id;
+};
+
 export const smartEditEnabledDurationSeconds = (
   sortedSegments: SmartEditSegment[],
 ): number =>

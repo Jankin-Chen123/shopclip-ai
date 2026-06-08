@@ -9,12 +9,12 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit before this local follow-up: `b87d7908 Tidy Smart Edit selection handlers`.
+- Latest deployed optimization commit before this local follow-up: `1863fddf Extract Smart Edit selection helpers`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
-- Current local follow-up cleanup after the deployed commit:
+- Recent deployed cleanup at `1863fddf`:
   - Extracted reusable Smart Edit selection helpers into `apps/web/src/features/edit/SmartEditSelectionUtils.ts`.
   - Replaced repeated inline ordered-selection filtering/toggle logic in `apps/web/src/features/edit/SmartEditPanel.tsx`.
   - Added focused tests in `apps/web/src/features/edit/SmartEditSelectionUtils.test.ts`.
@@ -29,7 +29,14 @@
   - Verification for the follow-up: `corepack pnpm --filter @shopclip/web typecheck`, `corepack pnpm --filter @shopclip/web lint`, and `corepack pnpm --filter @shopclip/web test -- src/app/App.test.tsx` all passed during incremental checks.
   - Verification for this local selection-helper cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditSelectionUtils.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
   - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. An initial full `corepack pnpm test` run hit a transient Windows temp-file lock in `realMediaProcessing.test.ts`; the targeted rerun and subsequent full rerun both passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-D59HmPy1.js` at 604.01 kB minified.
-  - Full gate before packaging the follow-up: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` all passed. The build still reports the existing Vite chunk-size warning for `assets/index-CvIUgH3H.js` at 603.90 kB minified.
+- Current local follow-up cleanup after the deployed commit:
+  - Extracted offset-based segment navigation into `selectSmartEditSegmentIdByOffset` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
+  - Added focused tests in `apps/web/src/features/edit/SmartEditSegmentDerivedState.test.ts`.
+  - Stabilized `apps/api/src/modules/media/realMediaProcessing.test.ts` by using a smaller real ffmpeg fixture, adding realistic per-test timeout, and retrying Windows temp-directory cleanup on transient `EBUSY`.
+  - `SmartEditPanel.tsx`: 3102 lines after the follow-up.
+  - Verification for this local segment-derived-state cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditSegmentDerivedState.test.ts src/features/edit/SmartEditSelectionUtils.test.ts`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Verification for the real media test stability fix: `corepack pnpm --filter @shopclip/api test -- src/modules/media/realMediaProcessing.test.ts`, `corepack pnpm --filter @shopclip/api typecheck`, and `corepack pnpm --filter @shopclip/api lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-Cg07RHC7.js` at 604.12 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.

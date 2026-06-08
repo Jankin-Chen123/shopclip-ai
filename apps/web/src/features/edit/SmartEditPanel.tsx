@@ -33,6 +33,7 @@ import {
 import {
   materializableSmartEditSegments,
   selectSmartEditSegment,
+  selectSmartEditSegmentIdByOffset,
   selectedSmartEditSegmentIndex,
   selectSmartEditSegmentsById,
   selectSmartEditSegmentIdsWithToken,
@@ -2741,15 +2742,13 @@ export const SmartEditPanel = ({
   };
 
   const selectByOffset = (offset: number) => {
-    if (sortedSegments.length === 0) {
-      return;
-    }
-    const currentIndex = Math.max(
-      0,
-      sortedSegments.findIndex((segment) => segment.id === selectedSegment?.id),
+    onSelectedSegmentChange(
+      selectSmartEditSegmentIdByOffset({
+        offset,
+        selectedSegment,
+        sortedSegments,
+      }),
     );
-    const nextIndex = Math.max(0, Math.min(sortedSegments.length - 1, currentIndex + offset));
-    onSelectedSegmentChange(sortedSegments[nextIndex]?.id);
   };
   const timelineToolbarState: SmartEditTimelineToolbarState = {
     boundedPlayheadSeconds,
