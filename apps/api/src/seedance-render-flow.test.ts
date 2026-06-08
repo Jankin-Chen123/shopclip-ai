@@ -1,9 +1,9 @@
-import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import type { SceneRenderClip } from "@shopclip/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app";
+import { listenOnFetchSafePort } from "./testServer";
 
 const touchedKeys = [
   "ARK_API_BASE_URL",
@@ -64,12 +64,7 @@ describe("Seedance render API flow", () => {
     process.env.FFMPEG_PATH = "ffmpeg-disabled-for-test";
 
     const app = createApp();
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {
@@ -313,12 +308,7 @@ describe("Seedance render API flow", () => {
       renderExportPublisher,
       sceneClipMaterializer,
     });
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const originalFetch = globalThis.fetch;
     let createTaskCount = 0;
@@ -455,12 +445,7 @@ describe("Seedance render API flow", () => {
     const app = createApp({
       renderExportPublisher,
     });
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const originalFetch = globalThis.fetch;
     let createTaskCount = 0;

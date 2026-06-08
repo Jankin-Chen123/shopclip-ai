@@ -1,9 +1,9 @@
-import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { InspirationGenerateResponse } from "@shopclip/shared";
 
 import { createApp } from "./app";
+import { listenOnFetchSafePort } from "./testServer";
 
 const request = async <T>(
   baseUrl: string,
@@ -29,12 +29,7 @@ describe("inspiration generation API", () => {
   beforeEach(async () => {
     process.env.AI_PROVIDER_MODE = "mock";
     const app = createApp();
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {

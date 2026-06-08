@@ -1,8 +1,7 @@
-import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 
 import { createApp } from "./app";
+import { listenOnFetchSafePort } from "./testServer";
 
 describe("createApp", () => {
   it("creates an Express app with routes registered", () => {
@@ -14,12 +13,7 @@ describe("createApp", () => {
 
   it("sets production-safe baseline headers and a bounded error shape", async () => {
     const app = createApp();
-    const server: Server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const { baseUrl, server } = await listenOnFetchSafePort(app);
 
     try {
       const health = await fetch(`${baseUrl}/health`);

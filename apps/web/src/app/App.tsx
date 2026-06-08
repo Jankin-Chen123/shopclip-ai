@@ -3,7 +3,6 @@ import { ArrowLeft, Download, Film, FileText, ListVideo } from "lucide-react";
 import type {
   AssetMetadata,
   AssetSlice,
-  DashboardResponse,
   ProjectBrief,
   ReferenceVideo,
   RenderTask,
@@ -14,29 +13,21 @@ import type {
   ViralTemplate,
   SmartEditPlan,
   SmartEditResult,
+  DashboardResponse,
 } from "@shopclip/shared";
 
 import {
   AppShell,
   type BackgroundTaskItem,
-  type CreationPageId,
   type WorkspaceSectionId,
   type WorkspacePageId,
 } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
-import {
-  assetMatchesCategory,
-  externalAssetMatchesCategory,
-  getAssetDraftDefaults,
-  type AssetCategory,
-} from "../features/assets/AssetCategoryTabs";
+import type { AssetCategory } from "../features/assets/AssetCategoryTabs";
 import { AssetPrepPanel, type AssetPrepSnapshot } from "../features/assets/AssetPrepPanel";
 import { AssetsPanel, hasSearchableStockProviderCredential } from "../features/assets/AssetsPanel";
 import { DashboardPanel } from "../features/dashboard/DashboardPanel";
-import {
-  SmartEditPanel,
-  materializeSmartEditRenderedSegmentsToTimelineElements,
-} from "../features/edit/SmartEditPanel";
+import { SmartEditPanel } from "../features/edit/SmartEditPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import {
@@ -46,15 +37,11 @@ import {
   type ProjectDetailTab,
 } from "../features/projects/ProjectWorkspace";
 import {
-  createDefaultStockProviderConfigs,
-  createDefaultApiConfig,
-  sanitizeApiConfig,
-  sanitizeStockProviderConfigs,
   SettingsPanel,
 } from "../features/settings/SettingsPanel";
 import { ScriptPanel } from "../features/script/ScriptPanel";
 import { StudioWorkspace } from "../features/studio/StudioWorkspace";
-import { copy, isLanguage, type Language } from "./i18n";
+import { copy, type Language } from "./i18n";
 import {
   addAsset,
   addReferenceToScriptLibrary,
@@ -62,7 +49,6 @@ import {
   analyzeReferenceVideo,
   createReferenceTemplate,
   createProject,
-  createAssetUploadIntent,
   deleteAssets as deleteAssetsRequest,
   deleteProject as deleteProjectRequest,
   deleteRenderTask as deleteRenderTaskRequest,
@@ -98,10 +84,8 @@ import {
   updateRenderTaskDisplayName,
   updateScene,
   updateScriptDisplayName,
-  uploadAssetFileToStorage,
   type AssetRecallCandidate,
   type AssetLibraryCategory,
-  type AssetSearchResult,
   type CreateAssetInput,
   type EditingSuggestion,
   type ExportResult,
@@ -111,272 +95,107 @@ import {
   type ProjectSummary,
   type ProjectSnapshot,
   type RenderSnapshot,
-  type StockProviderConfig,
-  type UserApiConfig,
   type VideoGenerationSettings,
 } from "../lib/api";
-
-const defaultBrief: ProjectBrief = {
-  title: "Desk launch clip",
-  productName: "GlowGrip Phone Stand",
-  audience: "TikTok Shop buyers",
-  sellingPoints: ["folds flat", "keeps product shots stable"],
-  tone: "confident",
-  style: "fast desk demo",
-  targetDurationSeconds: 15,
-};
-
-const createProjectMockDashboard = (project: ProjectSnapshot): DashboardResponse => {
-  const assetBoost = Math.min(project.assets.length, 6) * 0.025;
-  const scriptBoost = Math.min(project.scripts.length, 4) * 0.035;
-  const focusScore = Math.min(0.92, 0.64 + assetBoost + scriptBoost);
-  const hookScore = Math.min(0.94, 0.68 + project.sellingPoints.length * 0.04);
-  const clarityScore = Math.min(0.9, 0.72 + project.scenes.length * 0.018);
-  const completionRate = Math.min(0.88, 0.46 + hookScore * 0.14 + focusScore * 0.16);
-  const impressions = 12000;
-  const watch3s = Math.round(impressions * completionRate);
-  const clicks = Math.round(watch3s * (0.18 + focusScore * 0.08));
-  const carts = Math.round(clicks * 0.38);
-  const purchases = Math.round(carts * 0.34);
-
-  return {
-    projectId: project.id,
-    summary: {
-      hookStrength: hookScore,
-      predictedCompletionRate: completionRate,
-      productFocus: focusScore,
-      subtitleClarity: clarityScore,
-    },
-    funnel: [
-      { stage: "Impression", value: impressions },
-      { stage: "Watch 3s", value: watch3s },
-      { stage: "Click", value: clicks },
-      { stage: "Add to cart", value: carts },
-      { stage: "Purchase", value: purchases },
-    ],
-    factors: [
-      {
-        id: "mock-factor-hook",
-        factor: "Hook clarity",
-        expectedImpact: "high",
-        evidence: `${project.sellingPoints.length} selling point(s) are available for hook testing.`,
-        recommendation: "Keep the first three seconds focused on the strongest visible product proof.",
-      },
-      {
-        id: "mock-factor-assets",
-        factor: "Product visibility",
-        expectedImpact: project.assets.length > 0 ? "high" : "medium",
-        evidence: `${project.assets.length} imported asset(s) can support product close-ups.`,
-        recommendation: "Use the hero image and one usage scene before the CTA.",
-      },
-    ],
-  };
-};
-
-const defaultAssetSizeBytes = 220_000;
-
-const createDefaultAsset = (language: Language): CreateAssetInput => ({
-  ...getAssetDraftDefaults("image", language),
-  sizeBytes: defaultAssetSizeBytes,
-});
-
-const documentMimeTypesByExtension: Record<string, string> = {
-  ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".pdf": "application/pdf",
-  ".ppt": "application/vnd.ms-powerpoint",
-  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-};
-
-const createScriptGenerationApiConfig = (apiConfig: UserApiConfig): UserApiConfig => {
-  const useOfficialWhenMissingKey = (roleConfig: UserApiConfig["general"]) =>
-    roleConfig?.credentialSource === "official" || roleConfig?.apiKey?.trim()
-      ? roleConfig
-      : {
-          ...roleConfig,
-          credentialSource: "official" as const,
-          apiKey: undefined,
-        };
-
-  return {
-    ...apiConfig,
-    general: useOfficialWhenMissingKey(apiConfig.general),
-    image: useOfficialWhenMissingKey(apiConfig.image),
-  };
-};
-
-export const createScriptGenerationRequestPayload = (
-  assetPrepSnapshot: Pick<AssetPrepSnapshot, "assetIds" | "keywords" | "materials">,
-  scriptDraft: string,
-  apiConfig: UserApiConfig,
-): ScriptGenerationRequest => ({
-  assetIds: assetPrepSnapshot.assetIds,
-  draftScript: scriptDraft.trim() || undefined,
-  keywords: assetPrepSnapshot.keywords,
-  materials: assetPrepSnapshot.materials,
-  productionMode: "automatic",
-  apiConfig: createScriptGenerationApiConfig(apiConfig),
-});
-
-export const createAssetInputFromFile = (file: File, language: Language): CreateAssetInput => {
-  const lowerName = file.name.toLowerCase();
-  const documentMimeType = Object.entries(documentMimeTypesByExtension).find(([extension]) =>
-    lowerName.endsWith(extension),
-  )?.[1];
-  const inferredCategory: AssetCategory = file.type.startsWith("image/")
-    ? "image"
-    : file.type.startsWith("video/")
-      ? "video"
-      : file.type.startsWith("audio/")
-        ? "audio"
-        : file.type.startsWith("text/") ||
-            lowerName.endsWith(".txt") ||
-            lowerName.endsWith(".md") ||
-            Boolean(documentMimeType)
-          ? "script"
-          : "script";
-  const defaults = getAssetDraftDefaults(inferredCategory, language);
-  const inferredMimeType =
-    file.type ||
-    documentMimeType ||
-    (lowerName.endsWith(".md")
-      ? "text/markdown"
-      : lowerName.endsWith(".txt")
-        ? "text/plain"
-        : defaults.mimeType);
-
-  return {
-    ...defaults,
-    name: file.name || defaults.name,
-    mimeType: inferredMimeType,
-    sizeBytes: file.size > 0 ? file.size : defaultAssetSizeBytes,
-  };
-};
-
-const shouldAutoProcessImportedAsset = (asset: AssetMetadata): boolean =>
-  asset.type === "image" ||
-  asset.type === "video" ||
-  Boolean(asset.mimeType?.startsWith("image/") || asset.mimeType?.startsWith("video/"));
-
-export const mergeReferences = (...groups: ReferenceVideo[][]): ReferenceVideo[] => {
-  const referencesById = new Map<string, ReferenceVideo>();
-  groups.flat().forEach((reference) => referencesById.set(reference.id, reference));
-  return [...referencesById.values()];
-};
-
-const activeReferencePollingWindowMs = 10 * 60 * 1000;
-
-export const hasActivePendingReferenceAnalysis = (
-  references: ReferenceVideo[],
-  nowMs = Date.now(),
-): boolean =>
-  references.some((reference) => {
-    if (reference.status !== "registered" && reference.status !== "analyzing") {
-      return false;
-    }
-    const updatedAtMs = Date.parse(reference.updatedAt);
-    if (Number.isNaN(updatedAtMs)) {
-      return true;
-    }
-    return nowMs - updatedAtMs <= activeReferencePollingWindowMs;
-  });
-
-const mergeTemplates = (...groups: ViralTemplate[][]): ViralTemplate[] => {
-  const templatesById = new Map<string, ViralTemplate>();
-  groups.flat().forEach((template) => templatesById.set(template.templateId, template));
-  return [...templatesById.values()];
-};
-
-interface ImportAndStructureFilesInput {
-  createAssetUploadIntentFn?: typeof createAssetUploadIntent;
-  files: File[];
-  language: Language;
-  processAssetStructureFn?: typeof processAssetStructure;
-  projectId?: string;
-  uploadAssetFileToStorageFn?: typeof uploadAssetFileToStorage;
-}
-
-export const importAndStructureFiles = async ({
-  createAssetUploadIntentFn = createAssetUploadIntent,
-  files,
-  language,
-  processAssetStructureFn = processAssetStructure,
-  projectId,
-  uploadAssetFileToStorageFn = uploadAssetFileToStorage,
-}: ImportAndStructureFilesInput): Promise<{
-  assets: AssetMetadata[];
-  assetSlices: AssetSlice[];
-}> => {
-  const importedAssets: AssetMetadata[] = [];
-  const assetSlices: AssetSlice[] = [];
-
-  for (const file of files) {
-    const uploadIntent = await createAssetUploadIntentFn(
-      projectId,
-      createAssetInputFromFile(file, language),
-    );
-    const uploaded = await uploadAssetFileToStorageFn(uploadIntent.asset.id, file);
-    let importedAsset = uploaded.asset;
-
-    if (shouldAutoProcessImportedAsset(importedAsset)) {
-      const processed = await processAssetStructureFn(importedAsset.id);
-      importedAsset = processed.asset;
-      assetSlices.push(...processed.slices);
-    }
-
-    importedAssets.push(importedAsset);
-  }
-
-  return { assets: importedAssets, assetSlices };
-};
+import {
+  createDefaultAsset,
+  createAssetDraftForCategory,
+  createProjectMockDashboard,
+  createScriptGenerationRequestPayload,
+  defaultBrief,
+  defaultMediaSettings,
+  getCreationAssetLibraryRefreshCategory,
+  isCreationPage,
+  localizeDefaultAssetDraft,
+  mergeReferences,
+  mergeTemplates,
+} from "./AppSetupUtils";
+import { importAndStructureFiles } from "./AppAssetImportUtils";
+import { getGenerationTaskText } from "./AppBackgroundTaskText";
+import {
+  createAssetPrepSnapshotFromProjectAssets,
+  pruneAssetPrepSnapshotDeletedAssets,
+} from "./AppProjectAssetUtils";
+import {
+  createBriefFromProject,
+  replaceAssetCategoryInLibrary,
+} from "./AppProjectLifecycleUtils";
+import {
+  removeProjectRenderTask,
+  removeProjectScript,
+  replaceProjectRenderTask,
+  replaceProjectScene,
+  replaceProjectScenes,
+  replaceProjectScript,
+} from "./AppProjectMutationUtils";
+import {
+  selectActiveAssetCategoryAssets,
+  selectCreationUsableAssets,
+  selectHasPendingReferences,
+  selectPreparedProjectAssetsByBucket,
+  selectScriptReferenceAssets,
+  selectScriptReferenceLibrary,
+  selectScriptTemplateLibrary,
+  selectSmartEditAssetSlices,
+  selectStudioAssets,
+} from "./AppWorkspaceDerivedState";
+import {
+  createSmartEditResultFromCompletedSourceRender,
+  isRenderTaskPollingActive,
+  isSmartEditTask,
+  needsSceneClipMaterialRefresh,
+  selectLatestCompletedSmartEditTask,
+  selectStudioBaseRenderTask,
+  smartEditResultFromRenderSnapshot,
+} from "./AppRenderUtils";
+export {
+  createSmartEditResultFromCompletedSourceRender,
+  hasCompletedSceneClips,
+  isRenderTaskPollingActive,
+  needsSceneClipMaterialRefresh,
+  selectLatestCompletedSmartEditTask,
+  selectStudioBaseRenderTask,
+} from "./AppRenderUtils";
+import { useAssetSearchState } from "./useAssetSearchState";
+import {
+  useBackgroundTaskTracker,
+  type BackgroundTaskKind,
+  type BackgroundTaskTarget,
+} from "./useBackgroundTaskTracker";
+import { useProjectStudioState, type ProjectStudioFlow } from "./useProjectStudioState";
+import { useSettingsState } from "./useSettingsState";
+import { useWorkspaceNavigationState } from "./useWorkspaceNavigationState";
+export {
+  importAndStructureFiles,
+} from "./AppAssetImportUtils";
+export {
+  createAssetPrepSnapshotFromProjectAssets,
+  getCreationUsableAssets,
+  getPreparedAssetsByBucket,
+  getReferenceScriptAssets,
+  pruneAssetPrepSnapshotDeletedAssets,
+} from "./AppProjectAssetUtils";
+export {
+  removeProjectRenderTask,
+  removeProjectScript,
+  replaceProjectRenderTask,
+  replaceProjectScene,
+  replaceProjectScenes,
+  replaceProjectScript,
+} from "./AppProjectMutationUtils";
+export {
+  createBriefFromProject,
+  replaceAssetCategoryInLibrary,
+} from "./AppProjectLifecycleUtils";
+export {
+  createAssetInputFromFile,
+  createScriptGenerationRequestPayload,
+  getCreationAssetLibraryRefreshCategory,
+  hasActivePendingReferenceAnalysis,
+  mergeReferences,
+} from "./AppSetupUtils";
 
 export const hasUsableStockProviderCredential = hasSearchableStockProviderCredential;
-
-const defaultMediaSettings: MediaSettings = {
-  bgmTrack: "creator-pop",
-  subtitleStyle: "clean-lower-third",
-  subtitlesEnabled: true,
-  ttsVoice: "clear-host",
-};
-
-const creationPageIds: CreationPageId[] = [
-  "project",
-  "create",
-  "studio",
-  "delivery",
-  "dashboard",
-];
-
-const isCreationPage = (page: WorkspacePageId): page is CreationPageId =>
-  creationPageIds.includes(page as CreationPageId);
-
-const workspacePageOrder: WorkspacePageId[] = [
-  "assets",
-  "inspiration",
-  "project",
-  "create",
-  "studio",
-  "delivery",
-  "dashboard",
-  "edit",
-  "settings",
-];
-
-type PageTransitionDirection = "forward" | "backward" | "neutral";
-
-const getPageTransitionDirection = (
-  previousPage: WorkspacePageId,
-  nextPage: WorkspacePageId,
-): PageTransitionDirection => {
-  const previousIndex = workspacePageOrder.indexOf(previousPage);
-  const nextIndex = workspacePageOrder.indexOf(nextPage);
-
-  if (previousIndex === -1 || nextIndex === -1 || previousIndex === nextIndex) {
-    return "neutral";
-  }
-
-  return nextIndex > previousIndex ? "forward" : "backward";
-};
 
 type BusyState =
   | "idle"
@@ -392,475 +211,6 @@ type BusyState =
   | "reference";
 
 type ScriptProductionMode = NonNullable<ScriptGenerationRequest["productionMode"]>;
-type ProjectStudioFlow = "script" | "storyboard" | "render";
-type BackgroundTaskKind =
-  | "asset-analysis"
-  | "asset-recall"
-  | "inspiration"
-  | "reference-analysis"
-  | "scene-regeneration"
-  | "script"
-  | "smart-edit"
-  | "storyboard"
-  | "suggestions"
-  | "template"
-  | "video";
-
-interface BackgroundTaskTarget {
-  flow?: ProjectStudioFlow;
-  isProjectStudioMode?: boolean;
-  page: WorkspacePageId;
-  projectDetailTab?: ProjectDetailTab;
-  section: WorkspaceSectionId;
-}
-
-interface TrackedBackgroundTask extends BackgroundTaskItem {
-  createdAt: number;
-  kind: BackgroundTaskKind;
-  target: BackgroundTaskTarget;
-}
-
-const getStoredLanguage = (): Language => {
-  if (typeof window === "undefined") {
-    return "en";
-  }
-  const storedLanguage = window.localStorage.getItem("shopclip-language");
-  return isLanguage(storedLanguage) ? storedLanguage : "en";
-};
-
-const getStoredApiConfig = (): UserApiConfig => {
-  if (typeof window === "undefined") {
-    return createDefaultApiConfig();
-  }
-
-  try {
-    const storedConfig = window.localStorage.getItem("shopclip-api-config");
-    if (!storedConfig) {
-      return createDefaultApiConfig();
-    }
-    return sanitizeApiConfig(JSON.parse(storedConfig) as UserApiConfig);
-  } catch {
-    return createDefaultApiConfig();
-  }
-};
-
-const getStoredStockProviderConfigs = (): StockProviderConfig[] => {
-  if (typeof window === "undefined") {
-    return createDefaultStockProviderConfigs();
-  }
-
-  try {
-    const storedConfig = window.localStorage.getItem("shopclip-stock-provider-config");
-    if (!storedConfig) {
-      return createDefaultStockProviderConfigs();
-    }
-    return sanitizeStockProviderConfigs(JSON.parse(storedConfig) as StockProviderConfig[]);
-  } catch {
-    return createDefaultStockProviderConfigs();
-  }
-};
-
-const getGenerationTaskText = (
-  kind: BackgroundTaskKind,
-  language: Language,
-): Pick<BackgroundTaskItem, "description" | "title"> => {
-  if (language === "zh") {
-    if (kind === "asset-analysis") {
-      return { title: "分析素材", description: "正在调用模型结构化素材内容" };
-    }
-    if (kind === "asset-recall") {
-      return { title: "召回素材", description: "正在为分镜匹配可用素材" };
-    }
-    if (kind === "inspiration") {
-      return { title: "生成灵感素材", description: "正在调用大模型生成创作素材" };
-    }
-    if (kind === "reference-analysis") {
-      return { title: "拆解参考视频", description: "正在分析参考视频结构和爆款因素" };
-    }
-    if (kind === "scene-regeneration") {
-      return { title: "重生成分镜", description: "正在调用模型重生成单个分镜" };
-    }
-    if (kind === "script") {
-      return { title: "生成脚本", description: "正在根据素材和产品信息生成脚本" };
-    }
-    if (kind === "smart-edit") {
-      return { title: "智能剪辑", description: "正在生成剪辑方案和视频片段" };
-    }
-    if (kind === "storyboard") {
-      return { title: "生成分镜", description: "正在生成可编辑的视频分镜" };
-    }
-    if (kind === "suggestions") {
-      return { title: "生成编辑建议", description: "正在调用编辑 Agent 分析分镜" };
-    }
-    if (kind === "template") {
-      return { title: "生成模板", description: "正在提取可复用的脚本/视频模板" };
-    }
-    return { title: "生成视频", description: "正在生成分镜视频和最终预览" };
-  }
-
-  if (kind === "asset-analysis") {
-    return { title: "Analyze asset", description: "Structuring asset content with AI" };
-  }
-  if (kind === "asset-recall") {
-    return { title: "Recall assets", description: "Matching usable assets to the selected scene" };
-  }
-  if (kind === "inspiration") {
-    return { title: "Generate inspiration", description: "Creating material with the model" };
-  }
-  if (kind === "reference-analysis") {
-    return { title: "Analyze reference", description: "Breaking down reference video structure" };
-  }
-  if (kind === "scene-regeneration") {
-    return { title: "Regenerate scene", description: "Regenerating the selected storyboard scene" };
-  }
-  if (kind === "script") {
-    return { title: "Generate script", description: "Creating the script from product context" };
-  }
-  if (kind === "smart-edit") {
-    return { title: "Smart edit", description: "Generating edit plan and video segments" };
-  }
-  if (kind === "storyboard") {
-    return { title: "Generate storyboard", description: "Creating editable storyboard scenes" };
-  }
-  if (kind === "suggestions") {
-    return { title: "Generate suggestions", description: "Running the Editing Agent for this scene" };
-  }
-  if (kind === "template") {
-    return { title: "Generate template", description: "Extracting a reusable creative template" };
-  }
-  return { title: "Generate video", description: "Rendering scene videos and final preview" };
-};
-
-const pageFromHash = (): WorkspacePageId => {
-  if (typeof window === "undefined") {
-    return "project";
-  }
-
-  const hash = window.location.hash.replace("#", "");
-  if (hash === "assets") {
-    return "assets";
-  }
-  if (hash === "inspiration") {
-    return "inspiration";
-  }
-  if (hash === "settings") {
-    return "settings";
-  }
-  if (hash === "script" || hash === "create") {
-    return "create";
-  }
-  if (hash === "studio") {
-    return "studio";
-  }
-  if (hash === "trace" || hash === "export" || hash === "delivery") {
-    return "delivery";
-  }
-  if (hash === "dashboard") {
-    return "dashboard";
-  }
-  return "project";
-};
-
-export const getCreationAssetLibraryRefreshCategory = (
-  page: WorkspacePageId,
-): AssetLibraryCategory | undefined => (page === "create" ? "all" : undefined);
-
-export const getCreationUsableAssets = (
-  projectId: string | undefined,
-  assets: AssetMetadata[],
-): AssetMetadata[] => {
-  const assetsById = new Map<string, AssetMetadata>();
-  assets.forEach((asset) => {
-    if (asset.projectId && asset.projectId !== projectId) {
-      return;
-    }
-    assetsById.set(asset.id, asset);
-  });
-  return [...assetsById.values()];
-};
-
-const getReferenceIdFromScriptAsset = (asset: AssetMetadata): string | undefined => {
-  if (!asset.metadata || typeof asset.metadata !== "object" || !("referenceId" in asset.metadata)) {
-    return undefined;
-  }
-  return typeof asset.metadata.referenceId === "string" ? asset.metadata.referenceId : undefined;
-};
-
-export const getReferenceScriptAssets = (assets: AssetMetadata[]): AssetMetadata[] => {
-  const assetsById = new Map<string, AssetMetadata>();
-  assets.forEach((asset) => {
-    const kind =
-      asset.metadata && typeof asset.metadata === "object" && "kind" in asset.metadata
-        ? asset.metadata.kind
-        : undefined;
-    if (
-      kind === "reference_script_asset" &&
-      asset.status === "ready" &&
-      getReferenceIdFromScriptAsset(asset)
-    ) {
-      assetsById.set(asset.id, asset);
-    }
-  });
-  return [...assetsById.values()];
-};
-
-export const isRenderTaskPollingActive = (
-  renderTask: Pick<RenderTask, "status"> | undefined,
-): boolean =>
-  renderTask?.status === "queued" ||
-  renderTask?.status === "running" ||
-  renderTask?.status === "retrying";
-
-const isSmartEditTask = (renderTask: Pick<RenderTask, "provider"> | undefined): boolean =>
-  renderTask?.provider === "smart-edit-ffmpeg";
-
-export const hasCompletedSceneClips = (renderTask: RenderTask | undefined): boolean =>
-  renderTask?.status === "completed" &&
-  renderTask.sceneClips?.some((clip) => clip.status === "completed" && Boolean(clip.videoUrl)) ===
-    true;
-
-export const needsSceneClipMaterialRefresh = (renderTask: RenderTask | undefined): boolean =>
-  renderTask?.provider === "volcengine-seedance" &&
-  hasCompletedSceneClips(renderTask) &&
-  renderTask.sceneClips?.some(
-    (clip) => clip.status === "completed" && Boolean(clip.videoUrl) && !clip.material,
-  ) === true;
-
-const hasSceneClipAudioMaterial = (renderTask: RenderTask | undefined): boolean =>
-  hasCompletedSceneClips(renderTask) &&
-  renderTask?.sceneClips?.some((clip) => Boolean(clip.material?.audioUrl)) === true;
-
-export const selectStudioBaseRenderTask = (renderTasks: RenderTask[]): RenderTask | undefined => {
-  const sourceRenders = [...renderTasks]
-    .reverse()
-    .filter((candidate) => !isSmartEditTask(candidate) && hasCompletedSceneClips(candidate));
-
-  return (
-    sourceRenders.find(hasSceneClipAudioMaterial) ??
-    sourceRenders.find(
-      (candidate) =>
-        candidate.videoSettings?.generateAudio === true &&
-        candidate.sceneClips?.some(
-          (clip) => clip.status === "completed" && Boolean(clip.videoUrl) && !clip.material,
-        ) === true,
-    ) ??
-    sourceRenders[0] ??
-    renderTasks.at(-1)
-  );
-};
-
-export const selectLatestCompletedSmartEditTask = (
-  renderTasks: RenderTask[],
-): RenderTask | undefined =>
-  [...renderTasks]
-    .reverse()
-    .find(
-      (candidate) =>
-        isSmartEditTask(candidate) &&
-        candidate.status === "completed" &&
-        Boolean(candidate.smartEditPlan) &&
-        Boolean(candidate.exportUrl) &&
-        Boolean(candidate.previewUrl),
-    );
-
-const smartEditResultFromRenderSnapshot = (
-  render: RenderSnapshot,
-): SmartEditResult | undefined => {
-  if (
-    render.renderTask.status !== "completed" ||
-    render.renderTask.provider !== "smart-edit-ffmpeg" ||
-    !render.renderTask.smartEditPlan ||
-    !render.renderTask.exportUrl ||
-    !render.renderTask.previewUrl
-  ) {
-    return undefined;
-  }
-
-  return {
-    exportUrl: render.renderTask.exportUrl,
-    plan: render.renderTask.smartEditPlan,
-    previewUrl: render.renderTask.previewUrl,
-    renderTaskId: render.renderTask.id,
-    segmentOutputs: render.renderTask.smartEditSegmentOutputs ?? [],
-    traceEvents: render.traceEvents,
-  };
-};
-
-export const createSmartEditResultFromCompletedSourceRender = ({
-  language,
-  mediaSettings,
-  renderTask,
-  scenes,
-  targetLanguage,
-  traceEvents,
-}: {
-  language: Language;
-  mediaSettings: MediaSettings;
-  renderTask: RenderTask;
-  scenes: StoryboardScene[];
-  targetLanguage?: string;
-  traceEvents: TraceEvent[];
-}): SmartEditResult | undefined => {
-  if (renderTask.status !== "completed" || isSmartEditTask(renderTask)) {
-    return undefined;
-  }
-
-  const readyClips = (renderTask.sceneClips ?? [])
-    .filter((clip) => clip.status === "completed" && Boolean(clip.videoUrl))
-    .sort((left, right) => left.order - right.order);
-  if (readyClips.length === 0) {
-    return undefined;
-  }
-
-  const sceneById = new Map(scenes.map((scene) => [scene.id, scene]));
-  const segments = readyClips.map((clip) => {
-    const scene = sceneById.get(clip.sceneId);
-    const durationSeconds =
-      scene?.durationSeconds ?? clip.material?.audioWaveform?.durationSeconds ?? 4;
-    const subtitle = (clip.material?.text || clip.subtitle || scene?.subtitle || scene?.voiceover || "")
-      .trim()
-      .slice(0, 2000);
-    const voiceover = (scene?.voiceover || clip.subtitle || subtitle).trim().slice(0, 2000);
-
-    return {
-      assetTags: [],
-      captionHidden: false,
-      captionStartOffsetSeconds: 0,
-      durationSeconds,
-      enabled: true,
-      id: `source-render-${renderTask.id}-scene-${clip.sceneId}`,
-      order: clip.order,
-      playbackRate: 1,
-      rationale:
-        language === "zh"
-          ? "渲染完成后自动拆解为可剪辑的视频、音频和字幕素材。"
-          : "Automatically materialized after rendering for video, audio, and subtitle editing.",
-      sceneId: clip.sceneId,
-      source: {
-        kind: "generated-scene-clip" as const,
-        sceneClipAudioUrl: clip.material?.audioUrl,
-        sceneClipAudioWaveform: clip.material?.audioWaveform,
-        sceneClipUrl: clip.videoUrl!,
-        sceneClipVideoOnlyUrl: clip.material?.videoOnlyUrl,
-      },
-      sourceAudioMuted: false,
-      sourceAudioStartOffsetSeconds: 0,
-      subtitle: subtitle || (language === "zh" ? `分镜 ${clip.order}` : `Scene ${clip.order}`),
-      timelineStartSecond: 0,
-      transition: clip.order === 1 ? ("cut" as const) : ("fade" as const),
-      voiceover: voiceover || subtitle || (language === "zh" ? `分镜 ${clip.order}` : `Scene ${clip.order}`),
-      voiceoverStartOffsetSeconds: 0,
-    };
-  });
-  const targetDurationSeconds = Math.max(
-    1,
-    segments.reduce((sum, segment) => sum + segment.durationSeconds, 0),
-  );
-  const plan: SmartEditPlan = {
-    audio: {
-      bgmTrack: renderTask.mediaSettings?.bgmTrack ?? mediaSettings.bgmTrack,
-      targetLanguage: targetLanguage?.trim() || (language === "zh" ? "zh-CN" : "en-US"),
-      voice: renderTask.mediaSettings?.ttsVoice ?? mediaSettings.ttsVoice,
-    },
-    createdAt: new Date().toISOString(),
-    id: `source-render-${renderTask.id}-auto-edit-plan`,
-    projectId: renderTask.projectId,
-    segments,
-    strategy:
-      language === "zh"
-        ? "自动把已渲染分镜拆解为剪辑区素材。"
-        : "Automatically seed the editor with materialized rendered scenes.",
-    targetDurationSeconds,
-  };
-  const materializedPlan = materializeSmartEditRenderedSegmentsToTimelineElements(
-    plan,
-    segments.map((segment) => segment.id),
-    renderTask.updatedAt.replace(/[^a-zA-Z0-9]/gu, ""),
-  );
-  const firstClipUrl = readyClips[0]?.videoUrl;
-  const previewUrl = renderTask.previewUrl ?? renderTask.exportUrl ?? firstClipUrl;
-  const exportUrl = renderTask.exportUrl ?? renderTask.previewUrl ?? firstClipUrl;
-  if (!previewUrl || !exportUrl) {
-    return undefined;
-  }
-
-  return {
-    exportUrl,
-    plan: materializedPlan,
-    previewUrl,
-    renderTaskId: renderTask.id,
-    segmentOutputs: [],
-    traceEvents,
-  };
-};
-
-type PreparedAssetBucketId = "hero" | "scene" | "demo" | "brand";
-
-export const getPreparedAssetsByBucket = (
-  assets: AssetMetadata[],
-): Record<string, AssetMetadata[]> => {
-  const preparedAssetsByBucket: Record<PreparedAssetBucketId, AssetMetadata[]> = {
-    hero: [],
-    scene: [],
-    demo: [],
-    brand: [],
-  };
-
-  assets.forEach((asset) => {
-    if (asset.type === "image" || asset.mimeType?.startsWith("image/")) {
-      const bucketId = preparedAssetsByBucket.hero.length === 0 ? "hero" : "scene";
-      preparedAssetsByBucket[bucketId].push(asset);
-      return;
-    }
-
-    if (asset.type === "video" || asset.mimeType?.startsWith("video/")) {
-      preparedAssetsByBucket.demo.push(asset);
-      return;
-    }
-
-    preparedAssetsByBucket.brand.push(asset);
-  });
-
-  return Object.fromEntries(
-    Object.entries(preparedAssetsByBucket).filter(([, bucketAssets]) => bucketAssets.length > 0),
-  );
-};
-
-export const createAssetPrepSnapshotFromProjectAssets = (
-  assets: AssetMetadata[],
-  keywords: string[] = [],
-): AssetPrepSnapshot => {
-  const preparedAssetsByBucket = getPreparedAssetsByBucket(assets);
-  const materials = Object.entries(preparedAssetsByBucket).flatMap(([bucketId, bucketAssets]) =>
-    bucketAssets.map((asset) => ({
-      assetId: asset.id,
-      bucketId,
-      mimeType: asset.mimeType,
-      name: asset.name,
-      sizeBytes: asset.sizeBytes,
-      source: "library" as const,
-      tags: asset.tags,
-      type: asset.type,
-    })),
-  );
-
-  return {
-    assetIds: materials.map((material) => material.assetId),
-    keywords,
-    materials,
-  };
-};
-
-export const pruneAssetPrepSnapshotDeletedAssets = (
-  snapshot: AssetPrepSnapshot,
-  deletedAssetIds: Set<string>,
-): AssetPrepSnapshot => ({
-  ...snapshot,
-  assetIds: snapshot.assetIds.filter((assetId) => !deletedAssetIds.has(assetId)),
-  materials: snapshot.materials.filter(
-    (material) => !material.assetId || !deletedAssetIds.has(material.assetId),
-  ),
-});
 
 interface AppProps {
   initialLanguage?: Language;
@@ -877,34 +227,37 @@ export const App = ({
   initialProjectDetailTab,
   initialProjectHistory,
 }: AppProps) => {
-  const [language, setLanguage] = useState<Language>(() => initialLanguage ?? getStoredLanguage());
-  const [activePage, setActivePage] = useState<WorkspacePageId>(
-    () => initialPage ?? pageFromHash(),
-  );
-  const [pageTransitionDirection, setPageTransitionDirection] =
-    useState<PageTransitionDirection>("neutral");
+  const {
+    activePage,
+    activeSection,
+    language,
+    pageTransitionDirection,
+    setLanguage,
+    updateActivePage,
+  } = useWorkspaceNavigationState({ initialLanguage, initialPage });
   const [activeAssetCategory, setActiveAssetCategory] = useState<AssetCategory>("image");
-  const [apiConfig, setApiConfig] = useState<UserApiConfig>(() => getStoredApiConfig());
-  const [stockProviderConfigs, setStockProviderConfigs] = useState<StockProviderConfig[]>(() =>
-    getStoredStockProviderConfigs(),
-  );
+  const {
+    apiConfig,
+    handleApiConfigChange,
+    handleStockProviderConfigsChange,
+    stockProviderConfigs,
+  } = useSettingsState();
   const [assetDraft, setAssetDraft] = useState<CreateAssetInput>(() =>
     createDefaultAsset(language),
   );
-  const [assetSearchQuery, setAssetSearchQuery] = useState("");
-  const [hasAssetSearchRun, setHasAssetSearchRun] = useState(false);
-  const [assetSearchResults, setAssetSearchResults] = useState<AssetSearchResult[]>([]);
-  const [externalAssetSearchResults, setExternalAssetSearchResults] = useState<
-    ExternalAssetResult[]
-  >([]);
+  const {
+    activeExternalAssetSearchResults,
+    activeSearchResults,
+    hasAssetSearchRun,
+    resetAssetSearch,
+    searchQuery: assetSearchQuery,
+    setExternalAssetSearchResults,
+    setHasAssetSearchRun,
+    setSearchQuery: setAssetSearchQuery,
+    setSearchResults: setAssetSearchResults,
+  } = useAssetSearchState(activeAssetCategory);
   const [brief, setBrief] = useState<ProjectBrief>(defaultBrief);
   const [busyState, setBusyState] = useState<BusyState>("idle");
-  const [trackedBackgroundTasks, setTrackedBackgroundTasks] = useState<TrackedBackgroundTask[]>(
-    [],
-  );
-  const backgroundTaskProgressTimers = useRef<Record<string, ReturnType<typeof window.setInterval>>>(
-    {},
-  );
   const [dashboard, setDashboard] = useState<DashboardResponse>();
   const [dirtySceneIds, setDirtySceneIds] = useState<Set<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
@@ -932,11 +285,16 @@ export const App = ({
     () => initialProjectDetailTab ?? "overview",
   );
   const [isProjectScriptComposerOpen, setIsProjectScriptComposerOpen] = useState(false);
-  const [isProjectStudioMode, setIsProjectStudioMode] = useState(false);
-  const [projectStudioFlow, setProjectStudioFlow] = useState<ProjectStudioFlow>("script");
-  const [projectStudioPreviewScriptId, setProjectStudioPreviewScriptId] = useState<
-    string | undefined
-  >();
+  const {
+    enterProjectStudioFlow,
+    exitProjectStudioMode,
+    isProjectStudioMode,
+    projectStudioFlow,
+    projectStudioPreviewScriptId,
+    resetProjectStudioMode,
+    setProjectStudioFlow,
+    setProjectStudioPreviewScriptId,
+  } = useProjectStudioState();
   const [isProjectHistoryLoading, setIsProjectHistoryLoading] = useState(false);
   const [referenceLibrary, setReferenceLibrary] = useState<ReferenceVideo[]>([]);
   const [renderTask, setRenderTask] = useState<RenderTask>();
@@ -956,110 +314,79 @@ export const App = ({
   const isReferencePollInFlight = useRef(false);
   const isRenderPollInFlight = useRef(false);
   const text = copy[language];
+  const currentBackgroundTaskTarget = useMemo<BackgroundTaskTarget>(
+    () => ({
+      flow: isProjectStudioMode ? projectStudioFlow : undefined,
+      isProjectStudioMode,
+      page: activePage,
+      projectDetailTab: activePage === "project" ? projectDetailTab : undefined,
+      section: activeSection,
+    }),
+    [activePage, activeSection, isProjectStudioMode, projectDetailTab, projectStudioFlow],
+  );
+  const getBackgroundTaskText = useCallback(
+    (kind: BackgroundTaskKind) => getGenerationTaskText(kind, language),
+    [language],
+  );
+  const {
+    backgroundTasks,
+    startBackgroundTask,
+    startEstimatedBackgroundTaskProgress,
+    stopEstimatedBackgroundTaskProgress,
+    updateBackgroundTask,
+  } = useBackgroundTaskTracker({
+    currentTarget: currentBackgroundTaskTarget,
+    getTaskText: getBackgroundTaskText,
+    renderTask,
+  });
 
   const scenes = useMemo(() => script?.scenes ?? project?.scenes ?? [], [project?.scenes, script]);
   const activeAssets = useMemo(
-    () => assetLibrary.assets.filter((asset) => assetMatchesCategory(asset, activeAssetCategory)),
+    () => selectActiveAssetCategoryAssets(assetLibrary.assets, activeAssetCategory),
     [activeAssetCategory, assetLibrary.assets],
   );
   const creationUsableAssets = useMemo(
-    () =>
-      getCreationUsableAssets(project?.id, [...(project?.assets ?? []), ...assetLibrary.assets]),
-    [assetLibrary.assets, project?.assets, project?.id],
+    () => selectCreationUsableAssets(project, assetLibrary),
+    [assetLibrary, project],
   );
-  const studioAssets = useMemo(() => {
-    const assetsById = new Map<string, AssetMetadata>();
-    [...(project?.assets ?? []), ...assetLibrary.assets].forEach((asset) => {
-      assetsById.set(asset.id, asset);
-    });
-    return [...assetsById.values()];
-  }, [assetLibrary.assets, project?.assets]);
+  const studioAssets = useMemo(
+    () => selectStudioAssets(project, assetLibrary.assets),
+    [assetLibrary.assets, project],
+  );
   const smartEditAssetSlices = useMemo(
-    () => [...(project?.assetSlices ?? []), ...assetLibrary.assetSlices],
-    [assetLibrary.assetSlices, project?.assetSlices],
+    () => selectSmartEditAssetSlices(project, assetLibrary),
+    [assetLibrary, project],
   );
   const isSmartEditTaskRunning = isSmartEditTask(renderTask) && isRenderTaskPollingActive(renderTask);
   const preparedProjectAssetsByBucket = useMemo(
-    () => getPreparedAssetsByBucket(project?.assets ?? []),
-    [project?.assets],
+    () => selectPreparedProjectAssetsByBucket(project),
+    [project],
   );
   const scriptReferenceLibrary = useMemo(
-    () => mergeReferences(project?.referenceVideos ?? [], referenceLibrary),
-    [project?.referenceVideos, referenceLibrary],
+    () => selectScriptReferenceLibrary(project, referenceLibrary),
+    [project, referenceLibrary],
   );
   const scriptReferenceAssets = useMemo(
-    () => getReferenceScriptAssets([...(project?.assets ?? []), ...assetLibrary.assets]),
-    [assetLibrary.assets, project?.assets],
+    () => selectScriptReferenceAssets(project, assetLibrary.assets),
+    [assetLibrary.assets, project],
   );
   const hasPendingReferences = useMemo(
-    () => hasActivePendingReferenceAnalysis(scriptReferenceLibrary),
+    () => selectHasPendingReferences(scriptReferenceLibrary),
     [scriptReferenceLibrary],
   );
   const scriptTemplateLibrary = useMemo(
-    () => mergeTemplates(viralTemplateLibrary, project?.viralTemplates ?? []),
-    [project?.viralTemplates, viralTemplateLibrary],
+    () => selectScriptTemplateLibrary(project, viralTemplateLibrary),
+    [project, viralTemplateLibrary],
   );
-  const activeAssetSearchResults = useMemo(
-    () =>
-      assetSearchResults.filter((result) =>
-        assetMatchesCategory(result.asset, activeAssetCategory),
-      ),
-    [activeAssetCategory, assetSearchResults],
-  );
-  const activeExternalAssetSearchResults = useMemo(
-    () =>
-      externalAssetSearchResults.filter((result) =>
-        externalAssetMatchesCategory(result, activeAssetCategory),
-      ),
-    [activeAssetCategory, externalAssetSearchResults],
-  );
-  const activeSection: WorkspaceSectionId =
-    activePage === "assets"
-      ? "assets"
-      : activePage === "inspiration"
-        ? "inspiration"
-        : activePage === "settings"
-          ? "settings"
-          : "create";
-  const getCurrentBackgroundTaskTarget = (): BackgroundTaskTarget => ({
-    flow: isProjectStudioMode ? projectStudioFlow : undefined,
-    isProjectStudioMode,
-    page: activePage,
-    projectDetailTab: activePage === "project" ? projectDetailTab : undefined,
-    section: activeSection,
-  });
-  const updateActivePage = useCallback((nextPage: WorkspacePageId) => {
-    setActivePage((previousPage) => {
-      setPageTransitionDirection(getPageTransitionDirection(previousPage, nextPage));
-      return nextPage;
-    });
-  }, []);
-
-  useEffect(() => {
-    const handleHashChange = () => updateActivePage(pageFromHash());
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [updateActivePage]);
-
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
     }
   }, [language]);
 
-  useEffect(
-    () => () => {
-      Object.values(backgroundTaskProgressTimers.current).forEach((timerId) => {
-        window.clearInterval(timerId);
-      });
-      backgroundTaskProgressTimers.current = {};
-    },
-    [],
-  );
-
   const handlePageChange = (page: WorkspacePageId) => {
     if (page !== "studio" && page !== "delivery") {
-      setIsProjectStudioMode(false);
+      exitProjectStudioMode();
     }
     updateActivePage(page);
     if (typeof window !== "undefined") {
@@ -1084,13 +411,13 @@ export const App = ({
       return false;
     }
 
-    setSmartEditResult(seededResult);
-    setSelectedSmartEditSegmentId(seededResult.plan.segments[0]?.id);
-    setExportResult(undefined);
-    if (options.navigateToEdit) {
-      setIsProjectStudioMode(false);
-      handlePageChange("edit");
-    }
+      setSmartEditResult(seededResult);
+      setSelectedSmartEditSegmentId(seededResult.plan.segments[0]?.id);
+      setExportResult(undefined);
+      if (options.navigateToEdit) {
+        exitProjectStudioMode();
+        handlePageChange("edit");
+      }
     return true;
   };
 
@@ -1113,38 +440,16 @@ export const App = ({
   const handleLanguageChange = (nextLanguage: Language) => {
     const previousLanguage = language;
     setLanguage(nextLanguage);
-    setAssetDraft((current) => {
-      const previousDefaults = getAssetDraftDefaults(activeAssetCategory, previousLanguage);
-      const nextDefaults = getAssetDraftDefaults(activeAssetCategory, nextLanguage);
-      const isLocalizedDefault =
-        current.type === previousDefaults.type &&
-        current.mimeType === previousDefaults.mimeType &&
-        current.name === previousDefaults.name &&
-        current.tags.join("\u0000") === previousDefaults.tags.join("\u0000");
-
-      return isLocalizedDefault ? { ...nextDefaults, sizeBytes: current.sizeBytes } : current;
-    });
+    setAssetDraft((current) =>
+      localizeDefaultAssetDraft({
+        category: activeAssetCategory,
+        currentDraft: current,
+        nextLanguage,
+        previousLanguage,
+      }),
+    );
     if (typeof window !== "undefined") {
       window.localStorage.setItem("shopclip-language", nextLanguage);
-    }
-  };
-
-  const handleApiConfigChange = (nextApiConfig: UserApiConfig) => {
-    const normalizedConfig = sanitizeApiConfig(nextApiConfig);
-    setApiConfig(normalizedConfig);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("shopclip-api-config", JSON.stringify(normalizedConfig));
-    }
-  };
-
-  const handleStockProviderConfigsChange = (nextConfigs: StockProviderConfig[]) => {
-    const normalizedConfigs = sanitizeStockProviderConfigs(nextConfigs);
-    setStockProviderConfigs(normalizedConfigs);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        "shopclip-stock-provider-config",
-        JSON.stringify(normalizedConfigs),
-      );
     }
   };
 
@@ -1188,83 +493,7 @@ export const App = ({
 
   const handleAssetCategoryChange = (category: AssetCategory) => {
     setActiveAssetCategory(category);
-    setAssetDraft((current) => ({
-      ...getAssetDraftDefaults(category, language),
-      sizeBytes: current.sizeBytes > 0 ? current.sizeBytes : defaultAssetSizeBytes,
-    }));
-  };
-
-  const startBackgroundTask = (
-    kind: BackgroundTaskKind,
-    target: BackgroundTaskTarget,
-    options: { id?: string; progress?: number } = {},
-  ) => {
-    const taskId =
-      options.id ?? `${kind}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const taskText = getGenerationTaskText(kind, language);
-    setTrackedBackgroundTasks((current) => [
-      {
-        ...taskText,
-        createdAt: Date.now(),
-        id: taskId,
-        kind,
-        progress: options.progress ?? 12,
-        status: "running",
-        target,
-      },
-      ...current.filter((task) => task.id !== taskId),
-    ]);
-    return taskId;
-  };
-
-  const updateBackgroundTask = (
-    taskId: string,
-    updates: Partial<Pick<TrackedBackgroundTask, "progress" | "status">>,
-  ) => {
-    setTrackedBackgroundTasks((current) =>
-      current.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              ...updates,
-            }
-          : task,
-      ),
-    );
-  };
-
-  const stopEstimatedBackgroundTaskProgress = (taskId: string) => {
-    const timerId = backgroundTaskProgressTimers.current[taskId];
-    if (!timerId) {
-      return;
-    }
-    window.clearInterval(timerId);
-    delete backgroundTaskProgressTimers.current[taskId];
-  };
-
-  const startEstimatedBackgroundTaskProgress = (taskId: string) => {
-    stopEstimatedBackgroundTaskProgress(taskId);
-    backgroundTaskProgressTimers.current[taskId] = window.setInterval(() => {
-      setTrackedBackgroundTasks((current) =>
-        current.map((task) => {
-          if (task.id !== taskId || task.status !== "running") {
-            return task;
-          }
-          const nextProgress =
-            task.progress < 35
-              ? task.progress + 6
-              : task.progress < 70
-                ? task.progress + 3
-                : task.progress < 90
-                  ? task.progress + 1.4
-                  : task.progress + 0.5;
-          return {
-            ...task,
-            progress: Math.min(96, nextProgress),
-          };
-        }),
-      );
-    }, 900);
+    setAssetDraft((current) => createAssetDraftForCategory(category, language, current.sizeBytes));
   };
 
   const runAction = async (
@@ -1281,7 +510,7 @@ export const App = ({
   ) => {
     const backgroundTask = options?.backgroundTask;
     const backgroundTaskId = backgroundTask
-      ? startBackgroundTask(backgroundTask.kind, backgroundTask.target ?? getCurrentBackgroundTaskTarget(), {
+      ? startBackgroundTask(backgroundTask.kind, backgroundTask.target ?? currentBackgroundTaskTarget, {
           id: backgroundTask.id,
         })
       : undefined;
@@ -1314,46 +543,13 @@ export const App = ({
     }
   };
 
-  const replaceAssetCategoryInLibrary = (
-    currentLibrary: { assets: AssetMetadata[]; assetSlices: AssetSlice[] },
-    category: AssetLibraryCategory,
-    assets: AssetMetadata[],
-    assetSlices: AssetSlice[],
-  ): { assets: AssetMetadata[]; assetSlices: AssetSlice[] } => {
-    if (category === "all") {
-      return { assets, assetSlices };
-    }
-
-    const replacedAssetIds = new Set(
-      currentLibrary.assets
-        .filter((asset) => assetMatchesCategory(asset, category))
-        .map((asset) => asset.id),
-    );
-    const nextAssetIds = new Set(assets.map((asset) => asset.id));
-
-    return {
-      assets: [
-        ...currentLibrary.assets.filter((asset) => !replacedAssetIds.has(asset.id)),
-        ...assets,
-      ],
-      assetSlices: [
-        ...currentLibrary.assetSlices.filter(
-          (slice) => !replacedAssetIds.has(slice.assetId) && !nextAssetIds.has(slice.assetId),
-        ),
-        ...assetSlices,
-      ],
-    };
-  };
-
   const refreshAssetLibrary = (category: AssetLibraryCategory) => {
     void runAction("asset", "asset", async () => {
       const response = await loadProjectAssets(undefined, category);
       setAssetLibrary((current) =>
         replaceAssetCategoryInLibrary(current, category, response.assets, response.assetSlices),
       );
-      setHasAssetSearchRun(false);
-      setAssetSearchResults([]);
-      setExternalAssetSearchResults([]);
+      resetAssetSearch();
     });
   };
 
@@ -1377,15 +573,7 @@ export const App = ({
   const syncCurrentProjectSnapshot = async (projectId: string) => {
     const loadedProject = await loadProject(projectId);
     setProject(loadedProject);
-    setBrief({
-      title: loadedProject.title,
-      productName: loadedProject.productName,
-      audience: loadedProject.audience,
-      sellingPoints: loadedProject.sellingPoints,
-      tone: loadedProject.tone,
-      style: loadedProject.style,
-      targetDurationSeconds: loadedProject.targetDurationSeconds,
-    });
+    setBrief(createBriefFromProject(loadedProject));
     refreshProjectHistory();
     return loadedProject;
   };
@@ -1552,8 +740,7 @@ export const App = ({
       setProject(createdProject);
       setProjectDetailTab("overview");
       setIsProjectScriptComposerOpen(false);
-      setIsProjectStudioMode(false);
-      setProjectStudioFlow("script");
+      resetProjectStudioMode();
       setScript(undefined);
       setScriptDraft("");
       setScriptProductionMode("automatic");
@@ -1565,9 +752,7 @@ export const App = ({
       setTraceEvents([]);
       setDashboard(undefined);
       setExportResult(undefined);
-      setHasAssetSearchRun(false);
-      setAssetSearchResults([]);
-      setExternalAssetSearchResults([]);
+      resetAssetSearch();
       setEditingSuggestions([]);
       setAssetRecallCandidates([]);
       setAssetPrepSnapshot({ assetIds: [], keywords: [], materials: [] });
@@ -1583,17 +768,8 @@ export const App = ({
     setProject(loadedProject);
     setProjectDetailTab("overview");
     setIsProjectScriptComposerOpen(false);
-    setIsProjectStudioMode(false);
-    setProjectStudioFlow("script");
-    setBrief({
-      title: loadedProject.title,
-      productName: loadedProject.productName,
-      audience: loadedProject.audience,
-      sellingPoints: loadedProject.sellingPoints,
-      tone: loadedProject.tone,
-      style: loadedProject.style,
-      targetDurationSeconds: loadedProject.targetDurationSeconds,
-    });
+    resetProjectStudioMode();
+    setBrief(createBriefFromProject(loadedProject));
     setScript(latestScript);
     setScriptDraft(latestScript?.narrative ?? "");
     setScriptProductionMode("automatic");
@@ -1631,9 +807,7 @@ export const App = ({
     }
     setDashboard(undefined);
     setExportResult(undefined);
-    setHasAssetSearchRun(false);
-    setAssetSearchResults([]);
-    setExternalAssetSearchResults([]);
+    resetAssetSearch();
     setEditingSuggestions([]);
     setAssetRecallCandidates([]);
     setAssetPrepSnapshot(
@@ -1653,8 +827,7 @@ export const App = ({
     setProject(undefined);
     setProjectDetailTab("overview");
     setIsProjectScriptComposerOpen(false);
-    setIsProjectStudioMode(false);
-    setProjectStudioFlow("script");
+    resetProjectStudioMode();
     refreshProjectHistory();
   };
 
@@ -1671,15 +844,7 @@ export const App = ({
     void runAction("project", "project", async () => {
       const updatedProject = await updateProjectBrief(project.id, nextBrief);
       setProject(updatedProject);
-      setBrief({
-        title: updatedProject.title,
-        productName: updatedProject.productName,
-        audience: updatedProject.audience,
-        sellingPoints: updatedProject.sellingPoints,
-        tone: updatedProject.tone,
-        style: updatedProject.style,
-        targetDurationSeconds: updatedProject.targetDurationSeconds,
-      });
+      setBrief(createBriefFromProject(updatedProject));
       refreshProjectHistory();
     });
   };
@@ -1696,16 +861,7 @@ export const App = ({
       if (render.renderTask.status === "completed") {
         seedSmartEditFromSourceRender(render.renderTask, render.traceEvents);
       }
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              renderTasks: current.renderTasks.map((task) =>
-                task.id === render.renderTask.id ? render.renderTask : task,
-              ),
-            }
-          : current,
-      );
+      setProject((current) => replaceProjectRenderTask(current, render.renderTask));
     });
   };
 
@@ -1715,28 +871,26 @@ export const App = ({
     setSmartEditResult(undefined);
     setSelectedSmartEditSegmentId(undefined);
     setProjectDetailTab("videos");
-    setIsProjectStudioMode(true);
-    setProjectStudioFlow("script");
+    enterProjectStudioFlow("script");
     handlePageChange("studio");
     refreshStudioBaseRenderMaterials(baseRender);
   };
 
   const handleSaveVideoAndReturn = () => {
-    setIsProjectStudioMode(false);
+    exitProjectStudioMode();
     setProjectDetailTab("videos");
     handlePageChange("project");
     refreshProjectHistory();
   };
 
   const handleBackToProjectVideoLibrary = () => {
-    setIsProjectStudioMode(false);
+    exitProjectStudioMode();
     setProjectDetailTab("videos");
     handlePageChange("project");
   };
 
   const handleProjectStudioFlowChange = (flow: ProjectStudioFlow) => {
-    setIsProjectStudioMode(true);
-    setProjectStudioFlow(flow);
+    enterProjectStudioFlow(flow);
     handlePageChange(flow === "render" ? "delivery" : "studio");
   };
 
@@ -1746,7 +900,7 @@ export const App = ({
       return;
     }
 
-    setIsProjectStudioMode(false);
+    exitProjectStudioMode();
     setRenderTask(selectedRenderTask);
     setTraceEvents([]);
     setExportResult(undefined);
@@ -1793,14 +947,7 @@ export const App = ({
     setDirtySceneIds(new Set());
     setEditingSuggestions([]);
     setAssetRecallCandidates([]);
-    setProject((current) =>
-      current
-        ? {
-            ...current,
-            scenes: selectedScript.scenes,
-          }
-        : current,
-    );
+    setProject((current) => replaceProjectScenes(current, selectedScript.scenes));
     handleProjectStudioFlowChange("storyboard");
   };
 
@@ -1848,22 +995,7 @@ export const App = ({
           }
         : current,
     );
-    setProject((current) =>
-      current
-        ? {
-            ...current,
-            scenes: current.scenes.map((scene) =>
-              scene.id === updatedScene.id ? updatedScene : scene,
-            ),
-            scripts: current.scripts.map((currentScript) => ({
-              ...currentScript,
-              scenes: currentScript.scenes.map((scene) =>
-                scene.id === updatedScene.id ? updatedScene : scene,
-              ),
-            })),
-          }
-        : current,
-    );
+    setProject((current) => replaceProjectScene(current, updatedScene));
   };
 
   const replaceScenesInState = (updatedScenes: StoryboardScene[]) => {
@@ -1925,7 +1057,7 @@ export const App = ({
     }
     setErrors((current) => ({
       ...current,
-      render: `分镜 ${invalidScene.order} 的时长为 ${invalidScene.durationSeconds}s。doubao-seedance-1.5-pro 仅支持单分镜 4-12s，请先在步骤三调整分镜时长。`,
+      render: `Scene ${invalidScene.order} is ${invalidScene.durationSeconds}s. Doubao Seedance 1.5 Pro supports 4-12s per scene; adjust the scene duration first.`,
     }));
     handlePageChange("studio");
     setSelectedSceneId(invalidScene.id);
@@ -1999,9 +1131,8 @@ export const App = ({
               }
             : current,
         );
-        setHasAssetSearchRun(false);
         setAssetSearchResults([]);
-        setExternalAssetSearchResults([]);
+        setHasAssetSearchRun(false);
       },
       {
         backgroundTask: {
@@ -2057,8 +1188,7 @@ export const App = ({
               }
             : current,
         );
-        setAssetSearchResults([]);
-        setHasAssetSearchRun(false);
+        resetAssetSearch();
       },
       {
         backgroundTask: {
@@ -2215,8 +1345,7 @@ export const App = ({
         setProject(undefined);
         setProjectDetailTab("overview");
         setIsProjectScriptComposerOpen(false);
-        setIsProjectStudioMode(false);
-        setProjectStudioFlow("script");
+        resetProjectStudioMode();
         setScript(undefined);
         setScriptDraft("");
         setRenderTask(undefined);
@@ -2236,21 +1365,14 @@ export const App = ({
   const handleDeleteProjectScript = (scriptId: string) => {
     const shouldDelete =
       typeof window === "undefined" ||
-      window.confirm(language === "zh" ? "确认删除这个剧本？" : "Delete this script?");
+      window.confirm("Delete this script?");
     if (!shouldDelete) {
       return;
     }
 
     void runAction("script", "script", async () => {
       const { deletedScript } = await deleteScriptRequest(scriptId);
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              scripts: current.scripts.filter((candidate) => candidate.id !== deletedScript.id),
-            }
-          : current,
-      );
+      setProject((current) => removeProjectScript(current, deletedScript.id));
       setScript((current) => (current?.id === deletedScript.id ? undefined : current));
       setScriptDraft((current) => (script?.id === deletedScript.id ? "" : current));
     });
@@ -2259,23 +1381,14 @@ export const App = ({
   const handleDeleteProjectRenderTask = (renderTaskId: string) => {
     const shouldDelete =
       typeof window === "undefined" ||
-      window.confirm(language === "zh" ? "确认删除这个视频？" : "Delete this video?");
+      window.confirm("Delete this video?");
     if (!shouldDelete) {
       return;
     }
 
     void runAction("render", "render", async () => {
       const { deletedRenderTask } = await deleteRenderTaskRequest(renderTaskId);
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              renderTasks: current.renderTasks.filter(
-                (candidate) => candidate.id !== deletedRenderTask.id,
-              ),
-            }
-          : current,
-      );
+      setProject((current) => removeProjectRenderTask(current, deletedRenderTask.id));
       setRenderTask((current) => (current?.id === deletedRenderTask.id ? undefined : current));
       setTraceEvents((current) => (renderTask?.id === deletedRenderTask.id ? [] : current));
     });
@@ -2285,16 +1398,7 @@ export const App = ({
     const nextDisplayName = displayName.trim() || undefined;
     void runAction("script", "script", async () => {
       const { script: updatedScript } = await updateScriptDisplayName(scriptId, nextDisplayName);
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              scripts: current.scripts.map((candidate) =>
-                candidate.id === updatedScript.id ? updatedScript : candidate,
-              ),
-            }
-          : current,
-      );
+      setProject((current) => replaceProjectScript(current, updatedScript));
       setScript((current) => (current?.id === updatedScript.id ? updatedScript : current));
       refreshProjectHistory();
     });
@@ -2307,16 +1411,7 @@ export const App = ({
         renderTaskId,
         nextDisplayName,
       );
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              renderTasks: current.renderTasks.map((candidate) =>
-                candidate.id === updatedRenderTask.id ? updatedRenderTask : candidate,
-              ),
-            }
-          : current,
-      );
+      setProject((current) => replaceProjectRenderTask(current, updatedRenderTask));
       setRenderTask((current) =>
         current?.id === updatedRenderTask.id ? updatedRenderTask : current,
       );
@@ -2444,9 +1539,7 @@ export const App = ({
         setViralTemplateLibrary((current) => mergeTemplates([template], current));
         setActiveAssetCategory("template");
         setAssetSearchQuery("");
-        setHasAssetSearchRun(false);
-        setAssetSearchResults([]);
-        setExternalAssetSearchResults([]);
+        resetAssetSearch();
       },
       {
         backgroundTask: {
@@ -2487,13 +1580,9 @@ export const App = ({
     const shouldDelete =
       typeof window === "undefined" ||
       window.confirm(
-        language === "zh"
-          ? uniqueReferenceIds.length === 1
-            ? "确认删除这条拆解任务？相关的脚本素材和公开视频分析素材也会一并删除。"
-            : `确认删除选中的 ${uniqueReferenceIds.length} 条拆解任务？相关的脚本素材和公开视频分析素材也会一并删除。`
-          : uniqueReferenceIds.length === 1
-            ? "Delete this breakdown? Related script material and public reference analysis assets will also be removed."
-            : `Delete ${uniqueReferenceIds.length} selected breakdowns? Related script material and public reference analysis assets will also be removed.`,
+        uniqueReferenceIds.length === 1
+          ? "Delete this breakdown? Related script material and public reference analysis assets will also be removed."
+          : `Delete ${uniqueReferenceIds.length} selected breakdowns? Related script material and public reference analysis assets will also be removed.`,
       );
     if (!shouldDelete) {
       return;
@@ -3298,60 +2387,6 @@ export const App = ({
   const projectStudioPreviewScript = project?.scripts.find(
     (candidate) => candidate.id === projectStudioPreviewScriptId,
   );
-  const hasVideoTaskHistory = trackedBackgroundTasks.some((task) => task.kind === "video");
-  const hasSmartEditTaskHistory = trackedBackgroundTasks.some((task) => task.kind === "smart-edit");
-  const renderBackgroundTask = useMemo<TrackedBackgroundTask | undefined>(() => {
-    const renderTaskKind = isSmartEditTask(renderTask) ? "smart-edit" : "video";
-    const hasMatchingTaskHistory =
-      renderTaskKind === "smart-edit" ? hasSmartEditTaskHistory : hasVideoTaskHistory;
-    if (!renderTask || (!isRenderTaskPollingActive(renderTask) && !hasMatchingTaskHistory)) {
-      return undefined;
-    }
-    const taskText = getGenerationTaskText(renderTaskKind, language);
-    const trackedRenderTask = trackedBackgroundTasks.find((task) => task.kind === renderTaskKind);
-    const taskStatus =
-      renderTask.status === "failed"
-        ? "failed"
-        : isRenderTaskPollingActive(renderTask)
-          ? "running"
-          : "completed";
-
-    return {
-      ...taskText,
-      createdAt: Date.parse(renderTask.updatedAt ?? renderTask.createdAt ?? "") || Date.now(),
-      id: `render-task-${renderTask.id}`,
-      kind: renderTaskKind,
-      progress: taskStatus === "completed" ? 100 : renderTask.progress ?? 0,
-      status: taskStatus,
-      target: trackedRenderTask?.target ?? getCurrentBackgroundTaskTarget(),
-    };
-  }, [
-    activePage,
-    activeSection,
-    hasSmartEditTaskHistory,
-    hasVideoTaskHistory,
-    language,
-    projectDetailTab,
-    renderTask,
-    trackedBackgroundTasks,
-  ]);
-  const backgroundTasks = useMemo<TrackedBackgroundTask[]>(() => {
-    const trackedTasks = renderBackgroundTask
-      ? trackedBackgroundTasks.filter((task) => task.kind !== renderBackgroundTask.kind)
-      : trackedBackgroundTasks;
-    return [renderBackgroundTask, ...trackedTasks]
-      .filter((task): task is TrackedBackgroundTask => Boolean(task))
-      .sort((left, right) => {
-        if (left.status === "running" && right.status !== "running") {
-          return -1;
-        }
-        if (left.status !== "running" && right.status === "running") {
-          return 1;
-        }
-        return right.createdAt - left.createdAt;
-      })
-      .slice(0, 8);
-  }, [renderBackgroundTask, trackedBackgroundTasks]);
   const handleOpenBackgroundTask = (task: BackgroundTaskItem) => {
     const trackedTask = backgroundTasks.find((candidate) => candidate.id === task.id);
     if (!trackedTask) {
@@ -3361,9 +2396,13 @@ export const App = ({
     if (trackedTask.target.projectDetailTab) {
       setProjectDetailTab(trackedTask.target.projectDetailTab);
     }
-    setIsProjectStudioMode(Boolean(trackedTask.target.isProjectStudioMode));
-    if (trackedTask.target.flow) {
-      setProjectStudioFlow(trackedTask.target.flow);
+    if (trackedTask.target.isProjectStudioMode) {
+      enterProjectStudioFlow(trackedTask.target.flow ?? "script");
+    } else {
+      exitProjectStudioMode();
+      if (trackedTask.target.flow) {
+        setProjectStudioFlow(trackedTask.target.flow);
+      }
     }
     handlePageChange(trackedTask.target.page);
   };
@@ -3442,7 +2481,7 @@ export const App = ({
               searchQuery={assetSearchQuery}
               stockProviderConfigs={stockProviderConfigs ?? []}
               externalSearchResults={activeExternalAssetSearchResults ?? []}
-              searchResults={activeAssetSearchResults ?? []}
+              searchResults={activeSearchResults ?? []}
               templates={scriptTemplateLibrary ?? []}
             />
           </section>

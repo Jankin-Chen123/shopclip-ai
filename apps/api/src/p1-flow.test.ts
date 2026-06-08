@@ -1,4 +1,3 @@
-import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -8,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app";
+import { listenOnFetchSafePort } from "./testServer";
 
 const require = createRequire(import.meta.url);
 const ffmpegPath = (require("@ffmpeg-installer/ffmpeg") as { path: string }).path;
@@ -127,12 +127,7 @@ describe("P1 asset retrieval and scene editing", () => {
         sourceUrl: asset.downloadUrl ?? asset.previewUrl,
       }),
     });
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {

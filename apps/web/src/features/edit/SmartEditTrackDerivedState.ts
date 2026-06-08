@@ -1,0 +1,293 @@
+import type { SmartEditPlan } from "@shopclip/shared";
+import type {
+  SmartEditTrack,
+  SmartEditTrackSegment,
+  TrackClipMoveDragState,
+  TrackClipTrimDragState,
+} from "./SmartEditTimelineOperations";
+import type { SmartEditTimelineElement } from "./SmartEditTimelineTypes";
+import { clampTimelineStart, snapTimelineSeconds } from "./SmartEditTimelineMath";
+import type { SmartEditTrackId } from "./SmartEditTrackUtils";
+import { buildSmartEditTimeline } from "./SmartEditSegmentOperations";
+import { selectSmartEditTimelineElementIdsForTrack } from "./SmartEditTimelineElementOperations";
+import {
+  previewSmartEditTrackClipDrag,
+  resizeSmartEditTrackClipPreview,
+  snapSmartEditTrackClipTrimDelta,
+} from "./SmartEditTrackClipOperations";
+
+type SmartEditTrackClipPreview = Pick<
+  SmartEditTrackSegment,
+  "durationSeconds" | "id" | "startSecond" | "trackId"
+>;
+
+export const allSmartEditTrackClips = (
+  trackSegments: SmartEditTrack[],
+): SmartEditTrackSegment[] => trackSegments.flatMap((track) => track.segments);
+
+export const buildSmartEditTrackEditPoints = (
+  timelineDurationSeconds: number,
+  trackSegments: SmartEditTrack[],
+): number[] =>
+  [
+    0,
+    timelineDurationSeconds,
+    ...allSmartEditTrackClips(trackSegments).flatMap((segment) => [
+      segment.startSecond,
+      snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+    ]),
+  ]
+    .map((point) => Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(point))))
+    .filter((point, index, points) => points.indexOf(point) === index)
+    .sort((left, right) => left - right);
+
+export const findSmartEditTrackClip = (
+  trackSegments: SmartEditTrack[],
+  selectedTrackClipId: string | undefined,
+): SmartEditTrackSegment | undefined =>
+  allSmartEditTrackClips(trackSegments).find((trackClip) => trackClip.id === selectedTrackClipId);
+
+export const selectSmartEditTrackClipsById = (
+  trackSegments: SmartEditTrack[],
+  selectedTrackClipIdSet: Set<string>,
+): SmartEditTrackSegment[] =>
+  allSmartEditTrackClips(trackSegments).filter((trackClip) =>
+    selectedTrackClipIdSet.has(trackClip.id),
+  );
+
+export const isSmartEditTextTimelineMaterial = (trackClip: SmartEditTrackSegment): boolean =>
+  !trackClip.segmentId && trackClip.trackId === "caption";
+
+export const selectEditableSmartEditTimelineMaterialIds = (
+  trackClips: SmartEditTrackSegment[],
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean,
+): string[] =>
+  trackClips
+    .filter((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId))
+    .map((trackClip) => trackClip.id);
+
+export const selectSmartEditTrackClipIdsAtSecond = ({
+  isTrackLocked,
+  playheadSecond,
+  trackSegments,
+}: {
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean;
+  playheadSecond: number;
+  trackSegments: SmartEditTrack[];
+}): string[] =>
+  allSmartEditTrackClips(trackSegments)
+    .filter((trackClip) => !isTrackLocked(trackClip.trackId))
+    .filter((trackClip) => {
+      const startSecond = clampTimelineStart(trackClip.startSecond);
+      const endSecond = snapTimelineSeconds(startSecond + trackClip.durationSeconds);
+      return playheadSecond >= startSecond - 0.001 && playheadSecond <= endSecond + 0.001;
+    })
+    .map((trackClip) => trackClip.id);
+
+export const selectSmartEditTimelineTextMaterialIds = (
+  trackClips: SmartEditTrackSegment[],
+): string[] =>
+  trackClips
+    .filter((trackClip) => isSmartEditTextTimelineMaterial(trackClip))
+    .map((trackClip) => trackClip.id);
+
+export const selectSmartEditTimelineElementIdsWithToken = (
+  elements: SmartEditTimelineElement[] | undefined,
+  sourceIds: string[],
+  token: string,
+): string[] =>
+  elements
+    ?.map((element) => element.id)
+    .filter((id) => sourceIds.some((sourceId) => id.startsWith(`${sourceId}-${token}-`))) ?? [];
+
+export const selectSplitSmartEditTextElementIds = (
+  elements: SmartEditTimelineElement[] | undefined,
+  sourceId: string,
+): string[] =>
+  elements
+    ?.filter((element) => element.id === sourceId || element.id.startsWith(`${sourceId}-line-`))
+    .map((element) => element.id) ?? [];
+
+export const findSelectedSmartEditTimelineElement = (
+  plan: SmartEditPlan | undefined,
+  selectedTrackClip: SmartEditTrackSegment | undefined,
+): SmartEditTimelineElement | undefined =>
+  plan?.timeline?.elements.find((element) => element.id === selectedTrackClip?.id);
+
+export const smartEditTimelineTextLineCount = (
+  element: SmartEditTimelineElement | undefined,
+): number =>
+  element?.kind === "text"
+    ? (element.text ?? element.label)
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter(Boolean).length
+    : 0;
+
+export const linkedSmartEditTimelineElements = (
+  plan: SmartEditPlan | undefined,
+  selectedTimelineElement: SmartEditTimelineElement | undefined,
+): SmartEditTimelineElement[] => {
+  if (!plan?.timeline || !selectedTimelineElement?.linkedGroupId) {
+    return [];
+  }
+  return plan.timeline.elements.filter(
+    (element) => element.linkedGroupId === selectedTimelineElement.linkedGroupId,
+  );
+};
+
+export const canRelinkSmartEditTimelineElement = (
+  plan: SmartEditPlan | undefined,
+  selectedTimelineElement: SmartEditTimelineElement | undefined,
+): boolean => {
+  if (
+    !plan?.timeline ||
+    !selectedTimelineElement ||
+    selectedTimelineElement.linkedGroupId ||
+    !selectedTimelineElement.sceneId ||
+    (selectedTimelineElement.kind !== "video" && selectedTimelineElement.kind !== "audio")
+  ) {
+    return false;
+  }
+  return plan.timeline.elements.some(
+    (element) =>
+      element.id !== selectedTimelineElement.id &&
+      !element.linkedGroupId &&
+      element.sceneId === selectedTimelineElement.sceneId &&
+      ((selectedTimelineElement.kind === "video" && element.kind === "audio") ||
+        (selectedTimelineElement.kind === "audio" && element.kind === "video")),
+  );
+};
+
+export const smartEditTimelineTrackIdForTrack = (trackId: SmartEditTrackId): string =>
+  trackId === "sourceAudio"
+    ? "audio-source"
+    : trackId === "caption"
+      ? "text-copy"
+      : trackId === "video"
+        ? "video-main"
+        : trackId === "bgm"
+          ? "bgm-bed"
+          : "voiceover";
+
+export const smartEditTimelineTrackForTrack = (
+  plan: SmartEditPlan | undefined,
+  trackId: SmartEditTrackId,
+): NonNullable<SmartEditPlan["timeline"]>["tracks"][number] | undefined =>
+  (plan?.timeline ?? (plan ? buildSmartEditTimeline(plan) : undefined))?.tracks.find(
+    (track) => track.id === smartEditTimelineTrackIdForTrack(trackId),
+  );
+
+export const smartEditTrackPresentationState = ({
+  plan,
+  track,
+}: {
+  plan: SmartEditPlan | undefined;
+  track: SmartEditTrack;
+}) => {
+  const timelineTrack = smartEditTimelineTrackForTrack(plan, track.id);
+  return {
+    hidden: timelineTrack?.hidden ?? track.segments.every((segment) => segment.hidden),
+    locked: timelineTrack?.locked ?? false,
+    muted: timelineTrack?.muted ?? track.segments.every((segment) => segment.muted),
+    selectableTrackMaterialCount: plan
+      ? selectSmartEditTimelineElementIdsForTrack(plan, track.id).length
+      : 0,
+  };
+};
+
+export const isSmartEditTimelineTrackLocked = (
+  plan: SmartEditPlan | undefined,
+  trackId: SmartEditTrackId,
+): boolean => smartEditTimelineTrackForTrack(plan, trackId)?.locked ?? false;
+
+export const buildSmartEditTrackClipDragPreview = ({
+  boundedPlayheadSeconds,
+  selectedTrackClipIdSet,
+  selectedTrackClipIds,
+  timelinePixelsPerSecond,
+  trackClipMoveDrag,
+  trackSegments,
+}: {
+  boundedPlayheadSeconds: number;
+  selectedTrackClipIdSet: Set<string>;
+  selectedTrackClipIds: string[];
+  timelinePixelsPerSecond: number;
+  trackClipMoveDrag?: TrackClipMoveDragState;
+  trackSegments: SmartEditTrack[];
+}): SmartEditTrackClipPreview[] =>
+  trackClipMoveDrag
+    ? previewSmartEditTrackClipDrag({
+        currentClientX: trackClipMoveDrag.currentClientX,
+        pixelsPerSecond: timelinePixelsPerSecond,
+        selectedIds: selectedTrackClipIds,
+        snapPoints: [
+          boundedPlayheadSeconds,
+          ...allSmartEditTrackClips(trackSegments)
+            .filter((segment) => !selectedTrackClipIdSet.has(segment.id))
+            .flatMap((segment) => [
+              segment.startSecond,
+              snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+            ]),
+        ],
+        startClientX: trackClipMoveDrag.startClientX,
+        trackClip: trackClipMoveDrag.trackClip,
+        trackClips: allSmartEditTrackClips(trackSegments),
+      })
+    : [];
+
+export const buildSmartEditTrackClipTrimPreview = ({
+  boundedPlayheadSeconds,
+  selectedBatchTrackClips,
+  selectedTrackClipIdSet,
+  selectedTrackClipIds,
+  timelinePixelsPerSecond,
+  trackClipTrimDrag,
+  trackSegments,
+}: {
+  boundedPlayheadSeconds: number;
+  selectedBatchTrackClips: SmartEditTrackSegment[];
+  selectedTrackClipIdSet: Set<string>;
+  selectedTrackClipIds: string[];
+  timelinePixelsPerSecond: number;
+  trackClipTrimDrag?: TrackClipTrimDragState;
+  trackSegments: SmartEditTrack[];
+}): SmartEditTrackClipPreview[] => {
+  if (!trackClipTrimDrag || timelinePixelsPerSecond <= 0) {
+    return [];
+  }
+
+  const selectedResizeIds =
+    selectedTrackClipIds.length > 1 && selectedTrackClipIdSet.has(trackClipTrimDrag.trackClip.id)
+      ? selectedTrackClipIds
+      : [];
+  const sourceClips =
+    selectedResizeIds.length > 1 &&
+    selectedBatchTrackClips.every(
+      (selectedClip) => !selectedClip.segmentId && selectedClip.trackId !== "bgm",
+    )
+      ? selectedBatchTrackClips
+      : [trackClipTrimDrag.trackClip];
+  const snapPoints = [
+    boundedPlayheadSeconds,
+    ...allSmartEditTrackClips(trackSegments)
+      .filter((segment) => !sourceClips.some((sourceClip) => sourceClip.id === segment.id))
+      .flatMap((segment) => [
+        segment.startSecond,
+        snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+      ]),
+  ];
+  const rawDeltaSeconds = snapTimelineSeconds(
+    (trackClipTrimDrag.currentClientX - trackClipTrimDrag.startClientX) /
+      timelinePixelsPerSecond,
+  );
+  const snappedDeltaSeconds = snapSmartEditTrackClipTrimDelta({
+    deltaSeconds: rawDeltaSeconds,
+    edge: trackClipTrimDrag.edge,
+    snapPoints,
+    trackClips: sourceClips,
+  });
+  return sourceClips.map((sourceClip) =>
+    resizeSmartEditTrackClipPreview(sourceClip, trackClipTrimDrag.edge, snappedDeltaSeconds),
+  );
+};

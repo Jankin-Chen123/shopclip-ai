@@ -1,5 +1,4 @@
 import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
 
 import type {
   AssetMetadata,
@@ -13,6 +12,7 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app.js";
+import { listenOnFetchSafePort } from "./testServer.js";
 
 const request = async <T>(
   baseUrl: string,
@@ -168,10 +168,7 @@ describe("smart edit API flow", () => {
       },
     });
 
-    server = app.listen(0);
-    await new Promise<void>((resolve) => server?.once("listening", () => resolve()));
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",
@@ -341,10 +338,7 @@ describe("smart edit API flow", () => {
       },
     });
 
-    server = app.listen(0);
-    await new Promise<void>((resolve) => server?.once("listening", () => resolve()));
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const created = await request<{ project: { id: string } }>(baseUrl, "/api/projects", {
       method: "POST",
@@ -556,10 +550,7 @@ describe("smart edit API flow", () => {
       },
     });
 
-    server = app.listen(0);
-    await new Promise<void>((resolve) => server?.once("listening", () => resolve()));
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const originalFetch = globalThis.fetch;
     let createTaskCount = 0;

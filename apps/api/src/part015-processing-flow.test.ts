@@ -1,5 +1,4 @@
 import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdtemp, rm, stat } from "node:fs/promises";
@@ -10,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { MemoryProjectStore } from "./modules/projects/memoryStore.js";
 import type { StorageProvider } from "./providers/storage/storageProvider.js";
+import { listenOnFetchSafePort } from "./testServer.js";
 
 const require = createRequire(import.meta.url);
 const ffmpegPath = (require("@ffmpeg-installer/ffmpeg") as { path: string }).path;
@@ -141,12 +141,7 @@ describe("Part 015 structured asset and reference flow", () => {
         }),
       },
     });
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {

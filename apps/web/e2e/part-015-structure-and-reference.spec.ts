@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
-import { importLocalAssets } from "./helpers";
+import { createDefaultProject, importLocalAssets } from "./helpers";
 
 const require = createRequire(new URL("../../api/package.json", import.meta.url));
 const ffmpegPath = (require("@ffmpeg-installer/ffmpeg") as { path: string }).path;
@@ -80,7 +80,8 @@ test.describe("Part 015 structured references", () => {
     await expect(page.getByText("ready").first()).toBeVisible({ timeout: 45_000 });
     await page.getByRole("button", { name: /script library/ }).click();
 
-    await expect(page).toHaveURL(/#create$/);
+    await expect(page).toHaveURL(/#assets$/);
+    await page.goto("/#create");
     const scriptGeneration = page.getByRole("region", { name: "Script generation" });
     await expect(scriptGeneration.getByLabel("Reference video")).toContainText(
       "Global viral cup proof",
@@ -95,9 +96,7 @@ test.describe("Part 015 structured references", () => {
     page,
   }) => {
     test.setTimeout(90_000);
-    await page.goto("/#project");
-    await page.getByRole("button", { name: "Create project" }).click();
-    await expect(page.getByText("Project loaded")).toBeVisible();
+    await createDefaultProject(page);
 
     const referenceVideo = await createReferenceVideoPayload();
     try {
@@ -124,17 +123,18 @@ test.describe("Part 015 structured references", () => {
     await page.getByLabel("Platform").fill("merchant_upload");
     await page.getByRole("button", { name: "Analyze reference" }).click();
 
-    await expect(page.getByRole("heading", { name: "Self-shot proof demo" })).toBeVisible();
-    await expect(page.getByText("ready").first()).toBeVisible();
-    await page.getByRole("button", { name: "Create template" }).click();
-    await expect(page.getByText("1 template")).toBeVisible();
+    const selfShotReference = page
+      .getByRole("article")
+      .filter({ has: page.getByRole("heading", { name: "Self-shot proof demo" }) });
+    await expect(selfShotReference).toBeVisible();
+    await expect(selfShotReference.getByText("Usable")).toBeVisible({ timeout: 60_000 });
+    await selfShotReference.getByRole("button", { name: "Add to script library" }).click();
 
     await page.goto("/#create");
     const scriptGeneration = page.getByRole("region", { name: "Script generation" });
     await expect(scriptGeneration.getByLabel("Reference video")).toContainText(
       "Self-shot proof demo",
     );
-    await expect(scriptGeneration.getByLabel("Viral template")).toContainText("viral template");
     await page.screenshot({
       fullPage: true,
       path: evidencePath("part-015-uploaded-reference-video.png"),

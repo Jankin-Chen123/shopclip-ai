@@ -1,8 +1,8 @@
-import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app";
+import { listenOnFetchSafePort } from "./testServer";
 
 const waitFor = async <T>(
   load: () => Promise<T>,
@@ -88,12 +88,7 @@ describe("COS-backed asset import contract", () => {
   beforeEach(async () => {
     process.env.VISION_PROVIDER_MODE = "mock";
     const app = createApp();
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {
@@ -232,12 +227,7 @@ describe("COS-backed asset import contract", () => {
     });
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const hit = await request<{ asset: { id: string; objectKey: string } }>(
       baseUrl,
@@ -299,12 +289,7 @@ describe("COS-backed asset import contract", () => {
     });
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
 
     const created = await request<{ asset: { id: string } }>(baseUrl, "/api/assets", {
       method: "POST",
@@ -619,12 +604,7 @@ describe("COS-backed asset import contract", () => {
     });
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
     const projectId = await createProject(baseUrl);
 
     const queued = await request<{

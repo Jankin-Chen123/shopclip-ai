@@ -112,6 +112,7 @@ process.on("SIGTERM", handleSignal);
     PROJECT_STORE_MODE: "memory",
     REFERENCE_DOWNLOAD_PROVIDER_MODE: "mock",
     REFERENCE_PROVIDER_MODE: "mock",
+    SHOPCLIP_FORCE_MOCK_PROVIDERS: "1",
     VIDEO_RENDER_PROVIDER_MODE: "mock",
     VISION_PROVIDER_MODE: "mock",
   });

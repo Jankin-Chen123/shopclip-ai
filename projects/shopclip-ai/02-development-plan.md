@@ -323,3 +323,35 @@ flowchart TD
 - 用户确认：No
 - 确认日期：
 - 备注：需求和设计确认后生成的开发计划草案。P0 必须在 P1 前完成；全部 P1 能力纳入最终目标。
+
+## 2026-06-08 Current Engineering Audit
+
+This section is the current source-of-truth addendum because earlier parts of this file have stale statuses and encoding damage.
+
+### Actual Current State
+
+- P0 browser flow is implemented and passes current Playwright verification.
+- P1 browser coverage for asset search, scene asset binding, editing suggestions, media settings/retry, dashboard, external stock assets, and structured references passes current Playwright verification.
+- API P0 lifecycle tests pass with the current provider routing contract.
+- The demo defaults to in-memory project storage for local/E2E runs; Prisma schema and migrations exist, and persistent storage is enabled when `DATABASE_URL` is configured.
+- No final contest submission material was added in this audit pass.
+
+### Fresh Verification
+
+- `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p0-flow.spec.ts`: passed, 1 test.
+- `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p1-flow.spec.ts`: passed, 1 test.
+- `corepack pnpm --filter @shopclip/web test:e2e -- e2e/p0-flow.spec.ts e2e/p1-flow.spec.ts e2e/p1-media-flow.spec.ts e2e/part-015-structure-and-reference.spec.ts`: passed, 5 tests.
+- `corepack pnpm --filter @shopclip/web test:e2e`: passed, 12 tests.
+- Earlier in the same repair pass: `corepack pnpm lint` passed; `corepack pnpm --filter @shopclip/api exec vitest run src/p0-flow.test.ts` passed, 24 tests.
+
+### Sync Notes
+
+- The original status table still lists Parts 002-005 as `Planned`; actual part files and fresh verification show these are implemented, with Part 002 still noting local PostgreSQL apply is blocked unless a local PostgreSQL service is available.
+- Current E2E assertions now match the redesigned Project workspace (`Project portfolio`, `Project overview`) and current render labels (`Ready to download`, `Needs retry`) instead of legacy UI text.
+- E2E server startup now sets `SHOPCLIP_FORCE_MOCK_PROVIDERS=1` so browser tests cannot accidentally call real provider endpoints through user/browser API config.
+
+### Remaining Structure Risks
+
+- `apps/web/src/features/edit/SmartEditPanel.tsx` is about 11268 lines and should be split after tests remain green. Start by extracting pure timeline helpers and types.
+- `apps/api/src/modules/projects/router.ts` is about 4588 lines and should be split conservatively into focused service/helper modules before route-level moves.
+- `apps/web/src/app/App.tsx` is about 3832 lines and still mixes routing, project state orchestration, background tasks, and page composition.

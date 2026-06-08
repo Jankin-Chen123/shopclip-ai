@@ -1,8 +1,8 @@
-import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 
 import { createApp } from "./app";
+import { listenOnFetchSafePort } from "./testServer";
 
 const request = async <T>(
   baseUrl: string,
@@ -29,12 +29,7 @@ describe("P0 backend lifecycle", () => {
     process.env.AI_PROVIDER_MODE = "mock";
     process.env.VIDEO_RENDER_PROVIDER_MODE = "mock";
     const app = createApp();
-    server = app.listen(0);
-    await new Promise<void>((resolve) => {
-      server.once("listening", resolve);
-    });
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {
@@ -1192,6 +1187,7 @@ describe("P0 backend lifecycle", () => {
   });
 
   it("uses configured text model settings when one-click rewriting a script", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
     const originalFetch = globalThis.fetch;
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const requestUrl = url instanceof Request ? url.url : String(url);
@@ -1286,7 +1282,7 @@ describe("P0 backend lifecycle", () => {
   });
 
   it("uses official server text settings when one-click rewriting receives no browser API key", async () => {
-    process.env.AI_PROVIDER_MODE = "mock";
+    process.env.AI_PROVIDER_MODE = "ark";
     process.env.ARK_API_KEY = "ark-fallback-key";
     process.env.AI_GENERAL_API_KEY = "general-api-key";
     process.env.AI_GENERAL_MODEL_ID = "ep-general-script";

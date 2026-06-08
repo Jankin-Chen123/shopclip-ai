@@ -1,5 +1,13 @@
 import { expect, type FilePayload, type Page } from "@playwright/test";
 
+export const createDefaultProject = async (page: Page) => {
+  await page.goto("/#project");
+  await expect(page.getByRole("heading", { name: "Project portfolio" })).toBeVisible();
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("heading", { name: "Project overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GlowGrip Phone Stand" })).toBeVisible();
+};
+
 export const importLocalAssets = async (
   page: Page,
   files: string | string[] | FilePayload | FilePayload[],

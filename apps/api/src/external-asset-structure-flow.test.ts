@@ -1,10 +1,10 @@
 import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
 import { MemoryProjectStore } from "./modules/projects/memoryStore.js";
 import type { StorageProvider } from "./providers/storage/storageProvider.js";
+import { listenOnFetchSafePort } from "./testServer.js";
 
 const tinyPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l5Z2WQAAAABJRU5ErkJggg==",
@@ -71,10 +71,7 @@ describe("external asset import structure flow", () => {
         sourceUrl: "https://images.pexels.com/photos/100/source.png",
       }),
     });
-    server = app.listen(0);
-    await new Promise<void>((resolve) => server.once("listening", resolve));
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
   });
 
   afterEach(async () => {

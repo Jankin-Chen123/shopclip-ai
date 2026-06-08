@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
-import { generateStoryboardFromPreparedAssets, importLocalAssets } from "./helpers";
+import { createDefaultProject, generateStoryboardFromPreparedAssets, importLocalAssets } from "./helpers";
 
 const evidenceDir = resolve(process.cwd(), "../../projects/shopclip-ai/evidence");
 
@@ -14,10 +14,7 @@ test.describe("P1 dashboard flow", () => {
   });
 
   test("loads mock performance metrics, funnel stages, and factor analysis", async ({ page }) => {
-    await page.goto("/#project");
-
-    await page.getByRole("button", { name: "Create project" }).click();
-    await expect(page.getByText("Project loaded")).toBeVisible();
+    await createDefaultProject(page);
     await importLocalAssets(page, {
       name: "GlowGrip packshot.png",
       mimeType: "image/png",
