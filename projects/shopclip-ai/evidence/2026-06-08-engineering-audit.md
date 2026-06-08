@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `d3d0fb9 Extract editable material clip selector`.
+- Latest deployed optimization commit: `053255e Extract mergeable text material selector`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `053255e`:
+  - Extracted mergeable Smart Edit text timeline material ID selection into `selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` so the merge-selected-text-materials command no longer performs its own text material count guard.
+  - Removed the now-unused `selectSmartEditTimelineTextMaterialIds` import from the panel while keeping merge command execution, selection restoration, and history labels in the panel.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for two-or-more text material selection and non-mergeable fallback.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3091 lines.
+    - `SmartEditTrackDerivedState.ts`: 399 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 12 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 423 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-CXwx-zI6.js` at 605.12 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `053255eac04eefc8222176ae701d132d913c2e6f`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `d3d0fb9`:
   - Extracted editable Smart Edit timeline material clip selection into `selectEditableSmartEditTimelineMaterials` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that selector from `selectEditableSmartEditTimelineMaterialIds` and from the Smart Edit panel's align-selected-materials command.
