@@ -133,6 +133,21 @@ export const replaceProjectScript = (
       }
     : project;
 
+export const replaceProjectScriptStoryboard = (
+  project: ProjectSnapshot | undefined,
+  script: ScriptResult,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        scenes: script.scenes,
+        scripts: project.scripts.map((candidate) =>
+          candidate.id === script.id ? script : candidate,
+        ),
+        status: "ready",
+      }
+    : project;
+
 export const removeProjectScript = (
   project: ProjectSnapshot | undefined,
   scriptId: string,

@@ -18,6 +18,7 @@ import {
   mergeImportedProjectAssets,
   markProjectRenderTaskExported,
   removeProjectAssets,
+  replaceProjectScriptStoryboard,
   replaceProjectRenderTaskProgress,
   replaceProcessedProjectAsset,
   upsertProjectRenderTask,
@@ -100,6 +101,35 @@ describe("appendProjectScript", () => {
 
   it("preserves an undefined project", () => {
     expect(appendProjectScript(undefined, script("script-new", []))).toBeUndefined();
+  });
+});
+
+describe("replaceProjectScriptStoryboard", () => {
+  it("replaces an existing script storyboard and marks the project ready", () => {
+    const existingScript = script("script-1", [scene("old-scene")]);
+    const updatedScript = script("script-1", [scene("new-scene-a"), scene("new-scene-b")]);
+    const untouchedScript = script("script-2", [scene("other-scene")]);
+    const project = {
+      scenes: existingScript.scenes,
+      scripts: [existingScript, untouchedScript],
+      status: "draft" as Project["status"],
+    } as ProjectSnapshot;
+
+    const nextProject = replaceProjectScriptStoryboard(project, updatedScript);
+
+    expect(nextProject?.scenes.map((candidate) => candidate.id)).toEqual([
+      "new-scene-a",
+      "new-scene-b",
+    ]);
+    expect(nextProject?.scripts).toEqual([
+      expect.objectContaining({ id: "script-1", scenes: updatedScript.scenes }),
+      expect.objectContaining({ id: "script-2", scenes: untouchedScript.scenes }),
+    ]);
+    expect(nextProject?.status).toBe("ready");
+  });
+
+  it("preserves an undefined project", () => {
+    expect(replaceProjectScriptStoryboard(undefined, script("script-new", []))).toBeUndefined();
   });
 });
 

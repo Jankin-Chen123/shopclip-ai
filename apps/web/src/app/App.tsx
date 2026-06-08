@@ -134,6 +134,7 @@ import {
   replaceProjectScene,
   replaceProjectScenes,
   replaceProjectScript,
+  replaceProjectScriptStoryboard,
   upsertProjectRenderTask,
   upsertProjectAsset,
 } from "./AppProjectMutationUtils";
@@ -942,18 +943,7 @@ export const App = ({
       "script",
       async () => {
         const generated = await generateScriptStoryboard(project.id, selectedScript.id);
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                scenes: generated.script.scenes,
-                scripts: current.scripts.map((candidate) =>
-                  candidate.id === generated.script.id ? generated.script : candidate,
-                ),
-                status: "ready",
-              }
-            : current,
-        );
+        setProject((current) => replaceProjectScriptStoryboard(current, generated.script));
         loadProjectScriptIntoStudio(generated.script);
         refreshProjectHistory();
       },
