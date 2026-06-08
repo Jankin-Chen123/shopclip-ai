@@ -73,8 +73,8 @@ import {
   canRelinkSmartEditTimelineElement,
   findSmartEditTrackClip,
   findSelectedSmartEditTimelineElement,
+  hasSmartEditTimelineTextMaterials,
   isSmartEditTimelineTrackLocked,
-  isSmartEditTextTimelineMaterial,
   linkedSmartEditTimelineElements,
   selectEditableSmartEditTimelineMaterialIds,
   selectSmartEditTimelineElementIdsWithToken,
@@ -83,6 +83,7 @@ import {
   selectSmartEditTrackClipsById,
   selectSplitSmartEditTextElementIds,
   smartEditTimelineTextLineCount,
+  smartEditTimelineTextMaterialCount,
   smartEditTimelineTrackIdForTrack,
   smartEditTrackPresentationState,
 } from "./SmartEditTrackDerivedState";
@@ -625,12 +626,10 @@ export const SmartEditPanel = ({
     () => selectSmartEditTrackClipsById(trackSegments, selectedTrackClipIdSet),
     [selectedTrackClipIdSet, trackSegments],
   );
-  const hasSelectedTextTimelineMaterials = selectedBatchTrackClips.some(
-    isSmartEditTextTimelineMaterial,
-  );
-  const selectedTextTimelineMaterialCount = selectedBatchTrackClips.filter(
-    isSmartEditTextTimelineMaterial,
-  ).length;
+  const hasSelectedTextTimelineMaterials =
+    hasSmartEditTimelineTextMaterials(selectedBatchTrackClips);
+  const selectedTextTimelineMaterialCount =
+    smartEditTimelineTextMaterialCount(selectedBatchTrackClips);
   const trackClipDragPreview = useMemo(
     () =>
       buildSmartEditTrackClipDragPreview({

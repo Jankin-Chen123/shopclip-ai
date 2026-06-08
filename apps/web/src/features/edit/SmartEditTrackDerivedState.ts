@@ -91,6 +91,14 @@ export const selectSmartEditTimelineTextMaterialIds = (
     .filter((trackClip) => isSmartEditTextTimelineMaterial(trackClip))
     .map((trackClip) => trackClip.id);
 
+export const smartEditTimelineTextMaterialCount = (
+  trackClips: SmartEditTrackSegment[],
+): number => selectSmartEditTimelineTextMaterialIds(trackClips).length;
+
+export const hasSmartEditTimelineTextMaterials = (
+  trackClips: SmartEditTrackSegment[],
+): boolean => smartEditTimelineTextMaterialCount(trackClips) > 0;
+
 export const selectSmartEditTimelineElementIdsWithToken = (
   elements: SmartEditTimelineElement[] | undefined,
   sourceIds: string[],
