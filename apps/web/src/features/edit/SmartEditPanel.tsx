@@ -882,12 +882,13 @@ export const SmartEditPanel = ({
     const isToggle = Boolean(event?.ctrlKey || event?.metaKey);
     const isRange = Boolean(event?.shiftKey);
     if (isRange && selectedSegment) {
-      const anchorIndex = sortedSegments.findIndex((segment) => segment.id === selectedSegment.id);
-      const targetIndex = sortedSegments.findIndex((segment) => segment.id === segmentId);
-      if (anchorIndex >= 0 && targetIndex >= 0) {
-        const [start, end] =
-          anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-        selectSegmentIds(sortedSegments.slice(start, end + 1).map((segment) => segment.id), segmentId);
+      const rangeIds = selectSmartEditSelectionRangeIdsOrUndefined({
+        orderedIds: sortedSegments.map((segment) => segment.id),
+        selectedIds: [selectedSegment.id],
+        targetId: segmentId,
+      });
+      if (rangeIds) {
+        selectSegmentIds(rangeIds, segmentId);
         clearSelectedTrackClips();
         return;
       }
