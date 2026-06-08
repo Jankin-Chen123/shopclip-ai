@@ -2,6 +2,16 @@ import type { RenderTask, ScriptResult, StoryboardScene } from "@shopclip/shared
 
 import type { ProjectSnapshot } from "../lib/api";
 
+const clearSceneAssetReferences = <T extends StoryboardScene>(
+  scenes: T[],
+  deletedAssetIds: Set<string>,
+): T[] =>
+  scenes.map((scene) =>
+    scene.assetId && deletedAssetIds.has(scene.assetId)
+      ? { ...scene, assetId: undefined }
+      : scene,
+  );
+
 export const replaceProjectRenderTask = (
   project: ProjectSnapshot | undefined,
   renderTask: RenderTask,
@@ -47,6 +57,23 @@ export const removeProjectScript = (
     ? {
         ...project,
         scripts: project.scripts.filter((candidate) => candidate.id !== scriptId),
+      }
+    : project;
+
+export const removeProjectAssets = (
+  project: ProjectSnapshot | undefined,
+  deletedAssetIds: Set<string>,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        assets: project.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
+        assetSlices: project.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
+        scenes: clearSceneAssetReferences(project.scenes, deletedAssetIds),
+        scripts: project.scripts.map((script) => ({
+          ...script,
+          scenes: clearSceneAssetReferences(script.scenes, deletedAssetIds),
+        })),
       }
     : project;
 

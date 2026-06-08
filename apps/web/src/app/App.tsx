@@ -121,6 +121,7 @@ import {
 } from "./AppProjectLifecycleUtils";
 import {
   removeProjectRenderTask,
+  removeProjectAssets,
   removeProjectScript,
   replaceProjectRenderTask,
   replaceProjectScene,
@@ -183,6 +184,7 @@ export {
   pruneAssetPrepSnapshotDeletedAssets,
 } from "./AppProjectAssetUtils";
 export {
+  removeProjectAssets,
   removeProjectRenderTask,
   removeProjectScript,
   replaceProjectRenderTask,
@@ -1247,30 +1249,7 @@ export const App = ({
         assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
         assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
       }));
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
-              assetSlices: current.assetSlices.filter(
-                (slice) => !deletedAssetIds.has(slice.assetId),
-              ),
-              scenes: current.scenes.map((scene) =>
-                scene.assetId && deletedAssetIds.has(scene.assetId)
-                  ? { ...scene, assetId: undefined }
-                  : scene,
-              ),
-              scripts: current.scripts.map((currentScript) => ({
-                ...currentScript,
-                scenes: currentScript.scenes.map((scene) =>
-                  scene.assetId && deletedAssetIds.has(scene.assetId)
-                    ? { ...scene, assetId: undefined }
-                    : scene,
-                ),
-              })),
-            }
-          : current,
-      );
+      setProject((current) => removeProjectAssets(current, deletedAssetIds));
       setScript((current) =>
         current
           ? {
