@@ -9,11 +9,30 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `621cf23 Extract movable material batch guard`.
+- Latest deployed optimization commit: `79badc0 Reuse movable material guard for removals`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `79badc0`:
+  - Reused `canMoveSelectedSmartEditTimelineMaterials` inside `selectRemovableSmartEditTimelineMaterialIds` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Removed the duplicated inline standalone-material and locked-track batch predicate from the removable timeline material selector.
+  - Kept the selector's command-facing contract unchanged: removable batches still return IDs, while single selections or partially blocked batches return an empty list.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3093 lines.
+    - `SmartEditTrackDerivedState.ts`: 417 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 14 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 425 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-sZE1YyFD.js` at 605.17 kB minified.
+    - `git diff --check`: passed.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `79badc077eb1dd2b29df5d80c1a08609f4f22b68`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `621cf23`:
   - Extracted selected Smart Edit timeline material batch move eligibility into `canMoveSelectedSmartEditTimelineMaterials` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that guard in `apps/web/src/features/edit/SmartEditPanel.tsx` so the selected-batch timeline move path no longer embeds segment-material and locked-track checks inline.
