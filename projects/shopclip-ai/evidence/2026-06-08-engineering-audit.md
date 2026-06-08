@@ -9,11 +9,31 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `08731f1 Reuse range helper for segment selection`.
+- Latest deployed optimization commit: `02ae600 Extract existing timeline element selector`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `02ae600`:
+  - Extracted `selectExistingSmartEditTimelineElementIds` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` so trim-at-playhead no longer directly filters selected timeline material IDs against `nextPlan.timeline.elements`.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for preserving requested ID order and returning an empty list when timeline elements are absent.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3095 lines.
+    - `SmartEditTrackDerivedState.ts`: 430 lines.
+    - `SmartEditSelectionUtils.ts`: 56 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `selectExistingSmartEditTimelineElementIds` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 17 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 430 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-BB6PO94M.js` at 605.29 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `02ae60098ef583e970f6890464e0edddc8c312fd`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `08731f1`:
   - Reused `selectSmartEditSelectionRangeIdsOrUndefined` in `apps/web/src/features/edit/SmartEditPanel.tsx` for segment Shift multi-select.
   - Removed the remaining segment-selection anchor/target index lookup, range normalization, slice, and ID mapping from the panel.
