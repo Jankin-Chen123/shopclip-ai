@@ -79,6 +79,7 @@ import {
   linkedSmartEditTimelineElements,
   selectRemovableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIds,
+  selectEditableSmartEditTimelineMaterialIdsOrUndefined as selectEditableTimelineMaterialIdsOrUndefined,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineElementIdsWithToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
@@ -2307,10 +2308,11 @@ export const SmartEditPanel = ({
       isTimelineTrackLocked,
     );
 
-  const selectedEditableTimelineMaterialIdsOrUndefined = () => {
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    return selectedTimelineMaterialIds.length > 0 ? selectedTimelineMaterialIds : undefined;
-  };
+  const selectedEditableTimelineMaterialIdsOrUndefined = () =>
+    selectEditableTimelineMaterialIdsOrUndefined(
+      selectedBatchTrackClips,
+      isTimelineTrackLocked,
+    );
 
   const selectTrackClipsAtPlayhead = () => {
     const selectedIds = selectSmartEditTrackClipIdsAtSecond({

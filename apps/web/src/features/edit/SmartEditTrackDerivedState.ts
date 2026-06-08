@@ -66,6 +66,17 @@ export const selectEditableSmartEditTimelineMaterialIds = (
     .filter((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId))
     .map((trackClip) => trackClip.id);
 
+export const selectEditableSmartEditTimelineMaterialIdsOrUndefined = (
+  trackClips: SmartEditTrackSegment[],
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean,
+): string[] | undefined => {
+  const selectedTimelineMaterialIds = selectEditableSmartEditTimelineMaterialIds(
+    trackClips,
+    isTrackLocked,
+  );
+  return selectedTimelineMaterialIds.length > 0 ? selectedTimelineMaterialIds : undefined;
+};
+
 export const selectSmartEditTrackClipIdsAtSecond = ({
   isTrackLocked,
   playheadSecond,
@@ -110,11 +121,11 @@ export const selectSmartEditClipboardCopySelection = ({
   selectedSegments: Array<Pick<SmartEditSegment, "id">>;
   selectedTrackClips: SmartEditTrackSegment[];
 }): SmartEditClipboardCopySelection | undefined => {
-  const selectedTimelineMaterialIds = selectEditableSmartEditTimelineMaterialIds(
+  const selectedTimelineMaterialIds = selectEditableSmartEditTimelineMaterialIdsOrUndefined(
     selectedTrackClips,
     isTrackLocked,
   );
-  if (selectedTimelineMaterialIds.length > 0) {
+  if (selectedTimelineMaterialIds) {
     return {
       ids: selectedTimelineMaterialIds,
       kind: "timeline-elements",

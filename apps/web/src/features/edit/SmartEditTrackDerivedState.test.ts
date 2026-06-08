@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
   hasSmartEditTimelineTextMaterials,
+  selectEditableSmartEditTimelineMaterialIdsOrUndefined,
   selectRemovableSmartEditTimelineMaterialIds,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
@@ -92,6 +93,33 @@ describe("SmartEditTrackDerivedState", () => {
         selectedTrackClips: [trackClip("single-caption")],
       }),
     ).toEqual([]);
+  });
+
+  it("returns editable timeline material ids only when selected materials are actionable", () => {
+    const isTrackLocked = (trackId: string) => trackId === "bgm";
+
+    expect(
+      selectEditableSmartEditTimelineMaterialIdsOrUndefined(
+        [
+          trackClip("caption-material"),
+          trackClip("scene-caption", { segmentId: "scene-1" }),
+          trackClip("bgm-material", { trackId: "bgm" }),
+        ],
+        isTrackLocked,
+      ),
+    ).toEqual(["caption-material"]);
+
+    expect(
+      selectEditableSmartEditTimelineMaterialIdsOrUndefined(
+        [
+          trackClip("scene-caption", { segmentId: "scene-1" }),
+          trackClip("bgm-material", { trackId: "bgm" }),
+        ],
+        isTrackLocked,
+      ),
+    ).toBeUndefined();
+
+    expect(selectEditableSmartEditTimelineMaterialIdsOrUndefined([], isTrackLocked)).toBeUndefined();
   });
 
   it("selects the alignment anchor for selected timeline materials", () => {
