@@ -5,6 +5,7 @@ import type {
   AssetProcessingJob,
   AssetSlice,
   Project,
+  RenderTask,
   ScriptResult,
   StoryboardScene,
 } from "@shopclip/shared";
@@ -13,9 +14,11 @@ import type { ProjectSnapshot } from "../lib/api";
 import {
   appendProjectScript,
   appendProjectAsset,
+  appendProjectRenderTask,
   mergeImportedProjectAssets,
   removeProjectAssets,
   replaceProcessedProjectAsset,
+  upsertProjectRenderTask,
   upsertProjectAsset,
 } from "./AppProjectMutationUtils";
 
@@ -29,6 +32,10 @@ const scene = (id: string, assetId?: string): StoryboardScene =>
   ({ id, assetId }) as StoryboardScene;
 const script = (id: string, scenes: StoryboardScene[]): ScriptResult =>
   ({ id, scenes }) as ScriptResult;
+const renderTask = (
+  id: string,
+  status: RenderTask["status"] = "running",
+): RenderTask => ({ id, status }) as RenderTask;
 
 describe("removeProjectAssets", () => {
   it("removes assets and slices while clearing scene asset references", () => {
@@ -91,6 +98,50 @@ describe("appendProjectScript", () => {
 
   it("preserves an undefined project", () => {
     expect(appendProjectScript(undefined, script("script-new", []))).toBeUndefined();
+  });
+});
+
+describe("project render task mutations", () => {
+  it("appends a render task and marks the project rendering until completion", () => {
+    const project = {
+      renderTasks: [renderTask("render-existing", "completed")],
+      status: "ready" as Project["status"],
+    } as ProjectSnapshot;
+
+    const nextProject = appendProjectRenderTask(project, renderTask("render-new", "running"));
+
+    expect(nextProject?.renderTasks.map((candidate) => candidate.id)).toEqual([
+      "render-existing",
+      "render-new",
+    ]);
+    expect(nextProject?.status).toBe("rendering");
+  });
+
+  it("appends a completed render task and marks the project completed", () => {
+    const project = {
+      renderTasks: [],
+      status: "rendering" as Project["status"],
+    } as ProjectSnapshot;
+
+    const nextProject = appendProjectRenderTask(project, renderTask("render-new", "completed"));
+
+    expect(nextProject?.renderTasks.map((candidate) => candidate.id)).toEqual(["render-new"]);
+    expect(nextProject?.status).toBe("completed");
+  });
+
+  it("upserts a render task by id and updates the project render status", () => {
+    const project = {
+      renderTasks: [renderTask("render-1", "running"), renderTask("render-2", "completed")],
+      status: "rendering" as Project["status"],
+    } as ProjectSnapshot;
+
+    const nextProject = upsertProjectRenderTask(project, renderTask("render-1", "completed"));
+
+    expect(nextProject?.renderTasks.map((candidate) => `${candidate.id}:${candidate.status}`)).toEqual([
+      "render-2:completed",
+      "render-1:completed",
+    ]);
+    expect(nextProject?.status).toBe("completed");
   });
 });
 

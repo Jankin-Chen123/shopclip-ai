@@ -122,6 +122,7 @@ import {
 import {
   appendProjectScript,
   appendProjectAsset,
+  appendProjectRenderTask,
   mergeImportedProjectAssets,
   removeProjectRenderTask,
   removeProjectAssets,
@@ -131,6 +132,7 @@ import {
   replaceProjectScene,
   replaceProjectScenes,
   replaceProjectScript,
+  upsertProjectRenderTask,
   upsertProjectAsset,
 } from "./AppProjectMutationUtils";
 import {
@@ -1905,15 +1907,7 @@ export const App = ({
             navigateToEdit: isProjectStudioMode,
           });
         }
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                renderTasks: [...current.renderTasks, render.renderTask],
-                status: render.renderTask.status === "completed" ? "completed" : "rendering",
-              }
-            : current,
-        );
+        setProject((current) => appendProjectRenderTask(current, render.renderTask));
       },
       {
         backgroundTask: {
@@ -1951,15 +1945,7 @@ export const App = ({
             navigateToEdit: isProjectStudioMode,
           });
         }
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                renderTasks: [...current.renderTasks, render.renderTask],
-                status: render.renderTask.status === "completed" ? "completed" : "rendering",
-              }
-            : current,
-        );
+        setProject((current) => appendProjectRenderTask(current, render.renderTask));
       },
       {
         backgroundTask: {
@@ -2008,18 +1994,7 @@ export const App = ({
       setSmartEditResult(completedSmartEdit);
       setSelectedSmartEditSegmentId(completedSmartEdit.plan.segments[0]?.id);
     }
-    setProject((current) =>
-      current
-        ? {
-            ...current,
-            renderTasks: [
-              ...current.renderTasks.filter((task) => task.id !== render.renderTask.id),
-              render.renderTask,
-            ],
-            status: render.renderTask.status === "completed" ? "completed" : "rendering",
-          }
-        : current,
-    );
+    setProject((current) => upsertProjectRenderTask(current, render.renderTask));
   };
 
   const handleSmartEditPlanChange = (plan: SmartEditPlan) => {

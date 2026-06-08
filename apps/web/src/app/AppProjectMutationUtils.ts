@@ -3,6 +3,7 @@ import type {
   AssetProcessingEvent,
   AssetProcessingJob,
   AssetSlice,
+  Project,
   RenderTask,
   ScriptResult,
   StoryboardScene,
@@ -24,6 +25,36 @@ const belongsToProject = (
   project: ProjectSnapshot | undefined,
   asset: AssetMetadata,
 ): project is ProjectSnapshot => Boolean(project && asset.projectId === project.id);
+
+const projectStatusAfterRenderTask = (renderTask: RenderTask): Project["status"] =>
+  renderTask.status === "completed" ? "completed" : "rendering";
+
+export const appendProjectRenderTask = (
+  project: ProjectSnapshot | undefined,
+  renderTask: RenderTask,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        renderTasks: [...project.renderTasks, renderTask],
+        status: projectStatusAfterRenderTask(renderTask),
+      }
+    : project;
+
+export const upsertProjectRenderTask = (
+  project: ProjectSnapshot | undefined,
+  renderTask: RenderTask,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        renderTasks: [
+          ...project.renderTasks.filter((task) => task.id !== renderTask.id),
+          renderTask,
+        ],
+        status: projectStatusAfterRenderTask(renderTask),
+      }
+    : project;
 
 export const replaceProjectRenderTask = (
   project: ProjectSnapshot | undefined,
