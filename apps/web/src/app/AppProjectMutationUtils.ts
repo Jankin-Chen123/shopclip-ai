@@ -1,5 +1,6 @@
 import type {
   AssetMetadata,
+  AssetSlice,
   RenderTask,
   ScriptResult,
   StoryboardScene,
@@ -108,6 +109,36 @@ export const upsertProjectAsset = (
         assets: [...project.assets.filter((candidate) => candidate.id !== asset.id), asset],
       }
     : project;
+
+export const mergeImportedProjectAssets = ({
+  assets,
+  assetSlices,
+  project,
+}: {
+  assets: AssetMetadata[];
+  assetSlices: AssetSlice[];
+  project: ProjectSnapshot | undefined;
+}): ProjectSnapshot | undefined => {
+  if (!project) {
+    return project;
+  }
+
+  const projectAssets = assets.filter((asset) => asset.projectId === project.id);
+  if (projectAssets.length === 0) {
+    return project;
+  }
+
+  const importedSliceAssetIds = new Set(assetSlices.map((slice) => slice.assetId));
+  const projectAssetIds = new Set(projectAssets.map((asset) => asset.id));
+  return {
+    ...project,
+    assets: [...project.assets, ...projectAssets],
+    assetSlices: [
+      ...project.assetSlices.filter((slice) => !importedSliceAssetIds.has(slice.assetId)),
+      ...assetSlices.filter((slice) => projectAssetIds.has(slice.assetId)),
+    ],
+  };
+};
 
 export const replaceProjectScenes = (
   project: ProjectSnapshot | undefined,

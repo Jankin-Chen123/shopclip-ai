@@ -121,6 +121,7 @@ import {
 } from "./AppProjectLifecycleUtils";
 import {
   appendProjectAsset,
+  mergeImportedProjectAssets,
   removeProjectRenderTask,
   removeProjectAssets,
   removeProjectScript,
@@ -187,6 +188,7 @@ export {
 } from "./AppProjectAssetUtils";
 export {
   appendProjectAsset,
+  mergeImportedProjectAssets,
   removeProjectAssets,
   removeProjectRenderTask,
   removeProjectScript,
@@ -1084,26 +1086,11 @@ export const App = ({
           ],
         }));
         setProject((current) =>
-          current && importedAssets.some((asset) => asset.projectId === current.id)
-            ? {
-                ...current,
-                assets: [
-                  ...current.assets,
-                  ...importedAssets.filter((asset) => asset.projectId === current.id),
-                ],
-                assetSlices: [
-                  ...current.assetSlices.filter(
-                    (slice) =>
-                      !imported.assetSlices.some((candidate) => candidate.assetId === slice.assetId),
-                  ),
-                  ...imported.assetSlices.filter((slice) =>
-                    importedAssets.some(
-                      (asset) => asset.projectId === current.id && asset.id === slice.assetId,
-                    ),
-                  ),
-                ],
-              }
-            : current,
+          mergeImportedProjectAssets({
+            assets: importedAssets,
+            assetSlices: imported.assetSlices,
+            project: current,
+          }),
         );
         setAssetSearchResults([]);
         setHasAssetSearchRun(false);
