@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `59b9217 Extract project template mutation`.
+- Latest deployed optimization commit: `a56a75e Extract project prep keyword mutation`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `a56a75e`:
+  - Extracted project prep-keyword synchronization from `apps/web/src/app/App.tsx` into `replaceProjectPrepKeywords` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Replaced the inline project update after `updateProjectPrep` while keeping debounced API persistence and error swallowing behavior in `App.tsx`.
+  - Extended `apps/web/src/app/AppProjectMutationUtils.test.ts` coverage for matching project updates, mismatched project preservation, and undefined project preservation.
+  - Current file sizes:
+    - `App.tsx`: 2616 lines.
+    - `AppProjectMutationUtils.ts`: 339 lines.
+    - `AppProjectMutationUtils.test.ts`: 499 lines.
+    - `AppWorkspaceDerivedState.ts`: 189 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `replaceProjectPrepKeywords` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 26 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 480 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-ZSqrqO1d.js` at 606.03 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `a56a75ed03ff7acc8680ff440d413c4eeaca5b5d`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `59b9217`:
   - Extracted project viral-template upsert logic from `apps/web/src/app/App.tsx` into `upsertProjectViralTemplate` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced the inline project update in `handleApplyScriptTemplate` while keeping template-library merge, selected template state, and script production mode changes in `App.tsx`.
