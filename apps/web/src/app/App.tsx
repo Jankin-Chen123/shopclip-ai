@@ -120,6 +120,7 @@ import {
   replaceAssetCategoryInLibrary,
 } from "./AppProjectLifecycleUtils";
 import {
+  appendProjectAsset,
   removeProjectRenderTask,
   removeProjectAssets,
   removeProjectScript,
@@ -127,6 +128,7 @@ import {
   replaceProjectScene,
   replaceProjectScenes,
   replaceProjectScript,
+  upsertProjectAsset,
 } from "./AppProjectMutationUtils";
 import {
   selectActiveAssetCategoryAssets,
@@ -184,6 +186,7 @@ export {
   pruneAssetPrepSnapshotDeletedAssets,
 } from "./AppProjectAssetUtils";
 export {
+  appendProjectAsset,
   removeProjectAssets,
   removeProjectRenderTask,
   removeProjectScript,
@@ -191,6 +194,7 @@ export {
   replaceProjectScene,
   replaceProjectScenes,
   replaceProjectScript,
+  upsertProjectAsset,
 } from "./AppProjectMutationUtils";
 export {
   createBriefFromProject,
@@ -1048,14 +1052,7 @@ export const App = ({
         ...current,
         assets: [...current.assets, asset],
       }));
-      setProject((current) =>
-        current && asset.projectId === current.id
-          ? {
-              ...current,
-              assets: [...current.assets, asset],
-            }
-          : current,
-      );
+      setProject((current) => appendProjectAsset(current, asset));
     });
   };
 
@@ -1214,14 +1211,7 @@ export const App = ({
         ...current,
         assets: [...current.assets, asset],
       }));
-      setProject((current) =>
-        current && asset.projectId === current.id
-          ? {
-              ...current,
-              assets: [...current.assets, asset],
-            }
-          : current,
-      );
+      setProject((current) => appendProjectAsset(current, asset));
       setAssetSearchResults([]);
       setExternalAssetSearchResults((current) =>
         current.filter((candidate) => candidate.id !== externalAsset.id),
@@ -1510,14 +1500,7 @@ export const App = ({
         ...current,
         assets: [...current.assets.filter((candidate) => candidate.id !== asset.id), asset],
       }));
-      setProject((current) =>
-        current && asset.projectId === current.id
-          ? {
-              ...current,
-              assets: [...current.assets.filter((candidate) => candidate.id !== asset.id), asset],
-            }
-          : current,
-      );
+      setProject((current) => upsertProjectAsset(current, asset));
       setSelectedReferenceIdForScript(referenceId);
       setSelectedTemplateIdForScript(undefined);
       setScriptProductionMode("viral-remix");

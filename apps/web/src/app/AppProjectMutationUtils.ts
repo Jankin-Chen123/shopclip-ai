@@ -1,4 +1,9 @@
-import type { RenderTask, ScriptResult, StoryboardScene } from "@shopclip/shared";
+import type {
+  AssetMetadata,
+  RenderTask,
+  ScriptResult,
+  StoryboardScene,
+} from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
 
@@ -11,6 +16,11 @@ const clearSceneAssetReferences = <T extends StoryboardScene>(
       ? { ...scene, assetId: undefined }
       : scene,
   );
+
+const belongsToProject = (
+  project: ProjectSnapshot | undefined,
+  asset: AssetMetadata,
+): project is ProjectSnapshot => Boolean(project && asset.projectId === project.id);
 
 export const replaceProjectRenderTask = (
   project: ProjectSnapshot | undefined,
@@ -74,6 +84,28 @@ export const removeProjectAssets = (
           ...script,
           scenes: clearSceneAssetReferences(script.scenes, deletedAssetIds),
         })),
+      }
+    : project;
+
+export const appendProjectAsset = (
+  project: ProjectSnapshot | undefined,
+  asset: AssetMetadata,
+): ProjectSnapshot | undefined =>
+  belongsToProject(project, asset)
+    ? {
+        ...project,
+        assets: [...project.assets, asset],
+      }
+    : project;
+
+export const upsertProjectAsset = (
+  project: ProjectSnapshot | undefined,
+  asset: AssetMetadata,
+): ProjectSnapshot | undefined =>
+  belongsToProject(project, asset)
+    ? {
+        ...project,
+        assets: [...project.assets.filter((candidate) => candidate.id !== asset.id), asset],
       }
     : project;
 

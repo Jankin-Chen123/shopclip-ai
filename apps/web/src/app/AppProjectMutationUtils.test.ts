@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { AssetMetadata, AssetSlice, ScriptResult, StoryboardScene } from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
-import { removeProjectAssets } from "./AppProjectMutationUtils";
+import {
+  appendProjectAsset,
+  removeProjectAssets,
+  upsertProjectAsset,
+} from "./AppProjectMutationUtils";
 
 const asset = (id: string): AssetMetadata => ({ id }) as AssetMetadata;
 const slice = (id: string, assetId: string): AssetSlice => ({ id, assetId }) as AssetSlice;
@@ -42,5 +46,52 @@ describe("removeProjectAssets", () => {
 
   it("preserves an undefined project", () => {
     expect(removeProjectAssets(undefined, new Set(["asset-delete"]))).toBeUndefined();
+  });
+});
+
+describe("single project asset mutations", () => {
+  it("appends an asset that belongs to the current project", () => {
+    const project = {
+      id: "project-1",
+      assets: [asset("asset-1")],
+    } as ProjectSnapshot;
+
+    expect(
+      appendProjectAsset(project, { ...asset("asset-2"), projectId: "project-1" }).assets.map(
+        (candidate) => candidate.id,
+      ),
+    ).toEqual(["asset-1", "asset-2"]);
+  });
+
+  it("leaves the project unchanged when the appended asset belongs elsewhere", () => {
+    const project = {
+      id: "project-1",
+      assets: [asset("asset-1")],
+    } as ProjectSnapshot;
+
+    expect(appendProjectAsset(project, { ...asset("asset-2"), projectId: "project-2" })).toBe(
+      project,
+    );
+  });
+
+  it("replaces an existing asset before appending the latest version", () => {
+    const project = {
+      id: "project-1",
+      assets: [
+        { ...asset("asset-1"), name: "Old" },
+        { ...asset("asset-2"), name: "Keep" },
+      ],
+    } as ProjectSnapshot;
+
+    expect(
+      upsertProjectAsset(project, {
+        ...asset("asset-1"),
+        name: "New",
+        projectId: "project-1",
+      }).assets,
+    ).toEqual([
+      expect.objectContaining({ id: "asset-2", name: "Keep" }),
+      expect.objectContaining({ id: "asset-1", name: "New" }),
+    ]);
   });
 });
