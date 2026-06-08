@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { UIEvent as ReactUIEvent } from "react";
@@ -485,12 +486,10 @@ export const SmartEditPanel = ({
   ) => {
     event.preventDefault();
     if (params.clipId) {
-      setSelectedTrackClipId(params.clipId);
-      setSelectedTrackClipIds([params.clipId]);
+      selectTrackClipIds([params.clipId]);
     }
     if (params.segmentId) {
-      setSelectedSegmentIds([params.segmentId]);
-      onSelectedSegmentChange(params.segmentId);
+      selectSegmentIds([params.segmentId], params.segmentId);
     }
     setTimelineContextMenu({
       ...params,
@@ -718,11 +717,24 @@ export const SmartEditPanel = ({
     setSelectedTrackClipIds([]);
   };
 
-  const selectTimelineMaterialIds = (ids: string[], activeId = ids.at(-1)) => {
+  const selectTrackClipIds = (ids: string[], activeId = ids.at(-1)) => {
     setSelectedTrackClipIds(ids);
     setSelectedTrackClipId(activeId);
+  };
+
+  const clearSelectedSegments = () => {
     setSelectedSegmentIds([]);
     onSelectedSegmentChange(undefined);
+  };
+
+  const selectSegmentIds = (ids: string[], activeId = ids[0]) => {
+    setSelectedSegmentIds(ids);
+    onSelectedSegmentChange(activeId);
+  };
+
+  const selectTimelineMaterialIds = (ids: string[], activeId = ids.at(-1)) => {
+    selectTrackClipIds(ids, activeId);
+    clearSelectedSegments();
   };
 
   const {
@@ -746,8 +758,7 @@ export const SmartEditPanel = ({
     const addedElement = nextPlan.timeline?.elements.at(-1);
     commitPlanChange(nextPlan, { label: "Add voice clip" });
     if (addedElement) {
-      setSelectedTrackClipId(addedElement.id);
-      setSelectedTrackClipIds([addedElement.id]);
+      selectTrackClipIds([addedElement.id]);
       setSelectedSegmentIds([]);
     }
   };
@@ -760,8 +771,7 @@ export const SmartEditPanel = ({
     const addedElement = nextPlan.timeline?.elements.at(-1);
     commitPlanChange(nextPlan, { label: "Add text clip" });
     if (addedElement) {
-      setSelectedTrackClipId(addedElement.id);
-      setSelectedTrackClipIds([addedElement.id]);
+      selectTrackClipIds([addedElement.id]);
       setSelectedSegmentIds([]);
     }
   };
@@ -870,10 +880,8 @@ export const SmartEditPanel = ({
       if (anchorIndex >= 0 && targetIndex >= 0) {
         const [start, end] =
           anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-        setSelectedSegmentIds(sortedSegments.slice(start, end + 1).map((segment) => segment.id));
-        setSelectedTrackClipId(undefined);
-        setSelectedTrackClipIds([]);
-        onSelectedSegmentChange(segmentId);
+        selectSegmentIds(sortedSegments.slice(start, end + 1).map((segment) => segment.id), segmentId);
+        clearSelectedTrackClips();
         return;
       }
     }
@@ -889,15 +897,12 @@ export const SmartEditPanel = ({
           .map((segment) => segment.id)
           .filter((id) => currentSet.has(id));
       });
-      setSelectedTrackClipId(undefined);
-      setSelectedTrackClipIds([]);
+      clearSelectedTrackClips();
       onSelectedSegmentChange(segmentId);
       return;
     }
-    setSelectedSegmentIds([segmentId]);
-    setSelectedTrackClipId(undefined);
-    setSelectedTrackClipIds([]);
-    onSelectedSegmentChange(segmentId);
+    selectSegmentIds([segmentId], segmentId);
+    clearSelectedTrackClips();
   };
 
   const selectTrackClip = (
@@ -931,18 +936,14 @@ export const SmartEditPanel = ({
         return trackClips.map((candidate) => candidate.id).filter((id) => currentSet.has(id));
       });
       setSelectedTrackClipId(trackClip.id);
-      setSelectedSegmentIds([]);
-      onSelectedSegmentChange(undefined);
+      clearSelectedSegments();
       return;
     }
-    setSelectedTrackClipId(trackClip.id);
-    setSelectedTrackClipIds([trackClip.id]);
+    selectTrackClipIds([trackClip.id]);
     if (trackClip.segmentId) {
-      setSelectedSegmentIds([trackClip.segmentId]);
-      onSelectedSegmentChange(trackClip.segmentId);
+      selectSegmentIds([trackClip.segmentId], trackClip.segmentId);
     } else {
-      setSelectedSegmentIds([]);
-      onSelectedSegmentChange(undefined);
+      clearSelectedSegments();
     }
   };
 
@@ -950,10 +951,8 @@ export const SmartEditPanel = ({
     if (sortedSegments.length === 0) {
       return;
     }
-    setSelectedSegmentIds(sortedSegments.map((segment) => segment.id));
-    setSelectedTrackClipId(undefined);
-    setSelectedTrackClipIds([]);
-    onSelectedSegmentChange(sortedSegments[0]?.id);
+    selectSegmentIds(sortedSegments.map((segment) => segment.id), sortedSegments[0]?.id);
+    clearSelectedTrackClips();
   };
 
   const selectAllTimelineElements = (): boolean => {
@@ -975,8 +974,7 @@ export const SmartEditPanel = ({
     const selectedIds = selectSmartEditTimelineElementIdsForTrack(plan, trackId);
     if (selectedIds.length === 0) {
       clearSelectedTrackClips();
-      setSelectedSegmentIds([]);
-      onSelectedSegmentChange(undefined);
+      clearSelectedSegments();
       return;
     }
     selectTimelineMaterialIds(selectedIds);
@@ -1013,8 +1011,7 @@ export const SmartEditPanel = ({
           : `Remove clip (${timelineEditMode})`,
     });
     const nextSelectedId = nextPlan.segments[Math.min(selectedSegmentIndex - 1, nextPlan.segments.length - 1)]?.id;
-    onSelectedSegmentChange(nextSelectedId);
-    setSelectedSegmentIds(nextSelectedId ? [nextSelectedId] : []);
+    selectSegmentIds(nextSelectedId ? [nextSelectedId] : [], nextSelectedId);
   };
 
   const updateSelectedSegments = (
@@ -1073,6 +1070,24 @@ export const SmartEditPanel = ({
       return;
     }
     commitPlanChange(replaceSegment(plan, selectedSegment.id, update), { label: "Edit segment" });
+  };
+
+  const moveSelectedSegmentEarlier = () => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(reorderSegments(plan, selectedSegment.id, "earlier"), {
+      label: "Move clip earlier",
+    });
+  };
+
+  const moveSelectedSegmentLater = () => {
+    if (!plan || !selectedSegment) {
+      return;
+    }
+    commitPlanChange(reorderSegments(plan, selectedSegment.id, "later"), {
+      label: "Move clip later",
+    });
   };
 
   const addVisualKeyframeAtPlayhead = () => {
@@ -1563,8 +1578,7 @@ export const SmartEditPanel = ({
             ) ?? [];
         commitPlanChange(nextPlan, { label: "Split selected materials at playhead" });
         if (rightElementIds.length > 0) {
-          setSelectedTrackClipId(rightElementIds[0]);
-          setSelectedTrackClipIds(rightElementIds);
+          selectTrackClipIds(rightElementIds, rightElementIds[0]);
         }
         return;
       }
@@ -2241,8 +2255,7 @@ export const SmartEditPanel = ({
         label: `Remove selected materials (${timelineEditMode})`,
       });
       clearSelectedTrackClips();
-      setSelectedSegmentIds([]);
-      onSelectedSegmentChange(undefined);
+      clearSelectedSegments();
       return;
     }
     if (selectedTrackClip.trackId === "video" && selectedTrackClip.segmentId) {
@@ -2260,11 +2273,9 @@ export const SmartEditPanel = ({
     commitPlanChange(nextPlan, { label: `Remove ${selectedTrackClip.trackId} material (${timelineEditMode})` });
     clearSelectedTrackClips();
     if (selectedTrackClip.segmentId) {
-      setSelectedSegmentIds([selectedTrackClip.segmentId]);
-      onSelectedSegmentChange(selectedTrackClip.segmentId);
+      selectSegmentIds([selectedTrackClip.segmentId], selectedTrackClip.segmentId);
     } else {
-      setSelectedSegmentIds([]);
-      onSelectedSegmentChange(undefined);
+      clearSelectedSegments();
     }
   };
 
@@ -2283,8 +2294,7 @@ export const SmartEditPanel = ({
       (segment) => segment.id === `${selectedSegment.id}-${duplicateToken}`,
     );
     if (duplicateSegment) {
-      onSelectedSegmentChange(duplicateSegment.id);
-      setSelectedSegmentIds([duplicateSegment.id]);
+      selectSegmentIds([duplicateSegment.id], duplicateSegment.id);
     }
   };
 
@@ -2315,6 +2325,11 @@ export const SmartEditPanel = ({
       selectedBatchTrackClips,
       isTimelineTrackLocked,
     );
+
+  const selectedEditableTimelineMaterialIdsOrUndefined = () => {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
+    return selectedTimelineMaterialIds.length > 0 ? selectedTimelineMaterialIds : undefined;
+  };
 
   const selectTrackClipsAtPlayhead = () => {
     const selectedIds = selectSmartEditTrackClipIdsAtSecond({
@@ -2374,8 +2389,7 @@ export const SmartEditPanel = ({
     }
     commitPlanChange(nextPlan, { label: `Cut preview range (${timelineEditMode})` });
     clearSelectedTrackClips();
-    setSelectedSegmentIds([]);
-    onSelectedSegmentChange(undefined);
+    clearSelectedSegments();
     setPlayheadAndSeekPreview(normalizedPreviewRange.startSecond);
   };
 
@@ -2383,8 +2397,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const selectedIds = new Set(selectedTimelineMaterialIds);
@@ -2424,8 +2438,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const cut = cutSmartEditTimelineElementsToClipboard(
@@ -2438,16 +2452,15 @@ export const SmartEditPanel = ({
     }
     setSmartEditClipboard(cut.clipboard);
     commitPlanChange(cut.plan, { label: `Cut selected materials (${timelineEditMode})` });
-    setSelectedTrackClipId(undefined);
-    setSelectedTrackClipIds([]);
+    clearSelectedTrackClips();
   };
 
   const duplicateSelectedTimelineMaterials = () => {
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const duplicateToken = `material-${Date.now()}`;
@@ -2467,8 +2480,7 @@ export const SmartEditPanel = ({
       duplicateToken,
     );
     if (duplicatedIds.length > 0) {
-      setSelectedTrackClipId(duplicatedIds[0]);
-      setSelectedTrackClipIds(duplicatedIds);
+      selectTrackClipIds(duplicatedIds, duplicatedIds[0]);
     }
   };
 
@@ -2476,8 +2488,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const nextPlan = updateSmartEditTimelineElementsPlaybackRate(
@@ -2495,8 +2507,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const nextPlan = slipSmartEditTimelineElementsSource(
@@ -2521,8 +2533,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const nextPlan = updateSmartEditTimelineElementsAudioProperties(
@@ -2540,8 +2552,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const nextPlan = addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead(
@@ -2559,8 +2571,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const nextPlan = updateSmartEditTimelineElementsState(plan, selectedTimelineMaterialIds, patch);
@@ -2589,8 +2601,8 @@ export const SmartEditPanel = ({
     if (!plan) {
       return;
     }
-    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIds();
-    if (selectedTimelineMaterialIds.length === 0) {
+    const selectedTimelineMaterialIds = selectedEditableTimelineMaterialIdsOrUndefined();
+    if (!selectedTimelineMaterialIds) {
       return;
     }
     const nextPlan = updateSmartEditTimelineElementsTextStyle(
@@ -2657,8 +2669,7 @@ export const SmartEditPanel = ({
       duplicateToken,
     );
     if (duplicateIds.length > 0) {
-      setSelectedSegmentIds(duplicateIds);
-      onSelectedSegmentChange(duplicateIds[0]);
+      selectSegmentIds(duplicateIds, duplicateIds[0]);
     }
   };
 
@@ -2682,8 +2693,7 @@ export const SmartEditPanel = ({
       duplicateToken,
     );
     if (pastedIds.length > 0) {
-      setSelectedSegmentIds(pastedIds);
-      onSelectedSegmentChange(pastedIds[0]);
+      selectSegmentIds(pastedIds, pastedIds[0]);
     }
   };
 
@@ -2726,8 +2736,7 @@ export const SmartEditPanel = ({
       duplicateToken,
     );
     if (pastedIds.length > 0) {
-      setSelectedSegmentIds(pastedIds);
-      onSelectedSegmentChange(pastedIds[0]);
+      selectSegmentIds(pastedIds, pastedIds[0]);
     }
   };
 
@@ -2779,39 +2788,42 @@ export const SmartEditPanel = ({
     trimAtPlayhead,
     undoPlanChange,
   };
+  const selectedSegmentLabel = selectedSegment
+    ? selectedSegment.subtitle || sourceLabel(selectedSegment, assets)
+    : "-";
+  const handlePanelKeyDown = (event: ReactKeyboardEvent<HTMLElement>) =>
+    handleSmartEditKeyboardShortcut(
+      event,
+      {
+        selectedSegment,
+        selectedTrackClip,
+      },
+      {
+        clearMultiSelection,
+        copySelectedSegmentsToLocalClipboard,
+        cutSelectedTimelineMaterialsToLocalClipboard,
+        jumpPlayheadToEditPoint,
+        moveSelectedTrackClips,
+        pasteClipboardAtPlayhead,
+        redoPlanChange,
+        removeSelectedSegment,
+        removeSelectedTrackClip,
+        selectAllSegments,
+        selectAllTimelineElements,
+        selectByOffset,
+        setPreviewRangePoint,
+        splitAtPlayhead,
+        togglePreviewPlayback,
+        trimAtPlayhead,
+        undoPlanChange,
+      },
+    );
 
   return (
     <section
       className="panel smart-edit-panel"
       aria-label="Smart edit timeline editor"
-      onKeyDown={(event) =>
-        handleSmartEditKeyboardShortcut(
-          event,
-          {
-            selectedSegment,
-            selectedTrackClip,
-          },
-          {
-            clearMultiSelection,
-            copySelectedSegmentsToLocalClipboard,
-            cutSelectedTimelineMaterialsToLocalClipboard,
-            jumpPlayheadToEditPoint,
-            moveSelectedTrackClips,
-            pasteClipboardAtPlayhead,
-            redoPlanChange,
-            removeSelectedSegment,
-            removeSelectedTrackClip,
-            selectAllSegments,
-            selectAllTimelineElements,
-            selectByOffset,
-            setPreviewRangePoint,
-            splitAtPlayhead,
-            togglePreviewPlayback,
-            trimAtPlayhead,
-            undoPlanChange,
-          },
-        )
-      }
+      onKeyDown={handlePanelKeyDown}
     >
       <div className="panel-heading smart-edit-heading">
         <SmartEditAssetTabRail
@@ -2870,7 +2882,7 @@ export const SmartEditPanel = ({
           result={result}
           selectedPreviewMedia={selectedPreviewMedia}
           selectedSegment={selectedSegment}
-          selectedSegmentLabel={selectedSegment ? selectedSegment.subtitle || sourceLabel(selectedSegment, assets) : "-"}
+          selectedSegmentLabel={selectedSegmentLabel}
           selectedTransform={selectedTransform}
           setPlayheadFromPreviewTime={setPlayheadFromPreviewTime}
           setPreviewCurrentTime={setPreviewCurrentTime}
@@ -2897,20 +2909,8 @@ export const SmartEditPanel = ({
           hasPlan={Boolean(plan)}
           linkedElementCount={selectedLinkedElements.length}
           minTimelineElementDurationSeconds={MIN_SMART_EDIT_CLIP_SECONDS}
-          moveSelectedSegmentEarlier={() =>
-            plan && selectedSegment
-              ? commitPlanChange(reorderSegments(plan, selectedSegment.id, "earlier"), {
-                  label: "Move clip earlier",
-                })
-              : undefined
-          }
-          moveSelectedSegmentLater={() =>
-            plan && selectedSegment
-              ? commitPlanChange(reorderSegments(plan, selectedSegment.id, "later"), {
-                  label: "Move clip later",
-                })
-              : undefined
-          }
+          moveSelectedSegmentEarlier={moveSelectedSegmentEarlier}
+          moveSelectedSegmentLater={moveSelectedSegmentLater}
           moveVisualEffectOnSelectedSegment={moveVisualEffectOnSelectedSegment}
           relinkSelectedTimelineElementGroup={relinkSelectedTimelineElementGroup}
           removeSegmentAudioVolumeKeyframe={removeSegmentAudioVolumeKeyframe}
