@@ -8,6 +8,7 @@ import {
   selectMergeableSmartEditTimelineTextMaterialIdsOrUndefined,
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectRemovableSmartEditTimelineMaterialIds,
+  selectResizableSmartEditTimelineMaterialIdsOrUndefined,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
@@ -114,6 +115,48 @@ describe("SmartEditTrackDerivedState", () => {
         selectedTrackClips: [trackClip("single-caption")],
       }),
     ).toEqual([]);
+  });
+
+  it("returns resizable timeline material ids only when the selected batch can resize together", () => {
+    const isTrackLocked = (trackId: string) => trackId === "voice";
+
+    expect(
+      selectResizableSmartEditTimelineMaterialIdsOrUndefined(
+        [
+          trackClip("caption-1"),
+          trackClip("video-1", { trackId: "video" }),
+        ],
+        isTrackLocked,
+      ),
+    ).toEqual(["caption-1", "video-1"]);
+
+    expect(
+      selectResizableSmartEditTimelineMaterialIdsOrUndefined(
+        [trackClip("single-caption")],
+        isTrackLocked,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      selectResizableSmartEditTimelineMaterialIdsOrUndefined(
+        [trackClip("caption-1"), trackClip("scene-caption", { segmentId: "scene-1" })],
+        isTrackLocked,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      selectResizableSmartEditTimelineMaterialIdsOrUndefined(
+        [trackClip("caption-1"), trackClip("bgm-1", { trackId: "bgm" })],
+        isTrackLocked,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      selectResizableSmartEditTimelineMaterialIdsOrUndefined(
+        [trackClip("caption-1"), trackClip("voice-1", { trackId: "voice" })],
+        isTrackLocked,
+      ),
+    ).toBeUndefined();
   });
 
   it("returns editable timeline material ids only when selected materials are actionable", () => {

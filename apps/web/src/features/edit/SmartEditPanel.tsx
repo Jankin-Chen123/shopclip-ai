@@ -80,6 +80,7 @@ import {
   isSmartEditTimelineTrackLocked,
   linkedSmartEditTimelineElements,
   selectRemovableSmartEditTimelineMaterialIds,
+  selectResizableSmartEditTimelineMaterialIdsOrUndefined,
   selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined as selectEditableTimelineMaterialIdsOrUndefined,
@@ -2002,22 +2003,22 @@ export const SmartEditPanel = ({
       selectedTrackClipIds.length > 1 && selectedTrackClipIdSet.has(trackClip.id)
         ? selectedTrackClipIds
         : [];
-    const shouldResizeSelectedBatch =
-      selectedResizeIds.length > 1 &&
-      selectedBatchTrackClips.every(
-        (selectedClip) =>
-          !selectedClip.segmentId &&
-          selectedClip.trackId !== "bgm" &&
-          !isTimelineTrackLocked(selectedClip.trackId),
-      );
-    const nextPlan = shouldResizeSelectedBatch
-      ? resizeSmartEditTimelineElementsEdge(plan, selectedResizeIds, edge, deltaSeconds, boundedPlayheadSeconds)
+    const resizableSelectedIds =
+      selectedResizeIds.length > 1
+        ? selectResizableSmartEditTimelineMaterialIdsOrUndefined(
+            selectedBatchTrackClips,
+            isTimelineTrackLocked,
+          )
+        : undefined;
+    const shouldResizeSelectedBatch = Boolean(resizableSelectedIds);
+    const nextPlan = resizableSelectedIds
+      ? resizeSmartEditTimelineElementsEdge(plan, resizableSelectedIds, edge, deltaSeconds, boundedPlayheadSeconds)
       : resizeSmartEditTrackClipEdge(plan, trackClip, edge, deltaSeconds);
     if (nextPlan === plan) {
       return;
     }
     commitPlanChange(nextPlan, {
-      label: shouldResizeSelectedBatch
+      label: resizableSelectedIds
         ? edge === "in"
           ? "Trim selected materials in"
           : "Trim selected materials out"

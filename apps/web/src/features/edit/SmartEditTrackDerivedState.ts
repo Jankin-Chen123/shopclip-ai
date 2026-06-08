@@ -172,6 +172,18 @@ export const selectRemovableSmartEditTimelineMaterialIds = ({
     ? selectedTrackClips.map((trackClip) => trackClip.id)
     : [];
 
+export const selectResizableSmartEditTimelineMaterialIdsOrUndefined = (
+  trackClips: SmartEditTrackSegment[],
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean,
+): string[] | undefined =>
+  trackClips.length > 1 &&
+  trackClips.every(
+    (trackClip) =>
+      !trackClip.segmentId && trackClip.trackId !== "bgm" && !isTrackLocked(trackClip.trackId),
+  )
+    ? trackClips.map((trackClip) => trackClip.id)
+    : undefined;
+
 export const selectSmartEditTimelineMaterialAlignAnchorSecond = (
   trackClips: Pick<SmartEditTrackSegment, "durationSeconds" | "startSecond">[],
   edge: "start" | "end",
