@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `869a848 Extract exact token timeline selector`.
+- Latest deployed optimization commit: `cea4fea Extract track clip snap point selector`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `cea4fea`:
+  - Extracted `selectSmartEditTrackClipSnapPoints` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that selector in `buildSmartEditTrackClipDragPreview`, `buildSmartEditTrackClipTrimPreview`, and `apps/web/src/features/edit/SmartEditPanel.tsx` trim-drag finish handling.
+  - Removed repeated inline construction of `[playhead, non-excluded clip starts/ends]` snap point arrays while preserving track order and existing `snapTimelineSeconds` end-point rounding.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for excluded clips, track-order preservation, and snapped clip end points.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3090 lines.
+    - `SmartEditTrackDerivedState.ts`: 449 lines.
+    - `SmartEditSelectionUtils.ts`: 56 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `selectSmartEditTrackClipSnapPoints` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 19 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 432 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-RCiUJuh-.js` at 605.32 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `cea4fea86bab3977f3fed6face460181db3dfed4`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `869a848`:
   - Extracted `selectSmartEditTimelineElementIdsByExactToken` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` after splitting selected timeline materials, replacing the inline exact generated element ID filter.
