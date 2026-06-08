@@ -19,6 +19,18 @@ export const isRenderTaskPollingActive = (
   renderTask?.status === "running" ||
   renderTask?.status === "retrying";
 
+export const markRenderTaskExported = (
+  renderTask: RenderTask | undefined,
+  exportUrl: string,
+): RenderTask | undefined =>
+  renderTask
+    ? {
+        ...renderTask,
+        exportUrl,
+        previewUrl: exportUrl,
+      }
+    : renderTask;
+
 export const isSmartEditTask = (renderTask: Pick<RenderTask, "provider"> | undefined): boolean =>
   renderTask?.provider === "smart-edit-ffmpeg";
 

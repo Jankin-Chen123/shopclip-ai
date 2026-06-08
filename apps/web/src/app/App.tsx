@@ -164,6 +164,7 @@ import {
   createSmartEditResultFromCompletedSourceRender,
   isRenderTaskPollingActive,
   isSmartEditTask,
+  markRenderTaskExported,
   needsSceneClipMaterialRefresh,
   selectInvalidSeedanceSceneDuration,
   selectStudioBaseRenderTask,
@@ -2037,15 +2038,7 @@ export const App = ({
     void runAction("export", "export", async () => {
       const exported = await exportProject(project.id);
       setExportResult(exported);
-      setRenderTask((current) =>
-        current
-          ? {
-              ...current,
-              exportUrl: exported.exportUrl,
-              previewUrl: exported.exportUrl,
-            }
-          : current,
-      );
+      setRenderTask((current) => markRenderTaskExported(current, exported.exportUrl));
       setProject((current) =>
         markProjectRenderTaskExported(current, {
           exportUrl: exported.exportUrl,

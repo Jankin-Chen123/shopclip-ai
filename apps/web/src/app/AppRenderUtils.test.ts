@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { StoryboardScene } from "@shopclip/shared";
+import type { RenderTask, StoryboardScene } from "@shopclip/shared";
 
-import { selectInvalidSeedanceSceneDuration } from "./AppRenderUtils";
+import { markRenderTaskExported, selectInvalidSeedanceSceneDuration } from "./AppRenderUtils";
 
 const sceneWithDuration = (id: string, durationSeconds: number): StoryboardScene =>
   ({
@@ -9,6 +9,8 @@ const sceneWithDuration = (id: string, durationSeconds: number): StoryboardScene
     id,
     order: Number(id.replace(/\D/gu, "")) || 1,
   }) as StoryboardScene;
+
+const renderTask = (id: string): RenderTask => ({ id }) as RenderTask;
 
 describe("selectInvalidSeedanceSceneDuration", () => {
   it("returns undefined when there are no scenes", () => {
@@ -55,5 +57,22 @@ describe("selectInvalidSeedanceSceneDuration", () => {
         sceneWithDuration("scene-2", 13),
       ]),
     ).toBe(firstInvalidScene);
+  });
+});
+
+describe("markRenderTaskExported", () => {
+  it("sets export and preview urls on the current render task", () => {
+    const task = renderTask("render-1");
+
+    expect(markRenderTaskExported(task, "https://example.com/export.mp4")).toEqual(
+      expect.objectContaining({
+        exportUrl: "https://example.com/export.mp4",
+        previewUrl: "https://example.com/export.mp4",
+      }),
+    );
+  });
+
+  it("preserves an undefined render task", () => {
+    expect(markRenderTaskExported(undefined, "https://example.com/export.mp4")).toBeUndefined();
   });
 });
