@@ -9,11 +9,30 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `73b4209 Extract Smart Edit clipboard copy selector`.
+- Latest deployed optimization commit: `f9161ef Extract editable material selection helper`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `f9161ef`:
+  - Extracted editable timeline material ID fallback into `selectEditableSmartEditTimelineMaterialIdsOrUndefined` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that selector from `selectSmartEditClipboardCopySelection` and the Smart Edit panel's timeline material commands.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for editable standalone materials, scene material exclusion, locked track exclusion, and empty selection fallback.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3081 lines.
+    - `SmartEditTrackDerivedState.ts`: 381 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `selectEditableSmartEditTimelineMaterialIdsOrUndefined` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 9 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 417 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-BXsg9z5R.js` at 605.07 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for touched files.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `f9161ef572b4948c9a0375bcc7e2cd6decc9105a`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `1863fddf`:
   - Extracted reusable Smart Edit selection helpers into `apps/web/src/features/edit/SmartEditSelectionUtils.ts`.
   - Replaced repeated inline ordered-selection filtering/toggle logic in `apps/web/src/features/edit/SmartEditPanel.tsx`.
