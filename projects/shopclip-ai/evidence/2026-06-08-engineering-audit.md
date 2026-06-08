@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `b25ab16 Extract project reference removal mutation`.
+- Latest deployed optimization commit: `9eb08d4 Extract render task export mutation`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `9eb08d4`:
+  - Extracted local render-task export URL synchronization from `apps/web/src/app/App.tsx` into `markRenderTaskExported` in `apps/web/src/app/AppRenderUtils.ts`.
+  - Replaced the inline `setRenderTask` object update in `handleExport` while keeping export result state and project render-task export synchronization in `App.tsx`.
+  - Extended `apps/web/src/app/AppRenderUtils.test.ts` coverage for setting export/preview URLs and preserving an undefined render task.
+  - Current file sizes:
+    - `App.tsx`: 2581 lines.
+    - `AppRenderUtils.ts`: 220 lines.
+    - `AppRenderUtils.test.ts`: 78 lines.
+    - `AppProjectMutationUtils.ts`: 376 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppRenderUtils.test.ts` failed before implementation because `markRenderTaskExported` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppRenderUtils.test.ts` passed, 7 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 484 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-Bm6t6nU-.js` at 606.03 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `9eb08d49812c0d09de9be8d4b1e70c085a695116`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `b25ab16`:
   - Extracted reference-deletion project snapshot cleanup from `apps/web/src/app/App.tsx` into `removeProjectReferenceResources` in `apps/web/src/app/AppProjectMutationUtils.ts`.
   - Replaced the largest remaining inline project update in `handleDeleteReferences` while keeping reference library, asset library, active script, asset-prep, search results, selected reference/template, and current project modal state updates in `App.tsx`.
