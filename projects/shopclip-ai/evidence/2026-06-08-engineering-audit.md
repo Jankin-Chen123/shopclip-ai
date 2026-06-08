@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `cea4fea Extract track clip snap point selector`.
+- Latest deployed optimization commit: `b0afb3a Extract selected track clip batch selector`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `b0afb3a`:
+  - Extracted `selectSelectedSmartEditTrackClipBatchIds` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that selector in `apps/web/src/features/edit/SmartEditPanel.tsx` for timeline material move and trim commit paths.
+  - Reused the same selector in `buildSmartEditTrackClipTrimPreview` so preview and commit paths share the same "target clip belongs to a multi-selection" rule.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for included targets, missing targets, and single-selection fallback.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3093 lines.
+    - `SmartEditTrackDerivedState.ts`: 463 lines.
+    - `SmartEditSelectionUtils.ts`: 56 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `selectSelectedSmartEditTrackClipBatchIds` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 20 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 433 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-B9S7IRDD.js` at 605.56 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `b0afb3a6dc951238068314b24761ee035e3b33ab`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `cea4fea`:
   - Extracted `selectSmartEditTrackClipSnapPoints` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Reused that selector in `buildSmartEditTrackClipDragPreview`, `buildSmartEditTrackClipTrimPreview`, and `apps/web/src/features/edit/SmartEditPanel.tsx` trim-drag finish handling.
