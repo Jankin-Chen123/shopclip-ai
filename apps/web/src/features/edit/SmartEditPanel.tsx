@@ -89,6 +89,7 @@ import {
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
+  selectSmartEditTrackClipSnapPoints,
   selectSmartEditTimelineElementIdsByExactToken,
   selectSmartEditTimelineElementIdsWithToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
@@ -2085,21 +2086,15 @@ export const SmartEditPanel = ({
     }
     event.preventDefault();
     event.stopPropagation();
-    const snapPoints = [
-      boundedPlayheadSeconds,
-      ...trackSegments
-        .flatMap((track) => track.segments)
-        .filter((segment) => !selectedTrackClipIdSet.has(segment.id))
-        .flatMap((segment) => [
-          segment.startSecond,
-          snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
-        ]),
-    ];
     const preview = previewSmartEditTrackClipTrimDrag({
       currentClientX: event.clientX,
       edge: trackClipTrimDrag.edge,
       pixelsPerSecond: timelinePixelsPerSecond,
-      snapPoints,
+      snapPoints: selectSmartEditTrackClipSnapPoints({
+        excludedClipIds: selectedTrackClipIdSet,
+        referenceSecond: boundedPlayheadSeconds,
+        trackSegments,
+      }),
       startClientX: trackClipTrimDrag.startClientX,
       trackClip: trackClipTrimDrag.trackClip,
     });

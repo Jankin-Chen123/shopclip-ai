@@ -41,6 +41,24 @@ export const buildSmartEditTrackEditPoints = (
     .filter((point, index, points) => points.indexOf(point) === index)
     .sort((left, right) => left - right);
 
+export const selectSmartEditTrackClipSnapPoints = ({
+  excludedClipIds,
+  referenceSecond,
+  trackSegments,
+}: {
+  excludedClipIds: Set<string>;
+  referenceSecond: number;
+  trackSegments: SmartEditTrack[];
+}): number[] => [
+  referenceSecond,
+  ...allSmartEditTrackClips(trackSegments)
+    .filter((segment) => !excludedClipIds.has(segment.id))
+    .flatMap((segment) => [
+      segment.startSecond,
+      snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
+    ]),
+];
+
 export const findSmartEditTrackClip = (
   trackSegments: SmartEditTrack[],
   selectedTrackClipId: string | undefined,
@@ -367,15 +385,11 @@ export const buildSmartEditTrackClipDragPreview = ({
         currentClientX: trackClipMoveDrag.currentClientX,
         pixelsPerSecond: timelinePixelsPerSecond,
         selectedIds: selectedTrackClipIds,
-        snapPoints: [
-          boundedPlayheadSeconds,
-          ...allSmartEditTrackClips(trackSegments)
-            .filter((segment) => !selectedTrackClipIdSet.has(segment.id))
-            .flatMap((segment) => [
-              segment.startSecond,
-              snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
-            ]),
-        ],
+        snapPoints: selectSmartEditTrackClipSnapPoints({
+          excludedClipIds: selectedTrackClipIdSet,
+          referenceSecond: boundedPlayheadSeconds,
+          trackSegments,
+        }),
         startClientX: trackClipMoveDrag.startClientX,
         trackClip: trackClipMoveDrag.trackClip,
         trackClips: allSmartEditTrackClips(trackSegments),
@@ -414,15 +428,11 @@ export const buildSmartEditTrackClipTrimPreview = ({
     canResizeSelectedSmartEditTimelineMaterials(selectedBatchTrackClips, isTrackLocked)
       ? selectedBatchTrackClips
       : [trackClipTrimDrag.trackClip];
-  const snapPoints = [
-    boundedPlayheadSeconds,
-    ...allSmartEditTrackClips(trackSegments)
-      .filter((segment) => !sourceClips.some((sourceClip) => sourceClip.id === segment.id))
-      .flatMap((segment) => [
-        segment.startSecond,
-        snapTimelineSeconds(segment.startSecond + segment.durationSeconds),
-      ]),
-  ];
+  const snapPoints = selectSmartEditTrackClipSnapPoints({
+    excludedClipIds: new Set(sourceClips.map((sourceClip) => sourceClip.id)),
+    referenceSecond: boundedPlayheadSeconds,
+    trackSegments,
+  });
   const rawDeltaSeconds = snapTimelineSeconds(
     (trackClipTrimDrag.currentClientX - trackClipTrimDrag.startClientX) /
       timelinePixelsPerSecond,

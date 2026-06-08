@@ -15,6 +15,7 @@ import {
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
   selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
+  selectSmartEditTrackClipSnapPoints,
   selectSmartEditTimelineElementIdsByExactToken,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
@@ -339,6 +340,28 @@ describe("SmartEditTrackDerivedState", () => {
         ],
       }).map((preview) => preview.id),
     ).toEqual(["caption-1"]);
+  });
+
+  it("builds track clip snap points from non-excluded clip starts and ends", () => {
+    expect(
+      selectSmartEditTrackClipSnapPoints({
+        referenceSecond: 2.5,
+        excludedClipIds: new Set(["caption-2"]),
+        trackSegments: [
+          {
+            id: "caption",
+            segments: [
+              trackClip("caption-1", { durationSeconds: 1.234, startSecond: 0.456 }),
+              trackClip("caption-2", { durationSeconds: 2, startSecond: 3 }),
+            ],
+          },
+          {
+            id: "voice",
+            segments: [trackClip("voice-1", { durationSeconds: 0.333, startSecond: 5 })],
+          },
+        ],
+      }),
+    ).toEqual([2.5, 0.456, 1.7, 5, 5.3]);
   });
 
   it("selects the alignment anchor for selected timeline materials", () => {
