@@ -16,7 +16,9 @@ import {
   appendProjectAsset,
   appendProjectRenderTask,
   mergeImportedProjectAssets,
+  markProjectRenderTaskExported,
   removeProjectAssets,
+  replaceProjectRenderTaskProgress,
   replaceProcessedProjectAsset,
   upsertProjectRenderTask,
   upsertProjectAsset,
@@ -141,6 +143,48 @@ describe("project render task mutations", () => {
       "render-2:completed",
       "render-1:completed",
     ]);
+    expect(nextProject?.status).toBe("completed");
+  });
+
+  it("replaces polled render task progress while preserving project status until completion", () => {
+    const project = {
+      renderTasks: [renderTask("render-1", "running")],
+      status: "ready" as Project["status"],
+    } as ProjectSnapshot;
+
+    const runningProject = replaceProjectRenderTaskProgress(
+      project,
+      renderTask("render-1", "running"),
+    );
+    const completedProject = replaceProjectRenderTaskProgress(
+      project,
+      renderTask("render-1", "completed"),
+    );
+
+    expect(runningProject?.renderTasks[0]?.status).toBe("running");
+    expect(runningProject?.status).toBe("ready");
+    expect(completedProject?.renderTasks[0]?.status).toBe("completed");
+    expect(completedProject?.status).toBe("completed");
+  });
+
+  it("marks a render task exported and completes the project", () => {
+    const project = {
+      renderTasks: [renderTask("render-1", "completed"), renderTask("render-2", "running")],
+      status: "rendering" as Project["status"],
+    } as ProjectSnapshot;
+
+    const nextProject = markProjectRenderTaskExported(project, {
+      exportUrl: "https://example.com/export.mp4",
+      renderTaskId: "render-1",
+    });
+
+    expect(nextProject?.renderTasks[0]).toEqual(
+      expect.objectContaining({
+        exportUrl: "https://example.com/export.mp4",
+        previewUrl: "https://example.com/export.mp4",
+      }),
+    );
+    expect(nextProject?.renderTasks[1]).toEqual(expect.objectContaining({ id: "render-2" }));
     expect(nextProject?.status).toBe("completed");
   });
 });

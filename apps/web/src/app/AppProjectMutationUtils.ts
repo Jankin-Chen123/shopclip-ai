@@ -56,6 +56,46 @@ export const upsertProjectRenderTask = (
       }
     : project;
 
+export const replaceProjectRenderTaskProgress = (
+  project: ProjectSnapshot | undefined,
+  renderTask: RenderTask,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        renderTasks: project.renderTasks.map((task) =>
+          task.id === renderTask.id ? renderTask : task,
+        ),
+        status: renderTask.status === "completed" ? "completed" : project.status,
+      }
+    : project;
+
+export const markProjectRenderTaskExported = (
+  project: ProjectSnapshot | undefined,
+  {
+    exportUrl,
+    renderTaskId,
+  }: {
+    exportUrl: string;
+    renderTaskId: string | undefined;
+  },
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        renderTasks: project.renderTasks.map((task) =>
+          task.id === renderTaskId
+            ? {
+                ...task,
+                exportUrl,
+                previewUrl: exportUrl,
+              }
+            : task,
+        ),
+        status: "completed",
+      }
+    : project;
+
 export const replaceProjectRenderTask = (
   project: ProjectSnapshot | undefined,
   renderTask: RenderTask,

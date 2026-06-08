@@ -123,9 +123,11 @@ import {
   appendProjectScript,
   appendProjectAsset,
   appendProjectRenderTask,
+  markProjectRenderTaskExported,
   mergeImportedProjectAssets,
   removeProjectRenderTask,
   removeProjectAssets,
+  replaceProjectRenderTaskProgress,
   removeProjectScript,
   replaceProcessedProjectAsset,
   replaceProjectRenderTask,
@@ -696,17 +698,7 @@ export const App = ({
             smartEdit: render.renderTask.errorMessage ?? "Smart edit failed.",
           }));
         }
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                renderTasks: current.renderTasks.map((task) =>
-                  task.id === render.renderTask.id ? render.renderTask : task,
-                ),
-                status: render.renderTask.status === "completed" ? "completed" : current.status,
-              }
-            : current,
-        );
+        setProject((current) => replaceProjectRenderTaskProgress(current, render.renderTask));
       } catch (error) {
         if (!cancelled) {
           setErrors((current) => ({
@@ -2119,21 +2111,10 @@ export const App = ({
           : current,
       );
       setProject((current) =>
-        current
-          ? {
-              ...current,
-              renderTasks: current.renderTasks.map((task) =>
-                task.id === renderTask?.id
-                  ? {
-                      ...task,
-                      exportUrl: exported.exportUrl,
-                      previewUrl: exported.exportUrl,
-                    }
-                  : task,
-              ),
-              status: "completed",
-            }
-          : current,
+        markProjectRenderTaskExported(current, {
+          exportUrl: exported.exportUrl,
+          renderTaskId: renderTask?.id,
+        }),
       );
     });
   };
