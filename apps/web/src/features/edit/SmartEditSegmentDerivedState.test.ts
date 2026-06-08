@@ -5,6 +5,7 @@ import {
   selectSmartEditAssetSlicesForSegment,
   selectSmartEditSegmentIdByOffset,
   selectSmartEditSegmentIdsOrUndefined,
+  updateSelectedSmartEditSegments,
   smartEditPreviewSegmentLabel,
 } from "./SmartEditSegmentDerivedState";
 
@@ -78,6 +79,31 @@ describe("SmartEditSegmentDerivedState", () => {
     ).toEqual(["scene-1", "scene-2"]);
 
     expect(selectSmartEditSegmentIdsOrUndefined([])).toBeUndefined();
+  });
+
+  it("updates only selected segments in a batch", () => {
+    const segments = [
+      segment("scene-1", { enabled: true }),
+      segment("scene-2", { enabled: true }),
+      segment("scene-3", { enabled: true }),
+    ];
+
+    expect(
+      updateSelectedSmartEditSegments(segments, [segments[0]!, segments[2]!], (current) => ({
+        ...current,
+        enabled: false,
+      })).map((current) => [current.id, current.enabled]),
+    ).toEqual([
+      ["scene-1", false],
+      ["scene-2", true],
+      ["scene-3", false],
+    ]);
+  });
+
+  it("keeps the original segment list when no batch segments are selected", () => {
+    const segments = [segment("scene-1"), segment("scene-2")];
+
+    expect(updateSelectedSmartEditSegments(segments, [], (current) => current)).toBe(segments);
   });
 
   it("uses subtitle as the preview segment label when present", () => {

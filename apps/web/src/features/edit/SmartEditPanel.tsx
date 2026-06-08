@@ -44,6 +44,7 @@ import {
   smartEditSelectedSourceLabel,
   smartEditTimelineDurationSeconds,
   sortSmartEditPlanSegments,
+  updateSelectedSmartEditSegments,
 } from "./SmartEditSegmentDerivedState";
 import {
   retainSmartEditSelectionIds,
@@ -1013,10 +1014,9 @@ export const SmartEditPanel = ({
     if (!plan || selectedBatchSegments.length === 0) {
       return;
     }
-    const selectedIds = new Set(selectedBatchSegments.map((segment) => segment.id));
     commitPlanChange(withRebuiltTimeline({
       ...plan,
-      segments: plan.segments.map((segment) => (selectedIds.has(segment.id) ? update(segment) : segment)),
+      segments: updateSelectedSmartEditSegments(plan.segments, selectedBatchSegments, update),
     }), { label: "Batch edit clips" });
   };
 

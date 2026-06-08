@@ -42,6 +42,19 @@ export const selectSmartEditSegmentIdsOrUndefined = (
   return ids.length > 0 ? ids : undefined;
 };
 
+export const updateSelectedSmartEditSegments = (
+  segments: SmartEditSegment[],
+  selectedSegments: Array<Pick<SmartEditSegment, "id">>,
+  update: (segment: SmartEditSegment) => SmartEditSegment,
+): SmartEditSegment[] => {
+  const selectedIds = selectSmartEditSegmentIdsOrUndefined(selectedSegments);
+  if (!selectedIds) {
+    return segments;
+  }
+  const selectedIdSet = new Set(selectedIds);
+  return segments.map((segment) => (selectedIdSet.has(segment.id) ? update(segment) : segment));
+};
+
 export const selectSmartEditSegmentIdByOffset = ({
   offset,
   selectedSegment,
