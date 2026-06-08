@@ -174,7 +174,7 @@ export const selectRemovableSmartEditTimelineMaterialIds = ({
   selectedTrackClips: SmartEditTrackSegment[];
 }): string[] =>
   selectedTrackClips.length > 1 &&
-  selectedTrackClips.every((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId))
+  canMoveSelectedSmartEditTimelineMaterials(selectedTrackClips, isTrackLocked)
     ? selectedTrackClips.map((trackClip) => trackClip.id)
     : [];
 
