@@ -96,6 +96,12 @@
     - Server HEAD: `afe318ef9b1db7ba8ba7478c63fc45c460c5b50a`.
     - Server API health and `https://shopclip.site/health`: returned `status: ok`.
     - `https://shopclip.site/#project` and `https://shopclip.site/#studio`: loaded without browser console errors, failed requests, or 4xx/5xx responses.
+- Current local follow-up cleanup after the deployed commit:
+  - Extracted Smart Edit timeline bookmark add/remove logic from `apps/web/src/features/edit/SmartEditPanel.tsx` into `apps/web/src/features/edit/SmartEditTimelineBookmarks.ts`.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTimelineBookmarks.test.ts` for sorted insertion with formatted labels, near-duplicate prevention, nearest-bookmark removal, and empty removal no-op behavior.
+  - `SmartEditPanel.tsx`: 3085 lines after this follow-up.
+  - Verification for this local bookmark cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditTimelineBookmarks.test.ts src/app/App.test.tsx`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-BM5x0BZe.js` at 604.77 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.

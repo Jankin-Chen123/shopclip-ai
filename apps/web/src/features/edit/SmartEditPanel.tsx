@@ -92,6 +92,11 @@ import {
   type SmartEditTimelineToolbarActions,
   type SmartEditTimelineToolbarState,
 } from "./SmartEditTimelineToolbar";
+import {
+  addSmartEditTimelineBookmark,
+  removeNearestSmartEditTimelineBookmark,
+  type SmartEditTimelineBookmark,
+} from "./SmartEditTimelineBookmarks";
 import { useSmartEditTimelinePanelResize } from "./useSmartEditTimelinePanelResize";
 import {
   addSmartEditTimelineElementsAudioVolumeKeyframeAtPlayhead,
@@ -172,7 +177,6 @@ import {
 import {
   MIN_SMART_EDIT_CLIP_SECONDS,
   TIMELINE_BASE_PX_PER_SECOND,
-  TIMELINE_SNAP_SECONDS,
   clampAudioVolume,
   clampPercentOffset,
   clampPlaybackRate,
@@ -222,12 +226,6 @@ interface SmartEditPanelProps {
 }
 
 const ENABLE_ADVANCED_VISUAL_CONTROLS = false;
-
-type SmartEditTimelineBookmark = {
-  id: string;
-  label: string;
-  second: number;
-};
 
 type SmartEditContextMenuState = {
   clipId?: string;
@@ -462,32 +460,21 @@ export const SmartEditPanel = ({
   const selectedTransform = selectedSegment ? transformForSegment(selectedSegment) : undefined;
   const addTimelineBookmarkAtPlayhead = () => {
     const second = snapTimelineSeconds(boundedPlayheadSeconds);
-    setTimelineBookmarks((current) => {
-      if (current.some((bookmark) => Math.abs(bookmark.second - second) < TIMELINE_SNAP_SECONDS)) {
-        return current;
-      }
-      return [
-        ...current,
-        {
-          id: `bookmark-${Date.now()}`,
-          label: formatTimelineTime(second),
-          second,
-        },
-      ].sort((left, right) => left.second - right.second);
-    });
+    setTimelineBookmarks((current) =>
+      addSmartEditTimelineBookmark({
+        bookmarks: current,
+        createId: () => `bookmark-${Date.now()}`,
+        second,
+      }),
+    );
   };
   const removeNearestTimelineBookmark = () => {
-    setTimelineBookmarks((current) => {
-      if (current.length === 0) {
-        return current;
-      }
-      const nearest = current.reduce((closest, bookmark) =>
-        Math.abs(bookmark.second - boundedPlayheadSeconds) < Math.abs(closest.second - boundedPlayheadSeconds)
-          ? bookmark
-          : closest,
-      );
-      return current.filter((bookmark) => bookmark.id !== nearest.id);
-    });
+    setTimelineBookmarks((current) =>
+      removeNearestSmartEditTimelineBookmark({
+        bookmarks: current,
+        second: boundedPlayheadSeconds,
+      }),
+    );
   };
   const openTimelineContextMenu = (
     event: ReactMouseEvent,
