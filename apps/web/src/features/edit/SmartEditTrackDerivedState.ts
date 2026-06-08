@@ -1,4 +1,4 @@
-import type { SmartEditPlan } from "@shopclip/shared";
+import type { SmartEditPlan, SmartEditSegment } from "@shopclip/shared";
 import type {
   SmartEditTrack,
   SmartEditTrackSegment,
@@ -90,6 +90,46 @@ export const selectSmartEditTimelineTextMaterialIds = (
   trackClips
     .filter((trackClip) => isSmartEditTextTimelineMaterial(trackClip))
     .map((trackClip) => trackClip.id);
+
+export type SmartEditClipboardCopySelection =
+  | {
+      ids: string[];
+      kind: "timeline-elements";
+    }
+  | {
+      ids: string[];
+      kind: "segments";
+    };
+
+export const selectSmartEditClipboardCopySelection = ({
+  isTrackLocked,
+  selectedSegments,
+  selectedTrackClips,
+}: {
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean;
+  selectedSegments: Array<Pick<SmartEditSegment, "id">>;
+  selectedTrackClips: SmartEditTrackSegment[];
+}): SmartEditClipboardCopySelection | undefined => {
+  const selectedTimelineMaterialIds = selectEditableSmartEditTimelineMaterialIds(
+    selectedTrackClips,
+    isTrackLocked,
+  );
+  if (selectedTimelineMaterialIds.length > 0) {
+    return {
+      ids: selectedTimelineMaterialIds,
+      kind: "timeline-elements",
+    };
+  }
+
+  if (selectedSegments.length > 0) {
+    return {
+      ids: selectedSegments.map((segment) => segment.id),
+      kind: "segments",
+    };
+  }
+
+  return undefined;
+};
 
 export const selectRemovableSmartEditTimelineMaterialIds = ({
   isTrackLocked,

@@ -4,6 +4,7 @@ import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
   hasSmartEditTimelineTextMaterials,
   selectRemovableSmartEditTimelineMaterialIds,
+  selectSmartEditClipboardCopySelection,
   selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
   smartEditTimelineTextMaterialCount,
@@ -102,5 +103,45 @@ describe("SmartEditTrackDerivedState", () => {
     expect(selectSmartEditTimelineMaterialAlignAnchorSecond(trackClips, "start")).toBe(1.1);
     expect(selectSmartEditTimelineMaterialAlignAnchorSecond(trackClips, "end")).toBe(6.5);
     expect(selectSmartEditTimelineMaterialAlignAnchorSecond([], "start")).toBeUndefined();
+  });
+
+  it("prefers editable timeline materials when choosing clipboard copy content", () => {
+    expect(
+      selectSmartEditClipboardCopySelection({
+        isTrackLocked: (trackId) => trackId === "bgm",
+        selectedSegments: [{ id: "scene-1" }],
+        selectedTrackClips: [
+          trackClip("caption-material"),
+          trackClip("scene-caption", { segmentId: "scene-1" }),
+          trackClip("bgm-material", { trackId: "bgm" }),
+        ],
+      }),
+    ).toEqual({
+      ids: ["caption-material"],
+      kind: "timeline-elements",
+    });
+  });
+
+  it("falls back to selected clips for clipboard copy when no editable material is selected", () => {
+    expect(
+      selectSmartEditClipboardCopySelection({
+        isTrackLocked: () => false,
+        selectedSegments: [{ id: "scene-1" }, { id: "scene-2" }],
+        selectedTrackClips: [trackClip("scene-caption", { segmentId: "scene-1" })],
+      }),
+    ).toEqual({
+      ids: ["scene-1", "scene-2"],
+      kind: "segments",
+    });
+  });
+
+  it("returns undefined when there is nothing to copy", () => {
+    expect(
+      selectSmartEditClipboardCopySelection({
+        isTrackLocked: () => false,
+        selectedSegments: [],
+        selectedTrackClips: [],
+      }),
+    ).toBeUndefined();
   });
 });
