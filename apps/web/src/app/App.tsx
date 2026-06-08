@@ -120,6 +120,7 @@ import {
   replaceAssetCategoryInLibrary,
 } from "./AppProjectLifecycleUtils";
 import {
+  appendProjectScript,
   appendProjectAsset,
   mergeImportedProjectAssets,
   removeProjectRenderTask,
@@ -1614,16 +1615,7 @@ export const App = ({
         setSelectedSceneId(generated.script.scenes[0]?.id);
         setDirtySceneIds(new Set());
         setAssetRecallCandidates([]);
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                scenes: generated.script.scenes,
-                scripts: [...current.scripts, generated.script],
-                status: "ready",
-              }
-            : current,
-        );
+        setProject((current) => appendProjectScript(current, generated.script));
         setIsProjectScriptComposerOpen(false);
         setProjectDetailTab("scripts");
       },
@@ -1660,16 +1652,7 @@ export const App = ({
       setSelectedSceneId(saved.script.scenes[0]?.id);
       setDirtySceneIds(new Set());
       setAssetRecallCandidates([]);
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              scenes: saved.script.scenes,
-              scripts: [...current.scripts, saved.script],
-              status: "ready",
-            }
-          : current,
-      );
+      setProject((current) => appendProjectScript(current, saved.script));
       setIsProjectScriptComposerOpen(false);
       setProjectDetailTab("scripts");
       refreshProjectHistory();
@@ -1694,16 +1677,7 @@ export const App = ({
         setSelectedSceneId(generated.script.scenes[0]?.id);
         setDirtySceneIds(new Set());
         setAssetRecallCandidates([]);
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                scenes: generated.script.scenes,
-                scripts: [...current.scripts, generated.script],
-                status: "ready",
-              }
-            : current,
-        );
+        setProject((current) => appendProjectScript(current, generated.script));
         setIsProjectScriptComposerOpen(false);
         setProjectDetailTab((current) => (current === "scripts" ? "scripts" : current));
         if (nextPage) {

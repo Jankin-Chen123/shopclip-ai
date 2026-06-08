@@ -4,12 +4,14 @@ import type {
   AssetProcessingEvent,
   AssetProcessingJob,
   AssetSlice,
+  Project,
   ScriptResult,
   StoryboardScene,
 } from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
 import {
+  appendProjectScript,
   appendProjectAsset,
   mergeImportedProjectAssets,
   removeProjectAssets,
@@ -25,6 +27,8 @@ const processingJob = (id: string, assetId: string): AssetProcessingJob =>
   ({ id, assetId }) as AssetProcessingJob;
 const scene = (id: string, assetId?: string): StoryboardScene =>
   ({ id, assetId }) as StoryboardScene;
+const script = (id: string, scenes: StoryboardScene[]): ScriptResult =>
+  ({ id, scenes }) as ScriptResult;
 
 describe("removeProjectAssets", () => {
   it("removes assets and slices while clearing scene asset references", () => {
@@ -59,6 +63,34 @@ describe("removeProjectAssets", () => {
 
   it("preserves an undefined project", () => {
     expect(removeProjectAssets(undefined, new Set(["asset-delete"]))).toBeUndefined();
+  });
+});
+
+describe("appendProjectScript", () => {
+  it("appends a generated script, promotes its scenes, and marks the project ready", () => {
+    const initialScript = script("script-existing", [scene("scene-existing")]);
+    const nextScript = script("script-new", [scene("scene-new-a"), scene("scene-new-b")]);
+    const project = {
+      scenes: initialScript.scenes,
+      scripts: [initialScript],
+      status: "draft" as Project["status"],
+    } as ProjectSnapshot;
+
+    const nextProject = appendProjectScript(project, nextScript);
+
+    expect(nextProject?.scenes.map((candidate) => candidate.id)).toEqual([
+      "scene-new-a",
+      "scene-new-b",
+    ]);
+    expect(nextProject?.scripts.map((candidate) => candidate.id)).toEqual([
+      "script-existing",
+      "script-new",
+    ]);
+    expect(nextProject?.status).toBe("ready");
+  });
+
+  it("preserves an undefined project", () => {
+    expect(appendProjectScript(undefined, script("script-new", []))).toBeUndefined();
   });
 });
 

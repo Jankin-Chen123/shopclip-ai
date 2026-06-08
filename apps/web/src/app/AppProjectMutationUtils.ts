@@ -73,6 +73,19 @@ export const removeProjectScript = (
       }
     : project;
 
+export const appendProjectScript = (
+  project: ProjectSnapshot | undefined,
+  script: ScriptResult,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        scenes: script.scenes,
+        scripts: [...project.scripts, script],
+        status: "ready",
+      }
+    : project;
+
 export const removeProjectAssets = (
   project: ProjectSnapshot | undefined,
   deletedAssetIds: Set<string>,
