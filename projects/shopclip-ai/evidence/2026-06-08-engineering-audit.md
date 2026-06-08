@@ -116,6 +116,12 @@
     - Server HEAD: `8f4e897b5ace517488fcc49c112638b157511e61`.
     - Server API health and `https://shopclip.site/health`: returned `status: ok`.
     - `https://shopclip.site/#project` and `https://shopclip.site/#studio`: loaded without browser console errors, failed requests, or 4xx/5xx responses.
+- Current local follow-up cleanup after the deployed commit:
+  - Extracted Smart Edit batch timeline-material removal eligibility and selected-material alignment anchor calculation from `apps/web/src/features/edit/SmartEditPanel.tsx` into `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for removable standalone material batches, scene/locked/single-selection guards, start-anchor selection, snapped end-anchor selection, and empty-selection fallback.
+  - `SmartEditPanel.tsx`: 3086 lines after this follow-up.
+  - Verification for this local track-derived-state cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditTrackDerivedState.test.ts src/app/App.test.tsx`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
+  - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-CdulQu6Q.js` at 605.08 kB minified.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.

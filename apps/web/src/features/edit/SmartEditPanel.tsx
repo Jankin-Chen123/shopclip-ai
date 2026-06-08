@@ -76,8 +76,10 @@ import {
   hasSmartEditTimelineTextMaterials,
   isSmartEditTimelineTrackLocked,
   linkedSmartEditTimelineElements,
+  selectRemovableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIds,
   selectSmartEditTimelineElementIdsWithToken,
+  selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
   selectSmartEditTrackClipIdsAtSecond,
   selectSmartEditTrackClipsById,
@@ -2224,15 +2226,14 @@ export const SmartEditPanel = ({
     if (isTimelineTrackLocked(selectedTrackClip.trackId)) {
       return;
     }
-    const selectedRemovableTrackClips =
-      selectedBatchTrackClips.length > 1 &&
-      selectedBatchTrackClips.every((trackClip) => !trackClip.segmentId && !isTimelineTrackLocked(trackClip.trackId))
-        ? selectedBatchTrackClips
-        : [];
-    if (selectedRemovableTrackClips.length > 1) {
+    const selectedRemovableTrackClipIds = selectRemovableSmartEditTimelineMaterialIds({
+      isTrackLocked: isTimelineTrackLocked,
+      selectedTrackClips: selectedBatchTrackClips,
+    });
+    if (selectedRemovableTrackClipIds.length > 1) {
       const nextPlan = removeSmartEditTimelineElementsFromTimeline(
         plan,
-        selectedRemovableTrackClips.map((trackClip) => trackClip.id),
+        selectedRemovableTrackClipIds,
         timelineEditMode,
       );
       if (nextPlan === plan) {
@@ -2395,14 +2396,13 @@ export const SmartEditPanel = ({
     if (selectedTimelineMaterials.length === 0) {
       return;
     }
-    const anchorSecond =
-      edge === "start"
-        ? Math.min(...selectedTimelineMaterials.map((trackClip) => trackClip.startSecond))
-        : Math.max(
-            ...selectedTimelineMaterials.map((trackClip) =>
-              snapTimelineSeconds(trackClip.startSecond + trackClip.durationSeconds),
-            ),
-          );
+    const anchorSecond = selectSmartEditTimelineMaterialAlignAnchorSecond(
+      selectedTimelineMaterials,
+      edge,
+    );
+    if (anchorSecond === undefined) {
+      return;
+    }
     const nextPlan = moveSmartEditTimelineElementsOnTimeline(
       plan,
       selectedTimelineMaterialIds,

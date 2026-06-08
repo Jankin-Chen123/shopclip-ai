@@ -91,6 +91,35 @@ export const selectSmartEditTimelineTextMaterialIds = (
     .filter((trackClip) => isSmartEditTextTimelineMaterial(trackClip))
     .map((trackClip) => trackClip.id);
 
+export const selectRemovableSmartEditTimelineMaterialIds = ({
+  isTrackLocked,
+  selectedTrackClips,
+}: {
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean;
+  selectedTrackClips: SmartEditTrackSegment[];
+}): string[] =>
+  selectedTrackClips.length > 1 &&
+  selectedTrackClips.every((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId))
+    ? selectedTrackClips.map((trackClip) => trackClip.id)
+    : [];
+
+export const selectSmartEditTimelineMaterialAlignAnchorSecond = (
+  trackClips: Pick<SmartEditTrackSegment, "durationSeconds" | "startSecond">[],
+  edge: "start" | "end",
+): number | undefined => {
+  if (trackClips.length === 0) {
+    return undefined;
+  }
+
+  return edge === "start"
+    ? Math.min(...trackClips.map((trackClip) => trackClip.startSecond))
+    : Math.max(
+        ...trackClips.map((trackClip) =>
+          snapTimelineSeconds(trackClip.startSecond + trackClip.durationSeconds),
+        ),
+      );
+};
+
 export const smartEditTimelineTextMaterialCount = (
   trackClips: SmartEditTrackSegment[],
 ): number => selectSmartEditTimelineTextMaterialIds(trackClips).length;

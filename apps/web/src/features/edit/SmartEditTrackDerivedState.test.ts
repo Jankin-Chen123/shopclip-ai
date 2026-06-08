@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
   hasSmartEditTimelineTextMaterials,
+  selectRemovableSmartEditTimelineMaterialIds,
+  selectSmartEditTimelineMaterialAlignAnchorSecond,
   selectSmartEditTimelineTextMaterialIds,
   smartEditTimelineTextMaterialCount,
 } from "./SmartEditTrackDerivedState";
@@ -51,5 +53,54 @@ describe("SmartEditTrackDerivedState", () => {
 
     expect(smartEditTimelineTextMaterialCount(trackClips)).toBe(0);
     expect(hasSmartEditTimelineTextMaterials(trackClips)).toBe(false);
+  });
+
+  it("selects removable standalone timeline material ids only when the whole batch is removable", () => {
+    const isTrackLocked = (trackId: string) => trackId === "bgm";
+
+    expect(
+      selectRemovableSmartEditTimelineMaterialIds({
+        isTrackLocked,
+        selectedTrackClips: [
+          trackClip("caption-1"),
+          trackClip("voice-1", { trackId: "voice" }),
+        ],
+      }),
+    ).toEqual(["caption-1", "voice-1"]);
+
+    expect(
+      selectRemovableSmartEditTimelineMaterialIds({
+        isTrackLocked,
+        selectedTrackClips: [
+          trackClip("caption-1"),
+          trackClip("scene-caption", { segmentId: "scene-1" }),
+        ],
+      }),
+    ).toEqual([]);
+
+    expect(
+      selectRemovableSmartEditTimelineMaterialIds({
+        isTrackLocked,
+        selectedTrackClips: [trackClip("caption-1"), trackClip("bgm-1", { trackId: "bgm" })],
+      }),
+    ).toEqual([]);
+
+    expect(
+      selectRemovableSmartEditTimelineMaterialIds({
+        isTrackLocked,
+        selectedTrackClips: [trackClip("single-caption")],
+      }),
+    ).toEqual([]);
+  });
+
+  it("selects the alignment anchor for selected timeline materials", () => {
+    const trackClips = [
+      trackClip("caption-1", { durationSeconds: 2.345, startSecond: 4.2 }),
+      trackClip("voice-1", { durationSeconds: 1.333, startSecond: 1.1, trackId: "voice" }),
+    ];
+
+    expect(selectSmartEditTimelineMaterialAlignAnchorSecond(trackClips, "start")).toBe(1.1);
+    expect(selectSmartEditTimelineMaterialAlignAnchorSecond(trackClips, "end")).toBe(6.5);
+    expect(selectSmartEditTimelineMaterialAlignAnchorSecond([], "start")).toBeUndefined();
   });
 });
