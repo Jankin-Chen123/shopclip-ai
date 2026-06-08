@@ -137,12 +137,14 @@ import {
   selectScriptReferenceAssets,
   selectScriptReferenceLibrary,
   selectScriptTemplateLibrary,
-  selectRenderedSmartEditSceneSegments,
   selectSmartEditAssetSlices,
-  selectSmartEditPlanSegmentOverrides,
   selectStudioAssets,
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
+import {
+  selectRenderedSmartEditSceneSegments,
+  selectSmartEditPlanSegmentOverrides,
+} from "./AppSmartEditRequest";
 import {
   createSmartEditResultFromCompletedSourceRender,
   isRenderTaskPollingActive,
