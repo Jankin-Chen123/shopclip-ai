@@ -79,7 +79,7 @@ import {
   selectSmartEditTrackClipSnapPoints,
   selectSmartEditTrackClipIdsAtSecond,
   selectSmartEditTrackClipsById,
-} from "./SmartEditTrackDerivedState";
+} from "./SmartEditTrackClipDerivedState";
 import {
   canMoveSelectedSmartEditTimelineMaterials,
   hasSmartEditTimelineTextMaterials,
