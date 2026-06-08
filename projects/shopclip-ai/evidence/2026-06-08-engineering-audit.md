@@ -9,11 +9,33 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `426ec932 Extract loaded project workspace state`.
+- Latest deployed optimization commit: `8621916 Extract project asset removal helper`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `8621916`:
+  - Extracted project asset removal mutation from `apps/web/src/app/App.tsx` into `removeProjectAssets` in `apps/web/src/app/AppProjectMutationUtils.ts`.
+  - Moved project `assets` filtering, `assetSlices` filtering, project scene `assetId` clearing, and script scene `assetId` clearing out of `handleDeleteAssets`.
+  - Kept asset library filtering, current script cleanup, asset prep cleanup, and search result cleanup in `App.tsx`.
+  - Added `apps/web/src/app/AppProjectMutationUtils.test.ts` covering asset/slice removal, scene reference clearing, script scene reference clearing, and undefined project preservation.
+  - Current file sizes:
+    - `App.tsx`: 2766 lines.
+    - `AppProjectMutationUtils.ts`: 106 lines.
+    - `AppProjectMutationUtils.test.ts`: 46 lines.
+    - `AppWorkspaceDerivedState.ts`: 189 lines.
+    - `SmartEditPanel.tsx`: 3099 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` failed before implementation because `removeProjectAssets` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/app/AppProjectMutationUtils.test.ts` passed, 2 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 456 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-D8qbSvMM.js` at 606.09 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `862191688d5259e9a9b48663c7f35260902137bd`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `426ec932`:
   - Extracted loaded-project workspace derivation from `apps/web/src/app/App.tsx` into `selectLoadedProjectWorkspaceState` in `apps/web/src/app/AppWorkspaceDerivedState.ts`.
   - Moved latest-script selection, initial script draft selection, selected scene selection, studio base render selection, and initial Smart Edit result selection out of `applyLoadedProject`.
