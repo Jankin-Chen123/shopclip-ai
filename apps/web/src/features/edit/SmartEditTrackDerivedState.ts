@@ -94,6 +94,15 @@ export const canMoveSelectedSmartEditTimelineMaterials = (
 ): boolean =>
   trackClips.every((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId));
 
+export const canResizeSelectedSmartEditTimelineMaterials = (
+  trackClips: SmartEditTrackSegment[],
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean,
+): boolean =>
+  trackClips.every(
+    (trackClip) =>
+      !trackClip.segmentId && trackClip.trackId !== "bgm" && !isTrackLocked(trackClip.trackId),
+  );
+
 export const selectSmartEditTrackClipIdsAtSecond = ({
   isTrackLocked,
   playheadSecond,
@@ -182,11 +191,7 @@ export const selectResizableSmartEditTimelineMaterialIdsOrUndefined = (
   trackClips: SmartEditTrackSegment[],
   isTrackLocked: (trackId: SmartEditTrackId) => boolean,
 ): string[] | undefined =>
-  trackClips.length > 1 &&
-  trackClips.every(
-    (trackClip) =>
-      !trackClip.segmentId && trackClip.trackId !== "bgm" && !isTrackLocked(trackClip.trackId),
-  )
+  trackClips.length > 1 && canResizeSelectedSmartEditTimelineMaterials(trackClips, isTrackLocked)
     ? trackClips.map((trackClip) => trackClip.id)
     : undefined;
 

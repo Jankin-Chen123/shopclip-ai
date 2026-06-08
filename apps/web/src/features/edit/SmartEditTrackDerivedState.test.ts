@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
   canMoveSelectedSmartEditTimelineMaterials,
+  canResizeSelectedSmartEditTimelineMaterials,
   hasSmartEditTimelineTextMaterials,
   selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined,
@@ -251,6 +252,41 @@ describe("SmartEditTrackDerivedState", () => {
 
     expect(
       canMoveSelectedSmartEditTimelineMaterials(
+        [trackClip("caption-1"), trackClip("voice-1", { trackId: "voice" })],
+        isTrackLocked,
+      ),
+    ).toBe(false);
+  });
+
+  it("reports whether a selected timeline material batch can resize together", () => {
+    const isTrackLocked = (trackId: string) => trackId === "voice";
+
+    expect(
+      canResizeSelectedSmartEditTimelineMaterials(
+        [
+          trackClip("caption-1"),
+          trackClip("video-1", { trackId: "video" }),
+        ],
+        isTrackLocked,
+      ),
+    ).toBe(true);
+
+    expect(
+      canResizeSelectedSmartEditTimelineMaterials(
+        [trackClip("caption-1"), trackClip("scene-caption", { segmentId: "scene-1" })],
+        isTrackLocked,
+      ),
+    ).toBe(false);
+
+    expect(
+      canResizeSelectedSmartEditTimelineMaterials(
+        [trackClip("caption-1"), trackClip("bgm-1", { trackId: "bgm" })],
+        isTrackLocked,
+      ),
+    ).toBe(false);
+
+    expect(
+      canResizeSelectedSmartEditTimelineMaterials(
         [trackClip("caption-1"), trackClip("voice-1", { trackId: "voice" })],
         isTrackLocked,
       ),
