@@ -8,6 +8,7 @@ import type {
   RenderTask,
   ScriptResult,
   StoryboardScene,
+  ViralTemplate,
 } from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
@@ -24,6 +25,7 @@ import {
   replaceProcessedProjectAsset,
   upsertProjectRenderTask,
   upsertProjectAsset,
+  upsertProjectViralTemplate,
 } from "./AppProjectMutationUtils";
 
 const asset = (id: string): AssetMetadata => ({ id }) as AssetMetadata;
@@ -40,6 +42,8 @@ const renderTask = (
   id: string,
   status: RenderTask["status"] = "running",
 ): RenderTask => ({ id, status }) as RenderTask;
+const viralTemplate = (templateId: string, title: string): ViralTemplate =>
+  ({ templateId, title }) as ViralTemplate;
 
 describe("removeProjectAssets", () => {
   it("removes assets and slices while clearing scene asset references", () => {
@@ -295,6 +299,49 @@ describe("single project asset mutations", () => {
       expect.objectContaining({ id: "asset-2", name: "Keep" }),
       expect.objectContaining({ id: "asset-1", name: "New" }),
     ]);
+  });
+});
+
+describe("upsertProjectViralTemplate", () => {
+  it("replaces an existing template by id before appending the latest version", () => {
+    const project = {
+      viralTemplates: [
+        viralTemplate("template-1", "Old"),
+        viralTemplate("template-2", "Keep"),
+      ],
+    } as ProjectSnapshot;
+
+    const nextProject = upsertProjectViralTemplate(
+      project,
+      viralTemplate("template-1", "New"),
+    );
+
+    expect(nextProject?.viralTemplates).toEqual([
+      expect.objectContaining({ templateId: "template-2", title: "Keep" }),
+      expect.objectContaining({ templateId: "template-1", title: "New" }),
+    ]);
+  });
+
+  it("appends a new template", () => {
+    const project = {
+      viralTemplates: [viralTemplate("template-1", "Existing")],
+    } as ProjectSnapshot;
+
+    const nextProject = upsertProjectViralTemplate(
+      project,
+      viralTemplate("template-2", "New"),
+    );
+
+    expect(nextProject?.viralTemplates.map((candidate) => candidate.templateId)).toEqual([
+      "template-1",
+      "template-2",
+    ]);
+  });
+
+  it("preserves an undefined project", () => {
+    expect(
+      upsertProjectViralTemplate(undefined, viralTemplate("template-1", "New")),
+    ).toBeUndefined();
   });
 });
 

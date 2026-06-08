@@ -7,6 +7,7 @@ import type {
   RenderTask,
   ScriptResult,
   StoryboardScene,
+  ViralTemplate,
 } from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "../lib/api";
@@ -209,6 +210,22 @@ export const upsertProjectAsset = (
         ...project,
         assets: [...project.assets.filter((candidate) => candidate.id !== asset.id), asset],
     }
+    : project;
+
+export const upsertProjectViralTemplate = (
+  project: ProjectSnapshot | undefined,
+  template: ViralTemplate,
+): ProjectSnapshot | undefined =>
+  project
+    ? {
+        ...project,
+        viralTemplates: [
+          ...project.viralTemplates.filter(
+            (candidate) => candidate.templateId !== template.templateId,
+          ),
+          template,
+        ],
+      }
     : project;
 
 export const replaceProcessedProjectAsset = (

@@ -138,6 +138,7 @@ import {
   replaceProjectScriptStoryboard,
   upsertProjectRenderTask,
   upsertProjectAsset,
+  upsertProjectViralTemplate,
 } from "./AppProjectMutationUtils";
 import {
   selectActiveAssetCategoryAssets,
@@ -1387,19 +1388,7 @@ export const App = ({
           templateName: `${project?.productName ?? brief.productName} viral template`,
         });
         setViralTemplateLibrary((current) => mergeTemplates([template], current));
-        setProject((current) =>
-          current
-            ? {
-                ...current,
-                viralTemplates: [
-                  ...current.viralTemplates.filter(
-                    (candidate) => candidate.templateId !== template.templateId,
-                  ),
-                  template,
-                ],
-              }
-            : current,
-        );
+        setProject((current) => upsertProjectViralTemplate(current, template));
         setSelectedTemplateIdForScript(template.templateId);
         setScriptProductionMode("template");
       },
