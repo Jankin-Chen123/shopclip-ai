@@ -13,11 +13,30 @@ import {
   getPreparedAssetsByBucket,
   getReferenceScriptAssets,
 } from "./AppProjectAssetUtils";
+import type { BackgroundTaskTarget } from "./useBackgroundTaskTracker";
 
 type AssetLibrarySnapshot = {
   assets: AssetMetadata[];
   assetSlices: AssetSlice[];
 };
+
+type CurrentBackgroundTaskTargetInput = BackgroundTaskTarget & {
+  projectDetailTab: BackgroundTaskTarget["projectDetailTab"];
+};
+
+export const selectCurrentBackgroundTaskTarget = ({
+  flow,
+  isProjectStudioMode,
+  page,
+  projectDetailTab,
+  section,
+}: CurrentBackgroundTaskTargetInput): BackgroundTaskTarget => ({
+  flow: isProjectStudioMode ? flow : undefined,
+  isProjectStudioMode,
+  page,
+  projectDetailTab: page === "project" ? projectDetailTab : undefined,
+  section,
+});
 
 export const selectActiveAssetCategoryAssets = (
   assets: AssetMetadata[],

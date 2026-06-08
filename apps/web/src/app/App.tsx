@@ -131,6 +131,7 @@ import {
 import {
   selectActiveAssetCategoryAssets,
   selectCreationUsableAssets,
+  selectCurrentBackgroundTaskTarget,
   selectHasPendingReferences,
   selectPreparedProjectAssetsByBucket,
   selectScriptReferenceAssets,
@@ -315,13 +316,14 @@ export const App = ({
   const isRenderPollInFlight = useRef(false);
   const text = copy[language];
   const currentBackgroundTaskTarget = useMemo<BackgroundTaskTarget>(
-    () => ({
-      flow: isProjectStudioMode ? projectStudioFlow : undefined,
-      isProjectStudioMode,
-      page: activePage,
-      projectDetailTab: activePage === "project" ? projectDetailTab : undefined,
-      section: activeSection,
-    }),
+    () =>
+      selectCurrentBackgroundTaskTarget({
+        flow: projectStudioFlow,
+        isProjectStudioMode,
+        page: activePage,
+        projectDetailTab,
+        section: activeSection,
+      }),
     [activePage, activeSection, isProjectStudioMode, projectDetailTab, projectStudioFlow],
   );
   const getBackgroundTaskText = useCallback(
