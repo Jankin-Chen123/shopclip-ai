@@ -9,11 +9,33 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `44f886c Extract timeline element derived state`.
+- Latest deployed optimization commit: `9ad004d Extract track presentation derived state`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `9ad004d`:
+  - Extracted track presentation derived state into `apps/web/src/features/edit/SmartEditTrackPresentationState.ts`.
+  - Moved track ID mapping, timeline track lookup, track presentation state, and track lock lookup out of `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Kept compatibility re-exports from `SmartEditTrackDerivedState.ts` while updating `apps/web/src/features/edit/SmartEditPanel.tsx` to import presentation helpers from the new module directly.
+  - Added `apps/web/src/features/edit/SmartEditTrackPresentationState.test.ts` covering editor-to-timeline track ID mapping, locked track lookup, timeline setting precedence, segment fallback state, and selectable material counts.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3097 lines.
+    - `SmartEditTrackDerivedState.ts`: 350 lines.
+    - `SmartEditTrackPresentationState.ts`: 47 lines.
+    - `SmartEditTimelineElementDerivedState.ts`: 88 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackPresentationState.test.ts` failed before implementation because `SmartEditTrackPresentationState` did not exist.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackPresentationState.test.ts src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 23 tests.
+    - `corepack pnpm test`: passed, 439 tests across shared/API/web.
+    - `corepack pnpm lint`: passed after removing the migrated unused `SmartEditPlan` import from `SmartEditTrackDerivedState.ts`.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-BoL2B-8u.js` at 605.56 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `9ad004ddee43d8595f391c8788259e60314817d1`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `44f886c`:
   - Extracted timeline-element-specific derived state into `apps/web/src/features/edit/SmartEditTimelineElementDerivedState.ts`.
   - Moved generated element ID selection, existing element ID selection, split text element selection, selected timeline element lookup, linked element lookup, text line counting, and relink eligibility out of `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
