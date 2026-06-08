@@ -53,3 +53,16 @@
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-08 Background Task Target Restore Batch
+
+- Scope:
+  - Fixes background task item clicks returning to the deprecated studio interface instead of the page where the task was started.
+- Fix:
+  - Extended background task targets to remember whether the task started in project studio mode.
+  - Persisted the project studio flow on the task target when applicable.
+  - Restored `isProjectStudioMode` and `projectStudioFlow` before navigating to the task target page.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web typecheck`
+  - `corepack pnpm --filter @shopclip/web build`
+  - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.

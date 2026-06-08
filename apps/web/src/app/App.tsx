@@ -408,6 +408,7 @@ type BackgroundTaskKind =
 
 interface BackgroundTaskTarget {
   flow?: ProjectStudioFlow;
+  isProjectStudioMode?: boolean;
   page: WorkspacePageId;
   projectDetailTab?: ProjectDetailTab;
   section: WorkspaceSectionId;
@@ -1021,6 +1022,8 @@ export const App = ({
           ? "settings"
           : "create";
   const getCurrentBackgroundTaskTarget = (): BackgroundTaskTarget => ({
+    flow: isProjectStudioMode ? projectStudioFlow : undefined,
+    isProjectStudioMode,
     page: activePage,
     projectDetailTab: activePage === "project" ? projectDetailTab : undefined,
     section: activeSection,
@@ -3358,7 +3361,10 @@ export const App = ({
     if (trackedTask.target.projectDetailTab) {
       setProjectDetailTab(trackedTask.target.projectDetailTab);
     }
-    setIsProjectStudioMode(false);
+    setIsProjectStudioMode(Boolean(trackedTask.target.isProjectStudioMode));
+    if (trackedTask.target.flow) {
+      setProjectStudioFlow(trackedTask.target.flow);
+    }
     handlePageChange(trackedTask.target.page);
   };
 
