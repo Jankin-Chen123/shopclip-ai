@@ -9,11 +9,33 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `9ad004d Extract track presentation derived state`.
+- Latest deployed optimization commit: `04f3e68 Extract timeline material derived state`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `04f3e68`:
+  - Extracted timeline-material-specific derived state into `apps/web/src/features/edit/SmartEditTimelineMaterialDerivedState.ts`.
+  - Moved editable/movable/resizable material selection, text material selection/counting, mergeability, clipboard copy selection, removable/resizable batch selection, and align anchor selection out of `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Kept compatibility re-exports from `SmartEditTrackDerivedState.ts` while updating `apps/web/src/features/edit/SmartEditPanel.tsx` to import material helpers from the new module directly.
+  - Added `apps/web/src/features/edit/SmartEditTimelineMaterialDerivedState.test.ts` covering editable material filtering, move/resize eligibility, clipboard selection priority, and align anchor selection.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3099 lines.
+    - `SmartEditTrackDerivedState.ts`: 221 lines.
+    - `SmartEditTimelineMaterialDerivedState.ts`: 151 lines.
+    - `SmartEditTrackPresentationState.ts`: 47 lines.
+    - `SmartEditTimelineElementDerivedState.ts`: 88 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineMaterialDerivedState.test.ts` failed before implementation because `SmartEditTimelineMaterialDerivedState` did not exist.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineMaterialDerivedState.test.ts src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 24 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 443 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-BtYgriT4.js` at 605.56 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `04f3e68bddefd3e9bbe5cf5868e83cc2119b5c0b`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `9ad004d`:
   - Extracted track presentation derived state into `apps/web/src/features/edit/SmartEditTrackPresentationState.ts`.
   - Moved track ID mapping, timeline track lookup, track presentation state, and track lock lookup out of `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
