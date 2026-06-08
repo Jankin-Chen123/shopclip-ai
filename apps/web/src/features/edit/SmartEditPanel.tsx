@@ -80,6 +80,7 @@ import {
   isSmartEditTimelineTrackLocked,
   linkedSmartEditTimelineElements,
   selectRemovableSmartEditTimelineMaterialIds,
+  selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined as selectEditableTimelineMaterialIdsOrUndefined,
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
@@ -2387,9 +2388,9 @@ export const SmartEditPanel = ({
     if (!selectedTimelineMaterialIds) {
       return;
     }
-    const selectedIds = new Set(selectedTimelineMaterialIds);
-    const selectedTimelineMaterials = selectedBatchTrackClips.filter((trackClip) =>
-      selectedIds.has(trackClip.id),
+    const selectedTimelineMaterials = selectEditableSmartEditTimelineMaterials(
+      selectedBatchTrackClips,
+      isTimelineTrackLocked,
     );
     if (selectedTimelineMaterials.length === 0) {
       return;

@@ -58,13 +58,18 @@ export const selectSmartEditTrackClipsById = (
 export const isSmartEditTextTimelineMaterial = (trackClip: SmartEditTrackSegment): boolean =>
   !trackClip.segmentId && trackClip.trackId === "caption";
 
+export const selectEditableSmartEditTimelineMaterials = (
+  trackClips: SmartEditTrackSegment[],
+  isTrackLocked: (trackId: SmartEditTrackId) => boolean,
+): SmartEditTrackSegment[] =>
+  trackClips.filter((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId));
+
 export const selectEditableSmartEditTimelineMaterialIds = (
   trackClips: SmartEditTrackSegment[],
   isTrackLocked: (trackId: SmartEditTrackId) => boolean,
-): string[] =>
-  trackClips
-    .filter((trackClip) => !trackClip.segmentId && !isTrackLocked(trackClip.trackId))
-    .map((trackClip) => trackClip.id);
+): string[] => selectEditableSmartEditTimelineMaterials(trackClips, isTrackLocked).map(
+  (trackClip) => trackClip.id,
+);
 
 export const selectEditableSmartEditTimelineMaterialIdsOrUndefined = (
   trackClips: SmartEditTrackSegment[],

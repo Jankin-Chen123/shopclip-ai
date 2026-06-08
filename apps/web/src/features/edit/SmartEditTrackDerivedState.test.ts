@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
   hasSmartEditTimelineTextMaterials,
+  selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined,
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectRemovableSmartEditTimelineMaterialIds,
@@ -121,6 +122,22 @@ describe("SmartEditTrackDerivedState", () => {
     ).toBeUndefined();
 
     expect(selectEditableSmartEditTimelineMaterialIdsOrUndefined([], isTrackLocked)).toBeUndefined();
+  });
+
+  it("selects editable timeline materials for commands that need clip timing", () => {
+    const isTrackLocked = (trackId: string) => trackId === "bgm";
+
+    expect(
+      selectEditableSmartEditTimelineMaterials(
+        [
+          trackClip("caption-material", { startSecond: 3 }),
+          trackClip("scene-caption", { segmentId: "scene-1", startSecond: 1 }),
+          trackClip("bgm-material", { startSecond: 2, trackId: "bgm" }),
+          trackClip("voice-material", { startSecond: 4, trackId: "voice" }),
+        ],
+        isTrackLocked,
+      ).map((trackClip) => trackClip.id),
+    ).toEqual(["caption-material", "voice-material"]);
   });
 
   it("returns movable timeline material ids only when selected materials can move", () => {
