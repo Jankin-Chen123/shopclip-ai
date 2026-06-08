@@ -9,11 +9,31 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `79badc0 Reuse movable material guard for removals`.
+- Latest deployed optimization commit: `85fa0b7 Extract resizable material batch guard`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `85fa0b7`:
+  - Extracted selected Smart Edit timeline material batch resize eligibility into `canResizeSelectedSmartEditTimelineMaterials` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
+  - Reused that guard in `selectResizableSmartEditTimelineMaterialIdsOrUndefined`, leaving the selector focused on the multi-selection and ID-return contract.
+  - Added focused coverage in `apps/web/src/features/edit/SmartEditTrackDerivedState.test.ts` for resizable batches, scene material exclusion, bgm exclusion, and locked track exclusion.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3093 lines.
+    - `SmartEditTrackDerivedState.ts`: 422 lines.
+    - `SmartEditSegmentDerivedState.ts`: 119 lines.
+    - `App.tsx`: 2818 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because `canResizeSelectedSmartEditTimelineMaterials` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` passed, 15 tests.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm test`: passed, 426 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-BMjGsFDF.js` at 605.18 kB minified.
+    - `git diff --check`: passed.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `85fa0b77b74d525991555a5043ba463b2981dae9`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `79badc0`:
   - Reused `canMoveSelectedSmartEditTimelineMaterials` inside `selectRemovableSmartEditTimelineMaterialIds` in `apps/web/src/features/edit/SmartEditTrackDerivedState.ts`.
   - Removed the duplicated inline standalone-material and locked-track batch predicate from the removable timeline material selector.
