@@ -83,6 +83,7 @@ import {
   linkedSmartEditTimelineElements,
   selectRemovableSmartEditTimelineMaterialIds,
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
+  selectSelectedSmartEditTrackClipBatchIds,
   selectEditableSmartEditTimelineMaterials,
   selectEditableSmartEditTimelineMaterialIds,
   selectEditableSmartEditTimelineMaterialIdsOrUndefined as selectEditableTimelineMaterialIdsOrUndefined,
@@ -1966,10 +1967,11 @@ export const SmartEditPanel = ({
     window.setTimeout(() => {
       suppressTimelineMoveClickRef.current = false;
     }, 0);
-    const selectedMoveIds =
-      selectedTrackClipIds.length > 1 && selectedTrackClipIdSet.has(trackClipMoveDrag.trackClip.id)
-        ? selectedTrackClipIds
-        : [];
+    const selectedMoveIds = selectSelectedSmartEditTrackClipBatchIds({
+      selectedTrackClipIds,
+      selectedTrackClipIdSet,
+      targetTrackClipId: trackClipMoveDrag.trackClip.id,
+    });
     const nextPlan =
       selectedMoveIds.length > 1 &&
       canMoveSelectedSmartEditTimelineMaterials(selectedBatchTrackClips, isTimelineTrackLocked)
@@ -2003,10 +2005,11 @@ export const SmartEditPanel = ({
     if (!plan || trackClip.trackId === "bgm" || isTimelineTrackLocked(trackClip.trackId)) {
       return;
     }
-    const selectedResizeIds =
-      selectedTrackClipIds.length > 1 && selectedTrackClipIdSet.has(trackClip.id)
-        ? selectedTrackClipIds
-        : [];
+    const selectedResizeIds = selectSelectedSmartEditTrackClipBatchIds({
+      selectedTrackClipIds,
+      selectedTrackClipIdSet,
+      targetTrackClipId: trackClip.id,
+    });
     const resizableSelectedIds =
       selectedResizeIds.length > 1
         ? selectResizableSmartEditTimelineMaterialIdsOrUndefined(

@@ -13,6 +13,7 @@ import {
   selectMovableSmartEditTimelineMaterialIdsOrUndefined,
   selectRemovableSmartEditTimelineMaterialIds,
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
+  selectSelectedSmartEditTrackClipBatchIds,
   selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTrackClipSnapPoints,
@@ -306,6 +307,32 @@ describe("SmartEditTrackDerivedState", () => {
         isTrackLocked,
       ),
     ).toBe(false);
+  });
+
+  it("returns selected batch ids only when the target clip is part of a multi-selection", () => {
+    expect(
+      selectSelectedSmartEditTrackClipBatchIds({
+        selectedTrackClipIdSet: new Set(["caption-1", "voice-1"]),
+        selectedTrackClipIds: ["caption-1", "voice-1"],
+        targetTrackClipId: "voice-1",
+      }),
+    ).toEqual(["caption-1", "voice-1"]);
+
+    expect(
+      selectSelectedSmartEditTrackClipBatchIds({
+        selectedTrackClipIdSet: new Set(["caption-1", "voice-1"]),
+        selectedTrackClipIds: ["caption-1", "voice-1"],
+        targetTrackClipId: "missing",
+      }),
+    ).toEqual([]);
+
+    expect(
+      selectSelectedSmartEditTrackClipBatchIds({
+        selectedTrackClipIdSet: new Set(["caption-1"]),
+        selectedTrackClipIds: ["caption-1"],
+        targetTrackClipId: "caption-1",
+      }),
+    ).toEqual([]);
   });
 
   it("keeps locked track clips out of selected trim previews", () => {
