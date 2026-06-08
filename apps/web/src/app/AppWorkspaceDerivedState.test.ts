@@ -7,6 +7,7 @@ import type {
 import type { ProjectSnapshot } from "../lib/api";
 import {
   selectCurrentBackgroundTaskTarget,
+  selectWorkspaceAssetRefreshAction,
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
 
@@ -94,5 +95,52 @@ describe("selectWorkspaceScenes", () => {
 
   it("returns an empty scene list without script or project scenes", () => {
     expect(selectWorkspaceScenes(undefined, undefined)).toEqual([]);
+  });
+});
+
+describe("selectWorkspaceAssetRefreshAction", () => {
+  it("refreshes references and templates for the template asset library", () => {
+    expect(
+      selectWorkspaceAssetRefreshAction({
+        activeAssetCategory: "template",
+        activePage: "assets",
+      }),
+    ).toEqual({ type: "reference", includeTemplates: true });
+  });
+
+  it("refreshes the selected category on non-template asset library pages", () => {
+    expect(
+      selectWorkspaceAssetRefreshAction({
+        activeAssetCategory: "image",
+        activePage: "assets",
+      }),
+    ).toEqual({ type: "asset", category: "image" });
+  });
+
+  it("refreshes all reusable assets for inspiration", () => {
+    expect(
+      selectWorkspaceAssetRefreshAction({
+        activeAssetCategory: "video",
+        activePage: "inspiration",
+      }),
+    ).toEqual({ type: "asset", category: "all" });
+  });
+
+  it("uses the creation-page asset refresh category for create pages", () => {
+    expect(
+      selectWorkspaceAssetRefreshAction({
+        activeAssetCategory: "audio",
+        activePage: "create",
+      }),
+    ).toEqual({ type: "asset", category: "all" });
+  });
+
+  it("does not refresh an asset library for project pages", () => {
+    expect(
+      selectWorkspaceAssetRefreshAction({
+        activeAssetCategory: "image",
+        activePage: "project",
+      }),
+    ).toEqual({ type: "none" });
   });
 });

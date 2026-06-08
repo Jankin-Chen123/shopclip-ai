@@ -8,8 +8,14 @@ import type {
 } from "@shopclip/shared";
 
 import { assetMatchesCategory, type AssetCategory } from "../features/assets/AssetCategoryTabs";
-import type { ProjectSnapshot } from "../lib/api";
-import { hasActivePendingReferenceAnalysis, mergeReferences, mergeTemplates } from "./AppSetupUtils";
+import type { WorkspacePageId } from "../components/layout/AppShell";
+import type { AssetLibraryCategory, ProjectSnapshot } from "../lib/api";
+import {
+  getCreationAssetLibraryRefreshCategory,
+  hasActivePendingReferenceAnalysis,
+  mergeReferences,
+  mergeTemplates,
+} from "./AppSetupUtils";
 import {
   getCreationUsableAssets,
   getPreparedAssetsByBucket,
@@ -26,6 +32,11 @@ type CurrentBackgroundTaskTargetInput = BackgroundTaskTarget & {
   projectDetailTab: BackgroundTaskTarget["projectDetailTab"];
 };
 
+export type WorkspaceAssetRefreshAction =
+  | { type: "asset"; category: AssetLibraryCategory }
+  | { type: "reference"; includeTemplates: true }
+  | { type: "none" };
+
 export const selectCurrentBackgroundTaskTarget = ({
   flow,
   isProjectStudioMode,
@@ -39,6 +50,26 @@ export const selectCurrentBackgroundTaskTarget = ({
   projectDetailTab: page === "project" ? projectDetailTab : undefined,
   section,
 });
+
+export const selectWorkspaceAssetRefreshAction = ({
+  activeAssetCategory,
+  activePage,
+}: {
+  activeAssetCategory: AssetCategory;
+  activePage: WorkspacePageId;
+}): WorkspaceAssetRefreshAction => {
+  if (activePage === "assets") {
+    return activeAssetCategory === "template"
+      ? { type: "reference", includeTemplates: true }
+      : { type: "asset", category: activeAssetCategory };
+  }
+
+  const creationAssetLibraryRefreshCategory =
+    activePage === "inspiration" ? "all" : getCreationAssetLibraryRefreshCategory(activePage);
+  return creationAssetLibraryRefreshCategory
+    ? { type: "asset", category: creationAssetLibraryRefreshCategory }
+    : { type: "none" };
+};
 
 export const selectWorkspaceScenes = (
   script: ScriptResult | undefined,

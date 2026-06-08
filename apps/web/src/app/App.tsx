@@ -104,7 +104,6 @@ import {
   createScriptGenerationRequestPayload,
   defaultBrief,
   defaultMediaSettings,
-  getCreationAssetLibraryRefreshCategory,
   isCreationPage,
   localizeDefaultAssetDraft,
   mergeReferences,
@@ -139,6 +138,7 @@ import {
   selectScriptTemplateLibrary,
   selectSmartEditAssetSlices,
   selectStudioAssets,
+  selectWorkspaceAssetRefreshAction,
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
 import {
@@ -614,19 +614,11 @@ export const App = ({
   };
 
   useEffect(() => {
-    if (activePage === "assets") {
-      if (activeAssetCategory === "template") {
-        refreshReferenceLibrary({ includeTemplates: true });
-        return;
-      }
-      refreshAssetLibrary(activeAssetCategory);
-      return;
-    }
-
-    const creationAssetLibraryRefreshCategory =
-      activePage === "inspiration" ? "all" : getCreationAssetLibraryRefreshCategory(activePage);
-    if (creationAssetLibraryRefreshCategory) {
-      refreshAssetLibrary(creationAssetLibraryRefreshCategory);
+    const refreshAction = selectWorkspaceAssetRefreshAction({ activeAssetCategory, activePage });
+    if (refreshAction.type === "reference") {
+      refreshReferenceLibrary({ includeTemplates: refreshAction.includeTemplates });
+    } else if (refreshAction.type === "asset") {
+      refreshAssetLibrary(refreshAction.category);
     }
   }, [activePage, activeAssetCategory]);
 
