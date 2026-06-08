@@ -9,7 +9,7 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `85f95af Extract Smart Edit timeline bookmarks`.
+- Latest deployed optimization commit: `8f4e897 Extract Smart Edit materialization selectors`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
@@ -106,12 +106,16 @@
     - Server HEAD: `85f95af7d6a0459ca42e32e45a7ac9fb6b5b3ef9`.
     - Server API health and `https://shopclip.site/health`: returned `status: ok`.
     - `https://shopclip.site/#project` and `https://shopclip.site/#studio`: loaded without browser console errors, failed requests, or 4xx/5xx responses.
-- Current local follow-up cleanup after the deployed commit:
+- Recent deployed cleanup at `8f4e897`:
   - Extracted Smart Edit rendered-scene materialization target selection and newly materialized timeline element selection from `apps/web/src/features/edit/SmartEditPanel.tsx` into `apps/web/src/features/edit/SmartEditMaterialization.ts`.
   - Added focused coverage in `apps/web/src/features/edit/SmartEditMaterialization.test.ts` for selected-materializable priority, all-materializable fallback, empty selection fallback, token-suffixed timeline element selection, and absent timeline fallback.
   - `SmartEditPanel.tsx`: 3086 lines after this follow-up.
   - Verification for this local materialization cleanup: `corepack pnpm --filter @shopclip/web test -- src/features/edit/SmartEditMaterialization.test.ts src/app/App.test.tsx`, `corepack pnpm --filter @shopclip/web typecheck`, and `corepack pnpm --filter @shopclip/web lint` all passed.
   - Full local gate for this cleanup: `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`, `corepack pnpm build`, `git diff --check`, and `git ls-files .agents/memory` passed. The build still reports the existing Vite chunk-size warning, now for `assets/index-CiSf-uAp.js` at 604.93 kB minified.
+  - Production verification after deployment:
+    - Server HEAD: `8f4e897b5ace517488fcc49c112638b157511e61`.
+    - Server API health and `https://shopclip.site/health`: returned `status: ok`.
+    - `https://shopclip.site/#project` and `https://shopclip.site/#studio`: loaded without browser console errors, failed requests, or 4xx/5xx responses.
 - Remaining risks:
   - `SmartEditPanel.tsx` is still the largest frontend maintenance hotspot, even after the major split.
   - `App.tsx` still owns broad workspace orchestration.
