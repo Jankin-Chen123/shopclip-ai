@@ -355,3 +355,42 @@ This section is the current source-of-truth addendum because earlier parts of th
 - `apps/web/src/features/edit/SmartEditPanel.tsx` is about 11268 lines and should be split after tests remain green. Start by extracting pure timeline helpers and types.
 - `apps/api/src/modules/projects/router.ts` is about 4588 lines and should be split conservatively into focused service/helper modules before route-level moves.
 - `apps/web/src/app/App.tsx` is about 3832 lines and still mixes routing, project state orchestration, background tasks, and page composition.
+
+## 2026-06-09 Optimization Sync Addendum
+
+This addendum supersedes the 2026-06-08 engineering audit section where the two sections conflict. It does not add final contest submission material.
+
+### Current Branch And Deployment
+
+- Active optimization branch: `codex/shopclip-optimization-cleanup`.
+- Latest branch documentation sync commit: `9755442 Sync audit after script template deployment`.
+- Latest deployed runtime commit: `107a87255b1bdc95e60a54d7ae025a19ebc593d9` (`Extract script template route service`).
+- Live public URL now exists at `https://shopclip.site`; `/health` returns `{"service":"api","status":"ok","version":"0.1.0"}`.
+
+### Actual Current State
+
+- P0/P1 implementation is materially present and covered by current tests and production smoke checks.
+- The current source-of-truth engineering log is `projects/shopclip-ai/evidence/2026-06-08-engineering-audit.md`.
+- Older handoff notes that say no live public URL exists are stale; the production deployment target is now `shopclip.site`.
+- Part 016 remains conservatively not marked `Done` in its part file because the broader OpenCut-like editor objective still calls out direct deployed timeline validation as a residual item, even though API/web tests and production `#studio` smoke checks pass.
+- Part 002 remains implementation-complete but local PostgreSQL migration application is environment-dependent unless a local PostgreSQL service is available.
+
+### Fresh Verification For This Sync
+
+- `.\node_modules\.bin\vitest.CMD run src/modules/projects/scriptTemplateRouteService.test.ts src/providers/ai/scriptTemplateExtractionProvider.test.ts src/p0-flow.test.ts src/p1-flow.test.ts`: passed, 36 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 543 tests total: shared 26, API 206, web 311.
+- `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+- Production deploy of runtime commit `107a872` completed on `/www/wwwroot/shopclip-ai`; PM2 `shopclip-ai-api` is online.
+- Production Playwright smoke check for `https://shopclip.site/#project` and `https://shopclip.site/#studio` reported no console errors, request failures, or 4xx/5xx responses.
+- `git diff --check`: passed before both the runtime commit and the audit sync commit.
+- `git ls-files .agents/memory`: empty.
+
+### Current Structure Risks
+
+- `apps/web/src/app/App.test.tsx`: 7255 lines. This is mostly test coverage and lower runtime risk, but it is difficult to maintain.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2969 lines. It remains the largest runtime UI module and the next best cleanup target after the API router pass.
+- `apps/web/src/app/App.tsx`: 2385 lines. It is improved from the stale audit number but still mixes routing, project state orchestration, background tasks, and page composition.
+- `apps/api/src/modules/projects/router.ts`: 1935 lines. The recent optimization pass reduced it by extracting asset resolution, request preparation, storyboard route flow, script provider orchestration, prompt context resolution, draft route handling, and template extraction into focused tested services.
+- `apps/web/src/features/edit/SmartEditTimelineElementOperations.ts`: 2293 lines and `apps/api/src/providers/renderer/smartEditComposer.ts`: 2002 lines remain large enough to justify focused follow-up extraction if more optimization time is available.
