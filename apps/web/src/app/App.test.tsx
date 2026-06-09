@@ -721,6 +721,67 @@ describe("App", () => {
     expect(markup).toContain("https://cdn.example.test/scene-1.mp4");
   });
 
+  it("keeps materialized scene clips visible below the final export preview", () => {
+    const markup = renderToStaticMarkup(
+      <RenderPanel
+        copy={copy.en.render}
+        disabled={false}
+        forceRenderFailure={false}
+        isExporting={false}
+        isRendering={false}
+        mediaSettings={{
+          bgmTrack: "creator-pop",
+          subtitleStyle: "clean-lower-third",
+          subtitlesEnabled: true,
+          ttsVoice: "clear-host",
+        }}
+        onExport={() => undefined}
+        onForceFailureChange={() => undefined}
+        onMediaSettingsChange={() => undefined}
+        onRefreshRender={() => undefined}
+        onRetryRender={() => undefined}
+        onStartRender={() => undefined}
+        onVideoSettingsChange={() => undefined}
+        renderTask={{
+          id: "render-1",
+          projectId: "project-1",
+          status: "completed",
+          progress: 100,
+          provider: "volcengine-seedance",
+          previewUrl: "https://cdn.example.test/scene-1.mp4",
+          exportUrl: "https://cos.example.test/export.mp4",
+          sceneClips: [
+            {
+              sceneId: "scene-1",
+              order: 1,
+              subtitle: "Hook",
+              status: "completed",
+              progress: 100,
+              videoUrl:
+                "https://ark-content-generation-cn-beijing.tos-cn-beijing.volces.com/long-provider-url.mp4?Signature=secret",
+              material: {
+                materializedAt: "2026-05-28T00:00:00.000Z",
+                status: "ready",
+                text: "Hook",
+                videoOnlyUrl: "https://cos.example.test/render-1/scene-1-video-only.mp4",
+              },
+            },
+          ],
+          createdAt: "2026-05-28T00:00:00.000Z",
+          updatedAt: "2026-05-28T00:00:00.000Z",
+        }}
+        traceEvents={[]}
+        videoSettings={defaultVideoSettings}
+      />,
+    );
+
+    expect(markup).toContain("Ready to download");
+    expect(markup).toContain("Scene clip previews");
+    expect(markup).toContain("https://cos.example.test/export.mp4");
+    expect(markup).toContain("https://cos.example.test/render-1/scene-1-video-only.mp4");
+    expect(markup).not.toContain("Signature=secret");
+  });
+
   it("keeps step 04 user-facing output free of raw provider URLs and trace noise", () => {
     const markup = renderToStaticMarkup(
       <RenderPanel

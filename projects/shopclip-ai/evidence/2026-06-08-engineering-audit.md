@@ -23,6 +23,21 @@
   - `corepack pnpm --filter @shopclip/api test`: passed, 55 files and 273 tests.
   - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
 
+## 2026-06-10 Render Panel Scene Clip Visibility Fix
+
+- Follow-up issue:
+  - The render API correctly generated and materialized all Seedance scene clips, but the Step 04 render panel showed only the final composed export when `renderTask.exportUrl` existed.
+  - This made a completed 3-scene render look like only one scene video had been generated.
+- Fix:
+  - Updated `apps/web/src/features/render/RenderPanel.tsx` to show the final export preview and, beneath it, materialized per-scene clip previews.
+  - Added `SceneClipPreviewGrid` to avoid duplicating scene-card JSX.
+  - When a final export exists, scene clip preview URLs are limited to materialized COS `material.videoOnlyUrl` values so raw Ark provider signed URLs are not exposed in the UI.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx`: passed, 20 files and 318 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/web lint`: passed.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-DykKICBL.js` at 607.73 kB minified.
+
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
