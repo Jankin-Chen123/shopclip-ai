@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SmartEditPlan } from "@shopclip/shared";
 import type { SmartEditTrack, SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import {
+  buildSmartEditTrackLabels,
   isSmartEditTimelineTrackLocked,
   smartEditTimelineTrackIdForTrack,
   smartEditTrackPresentationState,
@@ -29,6 +30,24 @@ const planWithTimeline = (timeline: NonNullable<SmartEditPlan["timeline"]>): Sma
   }) as SmartEditPlan;
 
 describe("SmartEditTrackPresentationState", () => {
+  it("builds localized track labels by editor track id", () => {
+    expect(
+      buildSmartEditTrackLabels({
+        bgmTrack: "Music",
+        captionTrack: "Captions",
+        sourceAudioTrack: "Source audio",
+        videoTrack: "Video",
+        voiceTrack: "Voice",
+      }),
+    ).toEqual({
+      bgm: "Music",
+      caption: "Captions",
+      sourceAudio: "Source audio",
+      video: "Video",
+      voice: "Voice",
+    });
+  });
+
   it("maps editor track ids to Smart Edit timeline track ids", () => {
     expect(smartEditTimelineTrackIdForTrack("sourceAudio")).toBe("audio-source");
     expect(smartEditTimelineTrackIdForTrack("caption")).toBe("text-copy");

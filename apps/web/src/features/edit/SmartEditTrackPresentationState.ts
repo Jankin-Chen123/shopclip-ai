@@ -1,8 +1,22 @@
 import type { SmartEditPlan } from "@shopclip/shared";
+import type { AppCopy } from "../../app/i18n";
 import { buildSmartEditTimeline } from "./SmartEditSegmentOperations";
 import type { SmartEditTrack } from "./SmartEditTimelineOperations";
 import { selectSmartEditTimelineElementIdsForTrack } from "./SmartEditTimelineElementOperations";
 import type { SmartEditTrackId } from "./SmartEditTrackUtils";
+
+export const buildSmartEditTrackLabels = (
+  copy: Pick<
+    AppCopy["smartEdit"],
+    "bgmTrack" | "captionTrack" | "sourceAudioTrack" | "videoTrack" | "voiceTrack"
+  >,
+): Record<SmartEditTrackId, string> => ({
+  bgm: copy.bgmTrack,
+  caption: copy.captionTrack,
+  sourceAudio: copy.sourceAudioTrack,
+  video: copy.videoTrack,
+  voice: copy.voiceTrack,
+});
 
 export const smartEditTimelineTrackIdForTrack = (trackId: SmartEditTrackId): string =>
   trackId === "sourceAudio"

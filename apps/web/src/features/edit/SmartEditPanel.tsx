@@ -95,6 +95,7 @@ import {
   smartEditTimelineTextMaterialCount,
 } from "./SmartEditTimelineMaterialDerivedState";
 import {
+  buildSmartEditTrackLabels,
   isSmartEditTimelineTrackLocked,
   smartEditTimelineTrackIdForTrack,
   smartEditTrackPresentationState,
@@ -707,13 +708,7 @@ export const SmartEditPanel = ({
     () => canRelinkSmartEditTimelineElement(plan, selectedTimelineElement),
     [plan, selectedTimelineElement],
   );
-  const trackLabels = {
-    bgm: copy.bgmTrack,
-    caption: copy.captionTrack,
-    sourceAudio: copy.sourceAudioTrack,
-    video: copy.videoTrack,
-    voice: copy.voiceTrack,
-  } as const;
+  const trackLabels = buildSmartEditTrackLabels(copy);
   const timelineTrackIdForTrack = smartEditTimelineTrackIdForTrack;
   const trackPresentationState = (track: SmartEditTrack) =>
     smartEditTrackPresentationState({ plan, track });
