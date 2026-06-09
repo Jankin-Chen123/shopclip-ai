@@ -7,8 +7,6 @@ import type {
 import {
   ProjectBriefSchema,
   ProjectPrepUpdateSchema,
-  SmartEditRequestSchema,
-  SmartEditSegmentRefreshRequestSchema,
   SceneRegenerationRequestSchema,
   SceneUpdateSchema,
 } from "@shopclip/shared";
@@ -65,11 +63,10 @@ import {
 } from "./scriptPromptContext.js";
 import { resolveScriptPromptContext } from "./scriptPromptContextResolution.js";
 import {
-  runSmartEditJob,
-  runSmartEditSegmentRefreshJob,
   type SmartEditComposer,
   type SmartEditPlanner,
 } from "./smartEditJobService.js";
+import { registerSmartEditRoutes } from "./smartEditRouteService.js";
 import {
   generateStoryboardSceneImageUrl,
   renderStoryboardSceneImages,
@@ -452,139 +449,13 @@ export const createP0Router = ({
     storageProvider,
     store,
   });
-  router.post("/projects/:projectId/smart-edit", async (request, response) => {
-    const project = await store.getProject(request.params.projectId);
-    if (!project) {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
-      return;
-    }
-
-    if (project.scenes.length === 0) {
-      sendInvalidRequest(
-        response,
-        "STORYBOARD_REQUIRED",
-        "Generate a storyboard before smart editing.",
-      );
-      return;
-    }
-
-    const parsedSmartEditRequest = SmartEditRequestSchema.safeParse(request.body ?? {});
-    if (!parsedSmartEditRequest.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SMART_EDIT_REQUEST",
-        "Smart edit settings are invalid.",
-      );
-      return;
-    }
-
-    const queuedEditRender = await store.addRenderTask(
-      project.id,
-      {
-        mediaSettings: parsedSmartEditRequest.data.mediaSettings,
-        progress: 0,
-        provider: "smart-edit-ffmpeg",
-        status: "queued",
-        videoSettings: parsedSmartEditRequest.data.videoSettings,
-      },
-      [
-        {
-          status: "queued",
-          step: "smart-edit-queued",
-          message:
-            "Smart edit job queued. The server will call the general model and ffmpeg in the background.",
-        },
-      ],
-    );
-
-    if (!queuedEditRender) {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
-      return;
-    }
-
-    void runSmartEditJob({
-      project,
-      renderTaskId: queuedEditRender.renderTask.id,
-      requestData: parsedSmartEditRequest.data,
-      smartEditComposer,
-      smartEditPlanner,
-      storageProvider,
-      store,
-    }).catch((error) => {
-      console.error("[smart-edit] background job failed unexpectedly.", error);
-    });
-
-    response.status(202).json(queuedEditRender);
+  registerSmartEditRoutes({
+    router,
+    smartEditComposer,
+    smartEditPlanner,
+    storageProvider,
+    store,
   });
-
-  router.post("/projects/:projectId/smart-edit/segments/:sceneId/refresh", async (request, response) => {
-    const project = await store.getProject(request.params.projectId);
-    if (!project) {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
-      return;
-    }
-
-    const targetScene = project.scenes.find((scene) => scene.id === request.params.sceneId);
-    if (!targetScene) {
-      sendNotFound(response, "SCENE_NOT_FOUND", "Storyboard scene was not found.");
-      return;
-    }
-
-    const parsedRefreshRequest = SmartEditSegmentRefreshRequestSchema.safeParse(
-      request.body ?? {},
-    );
-    if (!parsedRefreshRequest.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SMART_EDIT_REFRESH_REQUEST",
-        "Smart edit segment refresh settings are invalid.",
-      );
-      return;
-    }
-
-    const refreshRequest = parsedRefreshRequest.data;
-    const queuedEditRender = await store.addRenderTask(
-      project.id,
-      {
-        mediaSettings: refreshRequest.mediaSettings,
-        progress: 0,
-        provider: "smart-edit-ffmpeg",
-        smartEditPlan: refreshRequest.currentPlan,
-        smartEditSegmentOutputs: refreshRequest.segmentOutputs,
-        status: "queued",
-        videoSettings: refreshRequest.videoSettings,
-      },
-      [
-        {
-          status: "queued",
-          step: "smart-edit-segment-refresh-queued",
-          message:
-            "Smart edit segment refresh queued. The server will refresh the selected segment in the background.",
-        },
-      ],
-    );
-
-    if (!queuedEditRender) {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
-      return;
-    }
-
-    void runSmartEditSegmentRefreshJob({
-      project,
-      renderTaskId: queuedEditRender.renderTask.id,
-      requestData: refreshRequest,
-      smartEditComposer,
-      smartEditPlanner,
-      storageProvider,
-      store,
-      targetScene,
-    }).catch((error) => {
-      console.error("[smart-edit] background segment refresh failed unexpectedly.", error);
-    });
-
-    response.status(202).json(queuedEditRender);
-  });
-
   router.patch("/scenes/:sceneId", async (request, response) => {
     const parsedUpdate = SceneUpdateSchema.safeParse(request.body);
     if (!parsedUpdate.success) {

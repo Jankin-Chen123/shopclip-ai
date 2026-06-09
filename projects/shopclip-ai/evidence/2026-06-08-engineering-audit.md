@@ -1513,6 +1513,24 @@
 3. Split `apps/web/src/app/App.tsx` state orchestration into feature hooks after Smart Edit UI and router cleanup are stable under full verification.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 Smart Edit Route Service Extraction
+
+- Extracted Smart Edit job route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/smartEditRouteService.ts`.
+- Moved ownership for the full Smart Edit queue route and the single-segment refresh queue route, including request validation, render-task creation, and background job dispatch.
+- Kept top-level dependency creation and route registration order in `router.ts`.
+- Current file sizes:
+  - `router.ts`: 629 lines.
+  - `smartEditRouteService.ts`: 167 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh API verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 tests.
+- No final contest submission material was prepared in this pass.
+- Next queue: extract scene routes or project core routes only if the dependency boundary remains clear; keep frontend cleanup isolated from the user's separate frontend work.
+
 ## 2026-06-09 API Asset Route Service Extraction
 
 - Extracted global/project asset route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/assetRouteService.ts`.
