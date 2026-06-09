@@ -105,7 +105,6 @@ import {
   deleteStoredAssetObjects,
 } from "./projectAssetUtils.js";
 import {
-  getMetadataRecord,
   isScriptLibraryAsset,
 } from "./referenceAssetUtils.js";
 import {
@@ -121,6 +120,7 @@ import {
   scriptGenerationPrompt,
   type ScriptPromptContext,
 } from "./scriptPromptContext.js";
+import { resolveScriptPromptContext } from "./scriptPromptContextResolution.js";
 import {
   runSmartEditJob,
   runSmartEditSegmentRefreshJob,
@@ -214,116 +214,6 @@ const hasConfiguredTextProviderEnvironment = (): boolean =>
     process.env.AI_GENERAL_MODEL_ID?.trim() ||
     process.env.AI_TEXT_MODEL_ID?.trim(),
   );
-
-interface ScriptPromptContextResolution {
-  context: ScriptPromptContext;
-  error?: {
-    code: string;
-    message: string;
-    status: 400 | 404;
-  };
-}
-
-const getReferenceIdFromAsset = (asset: AssetMetadata): string | undefined => {
-  const metadata = getMetadataRecord(asset);
-  return metadata.kind === "reference_script_asset" && typeof metadata.referenceId === "string"
-    ? metadata.referenceId
-    : undefined;
-};
-
-const findReferenceScriptAsset = async (
-  store: ProjectStore,
-  referenceId: string,
-): Promise<AssetMetadata | undefined> => {
-  const library = await store.listAssets();
-  return library.assets.find((asset) => getReferenceIdFromAsset(asset) === referenceId);
-};
-
-const resolveScriptPromptContext = async (
-  store: ProjectStore,
-  request: ScriptGenerationRequest,
-): Promise<ScriptPromptContextResolution> => {
-  const context: ScriptPromptContext = {};
-
-  if (request.referenceId) {
-    const reference = (await store.listReferenceVideos()).find(
-      (candidate) => candidate.id === request.referenceId,
-    );
-    if (!reference) {
-      return {
-        context,
-        error: {
-          code: "REFERENCE_NOT_FOUND",
-          message: "Reference video was not found.",
-          status: 404,
-        },
-      };
-    }
-    if (request.productionMode === "viral-remix" && reference.status !== "ready") {
-      return {
-        context,
-        error: {
-          code: "REFERENCE_NOT_READY",
-          message: "Reference video must finish analysis before viral remix script generation.",
-          status: 400,
-        },
-      };
-    }
-    if (request.productionMode === "viral-remix" && !reference.analysis) {
-      return {
-        context,
-        error: {
-          code: "REFERENCE_ANALYSIS_REQUIRED",
-          message: "Reference video analysis is required for viral remix script generation.",
-          status: 400,
-        },
-      };
-    }
-    context.reference = reference;
-    context.referenceScriptAsset = await findReferenceScriptAsset(store, reference.id);
-  }
-
-  if (request.templateId) {
-    const template = (await store.listViralTemplates()).find(
-      (candidate) => candidate.templateId === request.templateId,
-    );
-    if (!template) {
-      return {
-        context,
-        error: {
-          code: "VIRAL_TEMPLATE_NOT_FOUND",
-          message: "Viral template was not found.",
-          status: 404,
-        },
-      };
-    }
-    context.template = template;
-  }
-
-  if (request.productionMode === "viral-remix" && !context.reference) {
-    return {
-      context,
-      error: {
-        code: "REFERENCE_REQUIRED",
-        message: "Viral remix script generation requires a selected reference video.",
-        status: 400,
-      },
-    };
-  }
-
-  if (request.productionMode === "template" && !context.template) {
-    return {
-      context,
-      error: {
-        code: "VIRAL_TEMPLATE_REQUIRED",
-        message: "Template script generation requires a selected viral template.",
-        status: 400,
-      },
-    };
-  }
-
-  return { context };
-};
 
 const rewriteScriptWithConfiguredProvider = async (
   project: ProjectSnapshot,
@@ -460,6 +350,14 @@ export const createP0Router = ({
       getAsset: (assetId) => store.getAsset(assetId),
       project,
       requestedAssetIds: request.assetIds,
+    });
+
+  const resolvePromptContextFromStore = (request: ScriptGenerationRequest) =>
+    resolveScriptPromptContext({
+      request,
+      listAssets: async () => (await store.listAssets()).assets,
+      listReferenceVideos: () => store.listReferenceVideos(),
+      listViralTemplates: () => store.listViralTemplates(),
     });
 
   const sendScriptPreparationError = (
@@ -1443,7 +1341,7 @@ export const createP0Router = ({
       request: parsedRequest.data,
       requestBody: request.body,
       resolvePreparedAssets,
-      resolvePromptContext: (scriptRequest) => resolveScriptPromptContext(store, scriptRequest),
+      resolvePromptContext: resolvePromptContextFromStore,
       updateProjectPrepKeywords: (projectId, keywords) =>
         store.updateProjectPrepKeywords(projectId, keywords),
     });
@@ -1495,7 +1393,7 @@ export const createP0Router = ({
       request: parsedRequest.data,
       requestBody: request.body,
       resolvePreparedAssets,
-      resolvePromptContext: (scriptRequest) => resolveScriptPromptContext(store, scriptRequest),
+      resolvePromptContext: resolvePromptContextFromStore,
       updateProjectPrepKeywords: (projectId, keywords) =>
         store.updateProjectPrepKeywords(projectId, keywords),
     });
@@ -1581,7 +1479,7 @@ export const createP0Router = ({
       request: parsedRequest.data,
       requestBody: request.body,
       resolvePreparedAssets,
-      resolvePromptContext: (scriptRequest) => resolveScriptPromptContext(store, scriptRequest),
+      resolvePromptContext: resolvePromptContextFromStore,
       updateProjectPrepKeywords: (projectId, keywords) =>
         store.updateProjectPrepKeywords(projectId, keywords),
     });
