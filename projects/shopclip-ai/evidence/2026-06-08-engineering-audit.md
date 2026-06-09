@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `7bf235c Extract project asset resolution helpers`.
+- Latest deployed optimization commit: `2feedb9 Extract script request preparation helpers`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `2feedb9`:
+  - Extracted script request preparation from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptRequestPreparation.ts`.
+  - Added a tested helper for prompt context resolution, explicit keyword persistence, prepared asset resolution, and invalid script asset error mapping.
+  - Replaced repeated preparation logic in `/projects/:projectId/rewrite-script`, `/projects/:projectId/scripts`, and `/projects/:projectId/generate-script` while keeping storyboard-specific behavior separate.
+  - Current file sizes:
+    - `router.ts`: 2281 lines.
+    - `scriptRequestPreparation.ts`: 83 lines.
+    - `scriptRequestPreparation.test.ts`: 130 lines.
+    - `App.tsx`: 2529 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/modules/projects/scriptRequestPreparation.test.ts` failed before implementation because `scriptRequestPreparation.js` did not exist.
+    - Targeted green tests: `scriptRequestPreparation.test.ts` passed 4 tests; `p0-flow.test.ts` and `p1-flow.test.ts` passed 30 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 525 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/api/src/modules/projects/router.ts`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `2feedb973a2bc4625f005d46bbbb7fd06b900af6`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy script note: the first local health check failed during PM2 restart, then retried successfully with API `status: ok`.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `7bf235c`:
   - Extracted API project asset id resolution and validation from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/projectAssetResolution.ts`.
   - Added tested helpers for prepared script asset fallback, requested asset id de-duplication, missing/cross-project asset rejection, and script-template asset type validation.
