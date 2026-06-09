@@ -18,7 +18,6 @@ import {
   SceneRegenerationRequestSchema,
   SceneUpdateSchema,
   ScriptGenerationRequestSchema,
-  ScriptResultSchema,
 } from "@shopclip/shared";
 
 import { createAssetSlices, inferAssetTags } from "../assets/tagging.js";
@@ -115,6 +114,7 @@ import {
   prepareScriptGenerationInputs,
   type ScriptPreparationHttpError,
 } from "./scriptRequestPreparation.js";
+import { storeFallbackDraftScript } from "./scriptDraftRouteService.js";
 import { buildStructuredScriptFromTextProvider } from "./scriptProviderOrchestration.js";
 import {
   scriptGenerationPrompt,
@@ -1383,11 +1383,6 @@ export const createP0Router = ({
       return;
     }
 
-    if (!parsedRequest.data.draftScript?.trim()) {
-      sendInvalidRequest(response, "EMPTY_SCRIPT_DRAFT", "Script draft cannot be empty.");
-      return;
-    }
-
     const scriptInputs = await prepareScriptGenerationInputs({
       project,
       request: parsedRequest.data,
@@ -1402,28 +1397,19 @@ export const createP0Router = ({
       return;
     }
 
-    const providerResult = generateFallbackScript(scriptInputs.workingProject, {
-      assets: scriptInputs.assets,
+    const draftResult = await storeFallbackDraftScript({
+      project: scriptInputs.workingProject,
       request: parsedRequest.data,
-      scriptSource: "fallback",
+      assets: scriptInputs.assets,
+      generateFallbackScriptForProject: generateFallbackScript,
+      addScript: (projectId, script) => store.addScript(projectId, script),
     });
-    const storedScript = await store.addScript(project.id, providerResult.script);
-    if (!storedScript) {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
+    if (draftResult.kind === "error") {
+      sendStoryboardRouteError(response, draftResult.error);
       return;
     }
 
-    const parsedScript = ScriptResultSchema.safeParse(storedScript);
-    if (!parsedScript.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SAVED_SCRIPT",
-        "Saved script failed contract validation.",
-      );
-      return;
-    }
-
-    response.status(201).json({ script: parsedScript.data });
+    response.status(201).json({ script: draftResult.script });
   });
 
   router.post("/projects/:projectId/scripts/:scriptId/storyboard", async (request, response) => {
