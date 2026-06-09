@@ -2,8 +2,10 @@ import type {
   AssetMetadata,
   ProjectSummary,
   ReferenceVideo,
+  RenderTask,
   ScriptResult,
   StoryboardScene,
+  TraceEvent,
 } from "@shopclip/shared";
 
 import type { ProjectSnapshot } from "./projectStore.js";
@@ -65,4 +67,85 @@ export const isReferenceOwnedAsset = (
     (metadata.kind === "reference_script_asset" && metadata.referenceId === reference.id) ||
     (asset.id === reference.sourceAssetId && asset.source === "public_reference")
   );
+};
+
+export const toProjectStatusFromRenderTask = (
+  renderTask: Pick<RenderTask, "status">,
+): ProjectSnapshot["status"] =>
+  renderTask.status === "completed"
+    ? "completed"
+    : renderTask.status === "failed"
+      ? "failed"
+      : "rendering";
+
+export const materializeTraceEvents = (
+  traceKey: string,
+  events: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>,
+  createId: () => string,
+  createTimestamp: () => string,
+): TraceEvent[] =>
+  events.map((event) => ({
+    ...event,
+    id: createId(),
+    renderTaskId: traceKey,
+    createdAt: createTimestamp(),
+  }));
+
+export const replaceSceneInProject = (
+  project: Pick<ProjectSnapshot, "scenes" | "scripts">,
+  updatedScene: StoryboardScene,
+): Pick<ProjectSnapshot, "scenes" | "scripts"> => ({
+  scenes: project.scenes.map((scene) => (scene.id === updatedScene.id ? updatedScene : scene)),
+  scripts: project.scripts.map((script) => ({
+    ...script,
+    scenes: script.scenes.map((scene) => (scene.id === updatedScene.id ? updatedScene : scene)),
+  })),
+});
+
+export const reorderProjectScenes = (
+  project: Pick<ProjectSnapshot, "scenes" | "scripts">,
+  sceneIds: string[],
+): StoryboardScene[] | undefined => {
+  if (
+    sceneIds.length !== project.scenes.length ||
+    sceneIds.some((sceneId) => !project.scenes.some((scene) => scene.id === sceneId))
+  ) {
+    return undefined;
+  }
+
+  return sceneIds.map((sceneId, index) => ({
+    ...project.scenes.find((scene) => scene.id === sceneId)!,
+    order: index + 1,
+  }));
+};
+
+export const syncScriptsToScenes = (
+  scripts: ScriptResult[],
+  scenes: StoryboardScene[],
+): ScriptResult[] =>
+  scripts.map((script) => ({
+    ...script,
+    scenes: scenes.filter((scene) =>
+      script.scenes.some((scriptScene) => scriptScene.id === scene.id),
+    ),
+  }));
+
+export const removeSceneFromProject = (
+  project: Pick<ProjectSnapshot, "scenes" | "scripts">,
+  sceneId: string,
+): Pick<ProjectSnapshot, "scenes" | "scripts"> => {
+  const scenes = project.scenes
+    .filter((scene) => scene.id !== sceneId)
+    .map((scene, index) => ({ ...scene, order: index + 1 }));
+
+  return {
+    scenes,
+    scripts: syncScriptsToScenes(
+      project.scripts.map((script) => ({
+        ...script,
+        scenes: script.scenes.filter((scene) => scene.id !== sceneId),
+      })),
+      scenes,
+    ),
+  };
 };

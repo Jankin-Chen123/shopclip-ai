@@ -20,7 +20,13 @@ import type { DeleteReferenceVideoResult, ProjectSnapshot, ProjectStore } from "
 import {
   clearAssetReferences,
   isReferenceOwnedAsset,
+  materializeTraceEvents,
+  removeSceneFromProject,
+  reorderProjectScenes,
+  replaceSceneInProject,
+  syncScriptsToScenes,
   toMemoryProjectSummary,
+  toProjectStatusFromRenderTask,
 } from "./memoryProjectStoreUtils.js";
 
 const now = (): string => new Date().toISOString();
@@ -793,20 +799,15 @@ export class MemoryProjectStore implements ProjectStore {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    const storedTraceEvents: TraceEvent[] = traceEvents.map((event) => ({
-      ...event,
-      id: randomUUID(),
-      renderTaskId: storedRenderTask.id,
-      createdAt: now(),
-    }));
+    const storedTraceEvents = materializeTraceEvents(
+      storedRenderTask.id,
+      traceEvents,
+      randomUUID,
+      now,
+    );
 
     project.renderTasks.push(storedRenderTask);
-    project.status =
-      storedRenderTask.status === "completed"
-        ? "completed"
-        : storedRenderTask.status === "failed"
-          ? "failed"
-          : "rendering";
+    project.status = toProjectStatusFromRenderTask(storedRenderTask);
     project.updatedAt = timestamp;
     this.traceEvents.set(storedRenderTask.id, storedTraceEvents);
 
@@ -833,7 +834,9 @@ export class MemoryProjectStore implements ProjectStore {
       status: update.status ?? "edited",
     };
 
-    this.replaceScene(match.project, updatedScene);
+    const nextProjectScenes = replaceSceneInProject(match.project, updatedScene);
+    match.project.scenes = nextProjectScenes.scenes;
+    match.project.scripts = nextProjectScenes.scripts;
     match.project.updatedAt = now();
     return updatedScene;
   }
@@ -844,25 +847,13 @@ export class MemoryProjectStore implements ProjectStore {
       return undefined;
     }
 
-    if (
-      sceneIds.length !== project.scenes.length ||
-      sceneIds.some((sceneId) => !project.scenes.some((scene) => scene.id === sceneId))
-    ) {
+    const reordered = reorderProjectScenes(project, sceneIds);
+    if (!reordered) {
       return undefined;
     }
 
-    const reordered = sceneIds.map((sceneId, index) => ({
-      ...project.scenes.find((scene) => scene.id === sceneId)!,
-      order: index + 1,
-    }));
-
     project.scenes = reordered;
-    project.scripts = project.scripts.map((script) => ({
-      ...script,
-      scenes: reordered.filter((scene) =>
-        script.scenes.some((scriptScene) => scriptScene.id === scene.id),
-      ),
-    }));
+    project.scripts = syncScriptsToScenes(project.scripts, reordered);
     project.updatedAt = now();
     return reordered;
   }
@@ -873,20 +864,11 @@ export class MemoryProjectStore implements ProjectStore {
       return undefined;
     }
 
-    const remainingScenes = match.project.scenes
-      .filter((scene) => scene.id !== sceneId)
-      .map((scene, index) => ({ ...scene, order: index + 1 }));
-
-    match.project.scenes = remainingScenes;
-    match.project.scripts = match.project.scripts.map((script) => ({
-      ...script,
-      scenes: script.scenes
-        .filter((scene) => scene.id !== sceneId)
-        .map((scene) => remainingScenes.find((remaining) => remaining.id === scene.id))
-        .filter((scene): scene is StoryboardScene => Boolean(scene)),
-    }));
+    const remainingProjectScenes = removeSceneFromProject(match.project, sceneId);
+    match.project.scenes = remainingProjectScenes.scenes;
+    match.project.scripts = remainingProjectScenes.scripts;
     match.project.updatedAt = now();
-    return remainingScenes;
+    return remainingProjectScenes.scenes;
   }
 
   getSceneContext(
@@ -899,15 +881,13 @@ export class MemoryProjectStore implements ProjectStore {
     traceKey: string,
     event: Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">,
   ): TraceEvent {
-    const storedTraceEvent: TraceEvent = {
-      ...event,
-      id: randomUUID(),
-      renderTaskId: traceKey,
-      createdAt: now(),
-    };
+    const [storedTraceEvent] = materializeTraceEvents(traceKey, [event], randomUUID, now);
 
-    this.traceEvents.set(traceKey, [...(this.traceEvents.get(traceKey) ?? []), storedTraceEvent]);
-    return storedTraceEvent;
+    this.traceEvents.set(traceKey, [
+      ...(this.traceEvents.get(traceKey) ?? []),
+      storedTraceEvent!,
+    ]);
+    return storedTraceEvent!;
   }
 
   getStoredSuggestion(
@@ -956,22 +936,12 @@ export class MemoryProjectStore implements ProjectStore {
         updatedAt: timestamp,
       };
       project.renderTasks[renderTaskIndex] = updatedRenderTask;
-      const storedTraceEvents: TraceEvent[] = traceEvents.map((event) => ({
-        ...event,
-        id: randomUUID(),
-        renderTaskId,
-        createdAt: now(),
-      }));
+      const storedTraceEvents = materializeTraceEvents(renderTaskId, traceEvents, randomUUID, now);
       this.traceEvents.set(renderTaskId, [
         ...(this.traceEvents.get(renderTaskId) ?? []),
         ...storedTraceEvents,
       ]);
-      project.status =
-        updatedRenderTask.status === "completed"
-          ? "completed"
-          : updatedRenderTask.status === "failed"
-            ? "failed"
-            : "rendering";
+      project.status = toProjectStatusFromRenderTask(updatedRenderTask);
       project.updatedAt = timestamp;
 
       return {
@@ -1051,13 +1021,4 @@ export class MemoryProjectStore implements ProjectStore {
     return [...deletedTemplateIds];
   }
 
-  private replaceScene(project: ProjectSnapshot, updatedScene: StoryboardScene): void {
-    project.scenes = project.scenes.map((scene) =>
-      scene.id === updatedScene.id ? updatedScene : scene,
-    );
-    project.scripts = project.scripts.map((script) => ({
-      ...script,
-      scenes: script.scenes.map((scene) => (scene.id === updatedScene.id ? updatedScene : scene)),
-    }));
-  }
 }
