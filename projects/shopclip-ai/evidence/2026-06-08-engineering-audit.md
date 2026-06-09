@@ -1513,6 +1513,43 @@
 3. Split `apps/web/src/app/App.tsx` state orchestration into feature hooks after Smart Edit UI and router cleanup are stable under full verification.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 API Asset Route Service Extraction
+
+- Extracted global/project asset route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/assetRouteService.ts`.
+- Moved route handlers for:
+  - asset library listing and project asset listing.
+  - global/project asset creation.
+  - upload intents, raw upload, upload confirmation, and asset processing jobs.
+  - asset content redirects and stored-object deletion.
+  - external asset import, local asset search, and external provider search.
+- Kept top-level project, dashboard, reference, script, render, Smart Edit, and scene route registration in `router.ts`.
+- Current file sizes:
+  - `router.ts`: 1528 lines.
+  - `assetRouteService.ts`: 632 lines.
+  - `prismaProjectStore.ts`: 1349 lines.
+  - `memoryStore.ts`: 1113 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh verification after this pass:
+  - First API typecheck failed because the moved COS search dependency can return `undefined` and `cosMatches` needed explicit initialization; fixed in `assetRouteService.ts`.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 560 tests total.
+  - `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for the web bundle.
+
+## Current Optimization Queue
+
+1. Commit this asset-route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+3. Verify production after deploy with `/health`, `#project`, and `#studio`.
+4. Continue backend route cleanup by extracting another coherent route cluster, such as references/templates or render-task routes, only if the dependency boundary remains clear.
+5. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+6. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 API Smart Edit Audio Filter Extraction
 
 - Extracted Smart Edit renderer audio filter and BGM profile helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditAudioFilters.ts`.

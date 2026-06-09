@@ -505,3 +505,53 @@ This addendum supersedes the Smart Edit renderer composer line counts in the pre
 4. Continue backend renderer cleanup only where helper clusters have obvious ownership; avoid a broad composer rewrite.
 5. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 6. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
+
+## 2026-06-09 Asset Route Service Addendum
+
+This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Current work location: `D:\DemoV2`.
+- Main workspace remains directly on the optimization branch.
+- The earlier user frontend edits from `codex/asset-preview-modal-ui` remain preserved in the local stash named `codex-preserve-main-frontend-before-optimization-switch`.
+
+### Actual Change
+
+- Extracted global and project asset route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/assetRouteService.ts`.
+- Moved route ownership for:
+  - asset library listing and project asset listing.
+  - global and project asset creation.
+  - upload intents, raw upload, upload confirmation, and processing job lookup.
+  - asset content redirects and stored-object deletion.
+  - external asset import, local asset search, and external provider search.
+- Kept `router.ts` responsible for top-level dependency assembly and route registration order.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/router.ts`: 1528 lines.
+- `apps/api/src/modules/projects/assetRouteService.ts`: 632 lines.
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 1474 lines.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2972 lines.
+- `apps/web/src/app/App.tsx`: 2529 lines.
+
+### Fresh Verification
+
+- First API typecheck after extraction failed because the moved COS search dependency can return `undefined` and `cosMatches` needed explicit initialization; fixed by preserving the original optional-result behavior in `assetRouteService.ts`.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 560 tests total.
+- `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for the web bundle.
+
+### Updated Optimization Queue
+
+1. Commit this asset-route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+3. Verify production after deploy with `/health`, `#project`, and `#studio`.
+4. Continue backend route cleanup by extracting another coherent route cluster, such as references/templates or render-task routes, only if the dependency boundary remains clear.
+5. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+6. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
