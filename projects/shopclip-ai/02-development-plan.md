@@ -1151,3 +1151,43 @@ This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It co
 1. Commit this Smart Edit source-audio planning extraction after `git diff --check` and `.agents/memory` tracking checks pass.
 2. Continue backend cleanup only where helper ownership is clear, such as voiceover timeline planning or renderer provider normalization.
 3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
+
+## 2026-06-09 Smart Edit Voiceover Plan Extraction Addendum
+
+This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It continues reducing `smartEditComposer.ts` without touching frontend files.
+
+### Actual Change
+
+- Extracted Smart Edit voiceover timeline planning helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditVoiceoverPlan.ts`.
+- Moved pure helpers for:
+  - segment voiceover clip derivation.
+  - unowned timeline voice/caption clip derivation.
+  - hidden/muted timeline voice filtering.
+  - voiceover fade, volume, offset, and keyframe normalization.
+- Kept TTS command execution, voice lane rendering, delay/padding filters, concat list writing, and ffmpeg mix output generation in `smartEditComposer.ts`.
+- Added focused coverage in `apps/api/src/providers/renderer/smartEditVoiceoverPlan.test.ts`.
+
+### Current File Sizes
+
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 887 lines, down from 965 before this pass.
+- `apps/api/src/providers/renderer/smartEditVoiceoverPlan.ts`: 84 lines.
+- `apps/api/src/providers/renderer/smartEditVoiceoverPlan.test.ts`: 156 lines.
+
+### Fresh Verification
+
+- TDD red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVoiceoverPlan.test.ts` failed first because `smartEditVoiceoverPlan.js` did not exist.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVoiceoverPlan.test.ts`: passed, 2 tests.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditTimelinePlan.test.ts src/providers/renderer/smartEditAudioFilters.test.ts src/providers/renderer/smartEditSubtitleOverlay.test.ts`: passed, 47 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 52 files and 264 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 607 tests total: shared 26, API 264, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Updated Optimization Queue
+
+1. Commit this Smart Edit voiceover planning extraction after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Continue backend cleanup only where helper ownership remains clear, such as renderer IO helpers or provider normalization.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
