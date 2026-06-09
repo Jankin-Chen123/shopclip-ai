@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `fc1586e Extract app asset cleanup helpers`.
+- Latest deployed optimization commit: `7bf235c Extract project asset resolution helpers`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `7bf235c`:
+  - Extracted API project asset id resolution and validation from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/projectAssetResolution.ts`.
+  - Added tested helpers for prepared script asset fallback, requested asset id de-duplication, missing/cross-project asset rejection, and script-template asset type validation.
+  - Replaced inline asset loading/validation in script generation/storyboard preparation and script-asset template extraction while preserving existing HTTP error responses.
+  - Current file sizes:
+    - `router.ts`: 2314 lines.
+    - `projectAssetResolution.ts`: 85 lines.
+    - `projectAssetResolution.test.ts`: 102 lines.
+    - `App.tsx`: 2529 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/modules/projects/projectAssetResolution.test.ts` failed before implementation because `projectAssetResolution.js` did not exist.
+    - Targeted green tests: `projectAssetResolution.test.ts` passed 6 tests; `p0-flow.test.ts` and `part015-processing-flow.test.ts` passed 26 tests.
+    - First `corepack pnpm typecheck` run caught a real type mismatch because `ProjectStore.getAsset` returns `MaybePromise`; after widening the helper lookup type, rerun passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 521 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/api/src/modules/projects/router.ts`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `7bf235c541c6d77c1284802acd77e421f69cca0a`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy script note: the first local health check failed during PM2 restart, then retried successfully with API `status: ok`.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `fc1586e`:
   - Extracted repeated App asset cleanup logic from `apps/web/src/app/App.tsx` into `apps/web/src/app/AppAssetCleanupUtils.ts`.
   - Added tested helpers for asset-library deletion filtering, active-script scene asset reference clearing, asset-search result filtering, and unique non-empty id selection.
