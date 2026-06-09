@@ -493,3 +493,40 @@ This pass continued on the original branch `codex/asset-preview-modal-ui` and st
 1. Continue `memoryStore.ts` reduction only around pure collection or materialization helpers.
 2. Revisit `prismaProjectStore.ts` mapper/materialization boundaries after memory-store cleanup.
 3. Keep broad frontend refactors deferred until the user's separate frontend branch/workspace is stable.
+
+## 2026-06-09 Prisma Store Write Data Extraction
+
+This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. The goal was to reduce `prismaProjectStore.ts` without changing database flow ownership.
+
+### Changed Files
+
+- `apps/api/src/modules/projects/prismaProjectWriteData.ts`
+  - Added Prisma write payload helpers for asset slices, asset updates, reference analysis updates, reference video updates, viral template create/update, script scene create data, trace events, and render task create/update data.
+- `apps/api/src/modules/projects/prismaProjectStore.ts`
+  - Replaced repeated inline Prisma `data` object construction with the new helpers.
+  - Kept transaction boundaries, existence checks, Prisma calls, and mapper usage inside `PrismaProjectStore`.
+- `apps/api/src/modules/projects/prismaProjectWriteData.test.ts`
+  - Added focused tests for reference error cleanup, script scene create payloads, viral template create/update alignment, and render trace event materialization.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/prismaProjectStore.ts`: 937 lines, down from 1083 before this pass.
+- `apps/api/src/modules/projects/prismaProjectWriteData.ts`: 202 lines.
+- `apps/api/src/modules/projects/prismaProjectWriteData.test.ts`: 108 lines.
+
+### Verification
+
+- `corepack pnpm --filter @shopclip/api test src/modules/projects/prismaProjectWriteData.test.ts`: passed, 4 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 45 files and 228 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 571 tests total: shared 26, API 228, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Remaining Queue
+
+1. Continue reducing `prismaProjectStore.ts` only where transaction/data-flow boundaries remain obvious.
+2. Consider extracting scene reorder/delete helpers from both memory and Prisma stores after checking behavior parity.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is stable.
