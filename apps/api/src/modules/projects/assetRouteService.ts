@@ -7,7 +7,6 @@ import {
 } from "@shopclip/shared";
 
 import {
-  mapCosImageMatchesToAssetResults,
   type CosImageSearchMatch,
   type CosIntelligentSearchInput,
 } from "../../providers/assets/cosIntelligentSearchProvider.js";
@@ -17,16 +16,20 @@ import {
 } from "../../providers/assets/externalAssetProviders.js";
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { processAssetStructure } from "../assets/assetProcessingService.js";
-import { createAssetSlices, inferAssetTags } from "../assets/tagging.js";
 import {
   ConfirmAssetUploadRequestSchema,
   CreateAssetRequestSchema,
   CreateAssetUploadIntentRequestSchema,
   DeleteAssetsRequestSchema,
 } from "../assets/validation.js";
-import { mergeAssetSearchResults } from "../retrieval/hybridAssetSearch.js";
-import { searchAssets } from "../retrieval/search.js";
 import { filterAssetLibrary, getAssetCategory } from "./assetLibraryUtils.js";
+import {
+  createAssetSlices,
+  createGlobalAssetLibraryProject,
+  mergeLocalAndCosAssetSearch,
+  parseAssetSearchQuery,
+  toStoredAssetInput,
+} from "./assetRouteUtils.js";
 import {
   confirmAssetUpload,
   enqueueAssetUploadIntent,
@@ -102,21 +105,10 @@ export const registerAssetRoutes = ({
 
     const storedAsset = await store.addAsset(
       undefined,
-      {
-        type: parsedAsset.data.type,
-        status: "ready",
-        url: parsedAsset.data.url ?? `/demo-assets/library/${parsedAsset.data.name}`,
-        name: parsedAsset.data.name,
-        mimeType: parsedAsset.data.mimeType,
-        sizeBytes: parsedAsset.data.sizeBytes,
-        source: parsedAsset.data.source ?? "merchant_upload",
-        storageProvider: parsedAsset.data.storageProvider,
-        objectKey: parsedAsset.data.objectKey,
-        thumbnailKey: parsedAsset.data.thumbnailKey,
-        embeddingText: parsedAsset.data.embeddingText,
-        metadata: parsedAsset.data.metadata,
-        tags: inferAssetTags(parsedAsset.data),
-      },
+      toStoredAssetInput(
+        parsedAsset.data,
+        `/demo-assets/library/${parsedAsset.data.name}`,
+      ),
       createAssetSlices,
     );
 
@@ -132,23 +124,10 @@ export const registerAssetRoutes = ({
 
     const storedAsset = await store.addAsset(
       request.params.projectId,
-      {
-        type: parsedAsset.data.type,
-        status: "ready",
-        url:
-          parsedAsset.data.url ??
-          `/demo-assets/${request.params.projectId}/${parsedAsset.data.name}`,
-        name: parsedAsset.data.name,
-        mimeType: parsedAsset.data.mimeType,
-        sizeBytes: parsedAsset.data.sizeBytes,
-        source: parsedAsset.data.source ?? "merchant_upload",
-        storageProvider: parsedAsset.data.storageProvider,
-        objectKey: parsedAsset.data.objectKey,
-        thumbnailKey: parsedAsset.data.thumbnailKey,
-        embeddingText: parsedAsset.data.embeddingText,
-        metadata: parsedAsset.data.metadata,
-        tags: inferAssetTags(parsedAsset.data),
-      },
+      toStoredAssetInput(
+        parsedAsset.data,
+        `/demo-assets/${request.params.projectId}/${parsedAsset.data.name}`,
+      ),
       createAssetSlices,
     );
 
@@ -557,8 +536,7 @@ export const registerAssetRoutes = ({
   });
 
   router.get("/assets/search", async (request, response) => {
-    const projectId =
-      typeof request.query.projectId === "string" ? request.query.projectId.trim() : "";
+    const { level, projectId, query, sceneRole, tags } = parseAssetSearchQuery(request.query);
     const project = projectId ? await store.getProject(projectId) : undefined;
     if (projectId && !project) {
       sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
@@ -566,44 +544,12 @@ export const registerAssetRoutes = ({
     }
     const globalLibrary = project ? undefined : await store.listAssets();
 
-    const query = typeof request.query.q === "string" ? request.query.q : "";
-    const tags =
-      typeof request.query.tags === "string"
-        ? request.query.tags
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean)
-        : [];
-    const level =
-      request.query.level === "slice" || request.query.level === "asset"
-        ? request.query.level
-        : undefined;
-    const sceneRole =
-      typeof request.query.sceneRole === "string" ? request.query.sceneRole : undefined;
-
-    const searchLibrary = project ?? {
-      id: "global-asset-library",
-      title: "Global asset library",
-      productName: "Global asset library",
-      audience: "merchant",
-      sellingPoints: ["shared assets"],
-      tone: "neutral",
-      style: "library",
-      targetDurationSeconds: 15,
-      prepKeywords: [],
-      status: "ready" as const,
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-      assets: globalLibrary?.assets ?? [],
-      assetSlices: globalLibrary?.assetSlices ?? [],
-      assetProcessingEvents: [],
-      assetProcessingJobs: [],
-      referenceVideos: [],
-      viralTemplates: [],
-      scripts: [],
-      scenes: [],
-      renderTasks: [],
-    };
+    const searchLibrary =
+      project ??
+      createGlobalAssetLibraryProject({
+        assets: globalLibrary?.assets ?? [],
+        assetSlices: globalLibrary?.assetSlices ?? [],
+      });
     let cosMatches: Awaited<ReturnType<typeof cosAssetSearch>> = undefined;
     if (query.trim()) {
       try {
@@ -616,15 +562,13 @@ export const registerAssetRoutes = ({
         cosMatches = [];
       }
     }
-    const cosResults = cosMatches
-      ? mapCosImageMatchesToAssetResults(cosMatches, searchLibrary)
-      : undefined;
-    const textResults = searchAssets(searchLibrary, { query, tags, level, sceneRole });
-    const shouldUseHybridResults = Boolean(level || sceneRole);
-    const results =
-      cosMatches !== undefined && !shouldUseHybridResults
-        ? (cosResults ?? [])
-        : mergeAssetSearchResults(textResults, cosResults);
+    const results = mergeLocalAndCosAssetSearch(searchLibrary, {
+      cosMatches,
+      level,
+      query,
+      sceneRole,
+      tags,
+    });
 
     response.json({
       ...(projectId ? { projectId } : {}),
