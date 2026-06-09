@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `07639a3 Extract smart edit toolbar state builder`.
+- Latest deployed optimization commit: `b6f0c3b Extract smart edit track labels`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `b6f0c3b`:
+  - Extracted Smart Edit track-label construction from `apps/web/src/features/edit/SmartEditPanel.tsx` into `buildSmartEditTrackLabels` in `apps/web/src/features/edit/SmartEditTrackPresentationState.ts`.
+  - Replaced the inline track label object in `SmartEditPanel.tsx` while preserving localized labels passed to inspector and track stack children.
+  - Extended `apps/web/src/features/edit/SmartEditTrackPresentationState.test.ts` coverage for editor track id to localized label mapping.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3094 lines.
+    - `SmartEditTrackPresentationState.ts`: 61 lines.
+    - `SmartEditTrackPresentationState.test.ts`: 98 lines.
+    - `App.tsx`: 2581 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackPresentationState.test.ts` failed before implementation because `buildSmartEditTrackLabels` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackPresentationState.test.ts` passed, 4 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 487 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-CqohxA7k.js` at 606.65 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `b6f0c3b7cc73790c002ab31e0599eb6067448aa5`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `07639a3`:
   - Extracted Smart Edit timeline toolbar state construction from `apps/web/src/features/edit/SmartEditPanel.tsx` into `buildSmartEditTimelineToolbarState` in `apps/web/src/features/edit/SmartEditTimelineToolbarState.ts`.
   - Replaced the inline toolbar state object in `SmartEditPanel.tsx` while keeping the command callback wiring local to the panel.
