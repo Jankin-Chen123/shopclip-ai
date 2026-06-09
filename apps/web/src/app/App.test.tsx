@@ -1702,6 +1702,64 @@ describe("App", () => {
     expect(deleteIndex).toBeGreaterThan(extractIndex);
   });
 
+  it("uses the linked breakdown video first frame as the script card cover", () => {
+    const markup = renderToStaticMarkup(
+      <AssetsPanel
+        assetDraft={{
+          type: "reference",
+          name: "Cup hook script",
+          mimeType: "text/plain",
+          sizeBytes: 1200,
+          tags: ["script", "copy"],
+        }}
+        allAssets={[
+          makeAsset({
+            id: "breakdown-video",
+            type: "video",
+            name: "Cup breakdown video",
+            mimeType: "video/mp4",
+            thumbnailKey: "projects/project-1/derived/breakdown-video/frames/frame-0.jpg",
+          }),
+        ]}
+        assets={[
+          makeAsset({
+            id: "asset-script",
+            type: "reference",
+            name: "Cup hook script",
+            mimeType: "text/plain",
+            tags: ["script", "copy"],
+            metadata: {
+              kind: "reference_script_asset",
+              referenceId: "reference-1",
+              sourceAssetId: "breakdown-video",
+            },
+          }),
+        ]}
+        copy={copy.en.assets}
+        disabled={false}
+        hasProject
+        hasSearched={false}
+        isLoading={false}
+        isSearching={false}
+        language="en"
+        activeCategory="script"
+        onAssetDraftChange={() => undefined}
+        onDeleteAssets={() => undefined}
+        onExtractTemplateFromScripts={() => undefined}
+        onImportFiles={() => undefined}
+        onProcessAsset={() => undefined}
+        onSearchAssets={() => undefined}
+        onSearchQueryChange={() => undefined}
+        onUploadAsset={() => undefined}
+        searchQuery=""
+        searchResults={[]}
+      />,
+    );
+
+    expect(markup).toContain("/api/assets/breakdown-video/thumbnail");
+    expect(markup).toContain('alt="Cup hook script"');
+  });
+
   it("renders templates as a first-class asset library section", () => {
     const markup = renderToStaticMarkup(
       <AssetsPanel
@@ -6559,6 +6617,25 @@ Second imported caption`,
     expect(styles).toMatch(
       /\.external-preview-details\s*\{[^}]*max-height:\s*min\(620px,\s*calc\(100dvh - 210px\)\);[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
     );
+    expect(styles).toMatch(
+      /\.external-preview-content\.asset-detail-focused-preview\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
+    );
+    expect(styles).toMatch(
+      /\.asset-detail-focused-preview\s+\.external-preview-details\s*\{[^}]*width:\s*100%;[^}]*padding:\s*16px;/s,
+    );
+  });
+
+  it("keeps asset preview card actions limited to opening the file", () => {
+    const source = readFileSync(
+      new URL("../features/assets/AssetsPanel.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("Open file");
+    expect(source).not.toContain("用于当前分镜");
+    expect(source).not.toContain("Use in selected scene");
+    expect(source).not.toContain("多颗粒度结构化");
+    expect(source).not.toContain("Analyze structure");
   });
 
   it("keeps the asset import dialog centered in the viewport", () => {

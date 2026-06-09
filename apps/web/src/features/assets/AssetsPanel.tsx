@@ -17,7 +17,6 @@ import {
   Trash2,
   UploadCloud,
   Video,
-  WandSparkles,
   X,
 } from "lucide-react";
 
@@ -30,13 +29,14 @@ import type {
   ExternalAssetSearchResponse,
   StockProviderConfig,
 } from "../../lib/api";
-import { getAssetContentUrl } from "../../lib/api";
+import { getAssetContentUrl, getAssetThumbnailUrl } from "../../lib/api";
 import type { AssetCategory } from "./AssetCategoryTabs";
 import { AssetCategoryTabs, assetCategories, getAssetCategoryLabel } from "./AssetCategoryTabs";
 
 interface AssetsPanelProps {
   activeCategory: AssetCategory;
   assetDraft: CreateAssetInput;
+  allAssets?: AssetMetadata[];
   assets: AssetMetadata[];
   copy: AppCopy["assets"];
   disabled: boolean;
@@ -190,6 +190,44 @@ const structuredAssetSummary = (asset: AssetMetadata) => {
       usableForAd?: boolean;
     };
   };
+};
+
+const getAssetMetadataRecord = (asset: AssetMetadata): Record<string, unknown> => {
+  const metadata = asset.metadata;
+  return metadata && typeof metadata === "object" ? metadata : {};
+};
+
+const getStringMetadata = (metadata: Record<string, unknown>, key: string) => {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+};
+
+const findScriptCoverSourceAsset = (
+  scriptAsset: AssetMetadata,
+  candidateAssets: AssetMetadata[],
+): AssetMetadata | undefined => {
+  const metadata = getAssetMetadataRecord(scriptAsset);
+  if (metadata.kind !== "reference_script_asset") {
+    return undefined;
+  }
+
+  const sourceAssetId = getStringMetadata(metadata, "sourceAssetId");
+  if (sourceAssetId) {
+    const sourceAsset = candidateAssets.find((candidate) => candidate.id === sourceAssetId);
+    if (sourceAsset?.thumbnailKey && isVideoAsset(sourceAsset)) {
+      return sourceAsset;
+    }
+  }
+
+  const referenceId = getStringMetadata(metadata, "referenceId");
+  return candidateAssets.find((candidate) => {
+    const candidateMetadata = getAssetMetadataRecord(candidate);
+    return (
+      Boolean(candidate.thumbnailKey) &&
+      isVideoAsset(candidate) &&
+      getStringMetadata(candidateMetadata, "referenceId") === referenceId
+    );
+  });
 };
 
 interface ReferenceScriptStoryboardPreview {
@@ -545,6 +583,7 @@ const templateUi = {
 
 export const AssetsPanel = ({
   activeCategory,
+  allAssets,
   assets,
   copy,
   disabled,
@@ -556,8 +595,6 @@ export const AssetsPanel = ({
   hasProject,
   onImportExternalAsset,
   onImportFiles,
-  onProcessAsset,
-  onRecallAsset,
   onCategoryChange,
   onDeleteAssets,
   onExtractTemplateFromScripts,
@@ -631,6 +668,7 @@ export const AssetsPanel = ({
   const previewAssets = isShowingSearchResults
     ? searchResults.map((result) => result.asset)
     : assets;
+  const coverSourceAssets = allAssets ?? assets;
   const searchScoreByAssetId = new Map(
     searchResults.map((result) => [result.asset.id, result.score] as const),
   );
@@ -653,6 +691,12 @@ export const AssetsPanel = ({
   const previewReferenceScript = previewAsset
     ? parseReferenceScriptPreview(previewAsset)
     : undefined;
+  const shouldUseDetailFocusedAssetPreview =
+    previewAsset !== undefined &&
+    !isImageAsset(previewAsset) &&
+    !isVideoAsset(previewAsset) &&
+    !isAudioAsset(previewAsset) &&
+    (isScriptAsset(previewAsset) || previewReferenceScript !== undefined);
 
   useEffect(() => {
     const currentAssetIds = new Set(assets.map((asset) => asset.id));
@@ -1139,6 +1183,7 @@ export const AssetsPanel = ({
               const searchResult = searchResultByAssetId.get(asset.id);
               const structuredSummary = structuredAssetSummary(asset);
               const firstStructuredSlice = searchResult?.slices.find((slice) => slice.metadata);
+              const scriptCoverSourceAsset = findScriptCoverSourceAsset(asset, coverSourceAssets);
 
               return (
                 <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
@@ -1194,6 +1239,13 @@ export const AssetsPanel = ({
                         decoding="async"
                         loading="lazy"
                         src={getAssetContentUrl(asset.id)}
+                      />
+                    ) : scriptCoverSourceAsset ? (
+                      <img
+                        alt={asset.name}
+                        decoding="async"
+                        loading="lazy"
+                        src={getAssetThumbnailUrl(scriptCoverSourceAsset.id)}
                       />
                     ) : isVideoAsset(asset) ? (
                       <video
@@ -1276,13 +1328,16 @@ export const AssetsPanel = ({
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <div className="external-preview-content">
-              <div className="asset-document-preview">
-                <LayoutTemplate size={42} aria-hidden="true" />
-                <strong>{previewTemplate.category}</strong>
-                <span>{previewTemplate.narrativeStructure.join(" → ")}</span>
-              </div>
+            <div className="external-preview-content asset-detail-focused-preview">
               <aside className="external-preview-details asset-template-preview-details">
+                <div className="asset-detail-summary">
+                  <span className="external-source-pill">
+                    <LayoutTemplate size={14} aria-hidden="true" />
+                    {previewTemplate.category}
+                  </span>
+                  <h4>{language === "zh" ? "叙事结构" : "Narrative structure"}</h4>
+                  <p>{previewTemplate.narrativeStructure.join(" → ")}</p>
+                </div>
                 <h4>{language === "zh" ? "创作策略" : "Strategy"}</h4>
                 <p>{previewTemplate.strategy}</p>
                 <h4>{language === "zh" ? "共性因子" : "Shared factors"}</h4>
@@ -1336,49 +1391,57 @@ export const AssetsPanel = ({
               </button>
             </div>
 
-            <div className="external-preview-content">
-              <div className="external-preview-media asset-preview-media">
-                {!previewAssetReady ? (
-                  <div className="asset-document-preview" role="status">
-                    <span className="asset-uploading-spinner" aria-hidden="true" />
-                    <strong>
-                      {language === "zh"
-                        ? "正在上传，稍后可预览"
-                        : "Uploading, preview will be available soon"}
-                    </strong>
-                    <span>{previewAsset.name}</span>
-                  </div>
-                ) : isImageAsset(previewAsset) ? (
-                  <img alt={previewAsset.name} decoding="async" src={previewAssetUrl} />
-                ) : isVideoAsset(previewAsset) ? (
-                  <video controls preload="metadata" src={previewAssetUrl} />
-                ) : isAudioAsset(previewAsset) ? (
-                  <div className="external-preview-audio">
-                    <div
-                      className="external-audio-preview external-audio-preview-large"
-                      aria-hidden="true"
-                    >
-                      <Music size={42} />
-                      <span className="external-audio-waveform">
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                      </span>
+            <div
+              className={
+                shouldUseDetailFocusedAssetPreview
+                  ? "external-preview-content asset-detail-focused-preview"
+                  : "external-preview-content"
+              }
+            >
+              {shouldUseDetailFocusedAssetPreview ? null : (
+                <div className="external-preview-media asset-preview-media">
+                  {!previewAssetReady ? (
+                    <div className="asset-document-preview" role="status">
+                      <span className="asset-uploading-spinner" aria-hidden="true" />
+                      <strong>
+                        {language === "zh"
+                          ? "正在上传，稍后可预览"
+                          : "Uploading, preview will be available soon"}
+                      </strong>
+                      <span>{previewAsset.name}</span>
                     </div>
-                    <audio controls src={previewAssetUrl} />
-                  </div>
-                ) : (
-                  <div className="asset-document-preview">
-                    <FileText size={42} aria-hidden="true" />
-                    <strong>{previewAsset.name}</strong>
-                    <span>{previewAsset.mimeType ?? previewAsset.type}</span>
-                  </div>
-                )}
-              </div>
+                  ) : isImageAsset(previewAsset) ? (
+                    <img alt={previewAsset.name} decoding="async" src={previewAssetUrl} />
+                  ) : isVideoAsset(previewAsset) ? (
+                    <video controls preload="metadata" src={previewAssetUrl} />
+                  ) : isAudioAsset(previewAsset) ? (
+                    <div className="external-preview-audio">
+                      <div
+                        className="external-audio-preview external-audio-preview-large"
+                        aria-hidden="true"
+                      >
+                        <Music size={42} />
+                        <span className="external-audio-waveform">
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      </div>
+                      <audio controls src={previewAssetUrl} />
+                    </div>
+                  ) : (
+                    <div className="asset-document-preview">
+                      <FileText size={42} aria-hidden="true" />
+                      <strong>{previewAsset.name}</strong>
+                      <span>{previewAsset.mimeType ?? previewAsset.type}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <aside className="external-preview-details">
                 <span className="external-source-pill">
@@ -1494,27 +1557,6 @@ export const AssetsPanel = ({
                 </dl>
 
                 <div className="external-preview-actions">
-                  {onRecallAsset ? (
-                    <Button
-                      icon={<Check size={18} />}
-                      onClick={() => {
-                        onRecallAsset(previewAsset.id);
-                        closeAssetPreview();
-                      }}
-                      variant="primary"
-                    >
-                      {language === "zh" ? "用于当前分镜" : "Use in selected scene"}
-                    </Button>
-                  ) : null}
-                  {onProcessAsset ? (
-                    <Button
-                      disabled={disabled}
-                      icon={<WandSparkles size={18} />}
-                      onClick={() => onProcessAsset(previewAsset.id)}
-                    >
-                      {language === "zh" ? "多颗粒度结构化" : "Analyze structure"}
-                    </Button>
-                  ) : null}
                   {previewAssetReady ? (
                     <a
                       className="external-open-link"

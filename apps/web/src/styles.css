@@ -2946,6 +2946,10 @@ textarea {
   overflow: hidden;
 }
 
+.external-preview-content.asset-detail-focused-preview {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .external-preview-media {
   display: grid;
   min-height: clamp(280px, 48dvh, 420px);
@@ -2995,6 +2999,29 @@ textarea {
   background: rgba(15, 23, 42, 0.52);
   scrollbar-color: rgba(34, 211, 238, 0.62) rgba(15, 23, 42, 0.72);
   scrollbar-width: thin;
+}
+
+.asset-detail-focused-preview .external-preview-details {
+  width: 100%;
+  padding: 16px;
+}
+
+.asset-detail-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.asset-detail-summary h4,
+.asset-detail-summary p {
+  margin: 0;
+}
+
+.asset-detail-summary p {
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .external-preview-details dl {
@@ -7613,35 +7640,21 @@ textarea {
 
 .project-portfolio {
   display: grid;
-  gap: 24px;
+  gap: 18px;
   color: var(--text);
 }
 
-.project-portfolio-toolbar {
+.project-portfolio-card {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
-  gap: 16px;
-  align-items: center;
-}
-
-.project-search {
-  display: block;
-}
-
-.project-search input {
-  width: 100%;
-  min-height: 56px;
-  padding: 0 22px;
+  gap: 22px;
+  min-width: 0;
+  padding: 18px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--text);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
-    rgba(16, 16, 16, 0.88);
-}
-
-.project-search input::placeholder {
-  color: var(--subtle);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 220px),
+    rgba(17, 24, 39, 0.72);
+  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.18);
 }
 
 .project-portfolio-heading {
