@@ -110,6 +110,12 @@ import {
   mergeTemplates,
 } from "./AppSetupUtils";
 import { importAndStructureFiles } from "./AppAssetImportUtils";
+import {
+  removeDeletedAssetSearchResults,
+  removeDeletedAssetsFromAssetLibrary,
+  removeDeletedAssetsFromScript,
+  selectUniqueNonEmptyIds,
+} from "./AppAssetCleanupUtils";
 import { getGenerationTaskText } from "./AppBackgroundTaskText";
 import {
   createAssetPrepSnapshotFromProjectAssets,
@@ -1179,28 +1185,16 @@ export const App = ({
       const response = await deleteAssetsRequest(assetIds);
       const deletedAssetIds = new Set(response.deletedAssets.map((asset) => asset.id));
 
-      setAssetLibrary((current) => ({
-        assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
-        assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
-      }));
+      setAssetLibrary((current) => removeDeletedAssetsFromAssetLibrary(current, deletedAssetIds));
       setProject((current) => removeProjectAssets(current, deletedAssetIds));
       setScript((current) =>
-        current
-          ? {
-              ...current,
-              scenes: current.scenes.map((scene) =>
-                scene.assetId && deletedAssetIds.has(scene.assetId)
-                  ? { ...scene, assetId: undefined }
-                  : scene,
-              ),
-            }
-          : current,
+        removeDeletedAssetsFromScript(current, deletedAssetIds),
       );
       setAssetPrepSnapshot((current) =>
         pruneAssetPrepSnapshotDeletedAssets(current, deletedAssetIds),
       );
       setAssetSearchResults((current) =>
-        current.filter((result) => !deletedAssetIds.has(result.asset.id)),
+        removeDeletedAssetSearchResults(current, deletedAssetIds),
       );
     });
   };
@@ -1442,7 +1436,7 @@ export const App = ({
   };
 
   const handleDeleteReferences = (referenceIds: string[]) => {
-    const uniqueReferenceIds = Array.from(new Set(referenceIds)).filter(Boolean);
+    const uniqueReferenceIds = selectUniqueNonEmptyIds(referenceIds);
     if (uniqueReferenceIds.length === 0) {
       return;
     }
@@ -1475,10 +1469,7 @@ export const App = ({
       setReferenceLibrary((current) =>
         current.filter((reference) => !deletedReferenceIds.has(reference.id)),
       );
-      setAssetLibrary((current) => ({
-        assets: current.assets.filter((asset) => !deletedAssetIds.has(asset.id)),
-        assetSlices: current.assetSlices.filter((slice) => !deletedAssetIds.has(slice.assetId)),
-      }));
+      setAssetLibrary((current) => removeDeletedAssetsFromAssetLibrary(current, deletedAssetIds));
       setProject((current) =>
         removeProjectReferenceResources(current, {
           deletedAssetIds,
@@ -1487,22 +1478,13 @@ export const App = ({
         }),
       );
       setScript((current) =>
-        current
-          ? {
-              ...current,
-              scenes: current.scenes.map((scene) =>
-                scene.assetId && deletedAssetIds.has(scene.assetId)
-                  ? { ...scene, assetId: undefined }
-                  : scene,
-              ),
-            }
-          : current,
+        removeDeletedAssetsFromScript(current, deletedAssetIds),
       );
       setAssetPrepSnapshot((current) =>
         pruneAssetPrepSnapshotDeletedAssets(current, deletedAssetIds),
       );
       setAssetSearchResults((current) =>
-        current.filter((result) => !deletedAssetIds.has(result.asset.id)),
+        removeDeletedAssetSearchResults(current, deletedAssetIds),
       );
       setViralTemplateLibrary((current) =>
         current.filter((template) => !deletedTemplateIds.has(template.templateId)),
