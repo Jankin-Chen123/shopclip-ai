@@ -3652,6 +3652,31 @@
 3. Continue smaller API cleanup only where route-service boundaries are clear; avoid broad API rewrites after the router reduction unless a handler cluster has obvious ownership.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 Script Route Request Preparation Extraction
+
+- Branch/workspace: `codex/shopclip-optimization-cleanup` in `D:\DemoV2`.
+- Scope: backend-only cleanup; no final contest submission material and no broad frontend refactor.
+- Branch consolidation: the major optimization commits that were accidentally developed on `codex/asset-preview-modal-ui` have been cherry-picked onto `codex/shopclip-optimization-cleanup`.
+- Migrated commits now present on this branch: `e6a3d58f`, `b329c620`, `c7e3b1a6`, `49212f1e`, `6d680f5f`, `5d6b14ce`, `3e7156bb`, and `20bafed1`.
+- Risk note: `codex/shopclip-optimization-cleanup` is now the optimization consolidation branch. Do not resume optimization work on `codex/asset-preview-modal-ui`; production deployment should only happen from this branch after push and smoke tests.
+- Extracted repeated script-route request parsing, script input preparation, and route error mapping from `apps/api/src/modules/projects/scriptRouteService.ts` into `apps/api/src/modules/projects/scriptRouteUtils.ts`.
+- Added `apps/api/src/modules/projects/scriptRouteUtils.test.ts`.
+- Behavior audit: route paths, response shapes, error codes, HTTP status mapping, provider calls, store calls, and storyboard/script orchestration were kept unchanged.
+- Current file sizes:
+  - `scriptRouteService.ts`: 272 lines, down from 331 before this pass.
+  - `scriptRouteUtils.ts`: 103 lines.
+  - `scriptRouteUtils.test.ts`: 138 lines.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api test src/modules/projects/scriptRouteUtils.test.ts src/modules/projects/scriptRequestPreparation.test.ts`: passed, 9 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test src/p0-flow.test.ts src/modules/projects/scriptDraftRouteService.test.ts src/modules/projects/storyboardRouteService.test.ts src/modules/projects/scriptProviderOrchestration.test.ts`: passed, 34 tests.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 49 files and 254 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 597 tests total: shared 26, API 254, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## 2026-06-09 API Smart Edit Timeline Plan Extraction
 
 - Extracted Smart Edit renderer timeline-plan construction from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditTimelinePlan.ts`.

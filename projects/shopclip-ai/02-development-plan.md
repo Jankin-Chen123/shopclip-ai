@@ -1022,3 +1022,54 @@ This addendum supersedes the backend router line counts in the previous addenda.
 4. Continue backend route cleanup by extracting another coherent route cluster, such as references/templates or render-task routes, only if the dependency boundary remains clear.
 5. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 6. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
+
+## 2026-06-09 Script Route Request Preparation Addendum
+
+This pass is on the user-requested optimization branch `codex/shopclip-optimization-cleanup`. It is backend-only and does not add final contest submission material.
+
+### Branch And Risk Note
+
+- Current branch: `codex/shopclip-optimization-cleanup`.
+- The major optimization commits that were accidentally developed on `codex/asset-preview-modal-ui` have been cherry-picked onto this branch.
+- This branch is now the consolidation branch for optimization work. Do not resume optimization work on `codex/asset-preview-modal-ui`.
+- Production deployment should only happen from `codex/shopclip-optimization-cleanup` after the branch is pushed and smoke-tested.
+
+### Actual Change
+
+- Consolidated the migrated optimization commits on this branch:
+  - `e6a3d58f` Refine asset preview modals.
+  - `b329c620` Use breakdown thumbnails for script cards.
+  - `c7e3b1a6` Extract memory store collection helpers.
+  - `49212f1e` Extract prisma project write data helpers.
+  - `6d680f5f` Expand prisma write data helpers.
+  - `5d6b14ce` Extract asset route search helpers.
+  - `3e7156bb` Extract render task polling service.
+  - `20bafed1` Extract smart edit job task updates.
+- Extracted repeated script-route request parsing, script input preparation, and route error mapping from `apps/api/src/modules/projects/scriptRouteService.ts` into `apps/api/src/modules/projects/scriptRouteUtils.ts`.
+- Kept route paths, response shapes, error codes, HTTP status mapping, provider calls, store calls, and storyboard/script orchestration behavior unchanged.
+- Added focused coverage in `apps/api/src/modules/projects/scriptRouteUtils.test.ts`.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/scriptRouteService.ts`: 272 lines, down from 331 before this pass.
+- `apps/api/src/modules/projects/scriptRouteUtils.ts`: 103 lines.
+- `apps/api/src/modules/projects/scriptRouteUtils.test.ts`: 138 lines.
+
+### Fresh Verification
+
+- Manual diff audit: no route path, response shape, error code, provider call, store call, or storyboard/script orchestration behavior was intentionally changed.
+- `corepack pnpm --filter @shopclip/api test src/modules/projects/scriptRouteUtils.test.ts src/modules/projects/scriptRequestPreparation.test.ts`: passed, 9 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test src/p0-flow.test.ts src/modules/projects/scriptDraftRouteService.test.ts src/modules/projects/storyboardRouteService.test.ts src/modules/projects/scriptProviderOrchestration.test.ts`: passed, 34 tests.
+- `corepack pnpm --filter @shopclip/api test`: passed, 49 files and 254 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 597 tests total: shared 26, API 254, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Updated Optimization Queue
+
+1. Commit this script-route extraction and branch-consolidation record only after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Push only `codex/shopclip-optimization-cleanup` if deployment testing is needed.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.

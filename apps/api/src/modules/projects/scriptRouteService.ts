@@ -1,11 +1,6 @@
 import { z } from "zod";
-import type { Router, Response } from "express";
-import type {
-  AssetMetadata,
-  ScriptGenerationRequest,
-  ScriptResult,
-} from "@shopclip/shared";
-import { ScriptGenerationRequestSchema } from "@shopclip/shared";
+import type { Router } from "express";
+import type { AssetMetadata, ScriptGenerationRequest, ScriptResult } from "@shopclip/shared";
 
 import {
   sendInvalidRequest,
@@ -15,29 +10,20 @@ import {
 import type { structureModelScript } from "../../providers/ai/mockScriptProvider.js";
 import type { MaybePromise, ProjectSnapshot, ProjectStore } from "./projectStore.js";
 import {
-  prepareScriptGenerationInputs,
-  type ScriptPreparationHttpError,
-} from "./scriptRequestPreparation.js";
+  prepareScriptRouteInputs,
+  sendInvalidScriptRequest,
+  sendScriptPreparationError,
+  sendStoryboardRouteError,
+  type PreparedAssetResolver,
+  type PromptContextResolver,
+} from "./scriptRouteUtils.js";
 import { storeFallbackDraftScript } from "./scriptDraftRouteService.js";
 import { buildStructuredScriptFromTextProvider } from "./scriptProviderOrchestration.js";
 import type { ScriptPromptContext } from "./scriptPromptContext.js";
 import {
   generateFallbackStoryboardForScript,
   storeGeneratedStoryboardScript,
-  type StoryboardRouteHttpError,
 } from "./storyboardRouteService.js";
-
-type PreparedAssetResolver = (
-  project: ProjectSnapshot,
-  request: ScriptGenerationRequest,
-) => MaybePromise<{ assets: AssetMetadata[]; invalidAssetIds: string[] }>;
-
-type PromptContextResolver = (
-  request: ScriptGenerationRequest,
-) => MaybePromise<{
-  context: ScriptPromptContext;
-  error?: ScriptPreparationHttpError;
-}>;
 
 type FallbackScriptGenerator = (
   project: ProjectSnapshot,
@@ -80,28 +66,6 @@ const LibraryDisplayNameUpdateSchema = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
 });
 
-const sendScriptPreparationError = (
-  response: Response,
-  error: ScriptPreparationHttpError,
-): void => {
-  if (error.status === 404) {
-    sendNotFound(response, error.code, error.message);
-  } else {
-    sendInvalidRequest(response, error.code, error.message);
-  }
-};
-
-const sendStoryboardRouteError = (
-  response: Response,
-  error: StoryboardRouteHttpError,
-): void => {
-  if (error.status === 404) {
-    sendNotFound(response, error.code, error.message);
-  } else {
-    sendInvalidRequest(response, error.code, error.message);
-  }
-};
-
 export const registerScriptRoutes = ({
   generateFallbackScriptForProject,
   renderStoryboardSceneImagesForScript,
@@ -119,37 +83,29 @@ export const registerScriptRoutes = ({
       return;
     }
 
-    const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
-    if (!parsedRequest.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_REQUEST",
-        "Script generation request is invalid.",
-      );
-      return;
-    }
-
-    const scriptInputs = await prepareScriptGenerationInputs({
+    const scriptInputs = await prepareScriptRouteInputs({
       project,
-      request: parsedRequest.data,
       requestBody: request.body,
       resolvePreparedAssets,
       resolvePromptContext,
       updateProjectPrepKeywords: (projectId, keywords) =>
         store.updateProjectPrepKeywords(projectId, keywords),
     });
-    if (scriptInputs.kind === "error") {
+    if (scriptInputs.kind === "invalid-request") {
+      sendInvalidScriptRequest(response);
+      return;
+    }
+    if (scriptInputs.kind === "preparation-error") {
       sendScriptPreparationError(response, scriptInputs.error);
       return;
     }
-    const { assets: preparedAssets, promptContext, workingProject } = scriptInputs;
     let providerResult: Awaited<ReturnType<typeof rewriteScript>>;
     try {
       providerResult = await rewriteScript(
-        workingProject,
-        parsedRequest.data,
-        preparedAssets,
-        promptContext,
+        scriptInputs.workingProject,
+        scriptInputs.request,
+        scriptInputs.assets,
+        scriptInputs.promptContext,
       );
     } catch (error) {
       sendScriptGenerationFailure(response, error);
@@ -166,33 +122,26 @@ export const registerScriptRoutes = ({
       return;
     }
 
-    const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
-    if (!parsedRequest.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_REQUEST",
-        "Script generation request is invalid.",
-      );
-      return;
-    }
-
-    const scriptInputs = await prepareScriptGenerationInputs({
+    const scriptInputs = await prepareScriptRouteInputs({
       project,
-      request: parsedRequest.data,
       requestBody: request.body,
       resolvePreparedAssets,
       resolvePromptContext,
       updateProjectPrepKeywords: (projectId, keywords) =>
         store.updateProjectPrepKeywords(projectId, keywords),
     });
-    if (scriptInputs.kind === "error") {
+    if (scriptInputs.kind === "invalid-request") {
+      sendInvalidScriptRequest(response);
+      return;
+    }
+    if (scriptInputs.kind === "preparation-error") {
       sendScriptPreparationError(response, scriptInputs.error);
       return;
     }
 
     const draftResult = await storeFallbackDraftScript({
       project: scriptInputs.workingProject,
-      request: parsedRequest.data,
+      request: scriptInputs.request,
       assets: scriptInputs.assets,
       generateFallbackScriptForProject,
       addScript: (projectId, script) => store.addScript(projectId, script),
@@ -242,37 +191,29 @@ export const registerScriptRoutes = ({
       return;
     }
 
-    const parsedRequest = ScriptGenerationRequestSchema.safeParse(request.body ?? {});
-    if (!parsedRequest.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_REQUEST",
-        "Script generation request is invalid.",
-      );
-      return;
-    }
-
-    const scriptInputs = await prepareScriptGenerationInputs({
+    const scriptInputs = await prepareScriptRouteInputs({
       project,
-      request: parsedRequest.data,
       requestBody: request.body,
       resolvePreparedAssets,
       resolvePromptContext,
       updateProjectPrepKeywords: (projectId, keywords) =>
         store.updateProjectPrepKeywords(projectId, keywords),
     });
-    if (scriptInputs.kind === "error") {
+    if (scriptInputs.kind === "invalid-request") {
+      sendInvalidScriptRequest(response);
+      return;
+    }
+    if (scriptInputs.kind === "preparation-error") {
       sendScriptPreparationError(response, scriptInputs.error);
       return;
     }
-    const { assets: preparedAssets, promptContext, workingProject } = scriptInputs;
     let providerResult: Awaited<ReturnType<typeof buildStructuredScriptFromTextProvider>>;
     try {
       providerResult = await buildStructuredScriptFromTextProvider({
-        project: workingProject,
-        request: parsedRequest.data,
-        assets: preparedAssets,
-        promptContext,
+        project: scriptInputs.workingProject,
+        request: scriptInputs.request,
+        assets: scriptInputs.assets,
+        promptContext: scriptInputs.promptContext,
         rewriteScript,
         generateFallbackScriptForProject,
         structureModelScriptForProject,
@@ -282,10 +223,10 @@ export const registerScriptRoutes = ({
       return;
     }
     const storyboardResult = await storeGeneratedStoryboardScript({
-      project: workingProject,
+      project: scriptInputs.workingProject,
       providerScript: providerResult.script,
-      request: parsedRequest.data,
-      assets: preparedAssets,
+      request: scriptInputs.request,
+      assets: scriptInputs.assets,
       renderStoryboardSceneImagesForScript,
       addScript: (projectId, script) => store.addScript(projectId, script),
     });
