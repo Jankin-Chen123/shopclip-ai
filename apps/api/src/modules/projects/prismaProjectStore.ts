@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
@@ -26,7 +25,6 @@ import {
   toAssetProcessingEvent,
   toAssetProcessingJob,
   toAssetSlice,
-  toDbStorageProvider,
   toProjectSnapshot,
   toProjectSummary,
   toReferenceVideo,
@@ -37,12 +35,19 @@ import {
   toViralTemplate,
 } from "./prismaProjectMappers.js";
 import {
+  orderByRequestedIds,
+  toAssetCreateData,
   toAssetSliceCreateData,
+  toAssetSliceUpdateData,
   toAssetUpdateData,
+  toJsonObject,
+  toProjectStatusFromRenderTask,
   toReferenceAnalysisUpdateData,
+  toReferenceVideoCreateData,
   toReferenceVideoUpdateData,
   toRenderTaskCreateData,
   toRenderTaskUpdateData,
+  toSceneUpdateData,
   toScriptSceneCreateData,
   toTraceEventCreateData,
   toViralTemplateCreateData,
@@ -164,28 +169,7 @@ export class PrismaProjectStore implements ProjectStore {
       updatedAt: timestamp,
     };
     const created = await this.prisma.asset.create({
-      data: {
-        id: assetId,
-        projectId,
-        type: asset.type,
-        status: asset.status,
-        source: asset.source ?? "merchant_upload",
-        storageProvider: toDbStorageProvider(asset.storageProvider),
-        objectKey: asset.objectKey,
-        thumbnailKey: asset.thumbnailKey,
-        url: asset.url,
-        name: asset.name,
-        mimeType: asset.mimeType,
-        sizeBytes: asset.sizeBytes,
-        tags: asset.tags,
-        embeddingText: asset.embeddingText,
-        metadata: asset.metadata as Prisma.InputJsonValue | undefined,
-        slices: {
-          create: createSlices(projectedAsset).map((slice) =>
-            toAssetSliceCreateData(slice, randomUUID),
-          ),
-        },
-      },
+      data: toAssetCreateData(projectId, assetId, asset, createSlices(projectedAsset), randomUUID),
       include: { slices: true },
     });
     return toAsset(created);
@@ -221,16 +205,7 @@ export class PrismaProjectStore implements ProjectStore {
 
     const updated = await this.prisma.assetSlice.update({
       where: { id: sliceId },
-      data: {
-        label: update.label,
-        startSecond: update.startSecond,
-        endSecond: update.endSecond,
-        tags: update.tags,
-        thumbnailKey: update.thumbnailKey,
-        embeddingText: update.embeddingText,
-        searchText: update.searchText,
-        metadata: update.metadata as Prisma.InputJsonValue | undefined,
-      },
+      data: toAssetSliceUpdateData(update),
     });
     return toAssetSlice(updated);
   }
@@ -262,13 +237,9 @@ export class PrismaProjectStore implements ProjectStore {
       return undefined;
     }
 
-    const currentMetadata =
-      current.metadata && typeof current.metadata === "object" && !Array.isArray(current.metadata)
-        ? (current.metadata as Record<string, unknown>)
-        : {};
     const updated = await this.prisma.asset.update({
       where: { id: assetId },
-      data: toAssetUpdateData(update, currentMetadata),
+      data: toAssetUpdateData(update, toJsonObject(current.metadata)),
       include: { slices: true },
     });
     return toAsset(updated);
@@ -293,11 +264,7 @@ export class PrismaProjectStore implements ProjectStore {
       }),
     ]);
 
-    const assetById = new Map(assets.map((asset) => [asset.id, toAsset(asset)]));
-    return assetIds.flatMap((assetId) => {
-      const asset = assetById.get(assetId);
-      return asset ? [asset] : [];
-    });
+    return orderByRequestedIds(assetIds, assets.map(toAsset));
   }
 
   async deleteProject(projectId: string): Promise<boolean> {
@@ -527,20 +494,7 @@ export class PrismaProjectStore implements ProjectStore {
     }
 
     const created = await this.prisma.referenceVideo.create({
-      data: {
-        id: randomUUID(),
-        projectId,
-        sourceAssetId: reference.sourceAssetId,
-        sourceUrl: reference.sourceUrl,
-        sourcePlatform: reference.sourcePlatform,
-        sourceDeclaration: reference.sourceDeclaration,
-        title: reference.title,
-        author: reference.author,
-        category: reference.category,
-        publicStats: reference.publicStats as Prisma.InputJsonValue,
-        status: reference.status,
-        errorMessage: reference.errorMessage,
-      },
+      data: toReferenceVideoCreateData(projectId, randomUUID(), reference),
     });
     return toReferenceVideo(created);
   }
@@ -727,14 +681,7 @@ export class PrismaProjectStore implements ProjectStore {
     });
     await this.prisma.project.update({
       where: { id: projectId },
-      data: {
-        status:
-          renderTask.status === "completed"
-            ? "completed"
-            : renderTask.status === "failed"
-              ? "failed"
-              : "rendering",
-      },
+      data: { status: toProjectStatusFromRenderTask(renderTask) },
     });
 
     return {
@@ -750,16 +697,7 @@ export class PrismaProjectStore implements ProjectStore {
     }
     const updated = await this.prisma.storyboardScene.update({
       where: { id: sceneId },
-      data: {
-        durationSeconds: update.durationSeconds,
-        subtitle: update.subtitle,
-        voiceover: update.voiceover,
-        visualPrompt: update.visualPrompt,
-        assetRecallQuery: update.assetRecallQuery === null ? null : update.assetRecallQuery,
-        imageUrl: update.imageUrl,
-        assetId: update.assetId === null ? null : update.assetId,
-        status: update.status ?? "edited",
-      },
+      data: toSceneUpdateData(update),
     });
     return toScene(updated);
   }
@@ -875,14 +813,7 @@ export class PrismaProjectStore implements ProjectStore {
     });
     await this.prisma.project.update({
       where: { id: current.projectId },
-      data: {
-        status:
-          updated.status === "completed"
-            ? "completed"
-            : updated.status === "failed"
-              ? "failed"
-              : "rendering",
-      },
+      data: { status: toProjectStatusFromRenderTask(updated) },
     });
 
     return {

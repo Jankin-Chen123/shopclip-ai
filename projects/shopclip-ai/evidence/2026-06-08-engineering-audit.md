@@ -1643,6 +1643,37 @@
   - Production Playwright smoke for `#project` and `#studio`: passed with no console errors, request failures, or bad HTTP responses.
 - No final contest submission materials were prepared.
 
+## 2026-06-09 Prisma Write Data Follow-Up
+
+- Branch: `codex/asset-preview-modal-ui`.
+- Scope: backend-only Prisma project store cleanup.
+- Changed files:
+  - `apps/api/src/modules/projects/prismaProjectStore.ts`.
+  - `apps/api/src/modules/projects/prismaProjectWriteData.ts`.
+  - `apps/api/src/modules/projects/prismaProjectWriteData.test.ts`.
+- Additional responsibilities moved into write-data helpers:
+  - asset create payloads.
+  - asset slice update payloads.
+  - reference video create payloads.
+  - JSON-object fallback for metadata merging.
+  - scene update payloads.
+  - render task status to project status mapping.
+  - deleted asset result ordering by request order.
+- Current file sizes:
+  - `prismaProjectStore.ts`: 868 lines.
+  - `prismaProjectWriteData.ts`: 298 lines.
+  - `prismaProjectWriteData.test.ts`: 205 lines.
+- Fresh verification:
+  - `corepack pnpm --filter @shopclip/api test src/modules/projects/prismaProjectWriteData.test.ts`: passed, 8 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 45 files and 232 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 575 tests total.
+  - `corepack pnpm build`: passed with the existing Vite large chunk warning.
+- No final contest submission materials were prepared.
+
 ## 2026-06-08 Track Clip Card UI Cleanup
 
 - Extracted the repeated Smart Edit track clip JSX into `apps/web/src/features/edit/SmartEditTrackClipCard.tsx`.
