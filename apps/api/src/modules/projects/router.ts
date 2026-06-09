@@ -130,6 +130,11 @@ import {
   generateStoryboardSceneImageUrl,
   renderStoryboardSceneImages,
 } from "./storyboardImageService.js";
+import {
+  generateFallbackStoryboardForScript,
+  storeGeneratedStoryboardScript,
+  type StoryboardRouteHttpError,
+} from "./storyboardRouteService.js";
 
 export { buildScriptAssetPromptLines, scriptGenerationPrompt } from "./scriptPromptContext.js";
 
@@ -459,6 +464,17 @@ export const createP0Router = ({
   const sendScriptPreparationError = (
     response: Response,
     error: ScriptPreparationHttpError,
+  ): void => {
+    if (error.status === 404) {
+      sendNotFound(response, error.code, error.message);
+    } else {
+      sendInvalidRequest(response, error.code, error.message);
+    }
+  };
+
+  const sendStoryboardRouteError = (
+    response: Response,
+    error: StoryboardRouteHttpError,
   ): void => {
     if (error.status === 404) {
       sendNotFound(response, error.code, error.message);
@@ -1524,56 +1540,22 @@ export const createP0Router = ({
       return;
     }
 
-    const storyboardRequest: ScriptGenerationRequest = {
-      assetIds: [],
-      draftScript: script.narrative,
-      keywords: project.prepKeywords,
-      materials: [],
-      productionMode: "automatic",
-    };
-    const preparedAssetResult = await resolvePreparedAssets(project, storyboardRequest);
-    if (preparedAssetResult.invalidAssetIds.length > 0) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_ASSETS",
-        "One or more requested assets do not exist or cannot be used in this project.",
-      );
-      return;
-    }
-
-    const providerResult = generateFallbackScript(project, {
-      assets: preparedAssetResult.assets,
-      request: storyboardRequest,
-      scriptSource: "fallback",
-    });
-    const scriptWithSceneImages = await renderStoryboardSceneImages(
+    const storyboardResult = await generateFallbackStoryboardForScript({
       project,
-      providerResult.script,
-      storyboardRequest,
-      preparedAssetResult.assets,
-      videoFrameExtractor,
-    );
-    const updatedScript = await store.updateScriptScenes(
-      script.id,
-      scriptWithSceneImages.scenes,
-      scriptWithSceneImages.constraints,
-    );
-    if (!updatedScript) {
-      sendNotFound(response, "SCRIPT_NOT_FOUND", "Script was not found.");
+      script,
+      resolvePreparedAssets,
+      generateFallbackScriptForProject: generateFallbackScript,
+      renderStoryboardSceneImagesForScript: (project, script, request, assets) =>
+        renderStoryboardSceneImages(project, script, request, assets, videoFrameExtractor),
+      updateScriptScenes: (scriptId, scenes, constraints) =>
+        store.updateScriptScenes(scriptId, scenes, constraints),
+    });
+    if (storyboardResult.kind === "error") {
+      sendStoryboardRouteError(response, storyboardResult.error);
       return;
     }
 
-    const parsedScript = ScriptResultSchema.safeParse(updatedScript);
-    if (!parsedScript.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_GENERATED_SCRIPT",
-        "Generated storyboard failed contract validation.",
-      );
-      return;
-    }
-
-    response.status(201).json({ script: parsedScript.data });
+    response.status(201).json({ script: storyboardResult.script });
   });
 
   router.post("/projects/:projectId/generate-script", async (request, response) => {
@@ -1633,32 +1615,23 @@ export const createP0Router = ({
       sendScriptGenerationFailure(response, error);
       return;
     }
-    const scriptWithSceneImages = await renderStoryboardSceneImages(
-      workingProject,
-      providerResult.script,
-      parsedRequest.data,
-      preparedAssets,
-      videoFrameExtractor,
-    );
-    const storedScript = await store.addScript(project.id, scriptWithSceneImages);
-    if (!storedScript) {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
-      return;
-    }
-
-    const parsedScript = ScriptResultSchema.safeParse(storedScript);
-    if (!parsedScript.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_GENERATED_SCRIPT",
-        "Generated storyboard failed contract validation.",
-      );
+    const storyboardResult = await storeGeneratedStoryboardScript({
+      project: workingProject,
+      providerScript: providerResult.script,
+      request: parsedRequest.data,
+      assets: preparedAssets,
+      renderStoryboardSceneImagesForScript: (project, script, request, assets) =>
+        renderStoryboardSceneImages(project, script, request, assets, videoFrameExtractor),
+      addScript: (projectId, script) => store.addScript(projectId, script),
+    });
+    if (storyboardResult.kind === "error") {
+      sendStoryboardRouteError(response, storyboardResult.error);
       return;
     }
 
     response.status(201).json({
       fallback: textProviderResult.fallback,
-      script: parsedScript.data,
+      script: storyboardResult.script,
     });
   });
 
