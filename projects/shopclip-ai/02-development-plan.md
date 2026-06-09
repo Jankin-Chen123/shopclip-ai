@@ -551,6 +551,48 @@ This addendum supersedes the backend router line counts in the previous addenda.
 6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 Reference Analyze Route Registration Addendum
+
+This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Current work location: `D:\DemoV2`.
+- Frontend work remains intentionally out of scope for this pass to avoid conflicting with the user's separate frontend edits.
+
+### Actual Change
+
+- Moved `POST /references/analyze` route registration, request validation, and HTTP error mapping from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/referenceAnalysisRouteService.ts`.
+- Kept the reference registration and background analysis helper in the same module so the route owns its schema, validation, and result-to-response mapping.
+- Removed direct Express route registration, `zod`, and project HTTP response helper usage from `router.ts`.
+- `router.ts` now acts as a dependency assembly and route-service registration layer.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/router.ts`: 235 lines.
+- `apps/api/src/modules/projects/referenceAnalysisRouteService.ts`: 212 lines.
+- `apps/api/src/modules/projects/projectCoreRouteService.ts`: 154 lines.
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 1474 lines.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2972 lines.
+- `apps/web/src/app/App.tsx`: 2529 lines.
+
+### Fresh Verification
+
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+### Updated Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this reference analyze route registration extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend cleanup by reviewing the remaining large store implementations (`prismaProjectStore.ts`, `memoryStore.ts`) before touching frontend code.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 Project Core Route Service Addendum
 
 This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.

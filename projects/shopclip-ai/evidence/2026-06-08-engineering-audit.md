@@ -1569,6 +1569,26 @@
 - No final contest submission material was prepared in this pass.
 - Next queue: move `POST /references/analyze` registration out of `router.ts` if the schema/dependency boundary remains clear; keep frontend cleanup isolated from the user's separate frontend work.
 
+## 2026-06-09 Reference Analyze Route Registration Extraction
+
+- Moved `POST /references/analyze` route registration, request validation, and HTTP error mapping from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/referenceAnalysisRouteService.ts`.
+- Kept the reference registration and background analysis helper in the same module so the route owns its schema, validation, and result-to-response mapping.
+- Removed direct Express route registration, `zod`, and project HTTP response helper usage from `router.ts`.
+- `router.ts` now acts as a dependency assembly and route-service registration layer.
+- Current file sizes:
+  - `router.ts`: 235 lines.
+  - `referenceAnalysisRouteService.ts`: 212 lines.
+  - `projectCoreRouteService.ts`: 154 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh API verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 tests.
+- No final contest submission material was prepared in this pass.
+- Next queue: review the remaining large store implementations (`prismaProjectStore.ts`, `memoryStore.ts`) before touching frontend code; keep frontend cleanup isolated from the user's separate frontend work.
+
 ## 2026-06-09 API Asset Route Service Extraction
 
 - Extracted global/project asset route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/assetRouteService.ts`.
