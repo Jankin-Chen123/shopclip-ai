@@ -9,11 +9,36 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `f974dc6 Extract smart edit selection derived state`.
+- Latest deployed optimization commit: `790f6a8d Extract app workspace request derived state`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `790f6a8d`:
+  - Extracted a larger App-layer derived-state/request batch from `apps/web/src/app/App.tsx` into existing focused helper modules.
+  - Added tested workspace helpers for section-to-page routing, asset-prep keyword snapshot comparison, and reference source video asset selection.
+  - Added a tested Smart Edit request helper for selecting the active segment override from the current plan with first-segment fallback.
+  - Replaced inline nested section routing, repeated keyword snapshot string comparisons, inline reference source asset filtering, and the large repeated Smart Edit refresh segment payload copy in `App.tsx`.
+  - Current file sizes:
+    - `App.tsx`: 2547 lines.
+    - `AppWorkspaceDerivedState.ts`: 208 lines.
+    - `AppWorkspaceDerivedState.test.ts`: 280 lines.
+    - `AppSmartEditRequest.ts`: 139 lines.
+    - `AppSmartEditRequest.test.ts`: 447 lines.
+    - `SmartEditPanel.tsx`: 3087 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red tests: `.\node_modules\.bin\vitest.CMD run src/app/AppWorkspaceDerivedState.test.ts` failed with 5 missing-helper failures, and `.\node_modules\.bin\vitest.CMD run src/app/AppSmartEditRequest.test.ts` failed with 2 missing-helper failures before implementation.
+    - Targeted green tests: `AppWorkspaceDerivedState.test.ts` passed 18 tests; `AppSmartEditRequest.test.ts` passed 10 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 510 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-Bl9j2g9C.js` at 606.00 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `790f6a8d88de2baadaa3c2e8edf1ac0e7be7db4a`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy script note: the first local health check failed during PM2 restart, then retried successfully with API `status: ok`.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `f974dc6`:
   - Extracted a larger batch of Smart Edit selection and derived-state calculations from `apps/web/src/features/edit/SmartEditPanel.tsx` into existing derived-state modules.
   - Added segment helpers for ordered segment id selection and timed segment/start-second projection.
