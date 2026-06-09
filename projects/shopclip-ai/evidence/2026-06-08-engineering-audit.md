@@ -3652,6 +3652,30 @@
 3. Continue smaller API cleanup only where route-service boundaries are clear; avoid broad API rewrites after the router reduction unless a handler cluster has obvious ownership.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 Smart Edit Visual Filter Extraction
+
+- Branch/workspace: `codex/shopclip-optimization-cleanup` in `D:\DemoV2`.
+- Scope: backend-only cleanup; no final contest submission material and no broad frontend refactor.
+- Extracted Smart Edit ffmpeg visual filter, output-dimension, and transition mapping helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditVisualFilters.ts`.
+- Preserved `smartEditComposer.ts` ownership for ffmpeg execution, URL/material materialization, subtitle overlay application, source-audio mixing, voiceover generation, upload publishing, and response mapping.
+- Preserved the existing public `smartEditOutputDimensions` export from `smartEditComposer.ts`.
+- Added `apps/api/src/providers/renderer/smartEditVisualFilters.test.ts`.
+- Current file sizes:
+  - `smartEditComposer.ts`: 1085 lines, down from 1386 before this pass.
+  - `smartEditVisualFilters.ts`: 313 lines.
+  - `smartEditVisualFilters.test.ts`: 122 lines.
+- Verification:
+  - TDD red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVisualFilters.test.ts` failed first because `smartEditVisualFilters.js` did not exist.
+  - `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVisualFilters.test.ts`: passed, 4 tests.
+  - `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditTimelinePlan.test.ts src/providers/renderer/smartEditAudioFilters.test.ts src/providers/renderer/smartEditSubtitleOverlay.test.ts`: passed, 47 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 50 files and 258 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 601 tests total: shared 26, API 258, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## 2026-06-09 Script Route Request Preparation Extraction
 
 - Branch/workspace: `codex/shopclip-optimization-cleanup` in `D:\DemoV2`.
