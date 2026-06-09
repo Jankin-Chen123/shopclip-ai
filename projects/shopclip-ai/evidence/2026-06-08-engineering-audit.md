@@ -3523,6 +3523,10 @@
   - `corepack pnpm lint`: passed.
   - `corepack pnpm test`: passed, 580 tests total: shared 26, API 237, web 317.
   - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+  - Deployment to `/www/wwwroot/shopclip-ai` on `codex/asset-preview-modal-ui`: passed for code commit `7736845b2315985645f9850e5a2abda0ea3af2ac`.
+  - PM2 `shopclip-ai-api`: online after restart.
+  - `https://shopclip.site/health`: returned API `status: ok`.
+  - Production Playwright smoke for `https://shopclip.site/#project` and `https://shopclip.site/#studio`: passed with no console errors, request failures, or 4xx/5xx responses.
 
 ## 2026-06-08 Smart Edit Selection Helpers Follow-Up
 
