@@ -9,11 +9,34 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `790f6a8d Extract app workspace request derived state`.
+- Latest deployed optimization commit: `fc1586e Extract app asset cleanup helpers`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `fc1586e`:
+  - Extracted repeated App asset cleanup logic from `apps/web/src/app/App.tsx` into `apps/web/src/app/AppAssetCleanupUtils.ts`.
+  - Added tested helpers for asset-library deletion filtering, active-script scene asset reference clearing, asset-search result filtering, and unique non-empty id selection.
+  - Replaced duplicate cleanup in both `handleDeleteAssets` and `handleDeleteReferences`, keeping project-level mutation helpers and API flow behavior unchanged.
+  - Current file sizes:
+    - `App.tsx`: 2529 lines.
+    - `AppAssetCleanupUtils.ts`: 45 lines.
+    - `AppAssetCleanupUtils.test.ts`: 70 lines.
+    - `AppWorkspaceDerivedState.ts`: 208 lines.
+    - `SmartEditPanel.tsx`: 3087 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/app/AppAssetCleanupUtils.test.ts` failed before implementation because `AppAssetCleanupUtils` did not exist.
+    - Targeted green tests: `AppAssetCleanupUtils.test.ts` passed 5 tests; `App.test.tsx` passed 161 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 515 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/app/App.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `fc1586e3b0f448ecaf542df9a61e22fe27d3ec74`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy script note: the first local health check failed during PM2 restart, then retried successfully with API `status: ok`.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `790f6a8d`:
   - Extracted a larger App-layer derived-state/request batch from `apps/web/src/app/App.tsx` into existing focused helper modules.
   - Added tested workspace helpers for section-to-page routing, asset-prep keyword snapshot comparison, and reference source video asset selection.
