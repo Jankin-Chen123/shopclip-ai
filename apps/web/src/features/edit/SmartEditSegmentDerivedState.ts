@@ -1,6 +1,7 @@
 import type { AssetMetadata, AssetSlice, SmartEditPlan, SmartEditSegment } from "@shopclip/shared";
 
 import { sourceLabel } from "./SmartEditSegmentUtils";
+import { TIMELINE_BASE_PX_PER_SECOND } from "./SmartEditTimelineMath";
 import { timelineDurationForSegments } from "./SmartEditTimelineOperations";
 
 export const sortSmartEditSegments = (
@@ -85,6 +86,34 @@ export const smartEditEnabledDurationSeconds = (
 export const smartEditTimelineDurationSeconds = (
   sortedSegments: SmartEditSegment[],
 ): number => Math.max(1, timelineDurationForSegments(sortedSegments));
+
+export const buildSmartEditTimelineMetrics = ({
+  playheadSeconds,
+  sortedSegments,
+  timelineZoom,
+}: {
+  playheadSeconds: number;
+  sortedSegments: SmartEditSegment[];
+  timelineZoom: number;
+}): {
+  boundedPlayheadSeconds: number;
+  enabledDurationSeconds: number;
+  timelineDurationSeconds: number;
+  timelinePixelsPerSecond: number;
+  timelineWidth: number;
+} => {
+  const enabledDurationSeconds = smartEditEnabledDurationSeconds(sortedSegments);
+  const timelineDurationSeconds = smartEditTimelineDurationSeconds(sortedSegments);
+  const timelinePixelsPerSecond = TIMELINE_BASE_PX_PER_SECOND * timelineZoom;
+
+  return {
+    boundedPlayheadSeconds: Math.min(playheadSeconds, timelineDurationSeconds),
+    enabledDurationSeconds,
+    timelineDurationSeconds,
+    timelinePixelsPerSecond,
+    timelineWidth: Math.max(720, timelineDurationSeconds * timelinePixelsPerSecond),
+  };
+};
 
 export const smartEditSelectedSourceLabel = (
   selectedSegment: SmartEditSegment | undefined,

@@ -31,6 +31,7 @@ import {
   type SmartEditVisualEffectType,
 } from "./SmartEditSegmentUtils";
 import {
+  buildSmartEditTimelineMetrics,
   materializableSmartEditSegments,
   selectSmartEditSegment,
   selectSmartEditAssetSlicesForSegment,
@@ -40,9 +41,7 @@ import {
   selectSmartEditSegmentsById,
   selectSmartEditSegmentIdsWithToken,
   smartEditPreviewSegmentLabel,
-  smartEditEnabledDurationSeconds,
   smartEditSelectedSourceLabel,
-  smartEditTimelineDurationSeconds,
   sortSmartEditPlanSegments,
   updateSelectedSmartEditSegments,
 } from "./SmartEditSegmentDerivedState";
@@ -206,7 +205,6 @@ import {
 } from "./SmartEditTimelineOperations";
 import {
   MIN_SMART_EDIT_CLIP_SECONDS,
-  TIMELINE_BASE_PX_PER_SECOND,
   clampAudioVolume,
   clampPercentOffset,
   clampPlaybackRate,
@@ -420,11 +418,17 @@ export const SmartEditPanel = ({
   }, [selectedSegment, sortedSegments]);
   const selectedPreviewMedia = previewMediaForSegment(selectedSegment, assets);
   const selectedSlices = selectSmartEditAssetSlicesForSegment(assetSlices, selectedSegment);
-  const enabledDurationSeconds = smartEditEnabledDurationSeconds(sortedSegments);
-  const timelineDurationSeconds = smartEditTimelineDurationSeconds(sortedSegments);
-  const boundedPlayheadSeconds = Math.min(playheadSeconds, timelineDurationSeconds);
-  const timelinePixelsPerSecond = TIMELINE_BASE_PX_PER_SECOND * timelineZoom;
-  const timelineWidth = Math.max(720, timelineDurationSeconds * timelinePixelsPerSecond);
+  const {
+    boundedPlayheadSeconds,
+    enabledDurationSeconds,
+    timelineDurationSeconds,
+    timelinePixelsPerSecond,
+    timelineWidth,
+  } = buildSmartEditTimelineMetrics({
+    playheadSeconds,
+    sortedSegments,
+    timelineZoom,
+  });
   const normalizedPreviewRange = useMemo(
     () => normalizedSmartEditPreviewRange(previewRange, timelineDurationSeconds),
     [previewRange, timelineDurationSeconds],

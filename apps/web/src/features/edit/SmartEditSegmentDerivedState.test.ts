@@ -2,6 +2,7 @@ import type { AssetMetadata, AssetSlice, SmartEditSegment } from "@shopclip/shar
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSmartEditTimelineMetrics,
   selectSmartEditAssetSlicesForSegment,
   selectSmartEditSegmentIdByOffset,
   selectSmartEditSegmentIdsOrUndefined,
@@ -144,5 +145,41 @@ describe("SmartEditSegmentDerivedState", () => {
         segment("scene-1", { source: { assetId: "asset-1" } as SmartEditSegment["source"] }),
       ).map((slice) => slice.id),
     ).toEqual(["slice-1", "slice-3"]);
+  });
+
+  it("builds timeline metrics from enabled segments and zoom", () => {
+    expect(
+      buildSmartEditTimelineMetrics({
+        playheadSeconds: 20,
+        sortedSegments: [
+          segment("scene-1", { durationSeconds: 3, enabled: true, startSecond: 0 }),
+          segment("scene-2", { durationSeconds: 4, enabled: false, startSecond: 3 }),
+          segment("scene-3", { durationSeconds: 5, enabled: true, startSecond: 7 }),
+        ],
+        timelineZoom: 2,
+      }),
+    ).toEqual({
+      boundedPlayheadSeconds: 8,
+      enabledDurationSeconds: 8,
+      timelineDurationSeconds: 8,
+      timelinePixelsPerSecond: 68,
+      timelineWidth: 720,
+    });
+  });
+
+  it("keeps empty timelines visible and clamps the playhead to the fallback duration", () => {
+    expect(
+      buildSmartEditTimelineMetrics({
+        playheadSeconds: 5,
+        sortedSegments: [],
+        timelineZoom: 1,
+      }),
+    ).toEqual({
+      boundedPlayheadSeconds: 1,
+      enabledDurationSeconds: 0,
+      timelineDurationSeconds: 1,
+      timelinePixelsPerSecond: 34,
+      timelineWidth: 720,
+    });
   });
 });
