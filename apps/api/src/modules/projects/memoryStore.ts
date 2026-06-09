@@ -17,6 +17,11 @@ import type {
   ViralTemplate,
 } from "@shopclip/shared";
 import type { DeleteReferenceVideoResult, ProjectSnapshot, ProjectStore } from "./projectStore.js";
+import {
+  clearAssetReferences,
+  isReferenceOwnedAsset,
+  toMemoryProjectSummary,
+} from "./memoryProjectStoreUtils.js";
 
 const now = (): string => new Date().toISOString();
 
@@ -60,23 +65,7 @@ export class MemoryProjectStore implements ProjectStore {
 
   listProjects(): ProjectSummary[] {
     return [...this.projects.values()]
-      .map((project) => {
-        const coverAsset = project.assets.find(
-          (asset) => asset.type === "image" || asset.mimeType?.startsWith("image/"),
-        );
-        return {
-          id: project.id,
-          title: project.title,
-          productName: project.productName,
-          status: project.status,
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt,
-          assetCount: project.assets.length,
-          coverAssetId: coverAsset?.id,
-          coverAssetUrl: coverAsset?.url,
-          sceneCount: project.scenes.length,
-        };
-      })
+      .map(toMemoryProjectSummary)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
@@ -267,29 +256,8 @@ export class MemoryProjectStore implements ProjectStore {
       const nextAssetProcessingEvents = project.assetProcessingEvents.filter(
         (event) => !requestedAssetIds.has(event.assetId),
       );
-      const nextScenes = project.scenes.map((scene) =>
-        scene.assetId && requestedAssetIds.has(scene.assetId)
-          ? { ...scene, assetId: undefined }
-          : scene,
-      );
-      const nextScripts = project.scripts.map((script) => ({
-        ...script,
-        scenes: script.scenes.map((scene) =>
-          scene.assetId && requestedAssetIds.has(scene.assetId)
-            ? { ...scene, assetId: undefined }
-            : scene,
-        ),
-      }));
-
-      const changed =
-        projectDeletedAssets.length > 0 ||
-        nextScenes.some((scene, index) => scene.assetId !== project.scenes[index]?.assetId) ||
-        nextScripts.some((script, scriptIndex) =>
-          script.scenes.some(
-            (scene, sceneIndex) =>
-              scene.assetId !== project.scripts[scriptIndex]?.scenes[sceneIndex]?.assetId,
-          ),
-        );
+      const clearedReferences = clearAssetReferences(project, requestedAssetIds);
+      const changed = projectDeletedAssets.length > 0 || clearedReferences.changed;
       if (!changed) {
         continue;
       }
@@ -298,8 +266,8 @@ export class MemoryProjectStore implements ProjectStore {
       project.assetSlices = nextAssetSlices;
       project.assetProcessingJobs = nextAssetProcessingJobs;
       project.assetProcessingEvents = nextAssetProcessingEvents;
-      project.scenes = nextScenes;
-      project.scripts = nextScripts;
+      project.scenes = clearedReferences.scenes;
+      project.scripts = clearedReferences.scripts;
       project.updatedAt = timestamp;
     }
 
@@ -320,19 +288,9 @@ export class MemoryProjectStore implements ProjectStore {
 
     if (deletedAssetIds.size > 0) {
       for (const remainingProject of this.projects.values()) {
-        remainingProject.scenes = remainingProject.scenes.map((scene) =>
-          scene.assetId && deletedAssetIds.has(scene.assetId)
-            ? { ...scene, assetId: undefined }
-            : scene,
-        );
-        remainingProject.scripts = remainingProject.scripts.map((script) => ({
-          ...script,
-          scenes: script.scenes.map((scene) =>
-            scene.assetId && deletedAssetIds.has(scene.assetId)
-              ? { ...scene, assetId: undefined }
-              : scene,
-          ),
-        }));
+        const clearedReferences = clearAssetReferences(remainingProject, deletedAssetIds);
+        remainingProject.scenes = clearedReferences.scenes;
+        remainingProject.scripts = clearedReferences.scripts;
       }
     }
 
@@ -396,7 +354,7 @@ export class MemoryProjectStore implements ProjectStore {
       ...[...this.projects.values()].flatMap((project) => project.assets),
     ];
     const deletedAssetIds = allAssets
-      .filter((asset) => this.isReferenceOwnedAsset(asset, deletedReference))
+      .filter((asset) => isReferenceOwnedAsset(asset, deletedReference))
       .map((asset) => asset.id);
 
     if (globalReferenceIndex !== -1) {
@@ -1091,14 +1049,6 @@ export class MemoryProjectStore implements ProjectStore {
     }
 
     return [...deletedTemplateIds];
-  }
-
-  private isReferenceOwnedAsset(asset: AssetMetadata, reference: ReferenceVideo): boolean {
-    const metadata = asset.metadata && typeof asset.metadata === "object" ? asset.metadata : {};
-    return (
-      (metadata.kind === "reference_script_asset" && metadata.referenceId === reference.id) ||
-      (asset.id === reference.sourceAssetId && asset.source === "public_reference")
-    );
   }
 
   private replaceScene(project: ProjectSnapshot, updatedScene: StoryboardScene): void {
