@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `4e53412 Extract smart edit preview range label`.
+- Latest deployed optimization commit: `e0e005c Extract smart edit timeline metrics`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `e0e005c`:
+  - Extracted Smart Edit timeline metric derivation from `apps/web/src/features/edit/SmartEditPanel.tsx` into `buildSmartEditTimelineMetrics` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
+  - Replaced separate inline calculations for enabled duration, timeline duration, bounded playhead, pixels-per-second, and timeline width with a single tested helper call.
+  - Extended `apps/web/src/features/edit/SmartEditSegmentDerivedState.test.ts` coverage for enabled-only timeline duration behavior, zoom-derived pixels, minimum timeline width, and empty-timeline fallback clamping.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3101 lines.
+    - `SmartEditSegmentDerivedState.ts`: 148 lines.
+    - `SmartEditSegmentDerivedState.test.ts`: 185 lines.
+    - `App.tsx`: 2581 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` failed before implementation because `buildSmartEditTimelineMetrics` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` passed, 12 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 491 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-Cs8ZvNS_.js` at 607.03 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `e0e005c18ccdd33174fafdee758db259b9f3552f`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `4e53412`:
   - Extracted Smart Edit preview-range label formatting from `apps/web/src/features/edit/SmartEditPanel.tsx` into `selectSmartEditPreviewRangeLabel` in `apps/web/src/features/edit/SmartEditTimelineToolbarState.ts`.
   - Replaced the inline `formatTimelineTime` range interpolation in `SmartEditPanel.tsx`, removing that direct import from the large component.
