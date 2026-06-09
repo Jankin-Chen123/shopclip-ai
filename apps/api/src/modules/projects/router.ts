@@ -1,4 +1,4 @@
-import { Router, raw } from "express";
+import { Router, raw, type Response } from "express";
 import { z } from "zod";
 import type {
   AssetMetadata,
@@ -112,6 +112,10 @@ import {
   resolvePreparedScriptAssets,
   resolveScriptTemplateAssets,
 } from "./projectAssetResolution.js";
+import {
+  prepareScriptGenerationInputs,
+  type ScriptPreparationHttpError,
+} from "./scriptRequestPreparation.js";
 import {
   scriptGenerationPrompt,
   type ScriptPromptContext,
@@ -451,6 +455,17 @@ export const createP0Router = ({
       project,
       requestedAssetIds: request.assetIds,
     });
+
+  const sendScriptPreparationError = (
+    response: Response,
+    error: ScriptPreparationHttpError,
+  ): void => {
+    if (error.status === 404) {
+      sendNotFound(response, error.code, error.message);
+    } else {
+      sendInvalidRequest(response, error.code, error.message);
+    }
+  };
 
   router.post("/projects", async (request, response) => {
     const parsedBrief = ProjectBriefSchema.safeParse(request.body);
@@ -1406,43 +1421,27 @@ export const createP0Router = ({
       return;
     }
 
-    const promptContextResult = await resolveScriptPromptContext(store, parsedRequest.data);
-    if (promptContextResult.error) {
-      const { code, message, status } = promptContextResult.error;
-      if (status === 404) {
-        sendNotFound(response, code, message);
-      } else {
-        sendInvalidRequest(response, code, message);
-      }
+    const scriptInputs = await prepareScriptGenerationInputs({
+      project,
+      request: parsedRequest.data,
+      requestBody: request.body,
+      resolvePreparedAssets,
+      resolvePromptContext: (scriptRequest) => resolveScriptPromptContext(store, scriptRequest),
+      updateProjectPrepKeywords: (projectId, keywords) =>
+        store.updateProjectPrepKeywords(projectId, keywords),
+    });
+    if (scriptInputs.kind === "error") {
+      sendScriptPreparationError(response, scriptInputs.error);
       return;
     }
-
-    const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
-      request.body ?? {},
-      "keywords",
-    );
-    const workingProject = shouldPersistKeywords
-      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ??
-        project)
-      : project;
-
-    const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
-    if (preparedAssetResult.invalidAssetIds.length > 0) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_ASSETS",
-        "One or more requested assets do not exist or cannot be used in this project.",
-      );
-      return;
-    }
-    const preparedAssets = preparedAssetResult.assets;
+    const { assets: preparedAssets, promptContext, workingProject } = scriptInputs;
     let providerResult: Awaited<ReturnType<typeof rewriteScriptWithConfiguredProvider>>;
     try {
       providerResult = await rewriteScriptWithConfiguredProvider(
         workingProject,
         parsedRequest.data,
         preparedAssets,
-        promptContextResult.context,
+        promptContext,
       );
     } catch (error) {
       sendScriptGenerationFailure(response, error);
@@ -1474,38 +1473,22 @@ export const createP0Router = ({
       return;
     }
 
-    const promptContextResult = await resolveScriptPromptContext(store, parsedRequest.data);
-    if (promptContextResult.error) {
-      const { code, message, status } = promptContextResult.error;
-      if (status === 404) {
-        sendNotFound(response, code, message);
-      } else {
-        sendInvalidRequest(response, code, message);
-      }
+    const scriptInputs = await prepareScriptGenerationInputs({
+      project,
+      request: parsedRequest.data,
+      requestBody: request.body,
+      resolvePreparedAssets,
+      resolvePromptContext: (scriptRequest) => resolveScriptPromptContext(store, scriptRequest),
+      updateProjectPrepKeywords: (projectId, keywords) =>
+        store.updateProjectPrepKeywords(projectId, keywords),
+    });
+    if (scriptInputs.kind === "error") {
+      sendScriptPreparationError(response, scriptInputs.error);
       return;
     }
 
-    const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
-      request.body ?? {},
-      "keywords",
-    );
-    const workingProject = shouldPersistKeywords
-      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ??
-        project)
-      : project;
-
-    const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
-    if (preparedAssetResult.invalidAssetIds.length > 0) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_ASSETS",
-        "One or more requested assets do not exist or cannot be used in this project.",
-      );
-      return;
-    }
-
-    const providerResult = generateFallbackScript(workingProject, {
-      assets: preparedAssetResult.assets,
+    const providerResult = generateFallbackScript(scriptInputs.workingProject, {
+      assets: scriptInputs.assets,
       request: parsedRequest.data,
       scriptSource: "fallback",
     });
@@ -1610,36 +1593,20 @@ export const createP0Router = ({
       return;
     }
 
-    const promptContextResult = await resolveScriptPromptContext(store, parsedRequest.data);
-    if (promptContextResult.error) {
-      const { code, message, status } = promptContextResult.error;
-      if (status === 404) {
-        sendNotFound(response, code, message);
-      } else {
-        sendInvalidRequest(response, code, message);
-      }
+    const scriptInputs = await prepareScriptGenerationInputs({
+      project,
+      request: parsedRequest.data,
+      requestBody: request.body,
+      resolvePreparedAssets,
+      resolvePromptContext: (scriptRequest) => resolveScriptPromptContext(store, scriptRequest),
+      updateProjectPrepKeywords: (projectId, keywords) =>
+        store.updateProjectPrepKeywords(projectId, keywords),
+    });
+    if (scriptInputs.kind === "error") {
+      sendScriptPreparationError(response, scriptInputs.error);
       return;
     }
-
-    const shouldPersistKeywords = Object.prototype.hasOwnProperty.call(
-      request.body ?? {},
-      "keywords",
-    );
-    const workingProject = shouldPersistKeywords
-      ? ((await store.updateProjectPrepKeywords(project.id, parsedRequest.data.keywords)) ??
-        project)
-      : project;
-
-    const preparedAssetResult = await resolvePreparedAssets(workingProject, parsedRequest.data);
-    if (preparedAssetResult.invalidAssetIds.length > 0) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_ASSETS",
-        "One or more requested assets do not exist or cannot be used in this project.",
-      );
-      return;
-    }
-    const preparedAssets = preparedAssetResult.assets;
+    const { assets: preparedAssets, promptContext, workingProject } = scriptInputs;
     let textProviderResult: Awaited<ReturnType<typeof rewriteScriptWithConfiguredProvider>>;
     let providerResult: ReturnType<typeof generateFallbackScript>;
     try {
@@ -1647,7 +1614,7 @@ export const createP0Router = ({
         workingProject,
         parsedRequest.data,
         preparedAssets,
-        promptContextResult.context,
+        promptContext,
       );
       const scriptContext = {
         assets: preparedAssets,
