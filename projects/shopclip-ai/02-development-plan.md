@@ -1191,3 +1191,45 @@ This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It co
 1. Commit this Smart Edit voiceover planning extraction after `git diff --check` and `.agents/memory` tracking checks pass.
 2. Continue backend cleanup only where helper ownership remains clear, such as renderer IO helpers or provider normalization.
 3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
+
+## 2026-06-09 Smart Edit Media Source Extraction Addendum
+
+This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It continues reducing `smartEditComposer.ts` without touching frontend files.
+
+### Actual Change
+
+- Extracted Smart Edit media-source URL and source classification helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditMediaSources.ts`.
+- Moved pure helpers for:
+  - remote URL detection.
+  - data URL parsing.
+  - URL extension fallback resolution.
+  - segment asset lookup.
+  - segment source URL precedence.
+  - generated clip versus image source classification.
+- Kept URL materialization, temporary file writing, ffmpeg execution, subtitle overlay application, audio mixing, upload publishing, and response mapping in `smartEditComposer.ts`.
+- Added focused coverage in `apps/api/src/providers/renderer/smartEditMediaSources.test.ts`.
+
+### Current File Sizes
+
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 913 lines currently; media-source helper ownership has moved out while imports and formatting changed the measured line count.
+- `apps/api/src/providers/renderer/smartEditMediaSources.ts`: 52 lines.
+- `apps/api/src/providers/renderer/smartEditMediaSources.test.ts`: 108 lines.
+
+### Fresh Verification
+
+- TDD red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditMediaSources.test.ts` failed first because `smartEditMediaSources.js` did not exist.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditMediaSources.test.ts`: passed, 3 tests.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditVisualFilters.test.ts`: passed, 38 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 53 files and 267 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 610 tests total: shared 26, API 267, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Updated Optimization Queue
+
+1. Commit this Smart Edit media-source extraction after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Continue backend cleanup only where helper ownership remains clear, such as renderer IO materialization or provider normalization.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.

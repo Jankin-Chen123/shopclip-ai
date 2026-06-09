@@ -3652,6 +3652,39 @@
 3. Continue smaller API cleanup only where route-service boundaries are clear; avoid broad API rewrites after the router reduction unless a handler cluster has obvious ownership.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 Cleanup Branch Media Source Extraction Evidence
+
+- Branch: `codex/shopclip-optimization-cleanup`.
+- Scope: backend-only Smart Edit renderer cleanup. No frontend files were changed in this pass.
+- Change summary:
+  - Extracted media-source helper ownership from `apps/api/src/providers/renderer/smartEditComposer.ts`.
+  - Added `apps/api/src/providers/renderer/smartEditMediaSources.ts`.
+  - Added `apps/api/src/providers/renderer/smartEditMediaSources.test.ts`.
+  - Kept command execution, materialization side effects, ffmpeg orchestration, upload publishing, and response mapping in `smartEditComposer.ts`.
+- Current file sizes:
+  - `apps/api/src/providers/renderer/smartEditComposer.ts`: 913 lines.
+  - `apps/api/src/providers/renderer/smartEditMediaSources.ts`: 52 lines.
+  - `apps/api/src/providers/renderer/smartEditMediaSources.test.ts`: 108 lines.
+- TDD evidence:
+  - Red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditMediaSources.test.ts` failed first because `smartEditMediaSources.js` did not exist.
+  - Focused green check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditMediaSources.test.ts` passed, 3 tests.
+  - Composer regression check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditVisualFilters.test.ts` passed, 38 tests.
+- Fresh full verification:
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 610 tests total: shared 26, API 267, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+- Branch consolidation note:
+  - Current optimization work continues on `codex/shopclip-optimization-cleanup`.
+  - `codex/asset-preview-modal-ui` is not the active optimization branch and was not used for this pass.
+
+## Current Optimization Queue
+
+1. Commit and push the media-source extraction only to `codex/shopclip-optimization-cleanup` after pre-commit checks pass.
+2. Continue backend cleanup only where helper ownership remains clear, such as renderer IO materialization or provider normalization.
+3. Keep frontend refactors deferred until the user's separate frontend workspace changes are ready to integrate.
+4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; avoid mechanical rewrites of the damaged body.
+
 ## 2026-06-09 Smart Edit Visual Filter Extraction
 
 - Branch/workspace: `codex/shopclip-optimization-cleanup` in `D:\DemoV2`.
