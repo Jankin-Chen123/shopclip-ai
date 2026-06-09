@@ -1550,6 +1550,42 @@
 5. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 6. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 API Render Route Service Extraction
+
+- Extracted render route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/renderRouteService.ts`.
+- Moved route handlers for:
+  - storyboard render task creation.
+  - render task display-name update and deletion.
+  - Seedance render polling, final export publishing, and scene clip materialization.
+  - failed render retry.
+  - project export resolution.
+- Kept Smart Edit route registration in `router.ts`; it still owns planner/composer background job dependencies and should be split separately only if a clear Smart Edit route boundary is selected.
+- Current file sizes:
+  - `router.ts`: 1196 lines.
+  - `renderRouteService.ts`: 377 lines.
+  - `assetRouteService.ts`: 632 lines.
+  - `prismaProjectStore.ts`: 1349 lines.
+  - `memoryStore.ts`: 1113 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh verification after this pass:
+  - First API typecheck failed because the moved export route used an older `exportResult` field name and omitted the `not-ready` branch; fixed by preserving the original `body` response and `EXPORT_NOT_READY` handling.
+  - First API lint failed because the scene clip materializer import was type-only; fixed with an explicit type import.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+## Current Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this render-route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend route cleanup by extracting references/templates or script-generation routes only if the dependency boundary remains clear.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 API Smart Edit Audio Filter Extraction
 
 - Extracted Smart Edit renderer audio filter and BGM profile helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditAudioFilters.ts`.
