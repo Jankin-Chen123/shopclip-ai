@@ -18,16 +18,11 @@ import type {
 import type { AppCopy } from "../../app/i18n";
 import {
   audioVolumeKeyframes,
-  defaultVisualEffectAmount,
-  effectsForSegment,
   previewMediaForSegment,
   transformForSegment,
   trimSegmentSource,
   upsertSmartEditKeyframeAtTime,
-  visualEffectKeyframes,
   visualEffectLabel,
-  visualEffectsForSegment,
-  visualKeyframesForSegment,
   type SmartEditVisualEffectType,
 } from "./SmartEditSegmentUtils";
 import {
@@ -171,7 +166,6 @@ import {
   selectSmartEditTimelineElementIdsForTrack,
   selectSmartEditTimelineElementIdsInBox,
   selectSmartEditTrackClipIdsInRange,
-  segmentTimelineBaseStart,
   slipSmartEditTimelineElementSource,
   slipSmartEditTimelineElementsSource,
   splitSmartEditSegmentOnTimeline,
@@ -214,7 +208,6 @@ import {
   clampSnappedTimelineSecond,
   clampTimelineStart,
   clampVisualKeyframeTime,
-  clipDurationWithinSegment,
   nextTimelineScrollLeftForPlayhead,
   playheadSecondsFromTimelinePointer,
   snapTimelineSeconds,
@@ -222,6 +215,18 @@ import {
   timelineRulerTicks,
 } from "./SmartEditTimelineMath";
 import { useSmartEditSrtCaptions } from "./useSmartEditSrtCaptions";
+import {
+  addSmartEditSegmentAudioVolumeKeyframeAtPlayhead,
+  addSmartEditVisualEffectAmountKeyframe,
+  addSmartEditVisualEffectToSegment,
+  addSmartEditVisualKeyframeAtPlayhead,
+  moveSmartEditVisualEffectOnSegment,
+  removeSmartEditSegmentAudioVolumeKeyframe,
+  removeSmartEditVisualEffectAmountKeyframe,
+  removeSmartEditVisualEffectFromSegment,
+  removeSmartEditVisualKeyframe,
+  updateSmartEditVisualEffectOnSegment,
+} from "./SmartEditVisualEditOperations";
 import { handleSmartEditKeyboardShortcut } from "./SmartEditKeyboardShortcuts";
 
 export {
@@ -1090,26 +1095,11 @@ export const SmartEditPanel = ({
     if (!plan || !selectedSegment) {
       return;
     }
-    const selectedStart = segmentTimelineBaseStart(plan, selectedSegment.id);
-    const timeSecond = clampVisualKeyframeTime(
-      boundedPlayheadSeconds - selectedStart,
-      selectedSegment.durationSeconds,
-    );
-    const token = `${Date.now()}`;
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
-      return {
-        ...segment,
-        visualKeyframes: upsertSmartEditKeyframeAtTime({
-          keyframe: {
-            easing: "linear" as const,
-            effects: effectsForSegment(segment),
-            id: `${segment.id}-visual-kf-${token}`,
-            timeSecond,
-            transform: transformForSegment(segment),
-          },
-          keyframes: visualKeyframesForSegment(segment),
-        }),
-      };
+    commitPlanChange(addSmartEditVisualKeyframeAtPlayhead({
+      boundedPlayheadSeconds,
+      createToken: () => `${Date.now()}`,
+      plan,
+      selectedSegment,
     }), { label: "Add visual keyframe" });
   };
 
@@ -1117,32 +1107,23 @@ export const SmartEditPanel = ({
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
-      ...segment,
-      visualKeyframes: visualKeyframesForSegment(segment).filter((keyframe) => keyframe.id !== keyframeId),
-    })), { label: "Remove visual keyframe" });
+    commitPlanChange(removeSmartEditVisualKeyframe({
+      keyframeId,
+      plan,
+      selectedSegment,
+    }), { label: "Remove visual keyframe" });
   };
 
   const addVisualEffectToSelectedSegment = (type: SmartEditVisualEffectType) => {
     if (!plan || !selectedSegment) {
       return;
     }
-    const token = `${Date.now()}`;
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
-      ...segment,
-      visualEffects: [
-        ...visualEffectsForSegment(segment),
-        {
-          enabled: true,
-          id: `${segment.id}-${type}-effect-${token}`,
-          params: {
-            amount: defaultVisualEffectAmount(type),
-            radius: 4,
-          },
-          type,
-        },
-      ].slice(0, 20),
-    })), { label: `Add ${visualEffectLabel(type)} effect` });
+    commitPlanChange(addSmartEditVisualEffectToSegment({
+      createToken: () => `${Date.now()}`,
+      plan,
+      selectedSegment,
+      type,
+    }), { label: `Add ${visualEffectLabel(type)} effect` });
   };
 
   const updateVisualEffectOnSelectedSegment = (
@@ -1153,42 +1134,34 @@ export const SmartEditPanel = ({
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
-      ...segment,
-      visualEffects: visualEffectsForSegment(segment).map((effect) =>
-        effect.id === effectId ? update(effect) : effect,
-      ),
-    })), { label });
+    commitPlanChange(updateSmartEditVisualEffectOnSegment({
+      effectId,
+      plan,
+      selectedSegment,
+      update,
+    }), { label });
   };
 
   const removeVisualEffectFromSelectedSegment = (effectId: string) => {
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
-      ...segment,
-      visualEffects: visualEffectsForSegment(segment).filter((effect) => effect.id !== effectId),
-    })), { label: "Remove visual effect" });
+    commitPlanChange(removeSmartEditVisualEffectFromSegment({
+      effectId,
+      plan,
+      selectedSegment,
+    }), { label: "Remove visual effect" });
   };
 
   const moveVisualEffectOnSelectedSegment = (effectId: string, direction: -1 | 1) => {
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
-      const effects = visualEffectsForSegment(segment);
-      const index = effects.findIndex((effect) => effect.id === effectId);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= effects.length) {
-        return segment;
-      }
-      const nextEffects = [...effects];
-      const [moved] = nextEffects.splice(index, 1);
-      nextEffects.splice(nextIndex, 0, moved!);
-      return {
-        ...segment,
-        visualEffects: nextEffects,
-      };
+    commitPlanChange(moveSmartEditVisualEffectOnSegment({
+      direction,
+      effectId,
+      plan,
+      selectedSegment,
     }), { label: "Reorder visual effects" });
   };
 
@@ -1196,115 +1169,38 @@ export const SmartEditPanel = ({
     if (!plan || !selectedSegment) {
       return;
     }
-    const selectedStart = segmentTimelineBaseStart(plan, selectedSegment.id);
-    const timeSecond = clampVisualKeyframeTime(
-      boundedPlayheadSeconds - selectedStart,
-      selectedSegment.durationSeconds,
-    );
-    const token = `${Date.now()}`;
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
-      ...segment,
-      visualEffects: visualEffectsForSegment(segment).map((effect) => {
-        if (effect.id !== effectId) {
-          return effect;
-        }
-        return {
-          ...effect,
-          keyframes: upsertSmartEditKeyframeAtTime({
-            keyframe: {
-              easing: "linear" as const,
-              id: `${effect.id}-amount-kf-${token}`,
-              param: "amount" as const,
-              timeSecond,
-              value: effect.params.amount,
-            },
-            keyframes: visualEffectKeyframes(effect),
-          }),
-        };
-      }),
-    })), { label: "Add effect amount keyframe" });
+    commitPlanChange(addSmartEditVisualEffectAmountKeyframe({
+      boundedPlayheadSeconds,
+      createToken: () => `${Date.now()}`,
+      effectId,
+      plan,
+      selectedSegment,
+    }), { label: "Add effect amount keyframe" });
   };
 
   const removeVisualEffectAmountKeyframe = (effectId: string, keyframeId: string) => {
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => ({
-      ...segment,
-      visualEffects: visualEffectsForSegment(segment).map((effect) =>
-        effect.id === effectId
-          ? {
-              ...effect,
-              keyframes: visualEffectKeyframes(effect).filter(
-                (keyframe) => keyframe.id !== keyframeId,
-              ),
-            }
-          : effect,
-      ),
-    })), { label: "Remove effect amount keyframe" });
+    commitPlanChange(removeSmartEditVisualEffectAmountKeyframe({
+      effectId,
+      keyframeId,
+      plan,
+      selectedSegment,
+    }), { label: "Remove effect amount keyframe" });
   };
 
   const addSegmentAudioVolumeKeyframeAtPlayhead = (trackId: "sourceAudio" | "voice") => {
     if (!plan || !selectedSegment) {
       return;
     }
-    const selectedStart = segmentTimelineBaseStart(plan, selectedSegment.id);
-    const clipStartSecond =
-      selectedTrackClip?.startSecond ??
-      selectedStart +
-        (trackId === "sourceAudio"
-          ? selectedSegment.sourceAudioStartOffsetSeconds ?? 0
-          : selectedSegment.voiceoverStartOffsetSeconds ?? 0);
-    const clipDurationSeconds =
-      trackId === "sourceAudio"
-        ? clipDurationWithinSegment(
-            selectedSegment.sourceAudioDurationSeconds,
-            selectedSegment.sourceAudioStartOffsetSeconds,
-            selectedSegment.durationSeconds,
-          )
-        : clipDurationWithinSegment(
-            selectedSegment.voiceoverDurationSeconds,
-            selectedSegment.voiceoverStartOffsetSeconds,
-            selectedSegment.durationSeconds,
-          );
-    const timeSecond = clampVisualKeyframeTime(
-      boundedPlayheadSeconds - clipStartSecond,
-      clipDurationSeconds,
-    );
-    const token = `${Date.now()}`;
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) => {
-      if (trackId === "sourceAudio") {
-        return {
-          ...segment,
-          sourceAudioVolumeKeyframes: upsertSmartEditKeyframeAtTime({
-            keyframe: {
-              easing: "linear" as const,
-              id: `${segment.id}-source-volume-kf-${token}`,
-              timeSecond,
-              volume: clampAudioVolume(segment.sourceAudioVolume ?? 1),
-            },
-            keyframes: audioVolumeKeyframes(
-              segment.sourceAudioVolumeKeyframes,
-              clipDurationSeconds,
-            ),
-          }),
-        };
-      }
-      return {
-        ...segment,
-        voiceoverVolumeKeyframes: upsertSmartEditKeyframeAtTime({
-          keyframe: {
-            easing: "linear" as const,
-            id: `${segment.id}-voice-volume-kf-${token}`,
-            timeSecond,
-            volume: clampAudioVolume(segment.voiceoverVolume ?? 1),
-          },
-          keyframes: audioVolumeKeyframes(
-            segment.voiceoverVolumeKeyframes,
-            clipDurationSeconds,
-          ),
-        }),
-      };
+    commitPlanChange(addSmartEditSegmentAudioVolumeKeyframeAtPlayhead({
+      boundedPlayheadSeconds,
+      createToken: () => `${Date.now()}`,
+      plan,
+      selectedSegment,
+      selectedTrackClip,
+      trackId,
     }), { label: "Add audio volume keyframe" });
   };
 
@@ -1315,23 +1211,12 @@ export const SmartEditPanel = ({
     if (!plan || !selectedSegment) {
       return;
     }
-    commitPlanChange(replaceSegment(plan, selectedSegment.id, (segment) =>
-      trackId === "sourceAudio"
-        ? {
-            ...segment,
-            sourceAudioVolumeKeyframes: audioVolumeKeyframes(
-              segment.sourceAudioVolumeKeyframes,
-              segment.durationSeconds,
-            ).filter((keyframe) => keyframe.id !== keyframeId),
-          }
-        : {
-            ...segment,
-            voiceoverVolumeKeyframes: audioVolumeKeyframes(
-              segment.voiceoverVolumeKeyframes,
-              segment.durationSeconds,
-            ).filter((keyframe) => keyframe.id !== keyframeId),
-          },
-    ), { label: "Remove audio volume keyframe" });
+    commitPlanChange(removeSmartEditSegmentAudioVolumeKeyframe({
+      keyframeId,
+      plan,
+      selectedSegment,
+      trackId,
+    }), { label: "Remove audio volume keyframe" });
   };
 
   const addTimelineElementAudioVolumeKeyframeAtPlayhead = () => {
