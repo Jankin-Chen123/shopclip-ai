@@ -1586,6 +1586,43 @@
 6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 7. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 API Script Route Service Extraction
+
+- Extracted script generation route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptRouteService.ts`.
+- Moved route handlers for:
+  - script rewrite.
+  - fallback draft script creation.
+  - storyboard generation for an existing script.
+  - structured script generation with storyboard storage.
+  - script display-name update and deletion.
+- Kept model/provider selection in `router.ts` as an injected dependency, so this pass did not change AI provider behavior.
+- Current file sizes:
+  - `router.ts`: 758 lines.
+  - `scriptRouteService.ts`: 331 lines.
+  - `referenceRouteService.ts`: 219 lines.
+  - `renderRouteService.ts`: 377 lines.
+  - `assetRouteService.ts`: 632 lines.
+  - `prismaProjectStore.ts`: 1349 lines.
+  - `memoryStore.ts`: 1113 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh verification after this pass:
+  - First API lint failed because the `structureModelScript` dependency type used an inline `import()` type annotation; fixed with an explicit type import.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+## Current Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this script-route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend route cleanup by extracting Smart Edit job routes or scene routes only if the dependency boundary remains clear.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 API Reference Route Service Extraction
 
 - Extracted reference and template route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/referenceRouteService.ts`.

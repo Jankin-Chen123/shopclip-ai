@@ -555,6 +555,56 @@ This addendum supersedes the backend router line counts in the previous addenda.
 6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 Script Route Service Addendum
+
+This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Current work location: `D:\DemoV2`.
+- Main workspace remains directly on the optimization branch.
+- The earlier user frontend edits from `codex/asset-preview-modal-ui` remain preserved in the local stash named `codex-preserve-main-frontend-before-optimization-switch`.
+
+### Actual Change
+
+- Extracted script generation route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptRouteService.ts`.
+- Moved route ownership for:
+  - script rewrite.
+  - fallback draft script creation.
+  - storyboard generation for an existing script.
+  - structured script generation with storyboard storage.
+  - script display-name update and deletion.
+- Kept model/provider selection in `router.ts` as an injected dependency so this pass only changes route ownership, not AI provider behavior.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/router.ts`: 758 lines.
+- `apps/api/src/modules/projects/scriptRouteService.ts`: 331 lines.
+- `apps/api/src/modules/projects/referenceRouteService.ts`: 219 lines.
+- `apps/api/src/modules/projects/renderRouteService.ts`: 377 lines.
+- `apps/api/src/modules/projects/assetRouteService.ts`: 632 lines.
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 1474 lines.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2972 lines.
+- `apps/web/src/app/App.tsx`: 2529 lines.
+
+### Fresh Verification
+
+- First API lint after extraction failed because the `structureModelScript` dependency type used an inline `import()` type annotation; fixed with an explicit type import.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+### Updated Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this script-route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend route cleanup by extracting Smart Edit job routes or scene routes only if the dependency boundary remains clear.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 Reference Route Service Addendum
 
 This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.
