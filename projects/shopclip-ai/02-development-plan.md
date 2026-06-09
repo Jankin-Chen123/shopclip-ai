@@ -696,9 +696,13 @@ This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. T
 - `corepack pnpm lint`: passed.
 - `corepack pnpm test`: passed, 592 tests total: shared 26, API 249, web 317.
 - `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+- Deployment to `/www/wwwroot/shopclip-ai` on `codex/asset-preview-modal-ui`: passed for code commit `8adaadfc829fc1eb0b29aef004572f38719038ba`.
+- PM2 `shopclip-ai-api`: online after restart.
+- `https://shopclip.site/health`: returned API `status: ok` after one transient local TLS handshake retry.
+- Production Playwright smoke for `https://shopclip.site/#project` and `https://shopclip.site/#studio`: passed with no console errors, request failures, or 4xx/5xx responses.
 
 ### Remaining Queue
 
-1. Deploy this batch, then record production health and page smoke evidence.
-2. Continue backend cleanup next in `scriptRouteService.ts`, `sceneRouteService.ts`, or the remaining store hotspots if another safe helper boundary is clear.
-3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
+1. Continue backend cleanup next in `scriptRouteService.ts`, `sceneRouteService.ts`, or the remaining store hotspots if another safe helper boundary is clear.
+2. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
+3. Treat the Vite large client chunk warning as a later frontend bundle-splitting task.
