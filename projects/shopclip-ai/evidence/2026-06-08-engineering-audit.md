@@ -1586,6 +1586,40 @@
 6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 7. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 API Reference Route Service Extraction
+
+- Extracted reference and template route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/referenceRouteService.ts`.
+- Moved route handlers for:
+  - reference listing and deletion.
+  - reference script-asset creation.
+  - viral template listing and creation from analyzed references.
+  - template extraction from script assets.
+- Kept reference analysis route registration in `router.ts`; it still owns the analyze request schema plus injected reference downloader and video frame extractor dependencies.
+- Current file sizes:
+  - `router.ts`: 1004 lines.
+  - `referenceRouteService.ts`: 219 lines.
+  - `renderRouteService.ts`: 377 lines.
+  - `assetRouteService.ts`: 632 lines.
+  - `prismaProjectStore.ts`: 1349 lines.
+  - `memoryStore.ts`: 1113 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh verification after this pass:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+## Current Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this reference-route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend route cleanup by extracting script-generation routes or Smart Edit job routes only if the dependency boundary remains clear.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 API Smart Edit Audio Filter Extraction
 
 - Extracted Smart Edit renderer audio filter and BGM profile helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditAudioFilters.ts`.
