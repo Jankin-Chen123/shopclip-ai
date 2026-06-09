@@ -6,6 +6,23 @@
 - Fix hard verification failures before structural cleanup.
 - Keep this pass focused on project optimization; no final contest submission material is included.
 
+## 2026-06-09 Seedance Render First-Frame Fix
+
+- Production failure investigated on project `cmq6sg1y20000whwjk4xqb6s4`.
+- Root cause:
+  - Render tasks failed before scene submission could progress because Seedance rejected the first image input with HTTP 400.
+  - Provider error: expected image height at least `300px`, but received `474x275px`.
+  - The renderer default `first_frame` mode selected the bound merchant asset before the generated storyboard image. A small uploaded product image could therefore become the Seedance first frame even when a generated 9:16 storyboard image existed.
+- Fix:
+  - Changed Seedance image reference ordering so `scene.imageUrl` is used first for `first_frame`, with bound/project assets kept as later fallbacks or references.
+  - Updated the renderer regression test to assert storyboard-first behavior.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api test src/providers/renderer/seedanceRenderer.test.ts`: passed, 13 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 55 files and 273 tests.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.

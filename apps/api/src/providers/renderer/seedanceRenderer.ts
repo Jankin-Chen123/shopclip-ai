@@ -282,15 +282,15 @@ const buildSeedanceRequestBody = (
     imageInputMode === "none"
       ? []
       : uniqueImageReferences([
+          ...(isPublicHttpUrl(scene.imageUrl)
+            ? [{ id: `${scene.id}:storyboard-image`, url: scene.imageUrl }]
+            : []),
           ...(sceneAsset?.type === "image" && isPublicHttpUrl(sceneAsset.url)
             ? [{ id: sceneAsset.id, url: sceneAsset.url }]
             : []),
           ...projectImageAssets.flatMap((asset) =>
             isPublicHttpUrl(asset.url) ? [{ id: asset.id, url: asset.url }] : [],
           ),
-          ...(isPublicHttpUrl(scene.imageUrl)
-            ? [{ id: `${scene.id}:storyboard-image`, url: scene.imageUrl }]
-            : []),
         ]);
   const imageContent =
     imageInputMode === "reference_image"

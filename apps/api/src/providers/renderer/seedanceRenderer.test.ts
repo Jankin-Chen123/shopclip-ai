@@ -203,7 +203,7 @@ describe("Seedance renderer provider", () => {
     });
   });
 
-  it("uses the stable asset slot image as the video reference before the storyboard scene image", async () => {
+  it("uses the storyboard scene image as the first frame before the bound asset image", async () => {
     process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
     process.env.AI_VIDEO_API_KEY = "video-key";
     process.env.AI_VIDEO_MODEL_ID = "ep-seedance-render";
@@ -243,7 +243,7 @@ describe("Seedance renderer provider", () => {
       type: "image_url",
       role: "first_frame",
       image_url: {
-        url: "https://cdn.example.test/product.png",
+        url: "https://cdn.example.test/storyboard-scene-image.png",
       },
     });
   });
