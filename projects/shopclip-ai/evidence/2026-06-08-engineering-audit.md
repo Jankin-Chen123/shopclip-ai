@@ -3658,6 +3658,8 @@
 - Scope: backend-only cleanup; no final contest submission material and no broad frontend refactor.
 - Branch consolidation: the major optimization commits that were accidentally developed on `codex/asset-preview-modal-ui` have been cherry-picked onto `codex/shopclip-optimization-cleanup`.
 - Migrated commits now present on this branch: `e6a3d58f`, `b329c620`, `c7e3b1a6`, `49212f1e`, `6d680f5f`, `5d6b14ce`, `3e7156bb`, and `20bafed1`.
+- Subject-level audit: all `Extract`, `Refine`, and `Use` optimization code topics from `codex/asset-preview-modal-ui` are represented on `codex/shopclip-optimization-cleanup`.
+- Intentionally omitted from migration: `Record ... deployment evidence` and `Sync original branch optimization audit` commits that only record wrong-branch deployment/audit context.
 - Risk note: `codex/shopclip-optimization-cleanup` is now the optimization consolidation branch. Do not resume optimization work on `codex/asset-preview-modal-ui`; production deployment should only happen from this branch after push and smoke tests.
 - Extracted repeated script-route request parsing, script input preparation, and route error mapping from `apps/api/src/modules/projects/scriptRouteService.ts` into `apps/api/src/modules/projects/scriptRouteUtils.ts`.
 - Added `apps/api/src/modules/projects/scriptRouteUtils.test.ts`.

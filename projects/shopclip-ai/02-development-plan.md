@@ -1031,6 +1031,8 @@ This pass is on the user-requested optimization branch `codex/shopclip-optimizat
 
 - Current branch: `codex/shopclip-optimization-cleanup`.
 - The major optimization commits that were accidentally developed on `codex/asset-preview-modal-ui` have been cherry-picked onto this branch.
+- A subject-level audit confirms that all `Extract`, `Refine`, and `Use` optimization code topics from `codex/asset-preview-modal-ui` are now represented on `codex/shopclip-optimization-cleanup`.
+- The only `asset-preview-modal-ui` commits intentionally not copied are deployment/audit record commits with wrong-branch context, such as `Record ... deployment evidence` and `Sync original branch optimization audit`.
 - This branch is now the consolidation branch for optimization work. Do not resume optimization work on `codex/asset-preview-modal-ui`.
 - Production deployment should only happen from `codex/shopclip-optimization-cleanup` after the branch is pushed and smoke-tested.
 
