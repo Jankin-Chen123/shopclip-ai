@@ -3337,6 +3337,42 @@
 3. Continue smaller API cleanup only where route-service boundaries are clear; avoid broad API rewrites after the router reduction unless a handler cluster has obvious ownership.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 API Smart Edit Timeline Plan Extraction
+
+- Extracted Smart Edit renderer timeline-plan construction from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditTimelinePlan.ts`.
+- Moved selected helper ownership for:
+  - timeline duration normalization.
+  - scene clip, trim, text, voice, BGM, and source-audio clip plan construction.
+  - empty timeline fallback scene insertion.
+  - timeline render-plan assembly and filter ordering.
+- Kept ffmpeg execution, material download, subtitle rendering, upload publishing, and composer dependency orchestration inside `smartEditComposer.ts`.
+- Current file sizes:
+  - `smartEditComposer.ts`: 1844 lines.
+  - `smartEditTimelinePlan.ts`: 316 lines.
+  - `smartEditTimelinePlan.test.ts`: 269 lines.
+  - `SmartEditPanel.tsx`: 2854 lines.
+  - `App.tsx`: 2385 lines.
+  - `router.ts`: 1935 lines.
+- Fresh verification after this pass:
+  - `D:\DemoV2\apps\api\node_modules\.bin\vitest.CMD run src/providers/renderer/smartEditTimelinePlan.test.ts src/providers/renderer/smartEditComposer.test.ts`: passed, 38 tests.
+  - `corepack pnpm install --offline --frozen-lockfile`: completed in the isolated worktree to rebuild package links.
+  - `corepack pnpm --filter @shopclip/api db:generate`: passed after network-enabled Prisma engine access; this regenerated Prisma Client types for the isolated worktree.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm test`: passed, 551 tests total: shared 26, API 210, web 315.
+  - `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for `assets/index-De5NHyT2.js` at 607.03 kB minified.
+- Branch/workspace note:
+  - This optimization was moved back onto `codex/shopclip-optimization-cleanup` in the isolated worktree `D:\DemoV2\.worktrees\shopclip-optimization-cleanup`.
+  - The main `D:\DemoV2` workspace remains on `codex/asset-preview-modal-ui` and still contains user frontend edits that were not staged, committed, or overwritten.
+
+## Current Optimization Queue
+
+1. If deployment is still desired, push `codex/shopclip-optimization-cleanup`, deploy the branch to `/www/wwwroot/shopclip-ai`, and verify `https://shopclip.site/health`, `#project`, and `#studio`.
+2. Continue reducing `apps/web/src/features/edit/SmartEditPanel.tsx`; next candidates are command-handler grouping or another render/interaction section with a clearer ownership boundary.
+3. Continue reducing `apps/web/src/app/App.tsx`; next candidates are project/reference refresh orchestration only if a clean hook or service boundary is clear.
+4. Continue smaller API cleanup only where route-service boundaries are clear; after the composer extraction, avoid broad render rewrites unless a helper cluster has obvious ownership.
+5. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit its damaged legacy body.
+
 ## 2026-06-08 Smart Edit Selection Helpers Follow-Up
 
 - Extracted repeated Smart Edit timeline-material selection state updates into local helpers inside `apps/web/src/features/edit/SmartEditPanel.tsx`.

@@ -398,3 +398,35 @@ This addendum supersedes the 2026-06-08 engineering audit section where the two 
 - `apps/web/src/app/App.tsx`: 2385 lines. It is improved from the stale audit number but still mixes routing, project state orchestration, background tasks, and page composition.
 - `apps/api/src/modules/projects/router.ts`: 1935 lines. The recent optimization pass reduced it by extracting asset resolution, request preparation, storyboard route flow, script provider orchestration, prompt context resolution, draft route handling, and template extraction into focused tested services.
 - `apps/web/src/features/edit/SmartEditTimelineElementOperations.ts`: 2293 lines and `apps/api/src/providers/renderer/smartEditComposer.ts`: 2002 lines remain large enough to justify focused follow-up extraction if more optimization time is available.
+
+## 2026-06-09 Smart Edit Timeline Plan Addendum
+
+This addendum supersedes older structure-risk line counts for the Smart Edit renderer composer. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Latest local optimization runtime commit in isolated worktree: `0df7c0b Extract smart edit timeline plan helpers`.
+- Worktree used for this pass: `D:\DemoV2\.worktrees\shopclip-optimization-cleanup`.
+- Main workspace `D:\DemoV2` remains on `codex/asset-preview-modal-ui` with user frontend edits left untouched.
+
+### Actual Change
+
+- Extracted pure renderer timeline-plan construction from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditTimelinePlan.ts`.
+- Added `apps/api/src/providers/renderer/smartEditTimelinePlan.test.ts` for trim, text, audio/BGM, fallback scene, and timeline filter behavior.
+- `smartEditComposer.ts` now keeps external orchestration and ffmpeg/upload work; timeline-plan construction has a focused tested module.
+
+### Fresh Verification
+
+- Targeted renderer tests passed: `smartEditTimelinePlan.test.ts` and `smartEditComposer.test.ts`, 38 tests.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm test`: passed, 551 tests total.
+- `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for the web bundle.
+
+### Updated Optimization Queue
+
+1. Push and deploy `codex/shopclip-optimization-cleanup` only after confirming the branch state remains clean.
+2. Verify production after deploy with `/health`, `#project`, and `#studio`.
+3. Continue frontend module reduction only on a branch/worktree that does not conflict with the user's active frontend folder.
+4. Recover or rewrite this development-plan file with byte-safe handling before attempting deeper edits to the damaged legacy body.
