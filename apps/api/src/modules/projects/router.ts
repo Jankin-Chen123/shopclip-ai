@@ -5,7 +5,6 @@ import type {
   ScriptGenerationRequest,
 } from "@shopclip/shared";
 import {
-  InspirationGenerateRequestSchema,
   ProjectBriefSchema,
   ProjectPrepUpdateSchema,
   SmartEditRequestSchema,
@@ -15,7 +14,6 @@ import {
   ScriptGenerationRequestSchema,
 } from "@shopclip/shared";
 import { buildMockDashboard } from "../dashboard/mockDashboard.js";
-import { buildViralTemplateFromReferences } from "../references/referenceTemplateService.js";
 import { recallAssetsForScene } from "../scenes/assetRecallService.js";
 import { searchCosIntelligentAssets } from "../../providers/assets/cosIntelligentSearchProvider.js";
 import type { CosIntelligentSearchInput } from "../../providers/assets/cosIntelligentSearchProvider.js";
@@ -23,7 +21,6 @@ import type { ReferenceDownloadProvider } from "../../providers/references/refer
 import { generateEditingSuggestions } from "../../providers/ai/editingAgentProvider.js";
 import { createSmartEditPlan } from "../../providers/ai/smartEditPlannerProvider.js";
 import { generateInspiration } from "../../providers/ai/arkInspirationProvider.js";
-import { extractScriptTemplateWithGeneralModel } from "../../providers/ai/scriptTemplateExtractionProvider.js";
 import {
   generateFallbackScript,
   rewriteFallbackScript,
@@ -48,10 +45,7 @@ import {
   type SceneClipComposer,
   type SceneClipMaterializer,
 } from "./renderRouteService.js";
-import {
-  deleteReferenceWithOwnedAssets,
-  ensureReferenceScriptAsset,
-} from "./referenceAssetService.js";
+import { registerReferenceRoutes } from "./referenceRouteService.js";
 import { registerReferenceAnalysisRoute } from "./referenceAnalysisRouteService.js";
 import {
   regenerateSceneWithImage,
@@ -65,18 +59,13 @@ import {
 import { MemoryProjectStore } from "./memoryStore.js";
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 import { deleteStoredAssetObjects } from "./projectAssetUtils.js";
-import { isScriptLibraryAsset } from "./referenceAssetUtils.js";
-import {
-  resolvePreparedScriptAssets,
-  resolveScriptTemplateAssets,
-} from "./projectAssetResolution.js";
+import { resolvePreparedScriptAssets } from "./projectAssetResolution.js";
 import {
   prepareScriptGenerationInputs,
   type ScriptPreparationHttpError,
 } from "./scriptRequestPreparation.js";
 import { storeFallbackDraftScript } from "./scriptDraftRouteService.js";
 import { buildStructuredScriptFromTextProvider } from "./scriptProviderOrchestration.js";
-import { extractAndStoreScriptTemplate } from "./scriptTemplateRouteService.js";
 import {
   scriptGenerationPrompt,
   type ScriptPromptContext,
@@ -141,25 +130,6 @@ const ReferenceAnalyzeRequestSchema = z
       });
     }
   });
-
-const TemplateCreateRequestSchema = z.object({
-  category: z.string().trim().min(1),
-  referenceIds: z.array(z.string().trim().min(1)).min(1),
-  templateName: z.string().trim().min(1),
-});
-
-const ScriptAssetTemplateCreateRequestSchema = z.object({
-  assetIds: z.array(z.string().trim().min(1)).min(1).max(20),
-  category: OptionalNonEmptyStringSchema,
-  templateName: OptionalNonEmptyStringSchema,
-  apiConfig: InspirationGenerateRequestSchema.shape.apiConfig,
-});
-
-const ReferenceScriptAssetRequestSchema = z
-  .object({
-    projectId: OptionalNonEmptyStringSchema,
-  })
-  .default({});
 
 const hasConfiguredTextProviderEnvironment = (): boolean =>
   Boolean(
@@ -496,173 +466,11 @@ export const createP0Router = ({
     response.status(202).json({ reference: registration.reference });
   });
 
-  router.get("/references", async (request, response) => {
-    const projectId =
-      typeof request.query.projectId === "string" ? request.query.projectId : undefined;
-    response.json({
-      references: await store.listReferenceVideos(projectId),
-    });
+  registerReferenceRoutes({
+    router,
+    storageProvider,
+    store,
   });
-
-  router.delete("/references/:referenceId", async (request, response) => {
-    let deletedReference;
-    try {
-      deletedReference = await deleteReferenceWithOwnedAssets({
-        referenceId: request.params.referenceId,
-        storageProvider,
-        store,
-      });
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "STORAGE_DELETE_FAILED",
-          message: error instanceof Error ? error.message : "Storage delete failed.",
-        },
-      });
-      return;
-    }
-    if (deletedReference.kind === "not-found") {
-      sendNotFound(response, "REFERENCE_NOT_FOUND", "Reference video was not found.");
-      return;
-    }
-
-    response.json(deletedReference.result);
-  });
-
-  router.post("/references/:referenceId/script-asset", async (request, response) => {
-    const parsedRequest = ReferenceScriptAssetRequestSchema.safeParse(request.body ?? {});
-    if (!parsedRequest.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_REFERENCE_SCRIPT_ASSET_REQUEST",
-        "Reference script asset request failed validation.",
-      );
-      return;
-    }
-
-    const scriptAsset = await ensureReferenceScriptAsset({
-      projectId: parsedRequest.data.projectId,
-      referenceId: request.params.referenceId,
-      store,
-    });
-    if (scriptAsset.kind === "project-not-found") {
-      sendNotFound(response, "PROJECT_NOT_FOUND", "Project was not found.");
-      return;
-    }
-    if (scriptAsset.kind === "reference-not-found") {
-      sendNotFound(response, "REFERENCE_NOT_FOUND", "Reference video was not found.");
-      return;
-    }
-    if (scriptAsset.kind === "reference-not-ready") {
-      sendInvalidRequest(
-        response,
-        "REFERENCE_NOT_READY",
-        "Reference video must finish analysis before it can be added to the script library.",
-      );
-      return;
-    }
-    if (scriptAsset.kind === "create-failed") {
-      response.status(500).json({
-        error: {
-          code: "REFERENCE_SCRIPT_ASSET_CREATE_FAILED",
-          message: "Reference script asset could not be created.",
-        },
-      });
-      return;
-    }
-
-    response.status(scriptAsset.created ? 201 : 200).json({ asset: scriptAsset.asset });
-  });
-
-  router.get("/references/templates", async (request, response) => {
-    const category =
-      typeof request.query.category === "string" ? request.query.category : undefined;
-    response.json({
-      templates: await store.listViralTemplates(category),
-    });
-  });
-
-  router.post("/references/templates", async (request, response) => {
-    const parsedTemplate = TemplateCreateRequestSchema.safeParse(request.body);
-    if (!parsedTemplate.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_REFERENCE_TEMPLATE_REQUEST",
-        "Reference template request failed validation.",
-      );
-      return;
-    }
-
-    const references = (await store.listReferenceVideos()).filter((reference) =>
-      parsedTemplate.data.referenceIds.includes(reference.id),
-    );
-    if (references.length !== parsedTemplate.data.referenceIds.length) {
-      sendNotFound(response, "REFERENCE_NOT_FOUND", "One or more reference videos were not found.");
-      return;
-    }
-    if (references.some((reference) => reference.status !== "ready")) {
-      sendInvalidRequest(
-        response,
-        "REFERENCE_NOT_READY",
-        "Reference videos must finish analysis before template extraction.",
-      );
-      return;
-    }
-
-    const template = await store.addViralTemplate(
-      buildViralTemplateFromReferences({
-        category: parsedTemplate.data.category,
-        references,
-        templateName: parsedTemplate.data.templateName,
-      }),
-    );
-
-    response.status(201).json({ template });
-  });
-
-  router.post("/references/templates/from-script-assets", async (request, response) => {
-    const parsedTemplate = ScriptAssetTemplateCreateRequestSchema.safeParse(request.body ?? {});
-    if (!parsedTemplate.success) {
-      sendInvalidRequest(
-        response,
-        "INVALID_SCRIPT_ASSET_TEMPLATE_REQUEST",
-        "Script asset template request failed validation.",
-      );
-      return;
-    }
-
-    const templateResult = await extractAndStoreScriptTemplate({
-      request: parsedTemplate.data,
-      resolveTemplateAssets: (assetIds) =>
-        resolveScriptTemplateAssets({
-          getAsset: (assetId) => store.getAsset(assetId),
-          isScriptAsset: isScriptLibraryAsset,
-          requestedAssetIds: assetIds,
-        }),
-      extractTemplate: extractScriptTemplateWithGeneralModel,
-      addViralTemplate: (template) => store.addViralTemplate(template),
-    });
-    if (templateResult.kind === "error") {
-      if (templateResult.error.status === 404) {
-        sendNotFound(response, templateResult.error.code, templateResult.error.message);
-        return;
-      }
-      if (templateResult.error.status === 502) {
-        response.status(502).json({
-          error: {
-            code: templateResult.error.code,
-            message: templateResult.error.message,
-          },
-        });
-        return;
-      }
-      sendInvalidRequest(response, templateResult.error.code, templateResult.error.message);
-      return;
-    }
-
-    response.status(201).json({ template: templateResult.template });
-  });
-
   router.post("/projects/:projectId/rewrite-script", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
     if (!project) {
