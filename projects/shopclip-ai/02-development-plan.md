@@ -430,3 +430,40 @@ This addendum supersedes older structure-risk line counts for the Smart Edit ren
 2. Verify production after deploy with `/health`, `#project`, and `#studio`.
 3. Continue frontend module reduction only on a branch/worktree that does not conflict with the user's active frontend folder.
 4. Recover or rewrite this development-plan file with byte-safe handling before attempting deeper edits to the damaged legacy body.
+
+## 2026-06-09 Smart Edit Subtitle Overlay Addendum
+
+This addendum supersedes the Smart Edit renderer composer line counts in the previous addendum. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Current work location: `D:\DemoV2`.
+- Main workspace is now directly on the optimization branch per the user's instruction.
+- The earlier user frontend edits from `codex/asset-preview-modal-ui` remain preserved in a local stash named `codex-preserve-main-frontend-before-optimization-switch`.
+
+### Actual Change
+
+- Extracted renderer subtitle readability, segment subtitle burn-in, and global timeline text overlay from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditSubtitleOverlay.ts`.
+- Added `apps/api/src/providers/renderer/smartEditSubtitleOverlay.test.ts`.
+- Replaced a fragile migrated mojibake regex with explicit marker/replacement character counting after the first targeted run exposed an esbuild regex parse failure.
+- `smartEditComposer.ts` now keeps media orchestration, ffmpeg segment generation, audio mixing, storage upload, and response mapping.
+
+### Fresh Verification
+
+- Targeted renderer tests passed after the regex fix: `smartEditSubtitleOverlay.test.ts` and `smartEditComposer.test.ts`, 38 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 214 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 555 tests total.
+- `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for the web bundle.
+
+### Updated Optimization Queue
+
+1. Commit this runtime cleanup and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+3. Verify production after deploy with `/health`, `#project`, and `#studio`.
+4. Continue frontend module reduction only on a branch or folder that does not conflict with the user's active frontend work.
+5. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.

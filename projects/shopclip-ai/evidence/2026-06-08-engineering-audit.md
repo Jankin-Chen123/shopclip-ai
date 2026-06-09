@@ -3365,12 +3365,37 @@
   - This optimization was moved back onto `codex/shopclip-optimization-cleanup` in the isolated worktree `D:\DemoV2\.worktrees\shopclip-optimization-cleanup`.
   - The main `D:\DemoV2` workspace remains on `codex/asset-preview-modal-ui` and still contains user frontend edits that were not staged, committed, or overwritten.
 
+## 2026-06-09 API Smart Edit Subtitle Overlay Extraction
+
+- Extracted Smart Edit renderer subtitle readability, segment ASS burn-in, and global timeline text overlay logic from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditSubtitleOverlay.ts`.
+- Added focused tests in `apps/api/src/providers/renderer/smartEditSubtitleOverlay.test.ts` for readable subtitle selection, voiceover fallback for replacement-symbol captions, empty output for unreadable copy, and styled ASS global timeline text generation.
+- Replaced a fragile mojibake regex with explicit marker/replacement character counting after the first targeted test run caught an esbuild regex parse failure.
+- Kept segment video creation, audio track construction, ffmpeg concat/transition orchestration, upload publishing, and object-key construction inside `smartEditComposer.ts`.
+- Current file sizes:
+  - `smartEditComposer.ts`: 1602 lines.
+  - `smartEditSubtitleOverlay.ts`: 300 lines.
+  - `smartEditSubtitleOverlay.test.ts`: 77 lines.
+  - `smartEditTimelinePlan.ts`: 316 lines.
+  - `SmartEditPanel.tsx`: 2854 lines.
+  - `App.tsx`: 2385 lines.
+  - `router.ts`: 1935 lines.
+- Fresh verification after this pass:
+  - First targeted run failed because the migrated mojibake regex was invalid in esbuild; fixed by replacing it with explicit marker counting.
+  - Second targeted run passed: `smartEditSubtitleOverlay.test.ts` and `smartEditComposer.test.ts`, 38 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 214 API tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 555 tests total: shared 26, API 214, web 315.
+  - `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for `assets/index-De5NHyT2.js` at 607.03 kB minified.
+
 ## Current Optimization Queue
 
 1. If deployment is still desired, push `codex/shopclip-optimization-cleanup`, deploy the branch to `/www/wwwroot/shopclip-ai`, and verify `https://shopclip.site/health`, `#project`, and `#studio`.
 2. Continue reducing `apps/web/src/features/edit/SmartEditPanel.tsx`; next candidates are command-handler grouping or another render/interaction section with a clearer ownership boundary.
 3. Continue reducing `apps/web/src/app/App.tsx`; next candidates are project/reference refresh orchestration only if a clean hook or service boundary is clear.
-4. Continue smaller API cleanup only where route-service boundaries are clear; after the composer extraction, avoid broad render rewrites unless a helper cluster has obvious ownership.
+4. Continue smaller API cleanup only where route-service boundaries are clear; after the composer subtitle extraction, avoid broad render rewrites unless a helper cluster has obvious ownership.
 5. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit its damaged legacy body.
 
 ## 2026-06-08 Smart Edit Selection Helpers Follow-Up
