@@ -1635,6 +1635,12 @@
   - `corepack pnpm lint`: passed.
   - `corepack pnpm test`: passed, 571 tests total.
   - `corepack pnpm build`: passed with the existing Vite large chunk warning.
+- Deployment verification:
+  - Runtime commit: `1ea4b78cb0d6ca3cad25709e4874dfa661f0e3e6`.
+  - Server build: passed.
+  - PM2 `shopclip-ai-api`: online after restart.
+  - Public health: `https://shopclip.site/health` returned API `status: ok`.
+  - Production Playwright smoke for `#project` and `#studio`: passed with no console errors, request failures, or bad HTTP responses.
 - No final contest submission materials were prepared.
 
 ## 2026-06-08 Track Clip Card UI Cleanup
