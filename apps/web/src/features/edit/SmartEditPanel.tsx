@@ -112,8 +112,8 @@ import {
 import {
   SmartEditTimelineToolbar,
   type SmartEditTimelineToolbarActions,
-  type SmartEditTimelineToolbarState,
 } from "./SmartEditTimelineToolbar";
+import { buildSmartEditTimelineToolbarState } from "./SmartEditTimelineToolbarState";
 import {
   selectSmartEditMaterializationTargetSegmentIds,
   selectSmartEditMaterializedTimelineElementIds,
@@ -2749,21 +2749,21 @@ export const SmartEditPanel = ({
       }),
     );
   };
-  const timelineToolbarState: SmartEditTimelineToolbarState = {
+  const timelineToolbarState = buildSmartEditTimelineToolbarState({
     boundedPlayheadSeconds,
     commandHistory,
     commandHistoryLabel,
-    hasMaterializableSegments: materializableSegments.length > 0,
-    hasPlan: Boolean(plan),
-    hasSelectedEditableMaterials: selectedEditableTimelineMaterialIds().length > 0,
-    hasSmartEditClipboard: Boolean(smartEditClipboard),
+    materializableSegmentCount: materializableSegments.length,
     normalizedPreviewRange,
+    planExists: Boolean(plan),
     previewRange,
     previewRangeLabel,
     previewRangeLoopEnabled,
+    selectedEditableMaterialCount: selectedEditableTimelineMaterialIds().length,
+    smartEditClipboardExists: Boolean(smartEditClipboard),
     timelineDurationSeconds,
     timelineEditMode,
-  };
+  });
   const timelineToolbarActions: SmartEditTimelineToolbarActions = {
     addTextElementAtPlayhead,
     addVoiceElementAtPlayhead,
