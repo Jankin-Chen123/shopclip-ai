@@ -9,11 +9,33 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `e0e005c Extract smart edit timeline metrics`.
+- Latest deployed optimization commit: `eed48f5 Extract smart edit timeline math helpers`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `eed48f5`:
+  - Extracted a larger batch of Smart Edit timeline math and positioning calculations from `apps/web/src/features/edit/SmartEditPanel.tsx` into `apps/web/src/features/edit/SmartEditTimelineMath.ts`.
+  - Added tested helpers for snapped playhead clamping, pixel-distance-to-seconds conversion, and guarded playhead auto-scroll target selection.
+  - Replaced repeated inline formulas across playback seek, preview sync, asset drop positioning, segment trim drag, segment move drag, track clip move drag, track box selection, and playhead auto-scroll.
+  - Added `apps/web/src/features/edit/SmartEditTimelineMath.test.ts` with 7 focused tests covering clamp bounds, invalid pixels-per-second handling, guarded visible range, centering, scroll clamping, and non-scrollable containers.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3102 lines.
+    - `SmartEditTimelineMath.ts`: 211 lines.
+    - `SmartEditTimelineMath.test.ts`: 91 lines.
+    - `App.tsx`: 2581 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red tests: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineMath.test.ts` failed before implementation because `nextTimelineScrollLeftForPlayhead`, `clampSnappedTimelineSecond`, and `timelineSecondsFromPixelDistance` were not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineMath.test.ts` passed, 7 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 498 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-B6tksWYm.js` at 607.11 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `eed48f5db3318ad9f8fb903e4c09386d1c396b38`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: installed missing local Playwright Chromium browser, then `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `e0e005c`:
   - Extracted Smart Edit timeline metric derivation from `apps/web/src/features/edit/SmartEditPanel.tsx` into `buildSmartEditTimelineMetrics` in `apps/web/src/features/edit/SmartEditSegmentDerivedState.ts`.
   - Replaced separate inline calculations for enabled duration, timeline duration, bounded playhead, pixels-per-second, and timeline width with a single tested helper call.
