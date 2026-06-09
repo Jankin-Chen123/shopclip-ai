@@ -122,3 +122,18 @@ export const selectSmartEditPlanSegmentOverrides = (
     transition: segment.transition,
     voiceover: segment.voiceover,
   }));
+
+export const selectSmartEditPlanSegmentOverride = (
+  plan: SmartEditPlan | undefined,
+  selectedSegmentId: string | undefined,
+): SmartEditRequest["segments"][number] | undefined => {
+  if (!plan || plan.segments.length === 0) {
+    return undefined;
+  }
+
+  const segmentIndex = selectedSegmentId
+    ? plan.segments.findIndex((segment) => segment.id === selectedSegmentId)
+    : 0;
+  const overrideIndex = segmentIndex >= 0 ? segmentIndex : 0;
+  return selectSmartEditPlanSegmentOverrides(plan)?.[overrideIndex];
+};

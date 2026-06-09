@@ -12,6 +12,7 @@ import type { UserApiConfig } from "../lib/api";
 import {
   createSmartEditRequestPayload,
   selectRenderedSmartEditSceneSegments,
+  selectSmartEditPlanSegmentOverride,
   selectSmartEditPlanSegmentOverrides,
 } from "./AppSmartEditRequest";
 
@@ -256,6 +257,83 @@ describe("selectSmartEditPlanSegmentOverrides", () => {
 
   it("returns undefined when there is no active Smart Edit plan", () => {
     expect(selectSmartEditPlanSegmentOverrides(undefined)).toBeUndefined();
+  });
+});
+
+describe("selectSmartEditPlanSegmentOverride", () => {
+  it("selects the requested segment override from the current Smart Edit plan", () => {
+    const plan = {
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          durationSeconds: 4,
+          enabled: true,
+          timelineStartSecond: 0,
+          playbackRate: 1,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          sourceAudioMuted: false,
+          sourceAudioStartOffsetSeconds: 0,
+          source: { kind: "generated-scene-clip", sceneClipUrl: "https://cdn.example.test/1.mp4" },
+          subtitle: "First",
+          transition: "cut",
+          voiceover: "First voice",
+        },
+        {
+          id: "segment-2",
+          sceneId: "scene-2",
+          durationSeconds: 6,
+          enabled: false,
+          timelineStartSecond: 5,
+          playbackRate: 1.1,
+          captionHidden: true,
+          captionStartOffsetSeconds: 0.2,
+          voiceoverStartOffsetSeconds: 0.1,
+          sourceAudioMuted: true,
+          sourceAudioStartOffsetSeconds: 0.3,
+          source: { kind: "asset", assetId: "asset-1", url: "https://cdn.example.test/2.mp4" },
+          subtitle: "Second",
+          transition: "fade",
+          voiceover: "Second voice",
+        },
+      ],
+    } as SmartEditPlan;
+
+    expect(selectSmartEditPlanSegmentOverride(plan, "segment-2")).toMatchObject({
+      sceneId: "scene-2",
+      durationSeconds: 6,
+      enabled: false,
+      transition: "fade",
+    });
+  });
+
+  it("falls back to the first segment override when the selected segment id is absent", () => {
+    const plan = {
+      segments: [
+        {
+          id: "segment-1",
+          sceneId: "scene-1",
+          durationSeconds: 4,
+          enabled: true,
+          timelineStartSecond: 0,
+          playbackRate: 1,
+          captionHidden: false,
+          captionStartOffsetSeconds: 0,
+          voiceoverStartOffsetSeconds: 0,
+          sourceAudioMuted: false,
+          sourceAudioStartOffsetSeconds: 0,
+          source: { kind: "generated-scene-clip", sceneClipUrl: "https://cdn.example.test/1.mp4" },
+          subtitle: "First",
+          transition: "cut",
+          voiceover: "First voice",
+        },
+      ],
+    } as SmartEditPlan;
+
+    expect(selectSmartEditPlanSegmentOverride(plan, undefined)?.sceneId).toBe("scene-1");
+    expect(selectSmartEditPlanSegmentOverride(plan, "missing")?.sceneId).toBe("scene-1");
   });
 });
 

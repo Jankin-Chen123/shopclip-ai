@@ -8,8 +8,11 @@ import type {
 
 import type { ProjectSnapshot } from "../lib/api";
 import {
+  selectAssetPrepKeywordsChanged,
   selectCurrentBackgroundTaskTarget,
   selectLoadedProjectWorkspaceState,
+  selectReferenceSourceAssets,
+  selectSectionPage,
   selectWorkspaceAssetRefreshAction,
   selectWorkspaceScenes,
 } from "./AppWorkspaceDerivedState";
@@ -167,6 +170,45 @@ describe("selectWorkspaceAssetRefreshAction", () => {
         activePage: "project",
       }),
     ).toEqual({ type: "none" });
+  });
+});
+
+describe("selectSectionPage", () => {
+  it("routes top-level workspace sections to their pages", () => {
+    expect(selectSectionPage("assets")).toBe("assets");
+    expect(selectSectionPage("inspiration")).toBe("inspiration");
+    expect(selectSectionPage("settings")).toBe("settings");
+  });
+
+  it("routes creation and project sections back to the project page", () => {
+    expect(selectSectionPage("create")).toBe("project");
+  });
+});
+
+describe("selectAssetPrepKeywordsChanged", () => {
+  it("detects when the asset prep keyword snapshot differs from the project", () => {
+    expect(selectAssetPrepKeywordsChanged(["hero", "demo"], ["hero", "ugc"])).toBe(true);
+  });
+
+  it("keeps order-sensitive keyword snapshots unchanged", () => {
+    expect(selectAssetPrepKeywordsChanged(["hero", "demo"], ["hero", "demo"])).toBe(false);
+    expect(selectAssetPrepKeywordsChanged(["hero", "demo"], ["demo", "hero"])).toBe(true);
+  });
+});
+
+describe("selectReferenceSourceAssets", () => {
+  it("keeps local video assets and excludes public reference videos", () => {
+    const assets = [
+      { id: "image", type: "image", mimeType: "image/png", source: "upload" },
+      { id: "video-by-type", type: "video", mimeType: "application/octet-stream", source: "upload" },
+      { id: "video-by-mime", type: "image", mimeType: "video/mp4", source: "generated" },
+      { id: "public-reference", type: "video", mimeType: "video/mp4", source: "public_reference" },
+    ];
+
+    expect(selectReferenceSourceAssets(assets as never).map((asset) => asset.id)).toEqual([
+      "video-by-type",
+      "video-by-mime",
+    ]);
   });
 });
 

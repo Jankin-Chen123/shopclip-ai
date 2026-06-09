@@ -10,7 +10,7 @@ import type {
 } from "@shopclip/shared";
 
 import { assetMatchesCategory, type AssetCategory } from "../features/assets/AssetCategoryTabs";
-import type { WorkspacePageId } from "../components/layout/AppShell";
+import type { WorkspacePageId, WorkspaceSectionId } from "../components/layout/AppShell";
 import type { AssetLibraryCategory, MediaSettings, ProjectSnapshot } from "../lib/api";
 import {
   getCreationAssetLibraryRefreshCategory,
@@ -140,6 +140,18 @@ export const selectWorkspaceScenes = (
   project: ProjectSnapshot | undefined,
 ): StoryboardScene[] => script?.scenes ?? project?.scenes ?? [];
 
+export const selectSectionPage = (section: WorkspaceSectionId): WorkspacePageId => {
+  if (section === "assets" || section === "inspiration" || section === "settings") {
+    return section;
+  }
+  return "project";
+};
+
+export const selectAssetPrepKeywordsChanged = (
+  projectPrepKeywords: string[],
+  snapshotKeywords: string[],
+): boolean => projectPrepKeywords.join("\u001f") !== snapshotKeywords.join("\u001f");
+
 export const selectActiveAssetCategoryAssets = (
   assets: AssetMetadata[],
   activeAssetCategory: AssetCategory,
@@ -161,6 +173,13 @@ export const selectStudioAssets = (
   });
   return [...assetsById.values()];
 };
+
+export const selectReferenceSourceAssets = (assets: AssetMetadata[]): AssetMetadata[] =>
+  assets.filter(
+    (asset) =>
+      (asset.type === "video" || asset.mimeType?.startsWith("video/")) &&
+      asset.source !== "public_reference",
+  );
 
 export const selectSmartEditAssetSlices = (
   project: ProjectSnapshot | undefined,

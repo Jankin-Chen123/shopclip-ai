@@ -146,12 +146,15 @@ import {
   selectActiveAssetCategoryAssets,
   selectCreationUsableAssets,
   selectCurrentBackgroundTaskTarget,
+  selectAssetPrepKeywordsChanged,
   selectHasPendingReferences,
   selectLoadedProjectWorkspaceState,
   selectPreparedProjectAssetsByBucket,
+  selectReferenceSourceAssets,
   selectScriptReferenceAssets,
   selectScriptReferenceLibrary,
   selectScriptTemplateLibrary,
+  selectSectionPage,
   selectSmartEditAssetSlices,
   selectStudioAssets,
   selectWorkspaceAssetRefreshAction,
@@ -159,6 +162,7 @@ import {
 } from "./AppWorkspaceDerivedState";
 import {
   createSmartEditRequestPayload,
+  selectSmartEditPlanSegmentOverride,
 } from "./AppSmartEditRequest";
 import {
   createSmartEditResultFromCompletedSourceRender,
@@ -406,6 +410,10 @@ export const App = ({
     () => selectScriptTemplateLibrary(project, viralTemplateLibrary),
     [project, viralTemplateLibrary],
   );
+  const referenceSourceAssets = useMemo(
+    () => selectReferenceSourceAssets(studioAssets),
+    [studioAssets],
+  );
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
@@ -454,15 +462,7 @@ export const App = ({
       setProject(undefined);
       setProjectDetailTab("overview");
     }
-    handlePageChange(
-      section === "assets"
-        ? "assets"
-        : section === "inspiration"
-          ? "inspiration"
-          : section === "settings"
-            ? "settings"
-            : "project",
-    );
+    handlePageChange(selectSectionPage(section));
   };
 
   const handleLanguageChange = (nextLanguage: Language) => {
@@ -490,9 +490,7 @@ export const App = ({
       return;
     }
 
-    const currentKeywords = project.prepKeywords.join("\u001f");
-    const nextKeywords = assetPrepSnapshot.keywords.join("\u001f");
-    if (currentKeywords === nextKeywords) {
+    if (!selectAssetPrepKeywordsChanged(project.prepKeywords, assetPrepSnapshot.keywords)) {
       return;
     }
 
@@ -1970,9 +1968,10 @@ export const App = ({
       setErrors((current) => ({ ...current, smartEdit: "Run smart edit before refreshing a segment." }));
       return;
     }
-    const selectedSegment =
-      smartEditResult.plan.segments.find((segment) => segment.id === selectedSmartEditSegmentId) ??
-      smartEditResult.plan.segments[0];
+    const selectedSegment = selectSmartEditPlanSegmentOverride(
+      smartEditResult.plan,
+      selectedSmartEditSegmentId,
+    );
     if (!selectedSegment) {
       return;
     }
@@ -1987,36 +1986,7 @@ export const App = ({
           instructions: smartEditInstructions || undefined,
           locale: language === "zh" ? "zh-CN" : "en-US",
           mediaSettings,
-          segment: {
-            sceneId: selectedSegment.sceneId,
-            durationSeconds: selectedSegment.durationSeconds,
-            enabled: selectedSegment.enabled,
-            timelineStartSecond: selectedSegment.timelineStartSecond,
-            playbackRate: selectedSegment.playbackRate,
-            captionHidden: selectedSegment.captionHidden,
-            captionStartOffsetSeconds: selectedSegment.captionStartOffsetSeconds,
-            captionDurationSeconds: selectedSegment.captionDurationSeconds,
-            captionTextColor: selectedSegment.captionTextColor,
-            captionTextFontSize: selectedSegment.captionTextFontSize,
-            captionTextPositionYPercent: selectedSegment.captionTextPositionYPercent,
-            voiceoverStartOffsetSeconds: selectedSegment.voiceoverStartOffsetSeconds,
-            voiceoverDurationSeconds: selectedSegment.voiceoverDurationSeconds,
-            voiceoverVolume: selectedSegment.voiceoverVolume,
-            voiceoverVolumeKeyframes: selectedSegment.voiceoverVolumeKeyframes,
-            voiceoverFadeInSeconds: selectedSegment.voiceoverFadeInSeconds,
-            voiceoverFadeOutSeconds: selectedSegment.voiceoverFadeOutSeconds,
-            source: selectedSegment.source,
-            sourceAudioMuted: selectedSegment.sourceAudioMuted,
-            sourceAudioStartOffsetSeconds: selectedSegment.sourceAudioStartOffsetSeconds,
-            sourceAudioDurationSeconds: selectedSegment.sourceAudioDurationSeconds,
-            sourceAudioVolume: selectedSegment.sourceAudioVolume,
-            sourceAudioVolumeKeyframes: selectedSegment.sourceAudioVolumeKeyframes,
-            sourceAudioFadeInSeconds: selectedSegment.sourceAudioFadeInSeconds,
-            sourceAudioFadeOutSeconds: selectedSegment.sourceAudioFadeOutSeconds,
-            subtitle: selectedSegment.subtitle,
-            transition: selectedSegment.transition,
-            voiceover: selectedSegment.voiceover,
-          },
+          segment: selectedSegment,
           segmentOutputs: smartEditResult.segmentOutputs,
           targetLanguage: smartEditTargetLanguage.trim() || undefined,
           videoSettings,
@@ -2211,11 +2181,7 @@ export const App = ({
               onUseReference={handleUseReferenceForScript}
               references={scriptReferenceLibrary}
               selectedReferenceId={selectedReferenceIdForScript}
-              sourceAssets={studioAssets.filter(
-                (asset) =>
-                  (asset.type === "video" || asset.mimeType?.startsWith("video/")) &&
-                  asset.source !== "public_reference",
-              )}
+              sourceAssets={referenceSourceAssets}
               templates={scriptTemplateLibrary}
             />
           </section>
