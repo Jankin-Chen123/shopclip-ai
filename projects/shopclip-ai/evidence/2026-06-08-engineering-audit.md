@@ -3554,6 +3554,26 @@
   - `https://shopclip.site/health`: returned API `status: ok`.
   - Production Playwright smoke for `https://shopclip.site/#project` and `https://shopclip.site/#studio`: passed with no console errors, request failures, or 4xx/5xx responses.
 
+## 2026-06-09 Smart Edit Job Task Update Extraction
+
+- Branch/workspace: `codex/asset-preview-modal-ui` in `D:\DemoV2`.
+- Scope: backend-only cleanup; no final contest submission material and no broad frontend refactor.
+- Extracted repeated smart-edit render task status updates and trace event construction from `apps/api/src/modules/projects/smartEditJobService.ts` into `apps/api/src/modules/projects/smartEditJobTaskUpdates.ts`.
+- Added `apps/api/src/modules/projects/smartEditJobTaskUpdates.test.ts` for start/failure update payloads, compose-started/completed payloads, full smart-edit planning traces, and segment refresh traces.
+- Current file sizes:
+  - `smartEditJobService.ts`: 258 lines, down from 411 before this pass.
+  - `smartEditJobTaskUpdates.ts`: 158 lines.
+  - `smartEditJobTaskUpdates.test.ts`: 203 lines.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api test src/modules/projects/smartEditJobTaskUpdates.test.ts`: passed, 6 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 48 files and 249 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 592 tests total: shared 26, API 249, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## 2026-06-08 Smart Edit Selection Helpers Follow-Up
 
 - Extracted repeated Smart Edit timeline-material selection state updates into local helpers inside `apps/web/src/features/edit/SmartEditPanel.tsx`.

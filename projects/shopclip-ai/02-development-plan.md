@@ -664,3 +664,41 @@ This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. T
 1. Continue backend cleanup next in `scriptRouteService.ts` or `smartEditJobService.ts` if another route/service boundary is clear.
 2. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
 3. Treat the Vite large client chunk warning as a later frontend bundle-splitting task.
+
+## 2026-06-09 Smart Edit Job Task Update Extraction
+
+This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. The goal was to reduce `smartEditJobService.ts` by moving repeated render-task update payloads and trace-event construction into focused helpers while keeping planner/composer orchestration in the job service.
+
+### Changed Files
+
+- `apps/api/src/modules/projects/smartEditJobTaskUpdates.ts`
+  - Added helpers for smart-edit job start, failure, compose-started, and compose-completed render task updates.
+  - Added trace builders for full smart edit planning and segment refresh planning, including fresh scene material application trace events.
+- `apps/api/src/modules/projects/smartEditJobService.ts`
+  - Replaced repeated `store.updateRenderTask` blocks with the new helper functions.
+  - Kept async planner calls, current-plan reuse, segment-refresh plan creation, scene material application, and composer calls in the job service.
+- `apps/api/src/modules/projects/smartEditJobTaskUpdates.test.ts`
+  - Added focused tests for start/failure update payloads, compose-started/completed payloads, full smart-edit planning traces, and segment refresh traces.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/smartEditJobService.ts`: 258 lines, down from 411 before this pass.
+- `apps/api/src/modules/projects/smartEditJobTaskUpdates.ts`: 158 lines.
+- `apps/api/src/modules/projects/smartEditJobTaskUpdates.test.ts`: 203 lines.
+
+### Verification
+
+- `corepack pnpm --filter @shopclip/api test src/modules/projects/smartEditJobTaskUpdates.test.ts`: passed, 6 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 48 files and 249 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 592 tests total: shared 26, API 249, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Remaining Queue
+
+1. Deploy this batch, then record production health and page smoke evidence.
+2. Continue backend cleanup next in `scriptRouteService.ts`, `sceneRouteService.ts`, or the remaining store hotspots if another safe helper boundary is clear.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
