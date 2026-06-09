@@ -102,13 +102,16 @@ import {
 import { MemoryProjectStore } from "./memoryStore.js";
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 import {
-  canUseAssetInProject,
   deleteStoredAssetObjects,
 } from "./projectAssetUtils.js";
 import {
   getMetadataRecord,
   isScriptLibraryAsset,
 } from "./referenceAssetUtils.js";
+import {
+  resolvePreparedScriptAssets,
+  resolveScriptTemplateAssets,
+} from "./projectAssetResolution.js";
 import {
   scriptGenerationPrompt,
   type ScriptPromptContext,
@@ -439,30 +442,15 @@ export const createP0Router = ({
     };
   };
 
-  const resolvePreparedAssets = async (
+  const resolvePreparedAssets = (
     project: ProjectSnapshot,
     request: ScriptGenerationRequest,
-  ): Promise<{ assets: AssetMetadata[]; invalidAssetIds: string[] }> => {
-    const requestedAssetIds = [...new Set(request.assetIds)];
-    const requestedAssets = (
-      await Promise.all(requestedAssetIds.map((assetId) => store.getAsset(assetId)))
-    ).filter((asset): asset is AssetMetadata => Boolean(asset));
-    const assetById = new Map(requestedAssets.map((asset) => [asset.id, asset]));
-    const invalidAssetIds = requestedAssetIds.filter((assetId) => {
-      const asset = assetById.get(assetId);
-      return !asset || !canUseAssetInProject(asset, project.id);
+  ): Promise<{ assets: AssetMetadata[]; invalidAssetIds: string[] }> =>
+    resolvePreparedScriptAssets({
+      getAsset: (assetId) => store.getAsset(assetId),
+      project,
+      requestedAssetIds: request.assetIds,
     });
-
-    if (invalidAssetIds.length > 0) {
-      return { assets: [], invalidAssetIds };
-    }
-
-    if (requestedAssets.length > 0) {
-      return { assets: requestedAssets, invalidAssetIds: [] };
-    }
-
-    return { assets: project.assets, invalidAssetIds: [] };
-  };
 
   router.post("/projects", async (request, response) => {
     const parsedBrief = ProjectBriefSchema.safeParse(request.body);
@@ -1363,15 +1351,16 @@ export const createP0Router = ({
       return;
     }
 
-    const assetIds = [...new Set(parsedTemplate.data.assetIds)];
-    const assets = (await Promise.all(assetIds.map((assetId) => store.getAsset(assetId)))).filter(
-      (asset): asset is AssetMetadata => Boolean(asset),
-    );
-    if (assets.length !== assetIds.length) {
+    const templateAssets = await resolveScriptTemplateAssets({
+      getAsset: (assetId) => store.getAsset(assetId),
+      isScriptAsset: isScriptLibraryAsset,
+      requestedAssetIds: parsedTemplate.data.assetIds,
+    });
+    if (templateAssets.kind === "not-found") {
       sendNotFound(response, "SCRIPT_ASSET_NOT_FOUND", "One or more script assets were not found.");
       return;
     }
-    if (assets.some((asset) => !isScriptLibraryAsset(asset))) {
+    if (templateAssets.kind === "invalid-type") {
       sendInvalidRequest(
         response,
         "SCRIPT_ASSET_REQUIRED",
@@ -1382,7 +1371,7 @@ export const createP0Router = ({
 
     try {
       const extractedTemplate = await extractScriptTemplateWithGeneralModel({
-        assets,
+        assets: templateAssets.assets,
         category: parsedTemplate.data.category,
         templateName: parsedTemplate.data.templateName,
         apiConfig: parsedTemplate.data.apiConfig,
