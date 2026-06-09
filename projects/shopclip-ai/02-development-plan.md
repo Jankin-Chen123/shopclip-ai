@@ -398,3 +398,11 @@ This addendum supersedes the 2026-06-08 engineering audit section where the two 
 - `apps/web/src/app/App.tsx`: 2385 lines. It is improved from the stale audit number but still mixes routing, project state orchestration, background tasks, and page composition.
 - `apps/api/src/modules/projects/router.ts`: 1935 lines. The recent optimization pass reduced it by extracting asset resolution, request preparation, storyboard route flow, script provider orchestration, prompt context resolution, draft route handling, and template extraction into focused tested services.
 - `apps/web/src/features/edit/SmartEditTimelineElementOperations.ts`: 2293 lines and `apps/api/src/providers/renderer/smartEditComposer.ts`: 2002 lines remain large enough to justify focused follow-up extraction if more optimization time is available.
+
+## 2026-06-09 Original Branch Optimization Sync
+
+User direction changed from continuing on `codex/shopclip-optimization-cleanup` to modifying the original branch directly. The original branch was identified from Git reflog as `codex/asset-preview-modal-ui`, and the working tree was clean before switching.
+
+This sync is intentionally scoped to backend/service cleanup and project log alignment so it does not overwrite the user's separate frontend work. The first migrated batch begins with the smart-edit subtitle overlay extraction from the optimization branch.
+
+No final contest submission materials are being prepared in this optimization pass.

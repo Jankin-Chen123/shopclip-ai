@@ -1513,6 +1513,17 @@
 3. Split `apps/web/src/app/App.tsx` state orchestration into feature hooks after Smart Edit UI and router cleanup are stable under full verification.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 Original Branch Migration Addendum
+
+- Workspace: `D:\DemoV2`.
+- Active branch after user redirection: `codex/asset-preview-modal-ui`.
+- Source branch for previously verified optimization work: `codex/shopclip-optimization-cleanup`.
+- Git reflog showed the branch switch at `2026-06-09 16:20:26 +0800` moved from `codex/asset-preview-modal-ui` to `codex/shopclip-optimization-cleanup`; this confirms the original branch for the current migration.
+- The working tree was clean before switching back.
+- Scope rule for this branch: migrate backend/service/store cleanup and clear project logs, while avoiding frontend rewrites that could conflict with the user's separate frontend work.
+- First migrated code batch starts with smart-edit subtitle overlay helpers and tests.
+- No final contest submission materials are included.
+
 ## 2026-06-08 Track Clip Card UI Cleanup
 
 - Extracted the repeated Smart Edit track clip JSX into `apps/web/src/features/edit/SmartEditTrackClipCard.tsx`.
