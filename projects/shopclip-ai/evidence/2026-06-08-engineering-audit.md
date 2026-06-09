@@ -1549,6 +1549,26 @@
 - No final contest submission material was prepared in this pass.
 - Next queue: extract project core routes or reference analyze registration only if the dependency boundary remains clear; keep frontend cleanup isolated from the user's separate frontend work.
 
+## 2026-06-09 Project Core Route Service Extraction
+
+- Extracted project core route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/projectCoreRouteService.ts`.
+- Consolidated ownership for project create/list/detail/prep update/brief update/delete/dashboard routes.
+- Preserved project deletion stored-asset cleanup behavior in the new service.
+- Kept top-level dependency assembly and registration order in `router.ts`.
+- Current file sizes:
+  - `router.ts`: 336 lines.
+  - `projectCoreRouteService.ts`: 154 lines.
+  - `sceneRouteService.ts`: 313 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh API verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 tests.
+- No final contest submission material was prepared in this pass.
+- Next queue: move `POST /references/analyze` registration out of `router.ts` if the schema/dependency boundary remains clear; keep frontend cleanup isolated from the user's separate frontend work.
+
 ## 2026-06-09 API Asset Route Service Extraction
 
 - Extracted global/project asset route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/assetRouteService.ts`.
