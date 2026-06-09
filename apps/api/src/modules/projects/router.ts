@@ -116,6 +116,7 @@ import {
 } from "./scriptRequestPreparation.js";
 import { storeFallbackDraftScript } from "./scriptDraftRouteService.js";
 import { buildStructuredScriptFromTextProvider } from "./scriptProviderOrchestration.js";
+import { extractAndStoreScriptTemplate } from "./scriptTemplateRouteService.js";
 import {
   scriptGenerationPrompt,
   type ScriptPromptContext,
@@ -1281,42 +1282,36 @@ export const createP0Router = ({
       return;
     }
 
-    const templateAssets = await resolveScriptTemplateAssets({
-      getAsset: (assetId) => store.getAsset(assetId),
-      isScriptAsset: isScriptLibraryAsset,
-      requestedAssetIds: parsedTemplate.data.assetIds,
+    const templateResult = await extractAndStoreScriptTemplate({
+      request: parsedTemplate.data,
+      resolveTemplateAssets: (assetIds) =>
+        resolveScriptTemplateAssets({
+          getAsset: (assetId) => store.getAsset(assetId),
+          isScriptAsset: isScriptLibraryAsset,
+          requestedAssetIds: assetIds,
+        }),
+      extractTemplate: extractScriptTemplateWithGeneralModel,
+      addViralTemplate: (template) => store.addViralTemplate(template),
     });
-    if (templateAssets.kind === "not-found") {
-      sendNotFound(response, "SCRIPT_ASSET_NOT_FOUND", "One or more script assets were not found.");
-      return;
-    }
-    if (templateAssets.kind === "invalid-type") {
-      sendInvalidRequest(
-        response,
-        "SCRIPT_ASSET_REQUIRED",
-        "Template extraction only supports script material assets.",
-      );
+    if (templateResult.kind === "error") {
+      if (templateResult.error.status === 404) {
+        sendNotFound(response, templateResult.error.code, templateResult.error.message);
+        return;
+      }
+      if (templateResult.error.status === 502) {
+        response.status(502).json({
+          error: {
+            code: templateResult.error.code,
+            message: templateResult.error.message,
+          },
+        });
+        return;
+      }
+      sendInvalidRequest(response, templateResult.error.code, templateResult.error.message);
       return;
     }
 
-    try {
-      const extractedTemplate = await extractScriptTemplateWithGeneralModel({
-        assets: templateAssets.assets,
-        category: parsedTemplate.data.category,
-        templateName: parsedTemplate.data.templateName,
-        apiConfig: parsedTemplate.data.apiConfig,
-      });
-      const template = await store.addViralTemplate(extractedTemplate);
-      response.status(201).json({ template });
-    } catch (error) {
-      response.status(502).json({
-        error: {
-          code: "SCRIPT_TEMPLATE_EXTRACTION_FAILED",
-          message:
-            error instanceof Error ? error.message : "Script asset template extraction failed.",
-        },
-      });
-    }
+    response.status(201).json({ template: templateResult.template });
   });
 
   router.post("/projects/:projectId/rewrite-script", async (request, response) => {
