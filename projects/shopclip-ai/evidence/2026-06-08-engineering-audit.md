@@ -9,11 +9,35 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `5ca79e4 Extract script prompt context resolution`.
+- Latest deployed optimization commit: `a63a940 Extract script draft route service`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `a63a940`:
+  - Extracted fallback draft script storage and saved-script contract validation from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptDraftRouteService.ts`.
+  - Added focused tests for empty draft short-circuiting, prepared asset forwarding to fallback generation, missing-project save handling, and invalid saved script contract mapping.
+  - Replaced the inline `/projects/:projectId/scripts` draft generation/save/validation block with a tested service call while keeping request parsing and HTTP response mapping in the router.
+  - Current file sizes:
+    - `router.ts`: 2128 lines.
+    - `scriptDraftRouteService.ts`: 80 lines.
+    - `scriptDraftRouteService.test.ts`: 134 lines.
+    - `scriptPromptContextResolution.ts`: 131 lines.
+    - `scriptProviderOrchestration.ts`: 81 lines.
+    - `storyboardRouteService.ts`: 156 lines.
+    - `App.tsx`: 2529 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/modules/projects/scriptDraftRouteService.test.ts` failed before implementation because `scriptDraftRouteService.js` did not exist.
+    - Targeted green tests: `scriptDraftRouteService.test.ts` passed 4 tests; `p0-flow.test.ts` and `p1-flow.test.ts` passed 30 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 539 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/api/src/modules/projects/router.ts`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `a63a940f8e457c3535ab4bad83fc8ef4a98b1d0c`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy note: production install reported the existing ignored build-script warning for ffmpeg packages; build and PM2 restart succeeded.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `5ca79e4`:
   - Extracted script prompt context resolution from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptPromptContextResolution.ts`.
   - Added focused tests for resolving selected references, matching reference script assets, selected templates, viral-remix required reference validation, reference readiness and analysis validation, and template-mode required template validation.
