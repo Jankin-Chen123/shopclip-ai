@@ -116,6 +116,7 @@ import {
   prepareScriptGenerationInputs,
   type ScriptPreparationHttpError,
 } from "./scriptRequestPreparation.js";
+import { buildStructuredScriptFromTextProvider } from "./scriptProviderOrchestration.js";
 import {
   scriptGenerationPrompt,
   type ScriptPromptContext,
@@ -1589,28 +1590,17 @@ export const createP0Router = ({
       return;
     }
     const { assets: preparedAssets, promptContext, workingProject } = scriptInputs;
-    let textProviderResult: Awaited<ReturnType<typeof rewriteScriptWithConfiguredProvider>>;
-    let providerResult: ReturnType<typeof generateFallbackScript>;
+    let providerResult: Awaited<ReturnType<typeof buildStructuredScriptFromTextProvider>>;
     try {
-      textProviderResult = await rewriteScriptWithConfiguredProvider(
-        workingProject,
-        parsedRequest.data,
-        preparedAssets,
-        promptContext,
-      );
-      const scriptContext = {
+      providerResult = await buildStructuredScriptFromTextProvider({
+        project: workingProject,
+        request: parsedRequest.data,
         assets: preparedAssets,
-        request: {
-          ...parsedRequest.data,
-          draftScript: textProviderResult.fallback.used
-            ? parsedRequest.data.draftScript
-            : textProviderResult.scriptText,
-        },
-        scriptSource: textProviderResult.fallback.used ? "fallback" : "model",
-      } as const;
-      providerResult = textProviderResult.fallback.used
-        ? generateFallbackScript(workingProject, scriptContext)
-        : structureModelScript(workingProject, scriptContext, textProviderResult.fallback.provider);
+        promptContext,
+        rewriteScript: rewriteScriptWithConfiguredProvider,
+        generateFallbackScriptForProject: generateFallbackScript,
+        structureModelScriptForProject: structureModelScript,
+      });
     } catch (error) {
       sendScriptGenerationFailure(response, error);
       return;
@@ -1630,7 +1620,7 @@ export const createP0Router = ({
     }
 
     response.status(201).json({
-      fallback: textProviderResult.fallback,
+      fallback: providerResult.fallback,
       script: storyboardResult.script,
     });
   });
