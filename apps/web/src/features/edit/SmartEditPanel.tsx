@@ -209,11 +209,14 @@ import {
   clampPercentOffset,
   clampPlaybackRate,
   clampSmartEditDuration,
+  clampSnappedTimelineSecond,
   clampTimelineStart,
   clampVisualKeyframeTime,
   clipDurationWithinSegment,
+  nextTimelineScrollLeftForPlayhead,
   playheadSecondsFromTimelinePointer,
   snapTimelineSeconds,
+  timelineSecondsFromPixelDistance,
   timelineRulerTicks,
 } from "./SmartEditTimelineMath";
 import { useSmartEditSrtCaptions } from "./useSmartEditSrtCaptions";
@@ -451,22 +454,17 @@ export const SmartEditPanel = ({
     container: HTMLDivElement | null,
     seconds: number,
   ) => {
-    if (!container || container.clientWidth <= 0 || container.scrollWidth <= container.clientWidth) {
+    if (!container) {
       return;
     }
     const playheadX = seconds * timelinePixelsPerSecond;
-    const guard = Math.min(180, Math.max(80, container.clientWidth * 0.24));
-    const visibleStart = container.scrollLeft + guard;
-    const visibleEnd = container.scrollLeft + container.clientWidth - guard;
-    if (playheadX >= visibleStart && playheadX <= visibleEnd) {
-      return;
-    }
-    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-    const nextScrollLeft = Math.max(
-      0,
-      Math.min(playheadX - container.clientWidth / 2, maxScrollLeft),
-    );
-    if (Math.abs(container.scrollLeft - nextScrollLeft) > 1) {
+    const nextScrollLeft = nextTimelineScrollLeftForPlayhead({
+      clientWidth: container.clientWidth,
+      playheadX,
+      scrollLeft: container.scrollLeft,
+      scrollWidth: container.scrollWidth,
+    });
+    if (nextScrollLeft !== undefined) {
       container.scrollLeft = nextScrollLeft;
     }
   };
@@ -479,13 +477,13 @@ export const SmartEditPanel = ({
     });
   };
   const setPlayheadAndSeekPreview = (seconds: number) => {
-    const nextSecond = Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(seconds)));
+    const nextSecond = clampSnappedTimelineSecond(seconds, timelineDurationSeconds);
     setPlayheadSeconds(nextSecond);
     setPreviewCurrentTime(nextSecond);
     scrollPlayheadIntoView(nextSecond);
   };
   const setPlayheadFromPreviewTime = (seconds: number) => {
-    const nextSecond = Math.min(timelineDurationSeconds, Math.max(0, snapTimelineSeconds(seconds)));
+    const nextSecond = clampSnappedTimelineSecond(seconds, timelineDurationSeconds);
     setPlayheadSeconds((current) =>
       Math.abs(current - nextSecond) > 0.05 ? nextSecond : current,
     );
@@ -549,7 +547,7 @@ export const SmartEditPanel = ({
       return boundedPlayheadSeconds;
     }
     const x = Math.max(0, event.clientX - rect.left + (targetElement?.scrollLeft ?? 0));
-    return clampTimelineStart(snapTimelineSeconds(x / timelinePixelsPerSecond));
+    return clampTimelineStart(timelineSecondsFromPixelDistance(x, timelinePixelsPerSecond));
   };
   const handleAssetDragStart = (event: ReactDragEvent, assetId: string) => {
     event.dataTransfer.effectAllowed = "copy";
@@ -1791,8 +1789,9 @@ export const SmartEditPanel = ({
       setTrimDrag(undefined);
       return;
     }
-    const timelineDeltaSeconds = snapTimelineSeconds(
-      (event.clientX - trimDrag.startClientX) / timelinePixelsPerSecond,
+    const timelineDeltaSeconds = timelineSecondsFromPixelDistance(
+      event.clientX - trimDrag.startClientX,
+      timelinePixelsPerSecond,
     );
     const sourceDeltaSeconds =
       timelineDeltaSeconds * clampPlaybackRate(targetSegment.playbackRate ?? 1);
@@ -1909,8 +1908,9 @@ export const SmartEditPanel = ({
     if (!plan || !timelineMoveDrag || timelineMoveDrag.pointerId !== event.pointerId) {
       return;
     }
-    const deltaSeconds = snapTimelineSeconds(
-      (event.clientX - timelineMoveDrag.startClientX) / timelinePixelsPerSecond,
+    const deltaSeconds = timelineSecondsFromPixelDistance(
+      event.clientX - timelineMoveDrag.startClientX,
+      timelinePixelsPerSecond,
     );
     setTimelineMoveDrag(undefined);
     if (Math.abs(deltaSeconds) < 0.001) {
@@ -1964,8 +1964,9 @@ export const SmartEditPanel = ({
     if (!plan || !trackClipMoveDrag || trackClipMoveDrag.pointerId !== event.pointerId) {
       return;
     }
-    const deltaSeconds = snapTimelineSeconds(
-      (event.clientX - trackClipMoveDrag.startClientX) / timelinePixelsPerSecond,
+    const deltaSeconds = timelineSecondsFromPixelDistance(
+      event.clientX - trackClipMoveDrag.startClientX,
+      timelinePixelsPerSecond,
     );
     setTrackClipMoveDrag(undefined);
     if (Math.abs(deltaSeconds) < 0.001) {
@@ -2204,8 +2205,8 @@ export const SmartEditPanel = ({
       setPlayheadAndSeekPreview(playheadSecondsForPointerEvent(event));
       return;
     }
-    const startSecond = snapTimelineSeconds(startX / timelinePixelsPerSecond);
-    const endSecond = snapTimelineSeconds(endX / timelinePixelsPerSecond);
+    const startSecond = timelineSecondsFromPixelDistance(startX, timelinePixelsPerSecond);
+    const endSecond = timelineSecondsFromPixelDistance(endX, timelinePixelsPerSecond);
     const selectedIds = selectSmartEditTimelineElementIdsInBox(plan, {
       endSecond,
       startSecond,

@@ -150,6 +150,43 @@ export const timelineRulerTicks = (durationSeconds: number): number[] => {
 export const snapTimelineSeconds = (seconds: number): number =>
   Number((Math.round(seconds / TIMELINE_SNAP_SECONDS) * TIMELINE_SNAP_SECONDS).toFixed(3));
 
+export const clampSnappedTimelineSecond = (
+  seconds: number,
+  durationSeconds: number,
+): number => Math.min(durationSeconds, Math.max(0, snapTimelineSeconds(seconds)));
+
+export const timelineSecondsFromPixelDistance = (
+  pixelDistance: number,
+  pixelsPerSecond: number,
+): number => (pixelsPerSecond > 0 ? snapTimelineSeconds(pixelDistance / pixelsPerSecond) : 0);
+
+export const nextTimelineScrollLeftForPlayhead = ({
+  clientWidth,
+  playheadX,
+  scrollLeft,
+  scrollWidth,
+}: {
+  clientWidth: number;
+  playheadX: number;
+  scrollLeft: number;
+  scrollWidth: number;
+}): number | undefined => {
+  if (clientWidth <= 0 || scrollWidth <= clientWidth) {
+    return undefined;
+  }
+
+  const guard = Math.min(180, Math.max(80, clientWidth * 0.24));
+  const visibleStart = scrollLeft + guard;
+  const visibleEnd = scrollLeft + clientWidth - guard;
+  if (playheadX >= visibleStart && playheadX <= visibleEnd) {
+    return undefined;
+  }
+
+  const maxScrollLeft = Math.max(0, scrollWidth - clientWidth);
+  const nextScrollLeft = Math.max(0, Math.min(playheadX - clientWidth / 2, maxScrollLeft));
+  return Math.abs(scrollLeft - nextScrollLeft) > 1 ? nextScrollLeft : undefined;
+};
+
 export const playheadSecondsFromTimelinePointer = ({
   clientX,
   durationSeconds,
