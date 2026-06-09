@@ -1275,3 +1275,44 @@ This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It ex
 1. Commit this Smart Edit audio-track extraction after `git diff --check` and `.agents/memory` tracking checks pass.
 2. Continue backend cleanup only where ownership remains clear, such as video stitching helpers or renderer IO materialization.
 3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
+
+## 2026-06-09 Smart Edit Video Stitching Extraction Addendum
+
+This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It extracts the remaining video stitching ownership boundary from the Smart Edit composer.
+
+### Actual Change
+
+- Extracted Smart Edit video stitching from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditVideoStitching.ts`.
+- Moved renderer-side orchestration for:
+  - concat list writing for segment video files.
+  - black filler clip generation for manual timeline gaps.
+  - timeline gap insertion before concat.
+  - crossfade and wipe xfade filter graph construction.
+  - final stitched video ffmpeg invocation.
+- Kept segment source materialization, per-segment rendering, subtitle overlays, audio tracks, top-level export orchestration, storage upload, and response mapping in `smartEditComposer.ts`.
+- Added focused coverage in `apps/api/src/providers/renderer/smartEditVideoStitching.test.ts`.
+
+### Current File Sizes
+
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 390 lines, down from 556 after the previous audio-track pass.
+- `apps/api/src/providers/renderer/smartEditVideoStitching.ts`: 184 lines.
+- `apps/api/src/providers/renderer/smartEditVideoStitching.test.ts`: 127 lines.
+
+### Fresh Verification
+
+- TDD red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVideoStitching.test.ts` failed first because `smartEditVideoStitching.js` did not exist.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVideoStitching.test.ts`: passed, 2 tests.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditVideoStitching.test.ts src/providers/renderer/smartEditVisualFilters.test.ts`: passed, 40 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 55 files and 272 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 615 tests total: shared 26, API 272, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Updated Optimization Queue
+
+1. Commit this Smart Edit video-stitching extraction after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Continue backend cleanup only where ownership remains clear, such as segment-video rendering or renderer IO materialization.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.

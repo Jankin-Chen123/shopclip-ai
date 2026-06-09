@@ -3721,6 +3721,42 @@
 3. Keep frontend refactors deferred until the user's separate frontend workspace changes are ready to integrate.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; avoid mechanical rewrites of the damaged body.
 
+## 2026-06-09 Cleanup Branch Video Stitching Extraction Evidence
+
+- Branch: `codex/shopclip-optimization-cleanup`.
+- Scope: backend-only Smart Edit renderer cleanup. No frontend files were changed in this pass.
+- Change summary:
+  - Extracted segment concat, black timeline gap generation, and xfade transition stitching from `apps/api/src/providers/renderer/smartEditComposer.ts`.
+  - Added `apps/api/src/providers/renderer/smartEditVideoStitching.ts`.
+  - Added `apps/api/src/providers/renderer/smartEditVideoStitching.test.ts`.
+  - Kept top-level export orchestration, segment video generation, subtitle overlays, audio track rendering, storage upload, and response mapping in `smartEditComposer.ts`.
+- Current file sizes:
+  - `apps/api/src/providers/renderer/smartEditComposer.ts`: 390 lines.
+  - `apps/api/src/providers/renderer/smartEditVideoStitching.ts`: 184 lines.
+  - `apps/api/src/providers/renderer/smartEditVideoStitching.test.ts`: 127 lines.
+- TDD evidence:
+  - Red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVideoStitching.test.ts` failed first because `smartEditVideoStitching.js` did not exist.
+  - Focused green check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditVideoStitching.test.ts` passed, 2 tests.
+  - Composer regression check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditVideoStitching.test.ts src/providers/renderer/smartEditVisualFilters.test.ts` passed, 40 tests.
+- Fresh full verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 55 files and 272 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 615 tests total: shared 26, API 272, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+- Branch consolidation note:
+  - Current optimization work remains on `codex/shopclip-optimization-cleanup`.
+  - `codex/asset-preview-modal-ui` was not used for this pass.
+
+## Current Optimization Queue
+
+1. Commit and push the video-stitching extraction only to `codex/shopclip-optimization-cleanup` after pre-commit checks pass.
+2. Continue backend cleanup only where ownership remains clear, such as segment-video rendering or renderer IO materialization.
+3. Keep frontend refactors deferred until the user's separate frontend workspace changes are ready to integrate.
+4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; avoid mechanical rewrites of the damaged body.
+
 ## 2026-06-09 Smart Edit Visual Filter Extraction
 
 - Branch/workspace: `codex/shopclip-optimization-cleanup` in `D:\DemoV2`.
