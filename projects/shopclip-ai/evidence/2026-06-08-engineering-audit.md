@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `9eb08d4 Extract render task export mutation`.
+- Latest deployed optimization commit: `07639a3 Extract smart edit toolbar state builder`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `07639a3`:
+  - Extracted Smart Edit timeline toolbar state construction from `apps/web/src/features/edit/SmartEditPanel.tsx` into `buildSmartEditTimelineToolbarState` in `apps/web/src/features/edit/SmartEditTimelineToolbarState.ts`.
+  - Replaced the inline toolbar state object in `SmartEditPanel.tsx` while keeping the command callback wiring local to the panel.
+  - Added `apps/web/src/features/edit/SmartEditTimelineToolbarState.test.ts` coverage for direct field mapping and derived boolean toolbar flags.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3099 lines.
+    - `SmartEditTimelineToolbarState.ts`: 52 lines.
+    - `SmartEditTimelineToolbarState.test.ts`: 68 lines.
+    - `App.tsx`: 2581 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineToolbarState.test.ts` failed before implementation because `SmartEditTimelineToolbarState` did not exist.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineToolbarState.test.ts` passed, 2 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 486 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DHD2zmcY.js` at 606.64 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `07639a31ac0bd2dc570dfd2bc77797d303ed0eff`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `9eb08d4`:
   - Extracted local render-task export URL synchronization from `apps/web/src/app/App.tsx` into `markRenderTaskExported` in `apps/web/src/app/AppRenderUtils.ts`.
   - Replaced the inline `setRenderTask` object update in `handleExport` while keeping export result state and project render-task export synchronization in `App.tsx`.
