@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `b6f0c3b Extract smart edit track labels`.
+- Latest deployed optimization commit: `4e53412 Extract smart edit preview range label`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `4e53412`:
+  - Extracted Smart Edit preview-range label formatting from `apps/web/src/features/edit/SmartEditPanel.tsx` into `selectSmartEditPreviewRangeLabel` in `apps/web/src/features/edit/SmartEditTimelineToolbarState.ts`.
+  - Replaced the inline `formatTimelineTime` range interpolation in `SmartEditPanel.tsx`, removing that direct import from the large component.
+  - Extended `apps/web/src/features/edit/SmartEditTimelineToolbarState.test.ts` coverage for missing normalized range fallback and formatted timeline interval output.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3097 lines.
+    - `SmartEditTimelineToolbarState.ts`: 63 lines.
+    - `SmartEditTimelineToolbarState.test.ts`: 86 lines.
+    - `App.tsx`: 2581 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineToolbarState.test.ts` failed before implementation because `selectSmartEditPreviewRangeLabel` was not exported.
+    - Targeted green test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTimelineToolbarState.test.ts` passed, 4 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: initially caught a stale unused `formatTimelineTime` import in `SmartEditPanel.tsx`; after removing it, rerun passed.
+    - `corepack pnpm test`: passed, 489 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-Bp20T9be.js` at 606.67 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `4e53412c2567c4e54355dbfb2dcb8a26dc45e649`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `b6f0c3b`:
   - Extracted Smart Edit track-label construction from `apps/web/src/features/edit/SmartEditPanel.tsx` into `buildSmartEditTrackLabels` in `apps/web/src/features/edit/SmartEditTrackPresentationState.ts`.
   - Replaced the inline track label object in `SmartEditPanel.tsx` while preserving localized labels passed to inspector and track stack children.
