@@ -1524,6 +1524,42 @@
 - First migrated code batch starts with smart-edit subtitle overlay helpers and tests.
 - No final contest submission materials are included.
 
+### Completed Migration Batch On Original Branch
+
+- Migrated commits onto `codex/asset-preview-modal-ui`:
+  - `Extract smart edit subtitle overlay helpers`.
+  - `Extract smart edit audio filter helpers`.
+  - `Extract project asset routes`.
+  - `Extract project render routes`.
+  - `Extract project reference routes`.
+  - `Extract project script routes`.
+  - `Extract project smart edit routes`.
+  - `Extract project scene routes`.
+  - `Extract project core routes`.
+  - `Extract reference analysis route registration`.
+  - `Extract prisma project mappers`.
+  - `Extract memory project store utilities`.
+  - `Extract memory render scene utilities`.
+- Current backend structure:
+  - `router.ts`: 235 lines, dependency assembly plus route-service registration.
+  - `assetRouteService.ts`: 632 lines.
+  - `renderRouteService.ts`: 377 lines.
+  - `scriptRouteService.ts`: 331 lines.
+  - `prismaProjectMappers.ts`: 288 lines.
+  - `memoryProjectStoreUtils.ts`: 151 lines.
+  - `smartEditComposer.ts`: 1474 lines after subtitle/audio helper extraction.
+- Fresh local verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 43 files and 219 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 562 tests total.
+  - `corepack pnpm build`: passed with the existing Vite large chunk warning.
+- Remaining risks:
+  - `prismaProjectStore.ts` and `memoryStore.ts` remain large and should be reduced through pure helper extraction only.
+  - Frontend refactoring should remain deferred until the user's separate frontend changes are stable.
+
 ## 2026-06-08 Track Clip Card UI Cleanup
 
 - Extracted the repeated Smart Edit track clip JSX into `apps/web/src/features/edit/SmartEditTrackClipCard.tsx`.

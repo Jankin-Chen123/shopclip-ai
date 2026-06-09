@@ -406,3 +406,43 @@ User direction changed from continuing on `codex/shopclip-optimization-cleanup` 
 This sync is intentionally scoped to backend/service cleanup and project log alignment so it does not overwrite the user's separate frontend work. The first migrated batch begins with the smart-edit subtitle overlay extraction from the optimization branch.
 
 No final contest submission materials are being prepared in this optimization pass.
+
+### Migrated Optimization Scope
+
+- Migrated backend renderer helpers from `codex/shopclip-optimization-cleanup` onto `codex/asset-preview-modal-ui`:
+  - `smartEditSubtitleOverlay.ts` and coverage.
+  - `smartEditAudioFilters.ts`, FFmpeg expression helpers, and coverage.
+- Migrated project route-service extraction:
+  - asset, render, reference, script, smart-edit, scene, core, and reference-analysis route registration services.
+  - `router.ts` now acts as dependency assembly and service registration instead of directly owning the large project route blocks.
+- Migrated store cleanup:
+  - Prisma project mappers moved into `prismaProjectMappers.ts`.
+  - memory project/store render-scene helpers moved into `memoryProjectStoreUtils.ts`.
+- Conflict handling:
+  - `router.ts` had one expected conflict where the original large asset route block was replaced by `registerAssetRoutes(...)`.
+  - Project log conflicts were resolved by keeping the original branch body and appending this clear migration record.
+
+### Current File Sizes After Migration
+
+- `apps/api/src/modules/projects/router.ts`: 235 lines.
+- `apps/api/src/modules/projects/assetRouteService.ts`: 632 lines.
+- `apps/api/src/modules/projects/prismaProjectStore.ts`: 1083 lines.
+- `apps/api/src/modules/projects/memoryStore.ts`: 1024 lines.
+- `apps/api/src/modules/projects/prismaProjectMappers.ts`: 288 lines.
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 1474 lines.
+
+### Verification For Original Branch Migration
+
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 43 files and 219 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 562 tests total: shared 26, API 219, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Next Optimization Queue
+
+1. Continue backend cleanup in `memoryStore.ts` only where pure helper boundaries are clear.
+2. Defer large frontend refactors while the user is editing frontend in another workspace.
+3. Consider code-splitting or manual chunks later for the existing web bundle warning, after frontend work stabilizes.
