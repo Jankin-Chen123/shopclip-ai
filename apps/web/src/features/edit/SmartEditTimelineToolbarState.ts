@@ -6,6 +6,17 @@ import type {
   SmartEditTimelineEditMode,
   TimelinePreviewRangeState,
 } from "./SmartEditTimelineOperations";
+import { formatTimelineTime } from "./SmartEditTimelineMath";
+
+type NormalizedPreviewRange = { endSecond: number; startSecond: number };
+
+export const selectSmartEditPreviewRangeLabel = (
+  normalizedPreviewRange: NormalizedPreviewRange | undefined,
+  fallbackLabel: string,
+): string =>
+  normalizedPreviewRange
+    ? `${formatTimelineTime(normalizedPreviewRange.startSecond)}-${formatTimelineTime(normalizedPreviewRange.endSecond)}`
+    : fallbackLabel;
 
 export const buildSmartEditTimelineToolbarState = ({
   boundedPlayheadSeconds,
@@ -26,7 +37,7 @@ export const buildSmartEditTimelineToolbarState = ({
   commandHistory: SmartEditCommandHistory;
   commandHistoryLabel: (label: string) => string;
   materializableSegmentCount: number;
-  normalizedPreviewRange?: { endSecond: number; startSecond: number };
+  normalizedPreviewRange?: NormalizedPreviewRange;
   planExists: boolean;
   previewRange: TimelinePreviewRangeState;
   previewRangeLabel: string;

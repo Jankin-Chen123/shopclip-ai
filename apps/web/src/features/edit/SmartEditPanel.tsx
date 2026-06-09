@@ -114,7 +114,10 @@ import {
   SmartEditTimelineToolbar,
   type SmartEditTimelineToolbarActions,
 } from "./SmartEditTimelineToolbar";
-import { buildSmartEditTimelineToolbarState } from "./SmartEditTimelineToolbarState";
+import {
+  buildSmartEditTimelineToolbarState,
+  selectSmartEditPreviewRangeLabel,
+} from "./SmartEditTimelineToolbarState";
 import {
   selectSmartEditMaterializationTargetSegmentIds,
   selectSmartEditMaterializedTimelineElementIds,
@@ -211,7 +214,6 @@ import {
   clampTimelineStart,
   clampVisualKeyframeTime,
   clipDurationWithinSegment,
-  formatTimelineTime,
   playheadSecondsFromTimelinePointer,
   snapTimelineSeconds,
   timelineRulerTicks,
@@ -427,9 +429,10 @@ export const SmartEditPanel = ({
     () => normalizedSmartEditPreviewRange(previewRange, timelineDurationSeconds),
     [previewRange, timelineDurationSeconds],
   );
-  const previewRangeLabel = normalizedPreviewRange
-    ? `${formatTimelineTime(normalizedPreviewRange.startSecond)}-${formatTimelineTime(normalizedPreviewRange.endSecond)}`
-    : copy.previewRangeNotSet;
+  const previewRangeLabel = selectSmartEditPreviewRangeLabel(
+    normalizedPreviewRange,
+    copy.previewRangeNotSet,
+  );
   const setPreviewCurrentTime = (seconds: number) => {
     const preview = previewRef.current;
     if (!preview || !Number.isFinite(preview.duration)) {

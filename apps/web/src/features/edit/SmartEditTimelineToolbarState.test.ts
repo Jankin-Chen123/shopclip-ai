@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createSmartEditCommandHistory } from "./SmartEditCommandHistory";
-import { buildSmartEditTimelineToolbarState } from "./SmartEditTimelineToolbarState";
+import {
+  buildSmartEditTimelineToolbarState,
+  selectSmartEditPreviewRangeLabel,
+} from "./SmartEditTimelineToolbarState";
 
 describe("buildSmartEditTimelineToolbarState", () => {
   it("maps timeline toolbar values and derives boolean flags", () => {
@@ -64,5 +67,20 @@ describe("buildSmartEditTimelineToolbarState", () => {
     expect(state.hasSelectedEditableMaterials).toBe(false);
     expect(state.hasSmartEditClipboard).toBe(false);
     expect(state.normalizedPreviewRange).toBeUndefined();
+  });
+});
+
+describe("selectSmartEditPreviewRangeLabel", () => {
+  it("returns fallback copy when the preview range is not normalized", () => {
+    expect(selectSmartEditPreviewRangeLabel(undefined, "No range")).toBe("No range");
+  });
+
+  it("formats the normalized preview range as a timeline interval", () => {
+    expect(
+      selectSmartEditPreviewRangeLabel(
+        { startSecond: 61.25, endSecond: 125.5 },
+        "No range",
+      ),
+    ).toBe("01:01.3-02:05.5");
   });
 });
