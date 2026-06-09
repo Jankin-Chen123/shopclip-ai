@@ -9,11 +9,35 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `eed48f5 Extract smart edit timeline math helpers`.
+- Latest deployed optimization commit: `f974dc6 Extract smart edit selection derived state`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `f974dc6`:
+  - Extracted a larger batch of Smart Edit selection and derived-state calculations from `apps/web/src/features/edit/SmartEditPanel.tsx` into existing derived-state modules.
+  - Added segment helpers for ordered segment id selection and timed segment/start-second projection.
+  - Added track helpers for flattened track clip id selection and marquee-selected track id set construction.
+  - Replaced repeated inline `map`, `flatMap`, `new Set`, `timelineStartsForSegments`, and `selectSmartEditTrackIdsInMarquee` usage in segment retention, range/toggle selection, select-all, track clip selection, timed timeline segment projection, active marquee highlighting, and box-select completion.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 3087 lines.
+    - `SmartEditSegmentDerivedState.ts`: 165 lines.
+    - `SmartEditSegmentDerivedState.test.ts`: 217 lines.
+    - `SmartEditTrackClipDerivedState.ts`: 207 lines.
+    - `SmartEditTrackDerivedState.test.ts`: 511 lines.
+    - `App.tsx`: 2581 lines.
+    - `router.ts`: 2325 lines.
+  - Fresh verification after this pass:
+    - Red tests: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditSegmentDerivedState.test.ts` and `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditTrackDerivedState.test.ts` failed before implementation because the new helpers were not exported.
+    - Targeted green tests: both files passed, 37 tests total.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - First `corepack pnpm test` run hit two API media/ffmpeg timeout flakes unrelated to the frontend selection refactor; targeted API rerun passed, then a full `corepack pnpm test` rerun passed with 503 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-CaWPVXEt.js` at 607.05 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `f974dc607d1b939b7ae86c1a2641e87ea1fe0730`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `eed48f5`:
   - Extracted a larger batch of Smart Edit timeline math and positioning calculations from `apps/web/src/features/edit/SmartEditPanel.tsx` into `apps/web/src/features/edit/SmartEditTimelineMath.ts`.
   - Added tested helpers for snapped playhead clamping, pixel-distance-to-seconds conversion, and guarded playhead auto-scroll target selection.
