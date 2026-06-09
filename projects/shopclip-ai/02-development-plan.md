@@ -551,6 +551,52 @@ This addendum supersedes the backend router line counts in the previous addenda.
 6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 Scene Route Service Addendum
+
+This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Current work location: `D:\DemoV2`.
+- Frontend work remains intentionally out of scope for this pass to avoid conflicting with the user's separate frontend edits.
+
+### Actual Change
+
+- Moved scene route registration from `apps/api/src/modules/projects/router.ts` into the existing `apps/api/src/modules/projects/sceneRouteService.ts`.
+- Consolidated route ownership for:
+  - scene patch/update.
+  - project scene reorder.
+  - scene deletion.
+  - scene regeneration with storyboard image generation.
+  - scene editing suggestions and suggestion application.
+  - scene asset recall.
+- Kept `router.ts` responsible for injecting the storyboard image generator dependency and route registration order.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/router.ts`: 466 lines.
+- `apps/api/src/modules/projects/sceneRouteService.ts`: 313 lines.
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 1474 lines.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2972 lines.
+- `apps/web/src/app/App.tsx`: 2529 lines.
+
+### Fresh Verification
+
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+### Updated Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this scene route extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend cleanup by extracting project core routes or reference analyze registration only if the dependency boundary remains clear.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 Render Route Service Addendum
 
 This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.

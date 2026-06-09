@@ -1,3 +1,4 @@
+import type { Router } from "express";
 import type {
   AssetMetadata,
   SceneRegenerationRequest,
@@ -6,7 +7,14 @@ import type {
   StoryboardScene,
   TraceEvent,
 } from "@shopclip/shared";
+import {
+  SceneRegenerationRequestSchema,
+  SceneUpdateSchema,
+} from "@shopclip/shared";
 
+import { generateEditingSuggestions } from "../../providers/ai/editingAgentProvider.js";
+import { recallAssetsForScene } from "../scenes/assetRecallService.js";
+import { sendInvalidRequest, sendNotFound } from "./httpResponseUtils.js";
 import { canUseAssetInProject } from "./projectAssetUtils.js";
 import type { ProjectSnapshot, ProjectStore } from "./projectStore.js";
 
@@ -128,4 +136,178 @@ export const regenerateSceneWithImage = async ({
     scene: storedScene,
     traceEvent,
   };
+};
+
+type RegisterSceneRoutesOptions = {
+  generateImageUrl: SceneImageGenerator;
+  router: Router;
+  store: ProjectStore;
+};
+
+export const registerSceneRoutes = ({
+  generateImageUrl,
+  router,
+  store,
+}: RegisterSceneRoutesOptions): void => {
+  router.patch("/scenes/:sceneId", async (request, response) => {
+    const parsedUpdate = SceneUpdateSchema.safeParse(request.body);
+    if (!parsedUpdate.success) {
+      sendInvalidRequest(response, "INVALID_SCENE_UPDATE", "Scene update fields are invalid.");
+      return;
+    }
+
+    const updatedScene = await updateSceneWithAssetValidation({
+      sceneId: request.params.sceneId,
+      store,
+      update: parsedUpdate.data,
+    });
+    if (updatedScene.kind === "scene-not-found") {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+    if (updatedScene.kind === "invalid-asset") {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCENE_ASSET",
+        "Scene asset does not exist or cannot be used in this project.",
+      );
+      return;
+    }
+
+    response.json({ scene: updatedScene.scene });
+  });
+
+  router.post("/projects/:projectId/scenes/reorder", async (request, response) => {
+    const sceneIds = Array.isArray(request.body?.sceneIds)
+      ? request.body.sceneIds.filter(
+          (sceneId: unknown): sceneId is string => typeof sceneId === "string",
+        )
+      : [];
+    if (sceneIds.length === 0) {
+      sendInvalidRequest(response, "INVALID_SCENE_ORDER", "sceneIds are required.");
+      return;
+    }
+
+    const scenes = await store.reorderScenes(request.params.projectId, sceneIds);
+    if (!scenes) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCENE_ORDER",
+        "Scene order does not match project scenes.",
+      );
+      return;
+    }
+
+    response.json({ scenes });
+  });
+
+  router.delete("/scenes/:sceneId", async (request, response) => {
+    const scenes = await store.deleteScene(request.params.sceneId);
+    if (!scenes) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    response.json({ scenes });
+  });
+
+  router.post("/scenes/:sceneId/regenerate", async (request, response) => {
+    const parsedRegeneration = SceneRegenerationRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRegeneration.success) {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCENE_REGENERATION_REQUEST",
+        "Scene regeneration request is invalid.",
+      );
+      return;
+    }
+
+    const regeneratedScene = await regenerateSceneWithImage({
+      generateImageUrl,
+      regeneration: parsedRegeneration.data,
+      sceneId: request.params.sceneId,
+      store,
+    });
+    if (regeneratedScene.kind === "scene-not-found") {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+    if (regeneratedScene.kind === "invalid-asset") {
+      sendInvalidRequest(
+        response,
+        "INVALID_SCENE_ASSET",
+        "Scene asset does not exist or cannot be used in this project.",
+      );
+      return;
+    }
+
+    response.json({
+      scene: regeneratedScene.scene,
+      traceEvent: regeneratedScene.traceEvent,
+    });
+  });
+
+  router.get("/scenes/:sceneId/suggestions", async (request, response) => {
+    const context = await store.getSceneContext(request.params.sceneId);
+    if (!context) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    response.json({
+      suggestions: generateEditingSuggestions(
+        context.project,
+        context.scene,
+        context.project.assets,
+      ),
+    });
+  });
+
+  router.post("/scenes/:sceneId/asset-recall", async (request, response) => {
+    const context = await store.getSceneContext(request.params.sceneId);
+    if (!context) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    response.json({
+      scene: context.scene,
+      candidates: recallAssetsForScene(context.project, context.scene),
+    });
+  });
+
+  router.post("/scenes/:sceneId/suggestions/:suggestionId/apply", async (request, response) => {
+    const context = await store.getSceneContext(request.params.sceneId);
+    if (!context) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    const suggestion = generateEditingSuggestions(
+      context.project,
+      context.scene,
+      context.project.assets,
+    ).find((candidate) => candidate.id === request.params.suggestionId);
+    if (!suggestion) {
+      sendNotFound(response, "SUGGESTION_NOT_FOUND", "Suggestion was not found.");
+      return;
+    }
+
+    const storedScene = await store.updateScene(context.scene.id, suggestion.update);
+    if (!storedScene) {
+      sendNotFound(response, "SCENE_NOT_FOUND", "Scene was not found.");
+      return;
+    }
+
+    const traceEvent = await store.appendTraceEvent(`scene:${context.scene.id}`, {
+      status: "completed",
+      step: "agent-suggestion-applied",
+      message: `Applied editing suggestion ${suggestion.id}: ${suggestion.title}.`,
+    });
+
+    response.json({
+      scene: storedScene,
+      traceEvent,
+    });
+  });
 };
