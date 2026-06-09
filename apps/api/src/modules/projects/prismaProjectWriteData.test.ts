@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { RenderTask, StoryboardScene } from "@shopclip/shared";
 
 import {
+  orderByRequestedIds,
+  toAssetCreateData,
+  toAssetSliceUpdateData,
+  toJsonObject,
+  toProjectStatusFromRenderTask,
+  toReferenceVideoCreateData,
   toReferenceVideoUpdateData,
   toRenderTaskCreateData,
+  toSceneUpdateData,
   toScriptSceneCreateData,
   toViralTemplateCreateData,
   toViralTemplateUpdateData,
@@ -34,6 +41,41 @@ const renderTask = (): Omit<RenderTask, "id" | "projectId" | "createdAt" | "upda
   }) as Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">;
 
 describe("prisma project write data", () => {
+  it("builds asset create and slice update payloads", () => {
+    const data = toAssetCreateData(
+      "project-1",
+      "asset-1",
+      {
+        type: "image",
+        status: "ready",
+        source: "merchant_upload",
+        storageProvider: "cos",
+        url: "/asset.png",
+        name: "asset.png",
+        tags: ["demo"],
+      },
+      [
+        {
+          label: "hero",
+          tags: ["hero"],
+        },
+      ],
+      () => "generated-id",
+    );
+
+    expect(data).toEqual(
+      expect.objectContaining({
+        id: "asset-1",
+        projectId: "project-1",
+        storageProvider: "cos",
+      }),
+    );
+    expect(data.slices.create).toEqual([expect.objectContaining({ id: "generated-id" })]);
+    expect(toAssetSliceUpdateData({ label: "updated" })).toEqual(
+      expect.objectContaining({ label: "updated" }),
+    );
+  });
+
   it("clears stale reference errors when status moves away from failed", () => {
     expect(toReferenceVideoUpdateData({ status: "ready" })).toEqual(
       expect.objectContaining({
@@ -41,6 +83,28 @@ describe("prisma project write data", () => {
         status: "ready",
       }),
     );
+  });
+
+  it("builds reference create payloads and JSON object fallbacks", () => {
+    expect(
+      toReferenceVideoCreateData("project-1", "ref-1", {
+        sourceUrl: "https://example.test/ref",
+        sourcePlatform: "tiktok",
+        sourceDeclaration: "Public URL.",
+        title: "Reference",
+        category: "Kitchen",
+        publicStats: { likes: 1, comments: 2, shares: 3, views: 4 },
+        status: "registered",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        id: "ref-1",
+        projectId: "project-1",
+        status: "registered",
+      }),
+    );
+    expect(toJsonObject(["not-object"])).toEqual({});
+    expect(toJsonObject({ ok: true })).toEqual({ ok: true });
   });
 
   it("uses the target project id and generated id for script scene creates", () => {
@@ -54,6 +118,24 @@ describe("prisma project write data", () => {
         assetId: "asset-1",
       }),
     );
+  });
+
+  it("maps scene update nulls and render task status to persistence payloads", () => {
+    expect(
+      toSceneUpdateData({
+        assetId: null,
+        assetRecallQuery: null,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        assetId: null,
+        assetRecallQuery: null,
+        status: "edited",
+      }),
+    );
+    expect(toProjectStatusFromRenderTask({ status: "completed" })).toBe("completed");
+    expect(toProjectStatusFromRenderTask({ status: "failed" })).toBe("failed");
+    expect(toProjectStatusFromRenderTask({ status: "queued" })).toBe("rendering");
   });
 
   it("keeps viral template create and update payloads aligned", () => {
@@ -103,6 +185,21 @@ describe("prisma project write data", () => {
         status: "queued",
         step: "render",
       }),
+    ]);
+  });
+
+  it("orders deleted assets by the requested id list", () => {
+    expect(
+      orderByRequestedIds(
+        ["asset-2", "asset-1", "missing"],
+        [
+          { id: "asset-1", name: "one" },
+          { id: "asset-2", name: "two" },
+        ],
+      ),
+    ).toEqual([
+      { id: "asset-2", name: "two" },
+      { id: "asset-1", name: "one" },
     ]);
   });
 });

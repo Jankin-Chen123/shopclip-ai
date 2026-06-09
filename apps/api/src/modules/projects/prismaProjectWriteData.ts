@@ -5,12 +5,45 @@ import type {
   ReferenceVideo,
   ReferenceVideoAnalysis,
   RenderTask,
+  SceneUpdate,
   StoryboardScene,
   TraceEvent,
   ViralTemplate,
 } from "@shopclip/shared";
 
 import { toDbStorageProvider } from "./prismaProjectMappers.js";
+
+export const toJsonObject = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+export const toAssetCreateData = (
+  projectId: string | undefined,
+  assetId: string,
+  asset: Omit<AssetMetadata, "id" | "projectId" | "createdAt" | "updatedAt">,
+  slices: Array<Omit<AssetSlice, "id" | "assetId">>,
+  createId: () => string,
+) => ({
+  id: assetId,
+  projectId,
+  type: asset.type,
+  status: asset.status,
+  source: asset.source ?? "merchant_upload",
+  storageProvider: toDbStorageProvider(asset.storageProvider),
+  objectKey: asset.objectKey,
+  thumbnailKey: asset.thumbnailKey,
+  url: asset.url,
+  name: asset.name,
+  mimeType: asset.mimeType,
+  sizeBytes: asset.sizeBytes,
+  tags: asset.tags,
+  embeddingText: asset.embeddingText,
+  metadata: asset.metadata as Prisma.InputJsonValue | undefined,
+  slices: {
+    create: slices.map((slice) => toAssetSliceCreateData(slice, createId)),
+  },
+});
 
 export const toAssetSliceCreateData = (
   slice: Omit<AssetSlice, "id" | "assetId">,
@@ -25,6 +58,19 @@ export const toAssetSliceCreateData = (
   embeddingText: slice.embeddingText,
   searchText: slice.searchText,
   metadata: slice.metadata as Prisma.InputJsonValue | undefined,
+});
+
+export const toAssetSliceUpdateData = (
+  update: Partial<Omit<AssetSlice, "id" | "assetId">>,
+) => ({
+  label: update.label,
+  startSecond: update.startSecond,
+  endSecond: update.endSecond,
+  tags: update.tags,
+  thumbnailKey: update.thumbnailKey,
+  embeddingText: update.embeddingText,
+  searchText: update.searchText,
+  metadata: update.metadata as Prisma.InputJsonValue | undefined,
 });
 
 export const toAssetUpdateData = (
@@ -59,6 +105,25 @@ export const toAssetUpdateData = (
   tags: update.tags,
   thumbnailKey: update.thumbnailKey,
   url: update.url,
+});
+
+export const toReferenceVideoCreateData = (
+  projectId: string | undefined,
+  referenceId: string,
+  reference: Omit<ReferenceVideo, "id" | "projectId" | "analysis" | "createdAt" | "updatedAt">,
+) => ({
+  id: referenceId,
+  projectId,
+  sourceAssetId: reference.sourceAssetId,
+  sourceUrl: reference.sourceUrl,
+  sourcePlatform: reference.sourcePlatform,
+  sourceDeclaration: reference.sourceDeclaration,
+  title: reference.title,
+  author: reference.author,
+  category: reference.category,
+  publicStats: reference.publicStats as Prisma.InputJsonValue,
+  status: reference.status,
+  errorMessage: reference.errorMessage,
 });
 
 export const toReferenceAnalysisUpdateData = (
@@ -150,6 +215,15 @@ export const toTraceEventCreateData = (
   retryOfTraceEventId: event.retryOfTraceEventId,
 });
 
+export const toProjectStatusFromRenderTask = (
+  renderTask: Pick<RenderTask, "status">,
+): "completed" | "failed" | "rendering" =>
+  renderTask.status === "completed"
+    ? "completed"
+    : renderTask.status === "failed"
+      ? "failed"
+      : "rendering";
+
 export const toRenderTaskCreateData = (
   projectId: string,
   renderTask: Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">,
@@ -176,6 +250,28 @@ export const toRenderTaskCreateData = (
     create: traceEvents.map((event) => toTraceEventCreateData(event, createId)),
   },
 });
+
+export const toSceneUpdateData = (update: SceneUpdate) => ({
+  durationSeconds: update.durationSeconds,
+  subtitle: update.subtitle,
+  voiceover: update.voiceover,
+  visualPrompt: update.visualPrompt,
+  assetRecallQuery: update.assetRecallQuery === null ? null : update.assetRecallQuery,
+  imageUrl: update.imageUrl,
+  assetId: update.assetId === null ? null : update.assetId,
+  status: update.status ?? "edited",
+});
+
+export const orderByRequestedIds = <T extends { id: string }>(
+  requestedIds: string[],
+  values: T[],
+): T[] => {
+  const valueById = new Map(values.map((value) => [value.id, value]));
+  return requestedIds.flatMap((id) => {
+    const value = valueById.get(id);
+    return value ? [value] : [];
+  });
+};
 
 export const toRenderTaskUpdateData = (
   update: Partial<Omit<RenderTask, "id" | "projectId" | "createdAt" | "updatedAt">>,
