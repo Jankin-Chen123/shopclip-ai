@@ -9,11 +9,32 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `2feedb9 Extract script request preparation helpers`.
+- Latest deployed optimization commit: `72abb89 Extract storyboard route service`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `72abb89`:
+  - Extracted storyboard route request construction, prepared asset error mapping, render-and-persist flow, and generated script contract validation from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/storyboardRouteService.ts`.
+  - Added focused tests for saved-script storyboard request construction, invalid prepared asset short-circuiting, fallback storyboard scene persistence, and invalid generated storyboard contract mapping.
+  - Replaced the inline `/projects/:projectId/scripts/:scriptId/storyboard` fallback storyboard flow and the `/projects/:projectId/generate-script` render/store/validate tail with service calls.
+  - Current file sizes:
+    - `router.ts`: 2254 lines.
+    - `storyboardRouteService.ts`: 156 lines.
+    - `storyboardRouteService.test.ts`: 182 lines.
+    - `App.tsx`: 2529 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/modules/projects/storyboardRouteService.test.ts` failed before implementation because `storyboardRouteService.js` did not exist.
+    - Targeted green tests: `storyboardRouteService.test.ts` passed 4 tests; `p0-flow.test.ts` and `p1-flow.test.ts` passed 30 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 529 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/api/src/modules/projects/router.ts`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `72abb892bcb6939434b593a00979fc878ba7505b`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy note: production install reported the existing ignored build-script warning for ffmpeg packages; build and PM2 restart succeeded.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `2feedb9`:
   - Extracted script request preparation from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptRequestPreparation.ts`.
   - Added a tested helper for prompt context resolution, explicit keyword persistence, prepared asset resolution, and invalid script asset error mapping.
