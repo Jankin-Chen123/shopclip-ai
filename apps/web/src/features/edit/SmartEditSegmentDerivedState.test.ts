@@ -2,8 +2,10 @@ import type { AssetMetadata, AssetSlice, SmartEditSegment } from "@shopclip/shar
 import { describe, expect, it } from "vitest";
 
 import {
+  buildTimedSmartEditSegments,
   buildSmartEditTimelineMetrics,
   selectSmartEditAssetSlicesForSegment,
+  selectSmartEditSegmentIds,
   selectSmartEditSegmentIdByOffset,
   selectSmartEditSegmentIdsOrUndefined,
   updateSelectedSmartEditSegments,
@@ -145,6 +147,36 @@ describe("SmartEditSegmentDerivedState", () => {
         segment("scene-1", { source: { assetId: "asset-1" } as SmartEditSegment["source"] }),
       ).map((slice) => slice.id),
     ).toEqual(["slice-1", "slice-3"]);
+  });
+
+  it("selects segment ids in their current order", () => {
+    expect(selectSmartEditSegmentIds([segment("scene-1"), segment("scene-2")])).toEqual([
+      "scene-1",
+      "scene-2",
+    ]);
+  });
+
+  it("builds timed segment references from enabled timeline starts", () => {
+    expect(
+      buildTimedSmartEditSegments([
+        segment("scene-1", { durationSeconds: 2, enabled: true, order: 0 }),
+        segment("scene-2", { durationSeconds: 3, enabled: false, order: 1 }),
+        segment("scene-3", { durationSeconds: 4, enabled: true, order: 2 }),
+      ]),
+    ).toEqual([
+      {
+        segment: segment("scene-1", { durationSeconds: 2, enabled: true, order: 0 }),
+        startSecond: 0,
+      },
+      {
+        segment: segment("scene-2", { durationSeconds: 3, enabled: false, order: 1 }),
+        startSecond: 2,
+      },
+      {
+        segment: segment("scene-3", { durationSeconds: 4, enabled: true, order: 2 }),
+        startSecond: 2,
+      },
+    ]);
   });
 
   it("builds timeline metrics from enabled segments and zoom", () => {

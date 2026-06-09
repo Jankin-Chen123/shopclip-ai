@@ -1,11 +1,13 @@
 export {
   allSmartEditTrackClips,
+  buildSmartEditTrackBoxSelectTrackIdSet,
   buildSmartEditTrackClipDragPreview,
   buildSmartEditTrackClipTrimPreview,
   buildSmartEditTrackEditPoints,
   findSmartEditTrackClip,
   selectSelectedSmartEditTrackClipBatchIds,
   selectSmartEditTrackClipIdsAtSecond,
+  selectSmartEditTrackClipIds,
   selectSmartEditTrackClipSnapPoints,
   selectSmartEditTrackClipsById,
 } from "./SmartEditTrackClipDerivedState";

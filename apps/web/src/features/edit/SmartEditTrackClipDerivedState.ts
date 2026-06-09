@@ -1,11 +1,13 @@
 import type {
   SmartEditTrack,
   SmartEditTrackSegment,
+  TrackBoxSelectDragState,
   TrackClipMoveDragState,
   TrackClipTrimDragState,
 } from "./SmartEditTimelineOperations";
 import { clampTimelineStart, snapTimelineSeconds } from "./SmartEditTimelineMath";
 import type { SmartEditTrackId } from "./SmartEditTrackUtils";
+import { selectSmartEditTrackIdsInMarquee } from "./SmartEditTrackUtils";
 import { canResizeSelectedSmartEditTimelineMaterials } from "./SmartEditTimelineMaterialDerivedState";
 import {
   previewSmartEditTrackClipDrag,
@@ -21,6 +23,25 @@ type SmartEditTrackClipPreview = Pick<
 export const allSmartEditTrackClips = (
   trackSegments: SmartEditTrack[],
 ): SmartEditTrackSegment[] => trackSegments.flatMap((track) => track.segments);
+
+export const selectSmartEditTrackClipIds = (
+  trackSegments: SmartEditTrack[],
+): string[] => allSmartEditTrackClips(trackSegments).map((trackClip) => trackClip.id);
+
+export const buildSmartEditTrackBoxSelectTrackIdSet = (
+  trackBoxSelectDrag: Pick<
+    TrackBoxSelectDragState,
+    "currentTimelineY" | "startTimelineY" | "trackRows"
+  > | undefined,
+): Set<SmartEditTrackId> =>
+  new Set(
+    trackBoxSelectDrag
+      ? selectSmartEditTrackIdsInMarquee(trackBoxSelectDrag.trackRows, {
+          endY: trackBoxSelectDrag.currentTimelineY,
+          startY: trackBoxSelectDrag.startTimelineY,
+        })
+      : [],
+  );
 
 export const buildSmartEditTrackEditPoints = (
   timelineDurationSeconds: number,

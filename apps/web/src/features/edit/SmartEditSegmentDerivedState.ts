@@ -2,7 +2,10 @@ import type { AssetMetadata, AssetSlice, SmartEditPlan, SmartEditSegment } from 
 
 import { sourceLabel } from "./SmartEditSegmentUtils";
 import { TIMELINE_BASE_PX_PER_SECOND } from "./SmartEditTimelineMath";
-import { timelineDurationForSegments } from "./SmartEditTimelineOperations";
+import {
+  timelineDurationForSegments,
+  timelineStartsForSegments,
+} from "./SmartEditTimelineOperations";
 
 export const sortSmartEditSegments = (
   segments: SmartEditSegment[] | undefined,
@@ -35,6 +38,10 @@ export const selectSmartEditSegmentsById = (
   selectedSegmentIdSet: Set<string>,
 ): SmartEditSegment[] =>
   sortedSegments.filter((segment) => selectedSegmentIdSet.has(segment.id));
+
+export const selectSmartEditSegmentIds = (
+  sortedSegments: Array<Pick<SmartEditSegment, "id">>,
+): string[] => sortedSegments.map((segment) => segment.id);
 
 export const selectSmartEditSegmentIdsOrUndefined = (
   segments: Array<Pick<SmartEditSegment, "id">>,
@@ -86,6 +93,16 @@ export const smartEditEnabledDurationSeconds = (
 export const smartEditTimelineDurationSeconds = (
   sortedSegments: SmartEditSegment[],
 ): number => Math.max(1, timelineDurationForSegments(sortedSegments));
+
+export const buildTimedSmartEditSegments = (
+  sortedSegments: SmartEditSegment[],
+): Array<{ segment: SmartEditSegment; startSecond: number }> => {
+  const currentStarts = timelineStartsForSegments(sortedSegments);
+  return sortedSegments.map((segment) => ({
+    segment,
+    startSecond: currentStarts.get(segment.id) ?? 0,
+  }));
+};
 
 export const buildSmartEditTimelineMetrics = ({
   playheadSeconds,

@@ -4,6 +4,7 @@ import type { SmartEditTrackSegment } from "./SmartEditTimelineOperations";
 import type { SmartEditTimelineElement } from "./SmartEditTimelineTypes";
 import {
   buildSmartEditTrackClipTrimPreview,
+  buildSmartEditTrackBoxSelectTrackIdSet,
   canMoveSelectedSmartEditTimelineMaterials,
   canResizeSelectedSmartEditTimelineMaterials,
   hasSmartEditTimelineTextMaterials,
@@ -14,6 +15,7 @@ import {
   selectRemovableSmartEditTimelineMaterialIds,
   selectResizableSmartEditTimelineMaterialIdsOrUndefined,
   selectSelectedSmartEditTrackClipBatchIds,
+  selectSmartEditTrackClipIds,
   selectExistingSmartEditTimelineElementIds,
   selectSmartEditClipboardCopySelection,
   selectSmartEditTrackClipSnapPoints,
@@ -333,6 +335,39 @@ describe("SmartEditTrackDerivedState", () => {
         targetTrackClipId: "caption-1",
       }),
     ).toEqual([]);
+  });
+
+  it("flattens track clip ids in track order", () => {
+    expect(
+      selectSmartEditTrackClipIds([
+        {
+          id: "caption",
+          segments: [trackClip("caption-1"), trackClip("caption-2")],
+        },
+        {
+          id: "voice",
+          segments: [trackClip("voice-1", { trackId: "voice" })],
+        },
+      ]),
+    ).toEqual(["caption-1", "caption-2", "voice-1"]);
+  });
+
+  it("builds a selected track id set for an active marquee drag", () => {
+    expect(
+      buildSmartEditTrackBoxSelectTrackIdSet({
+        currentTimelineY: 35,
+        startTimelineY: 5,
+        trackRows: [
+          { bottom: 20, top: 0, trackId: "video" },
+          { bottom: 40, top: 21, trackId: "caption" },
+          { bottom: 60, locked: true, top: 41, trackId: "voice" },
+        ],
+      }),
+    ).toEqual(new Set(["video", "caption"]));
+  });
+
+  it("returns an empty track id set when no marquee drag is active", () => {
+    expect(buildSmartEditTrackBoxSelectTrackIdSet(undefined)).toEqual(new Set());
   });
 
   it("keeps locked track clips out of selected trim previews", () => {

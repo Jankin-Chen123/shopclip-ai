@@ -31,10 +31,12 @@ import {
   type SmartEditVisualEffectType,
 } from "./SmartEditSegmentUtils";
 import {
+  buildTimedSmartEditSegments,
   buildSmartEditTimelineMetrics,
   materializableSmartEditSegments,
   selectSmartEditSegment,
   selectSmartEditAssetSlicesForSegment,
+  selectSmartEditSegmentIds,
   selectSmartEditSegmentIdByOffset,
   selectSmartEditSegmentIdsOrUndefined,
   selectedSmartEditSegmentIndex,
@@ -51,7 +53,6 @@ import {
   toggleSmartEditSelectionId,
 } from "./SmartEditSelectionUtils";
 import {
-  selectSmartEditTrackIdsInMarquee,
   smartEditSyncedScrollLeft,
   type SmartEditTrackId,
 } from "./SmartEditTrackUtils";
@@ -70,6 +71,7 @@ import { SmartEditSrtCaptionControls } from "./SmartEditSrtCaptionControls";
 import { SmartEditTimelineSection } from "./SmartEditTimelineSection";
 import { SmartEditTrackStack } from "./SmartEditTrackStack";
 import {
+  buildSmartEditTrackBoxSelectTrackIdSet,
   buildSmartEditTrackClipDragPreview,
   buildSmartEditTrackClipTrimPreview,
   buildSmartEditTrackEditPoints,
@@ -77,6 +79,7 @@ import {
   selectSelectedSmartEditTrackClipBatchIds,
   selectSmartEditTrackClipSnapPoints,
   selectSmartEditTrackClipIdsAtSecond,
+  selectSmartEditTrackClipIds,
   selectSmartEditTrackClipsById,
 } from "./SmartEditTrackClipDerivedState";
 import {
@@ -175,7 +178,6 @@ import {
   splitSmartEditTimelineElementAtPlayhead,
   splitSmartEditTimelineElementsAtPlayhead,
   splitSmartEditTimelineTextElementByLines,
-  timelineStartsForSegments,
   timelineTrackSegments,
   trimSmartEditSegmentAtPlayhead,
   trimSmartEditTimelineElementAtPlayhead,
@@ -415,7 +417,7 @@ export const SmartEditPanel = ({
       retainSmartEditSelectionIds({
         fallbackId: selectedSegment.id,
         selectedIds: current,
-        validIds: sortedSegments.map((segment) => segment.id),
+        validIds: selectSmartEditSegmentIds(sortedSegments),
       }),
     );
   }, [selectedSegment, sortedSegments]);
@@ -611,13 +613,7 @@ export const SmartEditPanel = ({
     [timelineDurationSeconds],
   );
   const timedTimelineSegments = useMemo(() => {
-    const currentStarts = timelineStartsForSegments(sortedSegments);
-    return sortedSegments.map((segment) => {
-      return {
-        segment,
-        startSecond: currentStarts.get(segment.id) ?? 0,
-      };
-    });
+    return buildTimedSmartEditSegments(sortedSegments);
   }, [sortedSegments]);
   const selectedSegmentIndex = selectedSmartEditSegmentIndex(sortedSegments, selectedSegment);
   const selectedSourceLabel = smartEditSelectedSourceLabel(selectedSegment, assets);
@@ -689,15 +685,7 @@ export const SmartEditPanel = ({
     ],
   );
   const trackBoxSelectTrackIdSet = useMemo(
-    () =>
-      new Set(
-        trackBoxSelectDrag
-          ? selectSmartEditTrackIdsInMarquee(trackBoxSelectDrag.trackRows, {
-              endY: trackBoxSelectDrag.currentTimelineY,
-              startY: trackBoxSelectDrag.startTimelineY,
-            })
-          : [],
-    ),
+    () => buildSmartEditTrackBoxSelectTrackIdSet(trackBoxSelectDrag),
     [trackBoxSelectDrag],
   );
   const selectedTimelineElement = useMemo(
@@ -893,7 +881,7 @@ export const SmartEditPanel = ({
     const isRange = Boolean(event?.shiftKey);
     if (isRange && selectedSegment) {
       const rangeIds = selectSmartEditSelectionRangeIdsOrUndefined({
-        orderedIds: sortedSegments.map((segment) => segment.id),
+        orderedIds: selectSmartEditSegmentIds(sortedSegments),
         selectedIds: [selectedSegment.id],
         targetId: segmentId,
       });
@@ -907,7 +895,7 @@ export const SmartEditPanel = ({
       setSelectedSegmentIds((current) =>
         toggleSmartEditSelectionId({
           currentIds: current,
-          orderedIds: sortedSegments.map((segment) => segment.id),
+          orderedIds: selectSmartEditSegmentIds(sortedSegments),
           targetId: segmentId,
         }),
       );
@@ -923,7 +911,7 @@ export const SmartEditPanel = ({
     trackClip: SmartEditTrackSegment,
     event?: Pick<ReactMouseEvent<HTMLElement> | ReactPointerEvent<HTMLElement>, "ctrlKey" | "metaKey" | "shiftKey">,
   ) => {
-    const trackClipIds = trackSegments.flatMap((track) => track.segments.map((candidate) => candidate.id));
+    const trackClipIds = selectSmartEditTrackClipIds(trackSegments);
     if (event?.shiftKey && selectedTrackClipIds.length > 0) {
       const rangeIds = selectSmartEditSelectionRangeIdsOrUndefined({
         orderedIds: trackClipIds,
@@ -959,7 +947,7 @@ export const SmartEditPanel = ({
     if (sortedSegments.length === 0) {
       return;
     }
-    selectSegmentIds(sortedSegments.map((segment) => segment.id), sortedSegments[0]?.id);
+    selectSegmentIds(selectSmartEditSegmentIds(sortedSegments), sortedSegments[0]?.id);
     clearSelectedTrackClips();
   };
 
@@ -2210,10 +2198,7 @@ export const SmartEditPanel = ({
     const selectedIds = selectSmartEditTimelineElementIdsInBox(plan, {
       endSecond,
       startSecond,
-      trackIds: selectSmartEditTrackIdsInMarquee(trackBoxSelectDrag.trackRows, {
-        endY: trackBoxSelectDrag.currentTimelineY,
-        startY: trackBoxSelectDrag.startTimelineY,
-      }),
+      trackIds: Array.from(buildSmartEditTrackBoxSelectTrackIdSet(trackBoxSelectDrag)),
     });
     if (selectedIds.length === 0) {
       clearSelectedTrackClips();
