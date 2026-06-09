@@ -575,3 +575,42 @@ This pass continued on `codex/asset-preview-modal-ui` and expanded the backend-o
 1. Continue Prisma store cleanup only if a clear transaction helper or repeated query pattern emerges.
 2. Reassess `memoryStore.ts` and `assetRouteService.ts` for the next backend-only cleanup batch.
 3. Keep broad frontend refactors deferred until the user's separate frontend work is stable.
+
+## 2026-06-09 Asset Route Utility Extraction
+
+This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. The goal was to reduce `assetRouteService.ts` by moving pure asset-route payload and search helpers out of the route registration file without changing route behavior.
+
+### Changed Files
+
+- `apps/api/src/modules/projects/assetRouteUtils.ts`
+  - Added helpers for stored asset payload materialization, global asset-library project snapshot construction, asset search query parsing, and local/COS result merging.
+  - Re-exported `createAssetSlices` so the route service keeps one asset-route utility import surface.
+- `apps/api/src/modules/projects/assetRouteService.ts`
+  - Replaced inline global/project asset payload construction with `toStoredAssetInput`.
+  - Replaced inline `/assets/search` query parsing, synthetic global-library snapshot construction, and text/COS merge logic with utility helpers.
+  - Kept route registration, validation, store calls, COS search invocation, response shape, and error handling in the route service.
+- `apps/api/src/modules/projects/assetRouteUtils.test.ts`
+  - Added focused coverage for stored asset payload defaults, query parsing, global library snapshot creation, COS-only search behavior, and slice-level hybrid search behavior.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/assetRouteService.ts`: 576 lines, down from 632 before this pass.
+- `apps/api/src/modules/projects/assetRouteUtils.ts`: 104 lines.
+- `apps/api/src/modules/projects/assetRouteUtils.test.ts`: 138 lines.
+
+### Verification
+
+- `corepack pnpm --filter @shopclip/api test src/modules/projects/assetRouteUtils.test.ts`: passed, 5 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 46 files and 237 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 580 tests total: shared 26, API 237, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Remaining Queue
+
+1. Keep backend cleanup focused on files with obvious helper boundaries: `memoryStore.ts`, `prismaProjectStore.ts`, `assetRouteService.ts`, `smartEditJobService.ts`, `smartEditPlanUtils.ts`, `renderRouteService.ts`, and `scriptRouteService.ts`.
+2. Continue avoiding broad frontend refactors until the user's separate frontend work is integrated.
+3. Treat the Vite large client chunk warning as a later frontend bundle-splitting task, not part of this backend cleanup batch.

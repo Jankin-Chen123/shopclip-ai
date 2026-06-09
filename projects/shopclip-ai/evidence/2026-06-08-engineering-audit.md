@@ -3504,6 +3504,26 @@
 3. Continue smaller API cleanup only where route-service boundaries are clear; avoid broad API rewrites after the router reduction unless a handler cluster has obvious ownership.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 Asset Route Utility Extraction
+
+- Branch/workspace: `codex/asset-preview-modal-ui` in `D:\DemoV2`.
+- Scope: backend-only cleanup; no final contest submission material and no broad frontend refactor.
+- Extracted pure asset-route helpers from `apps/api/src/modules/projects/assetRouteService.ts` into `apps/api/src/modules/projects/assetRouteUtils.ts`.
+- Covered the extracted behavior with `apps/api/src/modules/projects/assetRouteUtils.test.ts`.
+- Current file sizes:
+  - `assetRouteService.ts`: 576 lines, down from 632 before this pass.
+  - `assetRouteUtils.ts`: 104 lines.
+  - `assetRouteUtils.test.ts`: 138 lines.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api test src/modules/projects/assetRouteUtils.test.ts`: passed, 5 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 46 files and 237 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 580 tests total: shared 26, API 237, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## 2026-06-08 Smart Edit Selection Helpers Follow-Up
 
 - Extracted repeated Smart Edit timeline-material selection state updates into local helpers inside `apps/web/src/features/edit/SmartEditPanel.tsx`.
