@@ -2119,6 +2119,7 @@ export const App = ({
             <AssetsPanel
               activeCategory={activeAssetCategory}
               assetDraft={assetDraft}
+              allAssets={assetLibrary.assets}
               assets={activeAssets}
               copy={text.assets}
               disabled={busyState !== "idle"}

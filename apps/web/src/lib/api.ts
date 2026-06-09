@@ -124,6 +124,9 @@ const absoluteApiBaseUrl = (): string => {
 export const getAssetContentUrl = (assetId: string): string =>
   `${apiBaseUrl}/assets/${encodeURIComponent(assetId)}/content`;
 
+export const getAssetThumbnailUrl = (assetId: string): string =>
+  `${apiBaseUrl}/assets/${encodeURIComponent(assetId)}/thumbnail`;
+
 export const resolveApiDownloadUrl = (url: string): string => {
   if (/^[a-z][a-z0-9+.-]*:/i.test(url)) {
     return url;
