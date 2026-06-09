@@ -1568,6 +1568,33 @@
   - `prismaProjectStore.ts` and `memoryStore.ts` remain large and should be reduced through pure helper extraction only.
   - Frontend refactoring should remain deferred until the user's separate frontend changes are stable.
 
+## 2026-06-09 Memory Store Helper Extraction Follow-Up
+
+- Branch: `codex/asset-preview-modal-ui`.
+- Scope: backend-only memory project store cleanup.
+- Changed files:
+  - `apps/api/src/modules/projects/memoryProjectStoreUtils.ts`.
+  - `apps/api/src/modules/projects/memoryStore.ts`.
+  - `apps/api/src/modules/projects/memoryProjectStoreUtils.test.ts`.
+- Moved responsibilities:
+  - reference video update materialization.
+  - viral template upsert and reference-based removal.
+  - script scene ID/project materialization.
+  - asset deletion collection cleanup for project assets, slices, processing jobs, processing events, and scene/script asset references.
+- Current file sizes:
+  - `memoryStore.ts`: 977 lines.
+  - `memoryProjectStoreUtils.ts`: 288 lines.
+  - `memoryProjectStoreUtils.test.ts`: 137 lines.
+- Fresh verification:
+  - `corepack pnpm --filter @shopclip/api test src/modules/projects/memoryProjectStoreUtils.test.ts`: passed, 5 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 567 tests total.
+  - `corepack pnpm build`: passed with the existing Vite large chunk warning.
+- No final contest submission materials were prepared.
+
 ## 2026-06-08 Track Clip Card UI Cleanup
 
 - Extracted the repeated Smart Edit track clip JSX into `apps/web/src/features/edit/SmartEditTrackClipCard.tsx`.

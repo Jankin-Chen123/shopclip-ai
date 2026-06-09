@@ -450,3 +450,42 @@ No final contest submission materials are being prepared in this optimization pa
 1. Continue backend cleanup in `memoryStore.ts` only where pure helper boundaries are clear.
 2. Defer large frontend refactors while the user is editing frontend in another workspace.
 3. Consider code-splitting or manual chunks later for the existing web bundle warning, after frontend work stabilizes.
+
+## 2026-06-09 Memory Store Helper Extraction Follow-Up
+
+This pass continued on the original branch `codex/asset-preview-modal-ui` and stayed within backend project-store cleanup to avoid colliding with separate frontend edits.
+
+### Changed Files
+
+- `apps/api/src/modules/projects/memoryProjectStoreUtils.ts`
+  - Added pure helpers for reference video analysis/update materialization.
+  - Added viral template upsert/reference-removal helpers.
+  - Added script scene materialization.
+  - Added project asset deletion state helpers for assets, slices, processing jobs, processing events, scenes, and script scene references.
+- `apps/api/src/modules/projects/memoryStore.ts`
+  - Replaced inline reference update, viral template synchronization, script scene ID remapping, and asset deletion filtering logic with the new helpers.
+  - Kept mutable Map/array ownership and store method side effects in `MemoryProjectStore`.
+- `apps/api/src/modules/projects/memoryProjectStoreUtils.test.ts`
+  - Added focused helper coverage for reference error cleanup, viral template upsert/removal, project asset deletion cleanup, and script scene materialization.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/memoryStore.ts`: 977 lines, down from 1024 after the previous migration.
+- `apps/api/src/modules/projects/memoryProjectStoreUtils.ts`: 288 lines.
+- `apps/api/src/modules/projects/memoryProjectStoreUtils.test.ts`: 137 lines.
+
+### Verification
+
+- `corepack pnpm --filter @shopclip/api test src/modules/projects/memoryProjectStoreUtils.test.ts`: passed, 5 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 567 tests total: shared 26, API 224, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Remaining Queue
+
+1. Continue `memoryStore.ts` reduction only around pure collection or materialization helpers.
+2. Revisit `prismaProjectStore.ts` mapper/materialization boundaries after memory-store cleanup.
+3. Keep broad frontend refactors deferred until the user's separate frontend branch/workspace is stable.
