@@ -618,3 +618,45 @@ This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. T
 1. Keep backend cleanup focused on files with obvious helper boundaries: `memoryStore.ts`, `prismaProjectStore.ts`, `assetRouteService.ts`, `smartEditJobService.ts`, `smartEditPlanUtils.ts`, `renderRouteService.ts`, and `scriptRouteService.ts`.
 2. Continue avoiding broad frontend refactors until the user's separate frontend work is integrated.
 3. Treat the Vite large client chunk warning as a later frontend bundle-splitting task, not part of this backend cleanup batch.
+
+## 2026-06-09 Render Task Polling Service Extraction
+
+This pass continued on `codex/asset-preview-modal-ui` and stayed backend-only. The goal was to reduce `renderRouteService.ts` by moving Seedance polling, completed-clip materialization, export publishing trace handling, and polling failure handling into a render-task service module.
+
+### Changed Files
+
+- `apps/api/src/modules/projects/renderTaskPollingService.ts`
+  - Added active Seedance render detection.
+  - Added completed scene-clip materialization helper with ready/failed trace event creation.
+  - Added completed render material refresh handling for already-finished Seedance tasks.
+  - Added active Seedance polling orchestration that publishes final exports, materializes scene clips, stores trace events, and records provider polling failures.
+- `apps/api/src/modules/projects/renderRouteService.ts`
+  - Replaced inline materialization and polling branches with calls to the new service helpers.
+  - Kept HTTP validation, route response shaping, retry routing, export routing, and provider creation ownership in the route layer.
+  - Fixed provider creation to stay lazy: `createSeedanceRenderProvider()` is only called after confirming the task is an active Seedance render task.
+- `apps/api/src/modules/projects/renderTaskPollingService.test.ts`
+  - Added focused tests for active status detection, materialization skip behavior, partial materialization failures, completed-render material refresh, completed provider polling with export publishing, and provider polling failure handling.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/renderRouteService.ts`: 242 lines, down from 377 before this pass.
+- `apps/api/src/modules/projects/renderTaskPollingService.ts`: 209 lines.
+- `apps/api/src/modules/projects/renderTaskPollingService.test.ts`: 240 lines.
+
+### Verification
+
+- `corepack pnpm --filter @shopclip/api test src/modules/projects/renderTaskPollingService.test.ts`: passed, 6 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test src/smart-edit-flow.test.ts src/p0-flow.test.ts`: passed, 27 tests.
+- `corepack pnpm --filter @shopclip/api test`: passed, 47 files and 243 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 586 tests total: shared 26, API 243, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Remaining Queue
+
+1. Deploy this batch, then record production health and page smoke evidence.
+2. Continue backend cleanup next in `scriptRouteService.ts` or `smartEditJobService.ts` if another route/service boundary is clear.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.

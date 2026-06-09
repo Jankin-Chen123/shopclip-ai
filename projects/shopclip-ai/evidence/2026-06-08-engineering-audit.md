@@ -3528,6 +3528,28 @@
   - `https://shopclip.site/health`: returned API `status: ok`.
   - Production Playwright smoke for `https://shopclip.site/#project` and `https://shopclip.site/#studio`: passed with no console errors, request failures, or 4xx/5xx responses.
 
+## 2026-06-09 Render Task Polling Service Extraction
+
+- Branch/workspace: `codex/asset-preview-modal-ui` in `D:\DemoV2`.
+- Scope: backend-only cleanup; no final contest submission material and no broad frontend refactor.
+- Extracted Seedance render polling, completed clip materialization, export publish trace handling, and polling failure handling from `apps/api/src/modules/projects/renderRouteService.ts` into `apps/api/src/modules/projects/renderTaskPollingService.ts`.
+- Added `apps/api/src/modules/projects/renderTaskPollingService.test.ts` for the extracted behavior.
+- Fixed a regression found during API testing: Seedance provider creation is now lazy and only happens after active Seedance task detection, so mock/non-Seedance render polling does not require real `AI_VIDEO_API_KEY` or `ARK_API_KEY`.
+- Current file sizes:
+  - `renderRouteService.ts`: 242 lines, down from 377 before this pass.
+  - `renderTaskPollingService.ts`: 209 lines.
+  - `renderTaskPollingService.test.ts`: 240 lines.
+- Verification:
+  - `corepack pnpm --filter @shopclip/api test src/modules/projects/renderTaskPollingService.test.ts`: passed, 6 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test src/smart-edit-flow.test.ts src/p0-flow.test.ts`: passed, 27 tests.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 47 files and 243 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 586 tests total: shared 26, API 243, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## 2026-06-08 Smart Edit Selection Helpers Follow-Up
 
 - Extracted repeated Smart Edit timeline-material selection state updates into local helpers inside `apps/web/src/features/edit/SmartEditPanel.tsx`.

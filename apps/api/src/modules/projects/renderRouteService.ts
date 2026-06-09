@@ -1,11 +1,10 @@
 import { z } from "zod";
 import type { Router } from "express";
-import type { SceneRenderClip, TraceEvent } from "@shopclip/shared";
+import type { SceneRenderClip } from "@shopclip/shared";
 import { RenderRequestSchema } from "@shopclip/shared";
 
 import type { RenderExportPublisher } from "../../providers/renderer/renderExportPublisher.js";
 import { createCosRenderExportPublisher } from "../../providers/renderer/renderExportPublisher.js";
-import type { materializeSceneClipsForSmartEdit } from "../../providers/renderer/sceneClipMaterializer.js";
 import {
   createQueuedRenderWithConfiguredVideoProvider,
   createSeedanceRenderProvider,
@@ -13,6 +12,12 @@ import {
 import type { StorageProvider } from "../../providers/storage/storageProvider.js";
 import { sendInvalidRequest, sendNotFound } from "./httpResponseUtils.js";
 import type { ProjectStore } from "./projectStore.js";
+import {
+  isActiveSeedanceRenderTask,
+  pollActiveSeedanceRenderTask,
+  refreshCompletedRenderMaterials,
+  type SceneClipMaterializer as RenderTaskSceneClipMaterializer,
+} from "./renderTaskPollingService.js";
 import {
   isSeedanceSceneDurationError,
   resolveProjectExport,
@@ -23,7 +28,7 @@ export type SceneClipComposer = (
   projectId: string,
   clips: SceneRenderClip[],
 ) => Promise<string | undefined>;
-export type SceneClipMaterializer = typeof materializeSceneClipsForSmartEdit;
+export type SceneClipMaterializer = RenderTaskSceneClipMaterializer;
 
 type RegisterRenderRoutesOptions = {
   renderExportPublisher?: RenderExportPublisher;
@@ -50,42 +55,6 @@ export const registerRenderRoutes = ({
     renderExportPublisher ??
     sceneClipComposer ??
     createCosRenderExportPublisher({ storageProvider });
-  const materializeCompletedSceneClips = async (
-    projectId: string,
-    renderTaskId: string,
-    sceneClips: SceneRenderClip[] | undefined,
-  ): Promise<{
-    sceneClips: SceneRenderClip[] | undefined;
-    traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">>;
-  }> => {
-    const hasMissingCompletedMaterials = sceneClips?.some(
-      (clip) => clip.status === "completed" && clip.videoUrl && !clip.material,
-    );
-    if (!hasMissingCompletedMaterials) {
-      return { sceneClips, traceEvents: [] };
-    }
-
-    const materialized = await sceneClipMaterializer(projectId, renderTaskId, sceneClips, {
-      storageProvider,
-    });
-    const readyCount =
-      materialized?.filter((clip) => clip.material?.status === "ready").length ?? 0;
-    const failedCount =
-      materialized?.filter((clip) => clip.material?.status === "failed").length ?? 0;
-    return {
-      sceneClips: materialized,
-      traceEvents: [
-        {
-          status: failedCount > 0 ? "retrying" : "completed",
-          step: failedCount > 0 ? "scene-clip-materialize-partial" : "scene-clip-materialize",
-          message:
-            failedCount > 0
-              ? `Prepared ${readyCount} scene clips for smart editing; ${failedCount} clip material separations failed.`
-              : `Prepared ${readyCount} scene clips as video, audio, and text materials for smart editing.`,
-        },
-      ],
-    };
-  };
 
   router.post("/projects/:projectId/render", async (request, response) => {
     const project = await store.getProject(request.params.projectId);
@@ -174,131 +143,29 @@ export const registerRenderRoutes = ({
       return;
     }
 
-    if (
-      renderTask.renderTask.provider === "volcengine-seedance" &&
-      renderTask.renderTask.status === "completed" &&
-      renderTask.renderTask.sceneClips?.some(
-        (clip) => clip.status === "completed" && clip.videoUrl && !clip.material,
-      )
-    ) {
-      const traceEvents: Array<Omit<TraceEvent, "id" | "renderTaskId" | "createdAt">> = [];
-      try {
-        const materialized = await materializeCompletedSceneClips(
-          renderTask.project.id,
-          renderTask.renderTask.id,
-          renderTask.renderTask.sceneClips,
-        );
-        traceEvents.push(...materialized.traceEvents);
-        const updated = await store.updateRenderTask(
-          renderTask.renderTask.id,
-          { sceneClips: materialized.sceneClips },
-          traceEvents,
-        );
-        if (updated) {
-          response.json(updated);
-          return;
-        }
-      } catch (error) {
-        traceEvents.push({
-          status: "failed",
-          step: "scene-clip-materialize-failed",
-          message: error instanceof Error ? error.message : "Scene clip materialization failed.",
-        });
-        const updated = await store.updateRenderTask(
-          renderTask.renderTask.id,
-          {},
-          traceEvents,
-        );
-        if (updated) {
-          response.json(updated);
-          return;
-        }
-      }
+    const refreshedMaterials = await refreshCompletedRenderMaterials({
+      renderTask,
+      sceneClipMaterializer,
+      storageProvider,
+      store,
+    });
+    if (refreshedMaterials) {
+      response.json(refreshedMaterials);
+      return;
     }
 
-    if (
-      renderTask.renderTask.provider === "volcengine-seedance" &&
-      !["completed", "failed"].includes(renderTask.renderTask.status)
-    ) {
-      try {
-        const provider = createSeedanceRenderProvider();
-        const providerResult = await provider.loadRenderTask(
-          renderTask.project,
-          renderTask.renderTask,
-        );
-        if (
-          providerResult.renderTask.status === "completed" &&
-          providerResult.renderTask.sceneClips &&
-          providerResult.renderTask.sceneClips.length > 0
-        ) {
-          try {
-            const exportUrl = await publishRenderExport(
-              renderTask.project.id,
-              providerResult.renderTask.sceneClips,
-            );
-            if (exportUrl) {
-              providerResult.renderTask.exportUrl = exportUrl;
-              providerResult.traceEvents.push({
-                status: "completed",
-                step: "render-export-published",
-                message: "Seedance scene clips composed and published as a final export video.",
-              });
-            }
-          } catch (error) {
-            providerResult.traceEvents.push({
-              status: "failed",
-              step: "render-export-publish-failed",
-              message:
-                error instanceof Error ? error.message : "Final render export publishing failed.",
-            });
-          }
-          try {
-            const materialized = await materializeCompletedSceneClips(
-              renderTask.project.id,
-              renderTask.renderTask.id,
-              providerResult.renderTask.sceneClips,
-            );
-            providerResult.renderTask.sceneClips = materialized.sceneClips;
-            providerResult.traceEvents.push(...materialized.traceEvents);
-          } catch (error) {
-            providerResult.traceEvents.push({
-              status: "failed",
-              step: "scene-clip-materialize-failed",
-              message:
-                error instanceof Error ? error.message : "Scene clip materialization failed.",
-            });
-          }
-        }
-        const updated = await store.updateRenderTask(
-          renderTask.renderTask.id,
-          providerResult.renderTask,
-          providerResult.traceEvents,
-        );
-        if (updated) {
-          response.json(updated);
-          return;
-        }
-      } catch (error) {
-        const storedTrace = await store.updateRenderTask(
-          renderTask.renderTask.id,
-          {
-            status: "failed",
-            progress: renderTask.renderTask.progress,
-            errorMessage:
-              error instanceof Error ? error.message : "Seedance render polling failed.",
-          },
-          [
-            {
-              status: "failed",
-              step: "seedance-task-poll-failed",
-              message: error instanceof Error ? error.message : "Seedance render polling failed.",
-            },
-          ],
-        );
-        if (storedTrace) {
-          response.json(storedTrace);
-          return;
-        }
+    if (isActiveSeedanceRenderTask(renderTask.renderTask)) {
+      const polledRenderTask = await pollActiveSeedanceRenderTask({
+        loadRenderTask: createSeedanceRenderProvider().loadRenderTask,
+        publishRenderExport,
+        renderTask,
+        sceneClipMaterializer,
+        storageProvider,
+        store,
+      });
+      if (polledRenderTask) {
+        response.json(polledRenderTask);
+        return;
       }
     }
 
