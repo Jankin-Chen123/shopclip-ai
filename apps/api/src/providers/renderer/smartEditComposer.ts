@@ -15,6 +15,19 @@ import type {
 import type { StorageProvider } from "../storage/storageProvider.js";
 import { formatFfmpegExitError } from "./ffmpegComposer.js";
 import {
+  atempoFilter,
+  audioFadeFilters,
+  audioVolumeFilter,
+  audioVolumeKeyframes,
+  normalizeAudioVolume,
+  smartEditBgmProfile,
+  type SmartEditAudioVolumeKeyframe,
+} from "./smartEditAudioFilters.js";
+import {
+  escapedFfmpegExpression,
+  linearKeyframeExpression,
+} from "./smartEditFfmpegExpressions.js";
+import {
   applyGlobalTimelineTextOverlay,
   applySegmentSubtitleOverlay,
 } from "./smartEditSubtitleOverlay.js";
@@ -162,8 +175,6 @@ const isImageSourceForSegment = (
 
 const escapeConcatPath = (path: string): string => path.replace(/\\/g, "/").replace(/'/g, "'\\''");
 
-type SmartEditAudioVolumeKeyframe = NonNullable<SmartEditSegment["sourceAudioVolumeKeyframes"]>[number];
-
 type OutputDimensions = {
   height: number;
   width: number;
@@ -257,50 +268,6 @@ const normalizedVisualEffects = (segment: SmartEditSegment) =>
       radius: Number.isFinite(effect.params?.radius) ? effect.params.radius : 4,
     }));
 
-type TimedScalarKeyframe = {
-  easing?: "linear" | "hold";
-  timeSecond: number;
-};
-
-const escapedFfmpegExpression = (expression: string): string =>
-  expression.replace(/,/gu, "\\,");
-
-const linearKeyframeExpression = <TKeyframe extends TimedScalarKeyframe>(
-  keyframes: TKeyframe[],
-  valueAt: (keyframe: TKeyframe) => number,
-  fallback: number,
-): string => {
-  if (keyframes.length < 2) {
-    return fallback.toFixed(3);
-  }
-  const unique = keyframes.filter(
-    (keyframe, index) =>
-      index === 0 || Math.abs(keyframe.timeSecond - keyframes[index - 1]!.timeSecond) > 0.001,
-  );
-  if (unique.length < 2) {
-    return valueAt(unique[0]!).toFixed(3);
-  }
-  const first = unique[0]!;
-  const last = unique.at(-1)!;
-  let expression = valueAt(last).toFixed(3);
-  for (let index = unique.length - 2; index >= 0; index -= 1) {
-    const left = unique[index]!;
-    const right = unique[index + 1]!;
-    const leftTime = left.timeSecond.toFixed(3);
-    const rightTime = right.timeSecond.toFixed(3);
-    const leftValue = valueAt(left).toFixed(3);
-    const rightValue = valueAt(right).toFixed(3);
-    const span = Math.max(0.001, right.timeSecond - left.timeSecond).toFixed(3);
-    const interpolation =
-      right.easing === "hold"
-        ? leftValue
-        : `(${leftValue}+(${rightValue}-${leftValue})*(t-${leftTime})/${span})`;
-    expression = `if(lte(t,${leftTime}),${leftValue},if(gte(t,${rightTime}),${expression},${interpolation}))`;
-  }
-  return escapedFfmpegExpression(
-    `if(lte(t,${first.timeSecond.toFixed(3)}),${valueAt(first).toFixed(3)},${expression})`,
-  );
-};
 
 const visualEffectAmountExpression = (
   effect: ReturnType<typeof normalizedVisualEffects>[number],
@@ -681,82 +648,6 @@ const createSegmentVideo = async ({
   });
 };
 
-const atempoFilter = (playbackRate: number): string => {
-  const factors: number[] = [];
-  let remaining = playbackRate;
-  while (remaining > 2) {
-    factors.push(2);
-    remaining /= 2;
-  }
-  while (remaining < 0.5) {
-    factors.push(0.5);
-    remaining /= 0.5;
-  }
-  factors.push(remaining);
-  return factors.map((factor) => `atempo=${factor.toFixed(4)}`).join(",");
-};
-
-const normalizeAudioFadeSeconds = (seconds: number | undefined, durationSeconds: number): number =>
-  Math.max(0, Math.min(10, durationSeconds, seconds ?? 0));
-
-const audioFadeFilters = (
-  durationSeconds: number,
-  fadeInSeconds?: number,
-  fadeOutSeconds?: number,
-): string[] => {
-  const fadeIn = normalizeAudioFadeSeconds(fadeInSeconds, durationSeconds);
-  const fadeOut = normalizeAudioFadeSeconds(fadeOutSeconds, durationSeconds);
-  return [
-    ...(fadeIn > 0 && durationSeconds > fadeIn
-      ? [`afade=t=in:st=0:d=${fadeIn.toFixed(2)}`]
-      : []),
-    ...(fadeOut > 0 && durationSeconds > fadeOut
-      ? [
-          `afade=t=out:st=${Math.max(0, durationSeconds - fadeOut).toFixed(2)}:d=${fadeOut.toFixed(
-            2,
-          )}`,
-        ]
-      : []),
-  ];
-};
-
-const normalizeAudioVolume = (volume: number | undefined): number =>
-  Number.isFinite(volume) ? Math.max(0, Math.min(4, volume!)) : 1;
-
-const audioVolumeKeyframes = (
-  keyframes: SmartEditAudioVolumeKeyframe[] | undefined,
-  durationSeconds: number,
-): SmartEditAudioVolumeKeyframe[] =>
-  (keyframes ?? [])
-    .slice(0, 40)
-    .map((keyframe) => ({
-      easing: keyframe.easing ?? "linear",
-      id: keyframe.id,
-      timeSecond: Math.max(0, Math.min(durationSeconds, keyframe.timeSecond)),
-      volume: normalizeAudioVolume(keyframe.volume),
-    }))
-    .sort((left, right) => left.timeSecond - right.timeSecond);
-
-const audioVolumeFilter = (
-  volume: number | undefined,
-  keyframes: SmartEditAudioVolumeKeyframe[] | undefined,
-  durationSeconds: number,
-): string[] => {
-  const normalizedVolume = normalizeAudioVolume(volume);
-  const normalizedKeyframes = audioVolumeKeyframes(keyframes, durationSeconds);
-  if (normalizedKeyframes.length >= 2) {
-    const expression = linearKeyframeExpression(
-      normalizedKeyframes,
-      (keyframe) => keyframe.volume,
-      normalizedVolume,
-    );
-    return [`volume='${expression}':eval=frame`];
-  }
-  if (Math.abs(normalizedVolume - 1) > 0.001) {
-    return [`volume=${normalizedVolume.toFixed(3)}`];
-  }
-  return [];
-};
 
 const createSilenceAudioSegment = async (
   command: string,
@@ -1368,27 +1259,6 @@ const createVoiceoverTrack = async (
   return voiceTrackPath;
 };
 
-type SmartEditBgmTrack = SmartEditPlan["audio"]["bgmTrack"];
-
-const bgmProfiles: Record<Exclude<SmartEditBgmTrack, "none">, { lavfi: string; volume: number }> = {
-  "creator-pop": {
-    lavfi: "sine=frequency=523:sample_rate=44100",
-    volume: 0.05,
-  },
-  "soft-lift": {
-    lavfi: "sine=frequency=330:sample_rate=44100",
-    volume: 0.035,
-  },
-  "tech-pulse": {
-    lavfi: "sine=frequency=176:sample_rate=44100",
-    volume: 0.045,
-  },
-};
-
-export const smartEditBgmProfile = (
-  bgmTrack: SmartEditBgmTrack,
-): { lavfi: string; volume: number } | undefined =>
-  bgmTrack === "none" ? undefined : bgmProfiles[bgmTrack] ?? bgmProfiles["creator-pop"];
 
 const addAudioTracks = async (
   command: string,
@@ -1481,6 +1351,8 @@ export const createSmartEditSegmentObjectKey = (
   exportId: string,
   segmentId: string,
 ): string => `projects/${projectId}/smart-edits/${exportId}/segments/${segmentId}.mp4`;
+
+export { smartEditBgmProfile };
 
 export const composeSmartEditToStorage = async (
   projectId: string,

@@ -1513,6 +1513,39 @@
 3. Split `apps/web/src/app/App.tsx` state orchestration into feature hooks after Smart Edit UI and router cleanup are stable under full verification.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; do not mechanically edit it further.
 
+## 2026-06-09 API Smart Edit Audio Filter Extraction
+
+- Extracted Smart Edit renderer audio filter and BGM profile helpers from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditAudioFilters.ts`.
+- Extracted shared ffmpeg keyframe expression helpers into `apps/api/src/providers/renderer/smartEditFfmpegExpressions.ts`.
+- Added `apps/api/src/providers/renderer/smartEditAudioFilters.test.ts` covering playback-rate `atempo` splitting, fade clamping, fixed/keyframed audio volume filters, and BGM profile mapping.
+- Kept segment video creation, source-audio rendering, voiceover rendering, BGM mixing, upload publishing, and high-level composer dependency orchestration inside `smartEditComposer.ts`.
+- Current file sizes:
+  - `smartEditComposer.ts`: 1474 lines.
+  - `smartEditAudioFilters.ts`: 107 lines.
+  - `smartEditAudioFilters.test.ts`: 64 lines.
+  - `smartEditFfmpegExpressions.ts`: 44 lines.
+  - `smartEditSubtitleOverlay.ts`: 300 lines.
+  - `smartEditTimelinePlan.ts`: 316 lines.
+- Fresh verification after this pass:
+  - First targeted audio-helper run failed because `audioVolumeKeyframes` was not imported from the new helper module; fixed by importing it in `smartEditComposer.ts`.
+  - Targeted renderer tests passed: `smartEditAudioFilters.test.ts`, `smartEditComposer.test.ts`, and `smartEditSubtitleOverlay.test.ts`, 43 tests.
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 560 tests total.
+  - `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for the web bundle.
+
+## Current Optimization Queue
+
+1. Commit this audio-helper cleanup and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+3. Verify production after deploy with `/health`, `#project`, and `#studio`.
+4. Continue backend renderer cleanup only where helper clusters have obvious ownership; next candidates are remaining segment filter assembly or temp-file path construction, not a broad composer rewrite.
+5. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+6. Recover or rewrite `02-development-plan.md` with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-08 Track Clip Card UI Cleanup
 
 - Extracted the repeated Smart Edit track clip JSX into `apps/web/src/features/edit/SmartEditTrackClipCard.tsx`.
