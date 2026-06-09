@@ -363,8 +363,8 @@ This addendum supersedes the 2026-06-08 engineering audit section where the two 
 ### Current Branch And Deployment
 
 - Active optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest branch documentation sync commit: `9755442 Sync audit after script template deployment`.
-- Latest deployed runtime commit: `107a87255b1bdc95e60a54d7ae025a19ebc593d9` (`Extract script template route service`).
+- Latest branch documentation sync commit before this update: `cfe7138 Sync development plan optimization audit`.
+- Latest deployed runtime commit: `714b773b219f17f39d05a56857666f3701d66f3c` (`Extract smart edit visual operations`).
 - Live public URL now exists at `https://shopclip.site`; `/health` returns `{"service":"api","status":"ok","version":"0.1.0"}`.
 
 ### Actual Current State
@@ -377,20 +377,24 @@ This addendum supersedes the 2026-06-08 engineering audit section where the two 
 
 ### Fresh Verification For This Sync
 
-- `.\node_modules\.bin\vitest.CMD run src/modules/projects/scriptTemplateRouteService.test.ts src/providers/ai/scriptTemplateExtractionProvider.test.ts src/p0-flow.test.ts src/p1-flow.test.ts`: passed, 36 tests.
+- `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditVisualEditOperations.test.ts`: failed before implementation because `SmartEditVisualEditOperations` did not exist.
+- `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditVisualEditOperations.test.ts src/features/edit/SmartEditSegmentUtils.test.ts src/features/edit/SmartEditTimelineMath.test.ts`: passed, 13 tests.
+- `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx src/features/edit/SmartEditVisualEditOperations.test.ts src/features/edit/SmartEditTimelineToolbarState.test.ts src/features/edit/SmartEditTrackDerivedState.test.ts`: passed, 315 tests.
 - `corepack pnpm typecheck`: passed.
 - `corepack pnpm lint`: passed.
-- `corepack pnpm test`: passed, 543 tests total: shared 26, API 206, web 311.
-- `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
-- Production deploy of runtime commit `107a872` completed on `/www/wwwroot/shopclip-ai`; PM2 `shopclip-ai-api` is online.
+- `corepack pnpm test`: passed, 547 tests total: shared 26, API 206, web 315.
+- `corepack pnpm build`: passed; Vite still reports the existing large chunk warning for `assets/index-De5NHyT2.js` at 607.03 kB minified.
+- Production deploy of runtime commit `714b773` completed on `/www/wwwroot/shopclip-ai`; PM2 `shopclip-ai-api` is online.
 - Production Playwright smoke check for `https://shopclip.site/#project` and `https://shopclip.site/#studio` reported no console errors, request failures, or 4xx/5xx responses.
-- `git diff --check`: passed before both the runtime commit and the audit sync commit.
+- Public `https://shopclip.site/health` returned API `status: ok` after one transient TLS retry.
+- `git diff --check`: passed before the runtime commit and this documentation sync.
 - `git ls-files .agents/memory`: empty.
 
 ### Current Structure Risks
 
 - `apps/web/src/app/App.test.tsx`: 7255 lines. This is mostly test coverage and lower runtime risk, but it is difficult to maintain.
-- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2969 lines. It remains the largest runtime UI module and the next best cleanup target after the API router pass.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2854 lines. The visual/effect/audio-keyframe plan mutations have been extracted to `SmartEditVisualEditOperations.ts`, but the panel remains the largest runtime UI module.
+- `apps/web/src/features/edit/SmartEditVisualEditOperations.ts`: 319 lines, with `SmartEditVisualEditOperations.test.ts` at 189 lines.
 - `apps/web/src/app/App.tsx`: 2385 lines. It is improved from the stale audit number but still mixes routing, project state orchestration, background tasks, and page composition.
 - `apps/api/src/modules/projects/router.ts`: 1935 lines. The recent optimization pass reduced it by extracting asset resolution, request preparation, storyboard route flow, script provider orchestration, prompt context resolution, draft route handling, and template extraction into focused tested services.
 - `apps/web/src/features/edit/SmartEditTimelineElementOperations.ts`: 2293 lines and `apps/api/src/providers/renderer/smartEditComposer.ts`: 2002 lines remain large enough to justify focused follow-up extraction if more optimization time is available.

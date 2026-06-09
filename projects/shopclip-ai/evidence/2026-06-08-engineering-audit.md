@@ -9,11 +9,34 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `107a872 Extract script template route service`.
+- Latest deployed optimization commit: `714b773 Extract smart edit visual operations`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `714b773`:
+  - Extracted Smart Edit selected-segment visual keyframe, visual effect, effect amount keyframe, and segment audio-volume keyframe plan operations from `apps/web/src/features/edit/SmartEditPanel.tsx` into `apps/web/src/features/edit/SmartEditVisualEditOperations.ts`.
+  - Added focused tests for visual keyframe add/remove, visual effect add/update/remove/reorder, effect amount keyframes, and source/voice volume keyframes.
+  - Kept React state, command-history recording, and UI event wiring inside `SmartEditPanel.tsx`, while moving pure plan mutation logic into a tested helper module.
+  - Current file sizes:
+    - `SmartEditPanel.tsx`: 2854 lines.
+    - `SmartEditVisualEditOperations.ts`: 319 lines.
+    - `SmartEditVisualEditOperations.test.ts`: 189 lines.
+    - `App.tsx`: 2385 lines.
+    - `router.ts`: 1935 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/features/edit/SmartEditVisualEditOperations.test.ts` failed before implementation because `SmartEditVisualEditOperations` did not exist.
+    - Targeted green tests: `SmartEditVisualEditOperations.test.ts`, `SmartEditSegmentUtils.test.ts`, and `SmartEditTimelineMath.test.ts` passed 13 tests.
+    - Wider web regression: `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx src/features/edit/SmartEditVisualEditOperations.test.ts src/features/edit/SmartEditTimelineToolbarState.test.ts src/features/edit/SmartEditTrackDerivedState.test.ts` passed 315 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 547 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-De5NHyT2.js` at 607.03 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/web/src/features/edit/SmartEditPanel.tsx`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `714b773b219f17f39d05a56857666f3701d66f3c`, local API health ok, public `https://shopclip.site/health` ok after one transient TLS retry, PM2 `shopclip-ai-api` online.
+    - Deploy note: production install reported the existing ignored build-script warning for ffmpeg packages; build and PM2 restart succeeded.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `107a872`:
   - Extracted script asset template extraction from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptTemplateRouteService.ts`.
   - Added focused tests for missing script assets, invalid asset types, successful provider extraction plus storage, and provider failure response mapping.
