@@ -551,6 +551,51 @@ This addendum supersedes the backend router line counts in the previous addenda.
 6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
 7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
 
+## 2026-06-09 Prisma Store Mapper Extraction Addendum
+
+This addendum supersedes the backend store line counts in the previous addenda. It does not add final contest submission material.
+
+### Branch And Workspace State
+
+- Optimization branch: `codex/shopclip-optimization-cleanup`.
+- Current work location: `D:\DemoV2`.
+- Frontend work remains intentionally out of scope for this pass to avoid conflicting with the user's separate frontend edits.
+
+### Actual Change
+
+- Extracted Prisma-to-domain mapping helpers from `apps/api/src/modules/projects/prismaProjectStore.ts` into `apps/api/src/modules/projects/prismaProjectMappers.ts`.
+- Moved ownership for:
+  - Prisma include definitions for full project snapshots.
+  - storage provider DB/domain conversion.
+  - asset, slice, processing event/job, scene, script, render task, trace event, reference video, viral template, project snapshot, and project summary mapping.
+- Kept `PrismaProjectStore` responsible for database reads/writes and transaction behavior.
+
+### Current File Sizes
+
+- `apps/api/src/modules/projects/router.ts`: 235 lines.
+- `apps/api/src/modules/projects/prismaProjectStore.ts`: 1083 lines.
+- `apps/api/src/modules/projects/prismaProjectMappers.ts`: 288 lines.
+- `apps/api/src/modules/projects/memoryStore.ts`: 1113 lines.
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 1474 lines.
+- `apps/web/src/features/edit/SmartEditPanel.tsx`: 2972 lines.
+- `apps/web/src/app/App.tsx`: 2529 lines.
+
+### Fresh Verification
+
+- `corepack pnpm --filter @shopclip/api typecheck`: passed after exporting all mapper helpers still used by store methods.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 219 API tests.
+
+### Updated Optimization Queue
+
+1. Run full workspace verification before commit: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, and `corepack pnpm build`.
+2. Commit this Prisma mapper extraction and documentation sync after `git diff --check` and `.agents/memory` tracking checks pass.
+3. Push and deploy `codex/shopclip-optimization-cleanup` if the branch remains clean after commit.
+4. Verify production after deploy with `/health`, `#project`, and `#studio`.
+5. Continue backend cleanup by extracting focused helpers from `memoryStore.ts` or smaller Prisma write-helper groups only if behavior stays covered by existing store/API tests.
+6. Continue frontend module reduction only in a branch or folder that does not conflict with the user's active frontend work.
+7. Recover or rewrite this development-plan file with byte-safe handling before deeper edits to the damaged legacy body.
+
 ## 2026-06-09 Reference Analyze Route Registration Addendum
 
 This addendum supersedes the backend router line counts in the previous addenda. It does not add final contest submission material.

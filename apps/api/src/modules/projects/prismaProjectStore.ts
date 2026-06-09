@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import type { AssetStorageProvider as PrismaAssetStorageProvider, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type {
   AssetMetadata,
@@ -18,279 +18,24 @@ import type {
   TraceEvent,
   ViralTemplate,
 } from "@shopclip/shared";
-import {
-  MediaSettingsSchema,
-  ReferenceVideoAnalysisSchema,
-  RenderTaskSchema,
-  StructuredSliceMetadataSchema,
-  VideoGenerationSettingsSchema,
-} from "@shopclip/shared";
 
 import type { DeleteReferenceVideoResult, ProjectSnapshot, ProjectStore } from "./projectStore.js";
-
-type AssetWithSlices = Prisma.AssetGetPayload<{ include: { slices: true } }>;
-
-type ProjectWithRelations = Prisma.ProjectGetPayload<{
-  include: {
-    assets: { include: { slices: true } };
-    assetProcessingEvents: true;
-    assetProcessingJobs: true;
-    referenceVideos: true;
-    viralTemplates: true;
-    scripts: { include: { scenes: true } };
-    scenes: true;
-    renderTasks: true;
-  };
-}>;
-
-type RenderTaskWithRelations = Prisma.RenderTaskGetPayload<{
-  include: {
-    traceEvents: true;
-    project: {
-      include: {
-        assets: { include: { slices: true } };
-        assetProcessingEvents: true;
-        assetProcessingJobs: true;
-        referenceVideos: true;
-        viralTemplates: true;
-        scripts: { include: { scenes: true } };
-        scenes: true;
-        renderTasks: true;
-      };
-    };
-  };
-}>;
-
-const toIso = (date: Date): string => date.toISOString();
-
-const toDbStorageProvider = (
-  provider?: AssetMetadata["storageProvider"],
-): PrismaAssetStorageProvider | undefined =>
-  provider?.replaceAll("-", "_") as PrismaAssetStorageProvider | undefined;
-
-const fromDbStorageProvider = (
-  provider?: string | null,
-): AssetMetadata["storageProvider"] | undefined =>
-  provider ? (provider.replaceAll("_", "-") as AssetMetadata["storageProvider"]) : undefined;
-
-const toAsset = (asset: AssetWithSlices): AssetMetadata => ({
-  id: asset.id,
-  projectId: asset.projectId ?? undefined,
-  type: asset.type,
-  status: asset.status,
-  source: asset.source,
-  storageProvider: fromDbStorageProvider(asset.storageProvider),
-  objectKey: asset.objectKey ?? undefined,
-  thumbnailKey: asset.thumbnailKey ?? undefined,
-  url: asset.url,
-  name: asset.name,
-  mimeType: asset.mimeType ?? undefined,
-  sizeBytes: asset.sizeBytes ?? undefined,
-  tags: asset.tags,
-  embeddingText: asset.embeddingText ?? undefined,
-  metadata:
-    asset.metadata && typeof asset.metadata === "object" && !Array.isArray(asset.metadata)
-      ? (asset.metadata as Record<string, unknown>)
-      : undefined,
-  createdAt: toIso(asset.createdAt),
-  updatedAt: toIso(asset.updatedAt),
-});
-
-const toAssetSlice = (slice: AssetWithSlices["slices"][number]): AssetSlice => ({
-  id: slice.id,
-  assetId: slice.assetId,
-  label: slice.label,
-  startSecond: slice.startSecond ?? undefined,
-  endSecond: slice.endSecond ?? undefined,
-  tags: slice.tags,
-  thumbnailKey: slice.thumbnailKey ?? undefined,
-  embeddingText: slice.embeddingText ?? undefined,
-  searchText: slice.searchText ?? undefined,
-  metadata: StructuredSliceMetadataSchema.safeParse(slice.metadata).success
-    ? StructuredSliceMetadataSchema.parse(slice.metadata)
-    : undefined,
-});
-
-const toAssetProcessingEvent = (
-  event: ProjectWithRelations["assetProcessingEvents"][number],
-): AssetProcessingEvent => ({
-  id: event.id,
-  jobId: event.jobId,
-  assetId: event.assetId,
-  step: event.step,
-  status: event.status,
-  message: event.message,
-  progress: event.progress,
-  retryable: event.retryable,
-  createdAt: toIso(event.createdAt),
-});
-
-const toAssetProcessingJob = (
-  job: ProjectWithRelations["assetProcessingJobs"][number],
-): AssetProcessingJob => ({
-  id: job.id,
-  assetId: job.assetId,
-  status: job.status,
-  steps: job.steps,
-  message: job.message,
-  createdAt: toIso(job.createdAt),
-});
-
-const toScene = (scene: ProjectWithRelations["scenes"][number]): StoryboardScene => ({
-  id: scene.id,
-  projectId: scene.projectId,
-  order: scene.order,
-  durationSeconds: scene.durationSeconds,
-  subtitle: scene.subtitle,
-  voiceover: scene.voiceover,
-  visualPrompt: scene.visualPrompt,
-  assetRecallQuery: scene.assetRecallQuery ?? undefined,
-  imageUrl: scene.imageUrl ?? undefined,
-  assetId: scene.assetId ?? undefined,
-  status: scene.status,
-});
-
-const toScript = (script: ProjectWithRelations["scripts"][number]): ScriptResult => ({
-  id: script.id,
-  projectId: script.projectId,
-  displayName: script.displayName ?? undefined,
-  hook: script.hook,
-  narrative: script.narrative,
-  constraints: script.constraints,
-  scenes: script.scenes.sort((left, right) => left.order - right.order).map(toScene),
-});
-
-const toRenderTask = (task: ProjectWithRelations["renderTasks"][number]): RenderTask => ({
-  id: task.id,
-  projectId: task.projectId,
-  displayName: task.displayName ?? undefined,
-  status: task.status,
-  progress: task.progress,
-  previewUrl: task.previewUrl ?? undefined,
-  exportUrl: task.exportUrl ?? undefined,
-  errorMessage: task.errorMessage ?? undefined,
-  provider: task.provider ?? undefined,
-  providerTaskId: task.providerTaskId ?? undefined,
-  sceneClips: Array.isArray(task.sceneClips)
-    ? RenderTaskSchema.parse({
-        id: task.id,
-        projectId: task.projectId,
-        status: task.status,
-        progress: task.progress,
-        sceneClips: task.sceneClips,
-        createdAt: toIso(task.createdAt),
-        updatedAt: toIso(task.updatedAt),
-      }).sceneClips
-    : undefined,
-  mediaSettings: MediaSettingsSchema.safeParse(task.mediaSettings).success
-    ? MediaSettingsSchema.parse(task.mediaSettings)
-    : undefined,
-  videoSettings: VideoGenerationSettingsSchema.safeParse(task.videoSettings).success
-    ? VideoGenerationSettingsSchema.parse(task.videoSettings)
-    : undefined,
-  smartEditPlan: RenderTaskSchema.shape.smartEditPlan.safeParse(task.smartEditPlan).success
-    ? RenderTaskSchema.shape.smartEditPlan.parse(task.smartEditPlan)
-    : undefined,
-  smartEditSegmentOutputs: RenderTaskSchema.shape.smartEditSegmentOutputs.safeParse(
-    task.smartEditSegmentOutputs,
-  ).success
-    ? RenderTaskSchema.shape.smartEditSegmentOutputs.parse(task.smartEditSegmentOutputs)
-    : undefined,
-  retryOfRenderTaskId: task.retryOfRenderTaskId ?? undefined,
-  createdAt: toIso(task.createdAt),
-  updatedAt: toIso(task.updatedAt),
-});
-
-const toTraceEvent = (event: RenderTaskWithRelations["traceEvents"][number]): TraceEvent => ({
-  id: event.id,
-  renderTaskId: event.renderTaskId,
-  status: event.status,
-  step: event.step,
-  message: event.message,
-  retryOfTraceEventId: event.retryOfTraceEventId ?? undefined,
-  createdAt: toIso(event.createdAt),
-});
-
-const toReferenceVideo = (
-  reference: ProjectWithRelations["referenceVideos"][number],
-): ReferenceVideo => ({
-  id: reference.id,
-  projectId: reference.projectId ?? undefined,
-  sourceAssetId: reference.sourceAssetId ?? undefined,
-  sourceUrl: reference.sourceUrl,
-  sourcePlatform: reference.sourcePlatform,
-  sourceDeclaration: reference.sourceDeclaration,
-  title: reference.title,
-  author: reference.author ?? undefined,
-  category: reference.category,
-  publicStats:
-    reference.publicStats &&
-    typeof reference.publicStats === "object" &&
-    !Array.isArray(reference.publicStats)
-      ? (reference.publicStats as ReferenceVideo["publicStats"])
-      : { likes: 0, comments: 0, shares: 0, views: 0 },
-  status: reference.status,
-  analysis: ReferenceVideoAnalysisSchema.safeParse(reference.analysis).success
-    ? ReferenceVideoAnalysisSchema.parse(reference.analysis)
-    : undefined,
-  errorMessage: reference.errorMessage ?? undefined,
-  createdAt: toIso(reference.createdAt),
-  updatedAt: toIso(reference.updatedAt),
-});
-
-const toViralTemplate = (
-  template: ProjectWithRelations["viralTemplates"][number],
-): ViralTemplate => ({
-  templateId: template.id,
-  name: template.name,
-  category: template.category,
-  strategy: template.strategy,
-  factorSet: template.factorSet,
-  narrativeStructure: template.narrativeStructure as ViralTemplate["narrativeStructure"],
-  shotRequirements: template.shotRequirements,
-  copywritingRules: template.copywritingRules,
-  riskRules: template.riskRules,
-  sourceReferenceIds: template.sourceReferenceIds,
-});
-
-const toProjectSnapshot = (project: ProjectWithRelations): ProjectSnapshot => {
-  const assets = project.assets.map(toAsset);
-  const assetSlices = project.assets.flatMap((asset) => asset.slices.map(toAssetSlice));
-  return {
-    id: project.id,
-    title: project.title,
-    productName: project.productName,
-    audience: project.audience,
-    sellingPoints: project.sellingPoints,
-    tone: project.tone,
-    style: project.style,
-    targetDurationSeconds: project.targetDurationSeconds,
-    prepKeywords: project.prepKeywords,
-    status: project.status,
-    createdAt: toIso(project.createdAt),
-    updatedAt: toIso(project.updatedAt),
-    assets,
-    assetSlices,
-    assetProcessingEvents: project.assetProcessingEvents.map(toAssetProcessingEvent),
-    assetProcessingJobs: project.assetProcessingJobs.map(toAssetProcessingJob),
-    referenceVideos: project.referenceVideos.map(toReferenceVideo),
-    viralTemplates: project.viralTemplates.map(toViralTemplate),
-    scripts: project.scripts.map(toScript),
-    scenes: project.scenes.sort((left, right) => left.order - right.order).map(toScene),
-    renderTasks: project.renderTasks.map(toRenderTask),
-  };
-};
-
-const projectInclude = {
-  assets: { include: { slices: true } },
-  assetProcessingEvents: true,
-  assetProcessingJobs: true,
-  referenceVideos: true,
-  viralTemplates: true,
-  scripts: { include: { scenes: true } },
-  scenes: true,
-  renderTasks: true,
-} as const;
+import {
+  projectInclude,
+  toAsset,
+  toAssetProcessingEvent,
+  toAssetProcessingJob,
+  toAssetSlice,
+  toDbStorageProvider,
+  toProjectSnapshot,
+  toProjectSummary,
+  toReferenceVideo,
+  toRenderTask,
+  toScene,
+  toScript,
+  toTraceEvent,
+  toViralTemplate,
+} from "./prismaProjectMappers.js";
 
 export class PrismaProjectStore implements ProjectStore {
   constructor(private readonly prisma = new PrismaClient()) {}
@@ -346,18 +91,7 @@ export class PrismaProjectStore implements ProjectStore {
       },
     });
 
-    return projects.map((project) => ({
-      id: project.id,
-      title: project.title,
-      productName: project.productName,
-      status: project.status,
-      createdAt: toIso(project.createdAt),
-      updatedAt: toIso(project.updatedAt),
-      assetCount: project._count.assets,
-      coverAssetId: project.assets[0]?.id,
-      coverAssetUrl: project.assets[0]?.url,
-      sceneCount: project._count.scenes,
-    }));
+    return projects.map(toProjectSummary);
   }
 
   async addAsset(
