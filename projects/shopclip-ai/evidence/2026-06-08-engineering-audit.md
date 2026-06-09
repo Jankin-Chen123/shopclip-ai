@@ -9,11 +9,34 @@
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.
-- Latest deployed optimization commit: `1d8839d Extract script provider orchestration`.
+- Latest deployed optimization commit: `5ca79e4 Extract script prompt context resolution`.
 - Production verification after that deployment:
   - `https://shopclip.site/health`: returned `status: ok`.
   - `https://shopclip.site/#project`: loaded without browser errors, failed requests, or 4xx/5xx responses.
   - `https://shopclip.site/#studio`: loaded without browser errors or 4xx/5xx responses.
+- Recent deployed cleanup at `5ca79e4`:
+  - Extracted script prompt context resolution from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptPromptContextResolution.ts`.
+  - Added focused tests for resolving selected references, matching reference script assets, selected templates, viral-remix required reference validation, reference readiness and analysis validation, and template-mode required template validation.
+  - Replaced three inline route uses with a store adapter so `/rewrite-script`, `/scripts`, and `/generate-script` share the same tested context resolver.
+  - Current file sizes:
+    - `router.ts`: 2142 lines.
+    - `scriptPromptContextResolution.ts`: 131 lines.
+    - `scriptPromptContextResolution.test.ts`: 173 lines.
+    - `scriptProviderOrchestration.ts`: 81 lines.
+    - `storyboardRouteService.ts`: 156 lines.
+    - `App.tsx`: 2529 lines.
+  - Fresh verification after this pass:
+    - Red test: `.\node_modules\.bin\vitest.CMD run src/modules/projects/scriptPromptContextResolution.test.ts` failed before implementation because `scriptPromptContextResolution.js` did not exist.
+    - Targeted green tests: `scriptPromptContextResolution.test.ts` and `scriptPromptContext.test.ts` passed 8 tests; `p0-flow.test.ts` and `p1-flow.test.ts` passed 30 tests.
+    - `corepack pnpm typecheck`: passed.
+    - `corepack pnpm lint`: passed.
+    - `corepack pnpm test`: passed, 535 tests across shared/API/web.
+    - `corepack pnpm build`: passed; Vite still reports the existing web bundle chunk-size warning for `assets/index-DYZmA1ca.js` at 605.86 kB minified.
+    - `git diff --check`: passed; Git still reports the existing CRLF-to-LF normalization warning for `apps/api/src/modules/projects/router.ts`.
+    - `git ls-files .agents/memory`: empty.
+    - Deploy: server HEAD `5ca79e4c8ba5d8ed935a248fa416abd6f7cf2c29`, local API health ok, public `https://shopclip.site/health` ok, PM2 `shopclip-ai-api` online.
+    - Deploy note: production install reported the existing ignored build-script warning for ffmpeg packages; build and PM2 restart succeeded.
+    - Playwright production check: `https://shopclip.site/#project` and `https://shopclip.site/#studio` loaded with no browser errors, failed requests, or 4xx/5xx responses.
 - Recent deployed cleanup at `1d8839d`:
   - Extracted script text-provider orchestration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/scriptProviderOrchestration.ts`.
   - Added focused tests for the model-text branch, which structures model output with `scriptSource=model`, and the fallback branch, which preserves the original draft request and uses deterministic fallback generation.
