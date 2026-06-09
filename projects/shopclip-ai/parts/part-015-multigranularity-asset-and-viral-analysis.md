@@ -567,6 +567,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 2026-06-01 script real-provider hardening follow-up: script generation now separates real text-model structuring from deterministic fallback generation. In real-provider mode, generated script text must parse into storyboard scenes; otherwise `/api/projects/:projectId/generate-script` returns `502 SCRIPT_GENERATION_FAILED` instead of silently creating fallback scenes. The frontend now shows fallback notices only when the API explicitly returns `fallback.used=true`, so successful real model calls no longer appear as deterministic fallback output. Verification: `corepack pnpm test`, `corepack pnpm --filter @shopclip/api typecheck`, `corepack pnpm --filter @shopclip/web typecheck`, `corepack pnpm --filter @shopclip/api lint`, `corepack pnpm --filter @shopclip/web lint`, `corepack pnpm --filter @shopclip/api build`, `corepack pnpm --filter @shopclip/web build`, and `git diff --check` passed.
 
+2026-06-09 asset preview modal UI follow-up: asset-library preview dialogs now keep only the file/source open action in the detail action area; the previous scene recall and multi-granularity structure actions were removed from the preview modal UI. Script/reference-script and viral-template preview dialogs now use a detail-focused single-column layout instead of rendering an empty document placeholder panel, giving breakdown and template guidance content the full dialog width. Verification: `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx` passed with 162 tests, `corepack pnpm --filter @shopclip/web typecheck` passed, `corepack pnpm --filter @shopclip/web build` passed, and `git diff --check` passed.
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。
