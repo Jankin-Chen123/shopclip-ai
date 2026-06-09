@@ -22,6 +22,47 @@ type ScriptContext = {
   scriptSource: "fallback" | "model";
 };
 
+const textProviderTimeoutFallback = (timeoutMs: number): ScriptTextProviderResult => ({
+  fallback: {
+    used: true,
+    provider: "timeout-fallback",
+    reason: `Text provider timed out after ${timeoutMs}ms.`,
+  },
+  scriptText: "",
+});
+
+const withTextProviderTimeout = async (
+  providerResult: MaybePromise<ScriptTextProviderResult>,
+  timeoutMs: number | undefined,
+): Promise<ScriptTextProviderResult> => {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return providerResult;
+  }
+
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const guardedProviderResult = Promise.resolve(providerResult).catch((error: unknown) => {
+    if (timedOut) {
+      return textProviderTimeoutFallback(timeoutMs);
+    }
+    throw error;
+  });
+  const timeoutResult = new Promise<ScriptTextProviderResult>((resolve) => {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      resolve(textProviderTimeoutFallback(timeoutMs));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([guardedProviderResult, timeoutResult]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
 export const buildStructuredScriptFromTextProvider = async ({
   project,
   request,
@@ -30,11 +71,13 @@ export const buildStructuredScriptFromTextProvider = async ({
   rewriteScript,
   generateFallbackScriptForProject,
   structureModelScriptForProject,
+  textProviderTimeoutMs,
 }: {
   project: ProjectSnapshot;
   request: ScriptGenerationRequest;
   assets: AssetMetadata[];
   promptContext: ScriptPromptContext;
+  textProviderTimeoutMs?: number;
   rewriteScript: (
     project: ProjectSnapshot,
     request: ScriptGenerationRequest,
@@ -51,7 +94,10 @@ export const buildStructuredScriptFromTextProvider = async ({
     provider: string,
   ) => { script: GeneratedScriptDraft };
 }): Promise<{ fallback: ScriptTextProviderFallback; script: GeneratedScriptDraft }> => {
-  const textProviderResult = await rewriteScript(project, request, assets, promptContext);
+  const textProviderResult = await withTextProviderTimeout(
+    rewriteScript(project, request, assets, promptContext),
+    textProviderTimeoutMs,
+  );
   if (textProviderResult.fallback.used) {
     return {
       fallback: textProviderResult.fallback,

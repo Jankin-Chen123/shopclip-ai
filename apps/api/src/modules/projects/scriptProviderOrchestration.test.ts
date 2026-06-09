@@ -100,4 +100,38 @@ describe("buildStructuredScriptFromTextProvider", () => {
       script: providerScript("fallback structured script"),
     });
   });
+
+  it("uses fallback script generation when the text provider times out", async () => {
+    const preparedAsset = asset();
+
+    const result = await buildStructuredScriptFromTextProvider({
+      project: project(),
+      request,
+      assets: [preparedAsset],
+      promptContext: {},
+      textProviderTimeoutMs: 1,
+      rewriteScript: async () =>
+        new Promise(() => {
+          // Simulate an upstream provider call that outlives the reverse proxy timeout.
+        }),
+      generateFallbackScriptForProject: (_project, context) => {
+        expect(context.assets).toEqual([preparedAsset]);
+        expect(context.request).toEqual(request);
+        expect(context.scriptSource).toBe("fallback");
+        return { script: providerScript("timeout fallback structured script") };
+      },
+      structureModelScriptForProject: () => {
+        throw new Error("model structuring should not run after provider timeout");
+      },
+    });
+
+    expect(result).toEqual({
+      fallback: {
+        used: true,
+        provider: "timeout-fallback",
+        reason: "Text provider timed out after 1ms.",
+      },
+      script: providerScript("timeout fallback structured script"),
+    });
+  });
 });

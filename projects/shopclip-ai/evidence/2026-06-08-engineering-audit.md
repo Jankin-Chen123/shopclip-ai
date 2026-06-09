@@ -3757,6 +3757,32 @@
 3. Keep frontend refactors deferred until the user's separate frontend workspace changes are ready to integrate.
 4. Plan a byte-safe recovery or rewrite for corrupted `02-development-plan.md`; avoid mechanical rewrites of the damaged body.
 
+## 2026-06-09 Script Generation 504 Timeout Fix Evidence
+
+- Branch: `codex/shopclip-optimization-cleanup`.
+- Reported symptom: script generation UI displayed `HTTP 504` with an HTML error page instead of JSON.
+- Root-cause evidence:
+  - Frontend `apps/web/src/lib/api.ts` shows this message only when an upstream response body is HTML rather than API JSON.
+  - Production Nginx `/api/` proxy has no explicit `proxy_read_timeout`, so long-running API calls can hit the reverse-proxy timeout before Express returns.
+  - Production server was still on `codex/asset-preview-modal-ui` at `55068380`, not the latest cleanup branch.
+  - `buildStructuredScriptFromTextProvider` previously awaited the text provider indefinitely, so a slow model call could outlive the reverse proxy.
+- Change summary:
+  - Added text-provider timeout fallback support in `apps/api/src/modules/projects/scriptProviderOrchestration.ts`.
+  - `generate-script` now passes `SCRIPT_TEXT_PROVIDER_TIMEOUT_MS` from env, defaulting to 45 seconds.
+  - When the text provider exceeds the timeout, the API returns a normal JSON fallback script instead of waiting for Nginx to return HTML 504.
+  - Added regression coverage in `apps/api/src/modules/projects/scriptProviderOrchestration.test.ts`.
+- TDD evidence:
+  - Red check: `corepack pnpm --filter @shopclip/api test src/modules/projects/scriptProviderOrchestration.test.ts` failed first by timing out at 5000ms.
+  - Green check: `corepack pnpm --filter @shopclip/api test src/modules/projects/scriptProviderOrchestration.test.ts` passed, 3 tests.
+- Fresh full verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 55 files and 273 tests.
+  - `corepack pnpm typecheck`: passed.
+  - `corepack pnpm lint`: passed.
+  - `corepack pnpm test`: passed, 616 tests total: shared 26, API 273, web 317.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
 ## 2026-06-09 Smart Edit Visual Filter Extraction
 
 - Branch/workspace: `codex/shopclip-optimization-cleanup` in `D:\DemoV2`.

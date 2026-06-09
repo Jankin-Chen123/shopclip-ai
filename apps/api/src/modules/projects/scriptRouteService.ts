@@ -66,6 +66,11 @@ const LibraryDisplayNameUpdateSchema = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
 });
 
+const scriptTextProviderTimeoutMs = (): number => {
+  const configured = Number.parseInt(process.env.SCRIPT_TEXT_PROVIDER_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : 45_000;
+};
+
 export const registerScriptRoutes = ({
   generateFallbackScriptForProject,
   renderStoryboardSceneImagesForScript,
@@ -217,6 +222,7 @@ export const registerScriptRoutes = ({
         rewriteScript,
         generateFallbackScriptForProject,
         structureModelScriptForProject,
+        textProviderTimeoutMs: scriptTextProviderTimeoutMs(),
       });
     } catch (error) {
       sendScriptGenerationFailure(response, error);
