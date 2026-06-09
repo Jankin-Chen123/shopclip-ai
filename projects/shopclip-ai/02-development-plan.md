@@ -1233,3 +1233,45 @@ This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It co
 1. Commit this Smart Edit media-source extraction after `git diff --check` and `.agents/memory` tracking checks pass.
 2. Continue backend cleanup only where helper ownership remains clear, such as renderer IO materialization or provider normalization.
 3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
+
+## 2026-06-09 Smart Edit Audio Track Extraction Addendum
+
+This pass is on `codex/shopclip-optimization-cleanup` and is backend-only. It extracts a larger renderer ownership boundary while keeping Smart Edit business behavior unchanged.
+
+### Actual Change
+
+- Extracted Smart Edit audio track rendering from `apps/api/src/providers/renderer/smartEditComposer.ts` into `apps/api/src/providers/renderer/smartEditAudioTracks.ts`.
+- Moved renderer-side orchestration for:
+  - source-audio lane rendering.
+  - overlapping source-audio mixing.
+  - voiceover TTS lane rendering.
+  - target-language voice mapping.
+  - final source/voice/BGM audio replacement and mixing.
+  - silence gap generation and audio concat list writing.
+- Kept the top-level export flow, segment video rendering, timeline stitching, subtitle overlays, URL materialization policy, storage upload, and response mapping in `smartEditComposer.ts`.
+- Added focused coverage in `apps/api/src/providers/renderer/smartEditAudioTracks.test.ts`.
+
+### Current File Sizes
+
+- `apps/api/src/providers/renderer/smartEditComposer.ts`: 556 lines, down from 913 after the previous media-source pass.
+- `apps/api/src/providers/renderer/smartEditAudioTracks.ts`: 381 lines.
+- `apps/api/src/providers/renderer/smartEditAudioTracks.test.ts`: 120 lines.
+
+### Fresh Verification
+
+- TDD red check: `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditAudioTracks.test.ts` failed first because `smartEditAudioTracks.js` did not exist.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditAudioTracks.test.ts`: passed, 3 tests.
+- `corepack pnpm --filter @shopclip/api test src/providers/renderer/smartEditComposer.test.ts src/providers/renderer/smartEditSourceAudioPlan.test.ts src/providers/renderer/smartEditVoiceoverPlan.test.ts src/providers/renderer/smartEditAudioFilters.test.ts`: passed, 45 tests.
+- `corepack pnpm --filter @shopclip/api typecheck`: passed.
+- `corepack pnpm --filter @shopclip/api lint`: passed.
+- `corepack pnpm --filter @shopclip/api test`: passed, 54 files and 270 tests.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed.
+- `corepack pnpm test`: passed, 613 tests total: shared 26, API 270, web 317.
+- `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+
+### Updated Optimization Queue
+
+1. Commit this Smart Edit audio-track extraction after `git diff --check` and `.agents/memory` tracking checks pass.
+2. Continue backend cleanup only where ownership remains clear, such as video stitching helpers or renderer IO materialization.
+3. Keep broad frontend refactors deferred until the user's separate frontend work is integrated.
