@@ -1556,6 +1556,14 @@
   - `corepack pnpm lint`: passed.
   - `corepack pnpm test`: passed, 562 tests total.
   - `corepack pnpm build`: passed with the existing Vite large chunk warning.
+- Deployment verification:
+  - Server branch: `codex/asset-preview-modal-ui`.
+  - Runtime commit: `4beeb3d08f83e3647e4a4726927bd10dea6d59d0`.
+  - Server build: passed.
+  - PM2 `shopclip-ai-api`: online after restart.
+  - Local server health: `http://127.0.0.1:4000/health` returned API `status: ok`.
+  - Public health: `https://shopclip.site/health` returned API `status: ok`.
+  - Production Playwright smoke for `#project` and `#studio`: passed with no console errors, request failures, or bad HTTP responses.
 - Remaining risks:
   - `prismaProjectStore.ts` and `memoryStore.ts` remain large and should be reduced through pure helper extraction only.
   - Frontend refactoring should remain deferred until the user's separate frontend changes are stable.

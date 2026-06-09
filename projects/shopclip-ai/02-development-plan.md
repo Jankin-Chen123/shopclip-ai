@@ -440,6 +440,10 @@ No final contest submission materials are being prepared in this optimization pa
 - `corepack pnpm lint`: passed.
 - `corepack pnpm test`: passed, 562 tests total: shared 26, API 219, web 317.
 - `corepack pnpm build`: passed. Vite still reports the existing large client chunk warning for `assets/index-C2voILdH.js` at 607.49 kB minified.
+- Deployment to `/www/wwwroot/shopclip-ai` on `codex/asset-preview-modal-ui`: passed at runtime commit `4beeb3d08f83e3647e4a4726927bd10dea6d59d0`.
+- PM2 `shopclip-ai-api`: online after restart.
+- `https://shopclip.site/health`: returned `{"service":"api","status":"ok","version":"0.1.0"}`.
+- Production Playwright smoke for `https://shopclip.site/#project` and `https://shopclip.site/#studio`: passed with no console errors, request failures, or 4xx/5xx responses.
 
 ### Next Optimization Queue
 
