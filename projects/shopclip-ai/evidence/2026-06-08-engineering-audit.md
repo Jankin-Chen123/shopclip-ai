@@ -1630,6 +1630,27 @@
 - No final contest submission material was prepared in this pass.
 - Next queue: continue backend cleanup with focused memory store helper groups or smaller Prisma write-helper groups only if behavior stays covered by existing store/API tests; keep frontend cleanup isolated from the user's separate frontend work.
 
+## 2026-06-09 Memory Store Render Scene Utility Extraction
+
+- Extended `apps/api/src/modules/projects/memoryProjectStoreUtils.ts` with pure helpers for memory-store render and scene workflows.
+- Moved render-task status mapping, trace event materialization, scene replacement, scene reorder materialization, script-scene synchronization, and scene removal helpers out of `memoryStore.ts`.
+- Kept `MemoryProjectStore` responsible for mutable Map/array ownership and method-level store behavior.
+- Current file sizes:
+  - `router.ts`: 235 lines.
+  - `prismaProjectStore.ts`: 1083 lines.
+  - `prismaProjectMappers.ts`: 288 lines.
+  - `memoryStore.ts`: 1024 lines.
+  - `memoryProjectStoreUtils.ts`: 151 lines.
+  - `smartEditComposer.ts`: 1474 lines.
+  - `SmartEditPanel.tsx`: 2972 lines.
+  - `App.tsx`: 2529 lines.
+- Fresh API verification:
+  - `corepack pnpm --filter @shopclip/api typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/api lint`: passed.
+  - `corepack pnpm --filter @shopclip/api test`: passed, 219 tests.
+- No final contest submission material was prepared in this pass.
+- Next queue: continue backend cleanup with focused memory store helper groups or smaller Prisma write-helper groups only if behavior stays covered by existing store/API tests; keep frontend cleanup isolated from the user's separate frontend work.
+
 ## 2026-06-09 API Asset Route Service Extraction
 
 - Extracted global/project asset route registration from `apps/api/src/modules/projects/router.ts` into `apps/api/src/modules/projects/assetRouteService.ts`.
