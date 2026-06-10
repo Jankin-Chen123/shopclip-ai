@@ -7648,11 +7648,13 @@ textarea {
   display: grid;
   gap: 22px;
   min-width: 0;
-  padding: 18px;
+  padding: 24px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 220px),
+    linear-gradient(135deg, rgba(236, 72, 153, 0.09), transparent 28%),
+    linear-gradient(225deg, rgba(34, 211, 238, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 260px),
     rgba(17, 24, 39, 0.72);
   box-shadow: 0 18px 58px rgba(0, 0, 0, 0.18);
 }
@@ -7662,6 +7664,7 @@ textarea {
   gap: 16px;
   align-items: flex-end;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .project-portfolio-heading h1 {
@@ -8958,7 +8961,6 @@ select {
 
 .creation-main .panel,
 .creation-main .studio-panel,
-.project-portfolio-heading,
 .studio-return-bar.is-project-studio {
   background:
     linear-gradient(135deg, rgba(236, 72, 153, 0.12), transparent 42%),

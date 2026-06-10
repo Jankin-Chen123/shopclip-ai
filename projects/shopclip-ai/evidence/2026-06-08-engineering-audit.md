@@ -49,6 +49,17 @@
   - `corepack pnpm --filter @shopclip/web lint`: passed.
   - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-scIBsRYi.js` at 607.62 kB minified.
 
+## 2026-06-10 Project Portfolio Unified Card Follow-Up
+
+- Follow-up adjustment:
+  - Moved the project portfolio heading, description, create-project action, error area, and project grid into the same `.project-portfolio-card` shell.
+  - Removed the standalone heading background treatment so the project section reads as one large card, matching the intended asset-library style.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx`: passed, 20 files and 319 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/web lint`: passed.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-BNPbaKQc.js` at 607.70 kB minified.
+
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.

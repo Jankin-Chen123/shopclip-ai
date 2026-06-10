@@ -370,26 +370,26 @@ export const ProjectWorkspace = ({
   if (!project) {
     return (
       <section className="project-portfolio" aria-labelledby="project-portfolio-title">
-        <div className="project-portfolio-heading">
-          <div>
-            <h1 id="project-portfolio-title">{text.portfolioTitle}</h1>
-            <p>{text.portfolioSubtitle}</p>
-          </div>
-          <Button
-            disabled={disabled}
-            icon={<Plus size={18} />}
-            onClick={onCreateProject}
-            variant="primary"
-          >
-            {text.createProject}
-          </Button>
-        </div>
-        {error ? (
-          <p className="inline-error" role="alert">
-            {error}
-          </p>
-        ) : null}
         <div className="project-portfolio-card">
+          <div className="project-portfolio-heading">
+            <div>
+              <h1 id="project-portfolio-title">{text.portfolioTitle}</h1>
+              <p>{text.portfolioSubtitle}</p>
+            </div>
+            <Button
+              disabled={disabled}
+              icon={<Plus size={18} />}
+              onClick={onCreateProject}
+              variant="primary"
+            >
+              {text.createProject}
+            </Button>
+          </div>
+          {error ? (
+            <p className="inline-error" role="alert">
+              {error}
+            </p>
+          ) : null}
           {projectHistory.length > 0 ? (
             <div className="project-card-grid">
               {projectHistory.map((historyProject, index) => {
