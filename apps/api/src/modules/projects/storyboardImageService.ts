@@ -20,6 +20,43 @@ import {
 
 const shouldForceMockProviders = (): boolean => process.env.SHOPCLIP_FORCE_MOCK_PROVIDERS === "1";
 
+const storyboardImageProviderTimeoutMs = (): number => {
+  const configured = Number.parseInt(process.env.STORYBOARD_IMAGE_PROVIDER_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : 10_000;
+};
+
+const createStoryboardImageTimeoutError = (timeoutMs: number): Error =>
+  new Error(`Storyboard image provider timed out after ${timeoutMs}ms.`);
+
+const withStoryboardImageTimeout = async (
+  imageUrlPromise: Promise<string>,
+  timeoutMs: number,
+): Promise<{ kind: "ready"; imageUrl: string } | { kind: "timeout"; error: Error }> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const guardedImageUrl = imageUrlPromise.then(
+    (imageUrl) => ({ kind: "ready" as const, imageUrl }),
+    (error: unknown) => {
+      throw error;
+    },
+  );
+  const timeoutResult = new Promise<{ kind: "timeout"; error: Error }>((resolve) => {
+    timeoutId = setTimeout(() => {
+      resolve({
+        kind: "timeout",
+        error: createStoryboardImageTimeoutError(timeoutMs),
+      });
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([guardedImageUrl, timeoutResult]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
 export const buildStoryboardImagePrompt = (
   project: ProjectSnapshot,
   scene: StoryboardScene,
@@ -83,12 +120,42 @@ export const generateStoryboardSceneImageUrl = async (
   assets: AssetMetadata[],
   videoFrameExtractor: VideoFrameExtractor,
 ): Promise<string> => {
+  if (shouldForceMockProviders()) {
+    return createStoryboardFallbackImageUrl(project, scene);
+  }
+
+  const timedResult = await withStoryboardImageTimeout(
+    generateStoryboardSceneImageUrlWithoutTimeout(
+      project,
+      scene,
+      request,
+      assets,
+      videoFrameExtractor,
+    ),
+    storyboardImageProviderTimeoutMs(),
+  );
+
+  if (timedResult.kind === "ready") {
+    return timedResult.imageUrl;
+  }
+
+  console.warn("[storyboard] image generation timed out; using deterministic fallback.", {
+    error: timedResult.error.message,
+    sceneId: scene.id,
+  });
+  return createStoryboardFallbackImageUrl(project, scene);
+};
+
+const generateStoryboardSceneImageUrlWithoutTimeout = async (
+  project: ProjectSnapshot,
+  scene: StoryboardScene,
+  request: ScriptGenerationRequest | undefined,
+  assets: AssetMetadata[],
+  videoFrameExtractor: VideoFrameExtractor,
+): Promise<string> => {
   let referenceImageUrls: string[] = [];
   let prompt = "";
   try {
-    if (shouldForceMockProviders()) {
-      return createStoryboardFallbackImageUrl(project, scene);
-    }
     referenceImageUrls = await resolveStoryboardReferenceImageUrls(
       scene,
       assets,
