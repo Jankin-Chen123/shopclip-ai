@@ -89,6 +89,7 @@ import {
   updateSmartEditTimelineTrack,
 } from "../features/edit/SmartEditPanel";
 import { ProjectSetup } from "../features/projects/ProjectSetup";
+import { selectProjectVideoUrl } from "../features/projects/ProjectWorkspace";
 import { ReferenceLibraryPanel } from "../features/references/ReferenceLibraryPanel";
 import { RenderPanel, defaultVideoSettings } from "../features/render/RenderPanel";
 import { ScriptPanel } from "../features/script/ScriptPanel";
@@ -866,6 +867,17 @@ describe("App", () => {
     expect(markup).not.toContain("Scene clip previews");
     expect(markup).not.toContain("https://cos.example.test/render-1/scene-1-video-only.mp4");
     expect(markup).not.toContain("Signature=secret");
+  });
+
+  it("uses the full export video for project video library previews", () => {
+    const videoUrl = selectProjectVideoUrl(
+      makeRenderTask({
+        previewUrl: "https://cdn.example.test/scene-1.mp4",
+        exportUrl: "https://cos.example.test/full-export.mp4",
+      }),
+    );
+
+    expect(videoUrl).toBe("https://cos.example.test/full-export.mp4");
   });
 
   it("keeps step 04 user-facing output free of raw provider URLs and trace noise", () => {

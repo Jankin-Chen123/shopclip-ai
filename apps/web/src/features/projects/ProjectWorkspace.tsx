@@ -124,6 +124,9 @@ const formatUpdatedAt = (value: string): string => {
   }
 };
 
+export const selectProjectVideoUrl = (video: RenderTask): string | undefined =>
+  video.exportUrl ?? video.previewUrl;
+
 const plural = (count: number, label: string) =>
   `${count} ${count === 1 ? label.replace(/s$/, "") : label}`;
 
@@ -929,6 +932,7 @@ const VideoList = ({
       {videos.map((video, index) => {
         const defaultTitle = `Video ${index + 1}`;
         const cardTitle = video.displayName ?? defaultTitle;
+        const videoUrl = selectProjectVideoUrl(video);
         return (
         <article
           aria-label={cardTitle}
@@ -974,11 +978,11 @@ const VideoList = ({
               <Scissors size={15} aria-hidden="true" />
               {smartEditLabel}
             </button>
-            {video.previewUrl || video.exportUrl ? (
+            {videoUrl ? (
               <a
                 className="project-video-link"
                 download
-                href={video.exportUrl ?? video.previewUrl}
+                href={videoUrl}
                 onClick={(event) => event.stopPropagation()}
               >
                 <Download size={15} aria-hidden="true" />
@@ -1007,7 +1011,7 @@ const VideoPreview = ({
   title: string;
   video: RenderTask;
 }) => {
-  const videoUrl = video.previewUrl ?? video.exportUrl;
+  const videoUrl = selectProjectVideoUrl(video);
   return (
     <article className="project-video-preview">
       <div className="project-detail-card-heading">

@@ -171,3 +171,19 @@
   - Playwright smoke test against `http://127.0.0.1:4174/` passed.
   - `git diff --check` reported only the existing CRLF normalization warning for `AssetsPanel.tsx`.
   - `git ls-files .agents/memory` returned no tracked files.
+
+## 2026-06-10 Video Library Full Preview URL Batch
+
+- Scope:
+  - Fixes project video library card previews opening the first scene clip instead of the complete export video.
+- Fix:
+  - Added a shared project video URL selector that prefers `exportUrl` before falling back to `previewUrl`.
+  - Reused that selector for video library card downloads and preview modal playback.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "project video library previews"` passed.
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx` passed with 328 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web lint` passed.
+  - `corepack pnpm --filter @shopclip/web build` passed with the existing Vite chunk-size warning.
+  - `git diff --check` passed.
+  - `git ls-files .agents/memory` returned no tracked files.
