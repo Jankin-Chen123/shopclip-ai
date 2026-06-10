@@ -66,9 +66,13 @@ const LibraryDisplayNameUpdateSchema = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
 });
 
-const scriptTextProviderTimeoutMs = (): number => {
+export const DEFAULT_SCRIPT_TEXT_PROVIDER_TIMEOUT_MS = 110_000;
+
+export const scriptTextProviderTimeoutMs = (): number => {
   const configured = Number.parseInt(process.env.SCRIPT_TEXT_PROVIDER_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(configured) && configured > 0 ? configured : 45_000;
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_SCRIPT_TEXT_PROVIDER_TIMEOUT_MS;
 };
 
 export const registerScriptRoutes = ({
@@ -213,6 +217,8 @@ export const registerScriptRoutes = ({
       return;
     }
     let providerResult: Awaited<ReturnType<typeof buildStructuredScriptFromTextProvider>>;
+    const providerStartedAt = Date.now();
+    const textProviderTimeoutMs = scriptTextProviderTimeoutMs();
     try {
       providerResult = await buildStructuredScriptFromTextProvider({
         project: scriptInputs.workingProject,
@@ -222,12 +228,26 @@ export const registerScriptRoutes = ({
         rewriteScript,
         generateFallbackScriptForProject,
         structureModelScriptForProject,
-        textProviderTimeoutMs: scriptTextProviderTimeoutMs(),
+        textProviderTimeoutMs,
+        onTextProviderTimeout: () => {
+          console.warn("[script] text provider timed out; using deterministic fallback.", {
+            projectId: scriptInputs.workingProject.id,
+            timeoutMs: textProviderTimeoutMs,
+            productionMode: scriptInputs.request.productionMode,
+            assetCount: scriptInputs.assets.length,
+          });
+        },
       });
     } catch (error) {
       sendScriptGenerationFailure(response, error);
       return;
     }
+    console.info("[script] text provider completed.", {
+      projectId: scriptInputs.workingProject.id,
+      durationMs: Date.now() - providerStartedAt,
+      fallbackUsed: providerResult.fallback.used,
+      provider: providerResult.fallback.provider,
+    });
     const storyboardResult = await storeGeneratedStoryboardScript({
       project: scriptInputs.workingProject,
       providerScript: providerResult.script,
