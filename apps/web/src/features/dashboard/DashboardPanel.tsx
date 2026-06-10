@@ -13,6 +13,7 @@ interface DashboardPanelProps {
   isLoading: boolean;
   onLoadDashboard: () => void;
   showLoadButton?: boolean;
+  showStepBadge?: boolean;
 }
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
@@ -37,6 +38,7 @@ export const DashboardPanel = ({
   isLoading,
   onLoadDashboard,
   showLoadButton = true,
+  showStepBadge = true,
 }: DashboardPanelProps) => {
   const funnelMax = Math.max(...(dashboard?.funnel.map((stage) => stage.value) ?? [1]));
   const summary = dashboard?.summary;
@@ -65,7 +67,7 @@ export const DashboardPanel = ({
     <section className="panel dashboard-panel" id="dashboard" aria-labelledby="dashboard-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">{copy.step}</p>
+          {showStepBadge ? <p className="eyebrow">{copy.step}</p> : null}
           <h2 id="dashboard-title">{copy.title}</h2>
         </div>
         {showLoadButton ? (

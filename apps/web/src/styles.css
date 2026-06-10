@@ -1301,7 +1301,6 @@ a {
 
 .asset-prep-card-heading h3,
 .asset-prep-card-heading p,
-.asset-prep-keywords h3,
 .asset-prep-footer p {
   margin: 0;
 }
@@ -1459,78 +1458,6 @@ a {
   height: 1px;
   opacity: 0;
   pointer-events: none;
-}
-
-.asset-prep-keywords {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 12px;
-}
-
-.asset-prep-keywords h3 {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.95rem;
-}
-
-.asset-prep-keywords div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.asset-keyword-chip,
-.asset-keyword-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.asset-keyword-chip {
-  min-height: 38px;
-  padding: 3px 4px 3px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 8px;
-  background: rgba(124, 58, 237, 0.18);
-  color: var(--text);
-}
-
-.asset-keyword-chip input {
-  min-height: 28px;
-  width: clamp(80px, 9vw, 150px);
-  padding: 2px 4px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.asset-keyword-chip button,
-.asset-keyword-add button {
-  cursor: pointer;
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 8px;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.asset-keyword-add {
-  min-height: 38px;
-}
-
-.asset-keyword-add > span {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.asset-keyword-add input {
-  width: clamp(120px, 14vw, 220px);
-  min-height: 38px;
 }
 
 .asset-prep-footer {
@@ -2161,6 +2088,29 @@ textarea {
   box-shadow:
     0 0 0 1px rgba(236, 72, 153, 0.18),
     0 16px 36px rgba(236, 72, 153, 0.1);
+}
+
+.asset-library-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.asset-library-tabs-row .asset-browser-tabs {
+  min-width: 0;
+}
+
+.asset-library-tabs-row > .button {
+  flex: 0 0 auto;
+}
+
+.asset-library-bulk-buttons {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .asset-grid {

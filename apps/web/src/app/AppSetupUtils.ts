@@ -37,6 +37,19 @@ export const defaultBrief: ProjectBrief = {
   targetDurationSeconds: 15,
 };
 
+export const createNewProjectBrief = (
+  _previousBrief?: ProjectBrief,
+  language: string = "en",
+): ProjectBrief => ({
+  title: language === "zh" ? "未命名项目" : "Untitled project",
+  productName: language === "zh" ? "未命名产品" : "Untitled product",
+  audience: language === "zh" ? "待填写目标人群" : "Audience to fill in",
+  sellingPoints: [language === "zh" ? "填写卖点" : "Fill in selling points"],
+  tone: language === "zh" ? "待填写语气" : "Tone to fill in",
+  style: "fast desk demo",
+  targetDurationSeconds: 15,
+});
+
 export const createProjectMockDashboard = (project: ProjectSnapshot): DashboardResponse => {
   const assetBoost = Math.min(project.assets.length, 6) * 0.025;
   const scriptBoost = Math.min(project.scripts.length, 4) * 0.035;

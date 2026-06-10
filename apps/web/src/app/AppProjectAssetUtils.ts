@@ -75,7 +75,7 @@ export const getPreparedAssetsByBucket = (
 
 export const createAssetPrepSnapshotFromProjectAssets = (
   assets: AssetMetadata[],
-  keywords: string[] = [],
+  _keywords: string[] = [],
 ): AssetPrepSnapshot => {
   const preparedAssetsByBucket = getPreparedAssetsByBucket(assets);
   const materials = Object.entries(preparedAssetsByBucket).flatMap(([bucketId, bucketAssets]) =>
@@ -93,7 +93,7 @@ export const createAssetPrepSnapshotFromProjectAssets = (
 
   return {
     assetIds: materials.map((material) => material.assetId),
-    keywords,
+    keywords: [],
     materials,
   };
 };

@@ -11,7 +11,6 @@ import {
   Loader2,
   Plus,
   Search,
-  Tag,
   UploadCloud,
   Video,
   X,
@@ -99,13 +98,6 @@ const text = {
     previewTitle: "Asset preview",
     closePreview: "Close preview",
     addMore: "Add more",
-    keywords: "Product keywords",
-    addKeyword: "Add keyword",
-    keywordInput: "Keyword",
-    keywordPlaceholder: "Enter keyword",
-    editKeyword: (keyword: string) => `Edit keyword: ${keyword}`,
-    removeKeyword: (keyword: string) => `Remove keyword: ${keyword}`,
-    keywordList: ["portable", "foldable", "desktop stable", "anti-slip base", "aluminum", "TikTok vertical"],
     back: "Back",
     generate: "Continue to script",
     estimate: "AI analysis usually takes 1-2 minutes. Use clear, complete materials for better results.",
@@ -152,13 +144,6 @@ const text = {
     previewTitle: "素材预览",
     closePreview: "关闭预览",
     addMore: "继续上传",
-    keywords: "产品关键词（可选）",
-    addKeyword: "添加关键词",
-    keywordInput: "关键词内容",
-    keywordPlaceholder: "输入关键词",
-    editKeyword: (keyword: string) => `编辑关键词：${keyword}`,
-    removeKeyword: (keyword: string) => `删除关键词：${keyword}`,
-    keywordList: ["便携", "可折叠", "桌面稳定", "防滑底座", "铝合金材质", "TikTok 竖屏"],
     back: "返回上一步",
     generate: "继续脚本生成",
     estimate: "AI 分析预计需要 1-2 分钟，请确保已上传清晰、完整的素材以获得更佳效果。",
@@ -292,13 +277,13 @@ const createInitialManualUploads = (
 
 export const createAssetPrepSnapshotFromUploads = (
   manualUploads: Record<string, ManualPrepUpload[]>,
-  keywords: string[],
+  _keywords: string[] = [],
 ): AssetPrepSnapshot => ({
   assetIds: Object.values(manualUploads)
     .flat()
     .map((upload) => upload.asset?.id)
     .filter((assetId): assetId is string => Boolean(assetId)),
-  keywords: keywords.map((keyword) => keyword.trim()).filter(Boolean),
+  keywords: [],
   materials: Object.entries(manualUploads).flatMap(([bucketId, uploads]) =>
     uploads.map((upload) => ({
       assetId: upload.asset?.id,
@@ -360,10 +345,6 @@ export const AssetPrepPanel = ({
     () => new Set(),
   );
   const [previewAsset, setPreviewAsset] = useState<AssetMetadata>();
-  const [keywords, setKeywords] = useState<string[]>(() =>
-    initialSnapshot ? [...initialSnapshot.keywords] : [...text[language].keywordList],
-  );
-  const [newKeyword, setNewKeyword] = useState("");
   const copy = text[language];
   const buckets = getBuckets(language);
   const inputPrefix = `asset-prep-${language}`;
@@ -432,16 +413,6 @@ export const AssetPrepPanel = ({
     });
   };
 
-  const updateKeyword = (index: number, value: string) => {
-    setKeywords((current) =>
-      current.map((keyword, keywordIndex) => (keywordIndex === index ? value : keyword)),
-    );
-  };
-
-  const removeKeyword = (index: number) => {
-    setKeywords((current) => current.filter((_, keywordIndex) => keywordIndex !== index));
-  };
-
   const removePreparedUpload = (bucketId: string, upload: ManualPrepUpload) => {
     setManualUploads((current) => ({
       ...current,
@@ -450,15 +421,6 @@ export const AssetPrepPanel = ({
     if (upload.asset) {
       onRemovePreparedAsset?.(upload.asset);
     }
-  };
-
-  const addKeyword = () => {
-    const keyword = newKeyword.trim();
-    if (!keyword) {
-      return;
-    }
-    setKeywords((current) => [...current, keyword]);
-    setNewKeyword("");
   };
 
   const activeLibraryBucket = buckets.find((bucket) => bucket.id === activeLibraryBucketId);
@@ -481,8 +443,8 @@ export const AssetPrepPanel = ({
   }, [libraryAssets]);
 
   useAssetPrepSnapshotEffect(() => {
-    onPreparationChange?.(createAssetPrepSnapshotFromUploads(manualUploads, keywords));
-  }, [keywords, manualUploads, onPreparationChange]);
+    onPreparationChange?.(createAssetPrepSnapshotFromUploads(manualUploads));
+  }, [manualUploads, onPreparationChange]);
 
   return (
     <section
@@ -609,49 +571,6 @@ export const AssetPrepPanel = ({
           );
         })}
       </div>
-
-      <section className="asset-prep-keywords" aria-labelledby="asset-prep-keywords-title">
-        <h3 id="asset-prep-keywords-title">
-          <Tag size={16} aria-hidden="true" />
-          {copy.keywords}
-        </h3>
-        <div className="asset-keyword-list">
-          {keywords.map((keyword, index) => (
-            <span className="asset-keyword-chip" key={`${keyword}-${index}`}>
-              <input
-                aria-label={copy.editKeyword(keyword)}
-                value={keyword}
-                onChange={(event) => updateKeyword(index, event.target.value)}
-              />
-              <button
-                aria-label={copy.removeKeyword(keyword)}
-                onClick={() => removeKeyword(index)}
-                type="button"
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-          <label className="asset-keyword-add">
-            <span>{copy.keywordInput}</span>
-            <input
-              value={newKeyword}
-              onChange={(event) => setNewKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addKeyword();
-                }
-              }}
-              placeholder={copy.keywordPlaceholder}
-            />
-            <button onClick={addKeyword} type="button">
-              <Plus size={15} aria-hidden="true" />
-              {copy.addKeyword}
-            </button>
-          </label>
-        </div>
-      </section>
 
       {embedded ? null : (
         <div className="asset-prep-footer">

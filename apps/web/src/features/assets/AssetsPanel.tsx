@@ -635,6 +635,7 @@ export const AssetsPanel = ({
     () => new Set(),
   );
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
+  const [isAssetMultiSelectMode, setIsAssetMultiSelectMode] = useState(false);
   const [importedExternalAssetIds, setImportedExternalAssetIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -722,6 +723,11 @@ export const AssetsPanel = ({
       return next.size === current.size ? current : next;
     });
   }, [assets]);
+
+  useEffect(() => {
+    setSelectedAssetIds(new Set());
+    setIsAssetMultiSelectMode(false);
+  }, [activeCategory]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(Array.from(event.target.files ?? []));
@@ -918,6 +924,7 @@ export const AssetsPanel = ({
       .map((asset) => asset.id);
     onDeleteAssets?.(assetIds);
     setSelectedAssetIds(new Set());
+    setIsAssetMultiSelectMode(false);
     if (previewAsset && assetIds.includes(previewAsset.id)) {
       closeAssetPreview();
     }
@@ -929,6 +936,7 @@ export const AssetsPanel = ({
     }
     await onExtractTemplateFromScripts(selectedScriptAssetIds);
     setSelectedAssetIds(new Set());
+    setIsAssetMultiSelectMode(false);
   };
 
   const isInteractivePreviewTarget = (target: EventTarget | null) =>
@@ -1055,11 +1063,52 @@ export const AssetsPanel = ({
         </div>
       ) : null}
 
-      <AssetCategoryTabs
-        activeCategory={activeCategory}
-        language={language}
-        onCategoryChange={handleCategoryClick}
-      />
+      <div className="asset-library-tabs-row">
+        <AssetCategoryTabs
+          activeCategory={activeCategory}
+          language={language}
+          onCategoryChange={handleCategoryClick}
+        />
+        {!isTemplateCategory && previewAssets.length > 0 ? (
+          <div className="asset-library-bulk-buttons">
+            {isScriptCategory && isAssetMultiSelectMode ? (
+              <Button
+                disabled={
+                  disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0
+                }
+                icon={<LayoutTemplate size={18} />}
+                onClick={() => void handleExtractTemplateFromSelectedScripts()}
+                variant="primary"
+              >
+                {language === "zh" ? "提炼模板" : "Extract template"}
+              </Button>
+            ) : null}
+            <Button
+              disabled={
+                disabled ||
+                !onDeleteAssets ||
+                (isAssetMultiSelectMode && selectedAssetCount === 0)
+              }
+              icon={isAssetMultiSelectMode ? <Trash2 size={18} /> : <Check size={18} />}
+              onClick={() => {
+                if (!isAssetMultiSelectMode) {
+                  setIsAssetMultiSelectMode(true);
+                  return;
+                }
+                handleDeleteSelectedAssets();
+              }}
+            >
+              {isAssetMultiSelectMode
+                ? language === "zh"
+                  ? "删除选中"
+                  : "Delete selected"
+                : language === "zh"
+                  ? "多选"
+                  : "Multi-select"}
+            </Button>
+          </div>
+        ) : null}
+      </div>
 
       {error ? (
         <p className="inline-error" role="alert">
@@ -1104,33 +1153,6 @@ export const AssetsPanel = ({
         </section>
       ) : null}
 
-      {previewAssets.length > 0 ? (
-        <div className="asset-bulk-actions">
-          <strong>
-            {language === "zh"
-              ? `已选择 ${selectedAssetCount} 个素材`
-              : `${selectedAssetCount} selected`}
-          </strong>
-          {isScriptCategory ? (
-            <Button
-              disabled={disabled || !onExtractTemplateFromScripts || selectedScriptAssetIds.length === 0}
-              icon={<LayoutTemplate size={18} />}
-              onClick={() => void handleExtractTemplateFromSelectedScripts()}
-              variant="primary"
-            >
-              {language === "zh" ? "提炼模板" : "Extract template"}
-            </Button>
-          ) : null}
-          <Button
-            disabled={disabled || !onDeleteAssets || selectedAssetCount === 0}
-            icon={<Trash2 size={18} />}
-            onClick={handleDeleteSelectedAssets}
-            variant="secondary"
-          >
-            {language === "zh" ? "删除选中" : "Delete selected"}
-          </Button>
-        </div>
-      ) : null}
 
       {isTemplateCategory ? (
         <div className="asset-grid asset-template-grid" aria-live="polite">
@@ -1224,19 +1246,21 @@ export const AssetsPanel = ({
               return (
                 <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
                   <div className="asset-card-actions">
-                    <button
-                      aria-label={
-                        language === "zh"
-                          ? `${isSelected ? "取消选择" : "选择"} ${asset.name}`
-                          : `${isSelected ? "Deselect" : "Select"} ${asset.name}`
-                      }
-                      aria-pressed={isSelected}
-                      className="asset-selection-control"
-                      onClick={() => toggleAssetSelection(asset.id)}
-                      type="button"
-                    >
-                      {isSelected ? <Check size={13} aria-hidden="true" /> : null}
-                    </button>
+                    {isAssetMultiSelectMode ? (
+                      <button
+                        aria-label={
+                          language === "zh"
+                            ? `${isSelected ? "取消选择" : "选择"} ${asset.name}`
+                            : `${isSelected ? "Deselect" : "Select"} ${asset.name}`
+                        }
+                        aria-pressed={isSelected}
+                        className="asset-selection-control"
+                        onClick={() => toggleAssetSelection(asset.id)}
+                        type="button"
+                      >
+                        {isSelected ? <Check size={13} aria-hidden="true" /> : null}
+                      </button>
+                    ) : null}
                     <button
                       aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
                       className="asset-card-delete"

@@ -100,6 +100,7 @@ import {
 import {
   createDefaultAsset,
   createAssetDraftForCategory,
+  createNewProjectBrief,
   createProjectMockDashboard,
   createScriptGenerationRequestPayload,
   defaultBrief,
@@ -746,7 +747,9 @@ export const App = ({
 
   const handleCreateProject = () =>
     runAction("project", "project", async () => {
-      const createdProject = await createProject(brief);
+      const projectBrief = createNewProjectBrief(brief, language);
+      setBrief(projectBrief);
+      const createdProject = await createProject(projectBrief);
       setProject(createdProject);
       setProjectDetailTab("overview");
       setIsProjectScriptComposerOpen(false);
@@ -2196,6 +2199,7 @@ export const App = ({
                       isLoading={busyState === "dashboard"}
                       onLoadDashboard={handleLoadDashboard}
                       showLoadButton={false}
+                      showStepBadge={false}
                     />
                   }
                   disabled={busyState !== "idle"}

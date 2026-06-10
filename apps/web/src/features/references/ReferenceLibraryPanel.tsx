@@ -51,7 +51,7 @@ const text = {
     sourceAsset: "Uploaded reference video",
     noSourceAsset: "Use public URL",
     platform: "Platform",
-    sourceDeclaration: "Source declaration",
+    sourceDeclaration: "Remarks",
     category: "Category",
     referenceTitle: "Reference title",
     analyze: "Analyze reference",
@@ -97,7 +97,7 @@ const text = {
     missingTitle: "reference title",
     missingPlatform: "platform",
     missingCategory: "category",
-    missingDeclaration: "source declaration",
+    missingDeclaration: "remarks",
     missingFields: (fields: string) => `Add ${fields} before submitting.`,
     retryReference: "Retry breakdown",
     deleteReference: "Delete",
@@ -122,7 +122,7 @@ const text = {
     sourceAsset: "已上传参考视频",
     noSourceAsset: "使用公开视频 URL",
     platform: "平台",
-    sourceDeclaration: "来源声明",
+    sourceDeclaration: "备注",
     category: "类目",
     referenceTitle: "参考标题",
     analyze: "拆解参考视频",
@@ -157,7 +157,7 @@ const text = {
     missingTitle: "参考标题",
     missingPlatform: "平台",
     missingCategory: "类目",
-    missingDeclaration: "来源声明",
+    missingDeclaration: "备注",
     missingFields: (fields: string) => `提交前请补充：${fields}。`,
     retryReference: "重新拆解",
     deleteReference: "删除",
@@ -178,6 +178,18 @@ const text = {
 
 type ReferenceCopy = (typeof text)[Language];
 const activeReferenceWindowMs = 10 * 60 * 1000;
+const defaultReferenceCategories = [
+  "洗护用品",
+  "床上用品",
+  "厨房用品",
+  "家居收纳",
+  "小家电",
+  "母婴用品",
+  "宠物用品",
+  "美妆个护",
+  "服饰配件",
+  "运动户外",
+];
 
 const createReferenceDraft = (reference: ReferenceVideo): ReferenceDraft => ({
   category: reference.category,
@@ -317,13 +329,12 @@ export const ReferenceLibraryPanel = ({
   references,
   selectedReferenceId,
   sourceAssets,
-  templates,
 }: ReferenceLibraryPanelProps) => {
   const copy = text[language];
   const [draft, setDraft] = useState<ReferenceDraft>(
     initialDraft ?? {
-      category: "Kitchen appliances",
-      sourceDeclaration: "Public reference URL; save structured analysis only.",
+      category: defaultReferenceCategories[0] ?? "",
+      sourceDeclaration: "",
       sourceAssetId: undefined,
       sourcePlatform: "tiktok",
       sourceUrl: "",
@@ -341,6 +352,7 @@ export const ReferenceLibraryPanel = ({
   const submitDraft = () => {
     onAnalyzeReference({
       ...draft,
+      sourceDeclaration: draft.sourceDeclaration.trim() || "No remarks.",
       sourceUrl: draft.sourceUrl?.trim() || undefined,
     });
   };
@@ -348,7 +360,6 @@ export const ReferenceLibraryPanel = ({
   const canAnalyze =
     (draft.sourceAssetId || draft.sourceUrl?.trim()) &&
     draft.sourcePlatform.trim() &&
-    draft.sourceDeclaration.trim() &&
     draft.title.trim() &&
     draft.category.trim();
   const showMissingSubmitHint = hasAttemptedIncompleteSubmit && !canAnalyze;
@@ -357,7 +368,6 @@ export const ReferenceLibraryPanel = ({
     draft.title.trim() ? undefined : copy.missingTitle,
     draft.sourcePlatform.trim() ? undefined : copy.missingPlatform,
     draft.category.trim() ? undefined : copy.missingCategory,
-    draft.sourceDeclaration.trim() ? undefined : copy.missingDeclaration,
   ].filter(Boolean);
   const activeReferences = references.filter(
     (reference) => isPendingReference(reference) && !isStalledReference(reference),
@@ -508,12 +518,6 @@ export const ReferenceLibraryPanel = ({
           <h2 id="reference-library-title">{copy.title}</h2>
           <p className="concept-panel-subtitle">{copy.body}</p>
         </div>
-        <StatusPill tone={references.length ? "success" : "neutral"}>
-          {copy.status(references.length)}
-        </StatusPill>
-        <StatusPill tone={templates.length ? "success" : "neutral"}>
-          {copy.templateStatus(templates.length)}
-        </StatusPill>
         <Button
           icon={isHistoryPageOpen ? <ArrowLeft size={18} /> : <Clock3 size={18} />}
           onClick={() => setIsHistoryPageOpen((current) => !current)}
@@ -567,9 +571,15 @@ export const ReferenceLibraryPanel = ({
         <label>
           {copy.category}
           <input
+            list="reference-category-options"
             onChange={(event) => updateDraft("category", event.target.value)}
             value={draft.category}
           />
+          <datalist id="reference-category-options">
+            {defaultReferenceCategories.map((category) => (
+              <option key={category} value={category} />
+            ))}
+          </datalist>
         </label>
       </div>
       <label className="script-draft-editor">

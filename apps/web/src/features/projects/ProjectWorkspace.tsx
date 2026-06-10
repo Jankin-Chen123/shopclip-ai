@@ -393,7 +393,7 @@ export const ProjectWorkspace = ({
                 return (
                   <article className="project-card-shell" key={historyProject.id}>
                     <button
-                      aria-label={historyProject.title}
+                      aria-label={historyProject.productName}
                       className="project-card"
                       disabled={disabled || isHistoryLoading}
                       onClick={() => onLoadProject(historyProject.id)}
@@ -407,12 +407,11 @@ export const ProjectWorkspace = ({
                       </span>
                       <span className="project-card-body">
                         <span className="project-card-title">
-                          <strong>{historyProject.title}</strong>
+                          <strong>{historyProject.productName}</strong>
                           <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
                             {historyProject.status}
                           </StatusPill>
                         </span>
-                        <span className="project-card-product">{historyProject.productName}</span>
                         <span className="project-card-divider" />
                         <span className="project-card-stats">
                           <span>{plural(historyProject.assetCount, "assets")}</span>

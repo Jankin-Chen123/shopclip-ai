@@ -118,6 +118,7 @@ import {
   selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
 } from "./App";
+import { createNewProjectBrief } from "./AppSetupUtils";
 import { copy } from "./i18n";
 import { listReferenceVideos, regenerateScene, resolveApiDownloadUrl } from "../lib/api";
 import { createExportDownloadFilename, triggerBrowserDownload } from "../lib/download";
@@ -261,6 +262,8 @@ describe("App", () => {
     expect(markup).toContain("Inspiration");
     expect(markup).toContain("Project");
     expect(markup).toContain("Project portfolio");
+    expect(markup).toContain("Desk Halo Lamp");
+    expect(markup).not.toContain("Lamp holiday clip");
     expect(markup).not.toContain(
       "Each card represents one product project with its materials, scripts, and videos.",
     );
@@ -320,6 +323,65 @@ describe("App", () => {
     expect(markup).toContain("Script library");
     expect(markup).toContain("Video library");
     expect(markup).toContain("Generate video");
+  });
+
+  it("starts new projects from a blank editable brief instead of the last loaded project brief", () => {
+    const lastLoadedBrief = {
+      title: "Headphone launch",
+      productName: "Havit H630BT",
+      audience: "commuters",
+      sellingPoints: ["active noise reduction", "long battery"],
+      tone: "confident",
+      style: "fast desk demo",
+      targetDurationSeconds: 15,
+    };
+
+    const nextBrief = createNewProjectBrief(lastLoadedBrief);
+
+    expect(nextBrief).not.toMatchObject({
+      title: "Headphone launch",
+      productName: "Havit H630BT",
+      audience: "commuters",
+      sellingPoints: ["active noise reduction", "long battery"],
+      tone: "confident",
+    });
+    expect(nextBrief.productName).toBe("Untitled product");
+    expect(nextBrief.sellingPoints).toEqual(["Fill in selling points"]);
+  });
+
+  it("omits the dashboard step badge from the project overview dashboard", () => {
+    const markup = renderToStaticMarkup(
+      <App
+        initialLanguage="en"
+        initialPage="project"
+        initialProject={{
+          id: "project-dashboard-1",
+          title: "Headphone launch",
+          productName: "Havit H630BT",
+          audience: "commuters",
+          sellingPoints: ["active noise reduction", "long battery"],
+          tone: "confident",
+          style: "fast desk demo",
+          targetDurationSeconds: 15,
+          prepKeywords: [],
+          status: "ready",
+          createdAt: "2026-06-02T00:00:00.000Z",
+          updatedAt: "2026-06-02T00:00:00.000Z",
+          assets: [],
+          assetSlices: [],
+          assetProcessingEvents: [],
+          assetProcessingJobs: [],
+          referenceVideos: [],
+          viralTemplates: [],
+          scripts: [],
+          scenes: [],
+          renderTasks: [],
+        }}
+      />,
+    );
+
+    expect(markup).toContain("Mock analytics");
+    expect(markup).not.toContain("Step 06");
   });
 
   it("uses the latest source render task as the studio base instead of the latest smart edit export", () => {
@@ -1131,24 +1193,23 @@ describe("App", () => {
     expect(markup).not.toContain("继续上传");
   });
 
-  it("renders free-editable product keyword controls in asset prep", () => {
+  it("omits duplicated product keyword controls from asset prep", () => {
     const markup = renderToStaticMarkup(
       <AssetPrepPanel
         disabled={false}
         isGenerating={false}
         isImporting={false}
-        language="zh"
+        language="en"
         onBack={() => undefined}
         onGenerateStoryboard={() => undefined}
         onImportFiles={() => undefined}
       />,
     );
 
-    expect(markup).toContain('aria-label="编辑关键词：便携"');
-    expect(markup).toContain('value="便携"');
-    expect(markup).toContain('aria-label="删除关键词：便携"');
-    expect(markup).toContain("添加关键词");
-    expect(markup).toContain("关键词内容");
+    expect(markup).not.toContain("Product keywords");
+    expect(markup).not.toContain("Add keyword");
+    expect(markup).not.toContain("Enter keyword");
+    expect(markup).not.toContain('aria-label="Edit keyword: portable"');
   });
 
   it("does not replace an explicitly empty prep keyword snapshot with defaults", () => {
@@ -1169,14 +1230,14 @@ describe("App", () => {
     expect(markup).not.toContain('value="可折叠"');
   });
 
-  it("keeps loaded project prep keywords in the script generation snapshot", () => {
+  it("drops loaded project prep keywords from the script generation snapshot", () => {
     const snapshot = createAssetPrepSnapshotFromProjectAssets(
       [makeAsset({ id: "asset-packshot", name: "Packshot.png", type: "image" })],
       ["portable", "stable"],
     );
 
     expect(snapshot.assetIds).toEqual(["asset-packshot"]);
-    expect(snapshot.keywords).toEqual(["portable", "stable"]);
+    expect(snapshot.keywords).toEqual([]);
   });
 
   it("keeps other projects' private assets out of the creation prep library", () => {
@@ -1390,7 +1451,7 @@ describe("App", () => {
     expect(markup).toContain("Uploaded packshot.png");
   });
 
-  it("creates a prep snapshot from the latest edited keywords and uploads", () => {
+  it("creates a prep snapshot from uploads without product keywords", () => {
     const snapshot = createAssetPrepSnapshotFromUploads(
       {
         hero: [
@@ -1424,7 +1485,7 @@ describe("App", () => {
 
     expect(snapshot).toEqual({
       assetIds: ["asset-packshot"],
-      keywords: ["portable", "creator table"],
+      keywords: [],
       materials: [
         expect.objectContaining({
           assetId: "asset-packshot",
@@ -1780,11 +1841,9 @@ describe("App", () => {
     expect(markup).not.toContain("Search external stock assets");
     expect(markup).not.toContain("Run structured analysis for Cup hook script");
 
-    const extractIndex = markup.indexOf("Extract template");
-    const deleteIndex = markup.indexOf("Delete selected");
-
-    expect(extractIndex).toBeGreaterThan(-1);
-    expect(deleteIndex).toBeGreaterThan(extractIndex);
+    expect(markup).toContain("Multi-select");
+    expect(markup).not.toContain("Delete selected");
+    expect(markup).not.toContain("Extract template");
   });
 
   it("uses the linked breakdown video first frame as the script card cover", () => {
@@ -6671,9 +6730,10 @@ Second imported caption`,
     expect(markup).toContain("asset-uploading-spinner");
     expect(markup).not.toContain("/api/assets/asset-uploading/content");
     expect(markup).toContain("/api/assets/asset-ready/content");
-    expect(markup).toContain("Select Uploading packshot");
+    expect(markup).toContain("Multi-select");
+    expect(markup).not.toContain("Select Uploading packshot");
     expect(markup).toContain("Delete Ready packshot");
-    expect(markup).toContain("Delete selected");
+    expect(markup).not.toContain("Delete selected");
     expect(markup).not.toContain("status-pill");
   });
 
@@ -6681,6 +6741,9 @@ Second imported caption`,
     const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
     expect(styles).toMatch(/\.asset-card\s*\{[^}]*gap:\s*8px;[^}]*padding:\s*8px;/s);
+    expect(styles).toMatch(
+      /\.asset-library-tabs-row\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s,
+    );
     expect(styles).toMatch(/\.asset-card-actions\s*\{[^}]*gap:\s*6px;/s);
     expect(styles).toMatch(
       /\.asset-selection-control,\s*\.asset-card-delete\s*\{[^}]*width:\s*26px;[^}]*height:\s*26px;/s,
@@ -7020,7 +7083,33 @@ Second imported caption`,
     expect(markup).not.toContain("Select Cup hook reference");
     expect(markup).not.toContain("Select Bottle demo reference");
     expect(markup).not.toContain("Delete selected");
+    expect(markup).not.toContain("2 references");
+    expect(markup).not.toContain("1 template");
     expect(markup).not.toContain("Create template");
+  });
+
+  it("renders reference remarks as an empty optional field with selectable categories", () => {
+    const markup = renderToStaticMarkup(
+      <ReferenceLibraryPanel
+        disabled={false}
+        isLoading={false}
+        language="en"
+        onAnalyzeReference={() => undefined}
+        onCreateTemplate={() => undefined}
+        onUseReference={() => undefined}
+        references={[]}
+        sourceAssets={[]}
+        templates={[]}
+      />,
+    );
+
+    expect(markup).toContain("Remarks");
+    expect(markup).toContain('<textarea rows="2"></textarea>');
+    expect(markup).toContain('list="reference-category-options"');
+    expect(markup).toContain('value="洗护用品"');
+    expect(markup).toContain('value="床上用品"');
+    expect(markup).not.toContain("Source declaration");
+    expect(markup).not.toContain("Public reference URL; save structured analysis only.");
   });
 
   it("renders ready reference rows with merchant-friendly fields only", () => {

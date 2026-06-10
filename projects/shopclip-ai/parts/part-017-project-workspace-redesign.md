@@ -92,6 +92,21 @@
   - `corepack pnpm --filter @shopclip/web lint` passed.
   - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx` still fails in unrelated reference library history page assertions from the existing in-progress `ReferenceLibraryPanel.tsx` changes.
 
+## 2026-06-10 Remove Product Keywords Batch
+
+- Scope:
+  - Removes the duplicated product keyword area from the project materials page because it overlaps with selling points in the project overview.
+- Fix:
+  - Removed the product keyword editor UI from `AssetPrepPanel`.
+  - Removed the obsolete keyword copy and CSS rules.
+  - Kept the `keywords` field as an empty compatibility field in asset prep snapshots so existing API/request shapes do not break.
+  - Ignored legacy project `prepKeywords` when rebuilding asset prep snapshots for script generation.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "product keyword|prep snapshot"` passed.
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx` passed.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web lint` passed.
+
 ## 2026-06-10 Background Task Free Drag Batch
 
 - Scope:
@@ -120,3 +135,19 @@
   - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx` passed with 167 tests.
   - `corepack pnpm --filter @shopclip/web typecheck` passed.
   - `corepack pnpm --filter @shopclip/web build` passed with the existing Vite chunk-size warning.
+
+## 2026-06-10 New Project Blank Brief And Dashboard Badge Batch
+
+- Scope:
+  - Prevents the project section new-project action from reusing the latest loaded project's overview brief.
+  - Removes the step badge from the embedded data dashboard in the project overview.
+- Fix:
+  - Added `createNewProjectBrief` and wired `handleCreateProject` to create projects from a fresh editable placeholder brief for the active language.
+  - Added a `showStepBadge` option to `DashboardPanel` and disabled it only for the project overview embedded dashboard.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "blank editable brief|dashboard step badge"` passed.
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx` passed with 327 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web lint` passed.
+  - `git diff --check` reported only existing CRLF normalization warnings for `AssetsPanel.tsx` and `ReferenceLibraryPanel.tsx`.
+  - `git ls-files .agents/memory` returned no tracked files.
