@@ -151,3 +151,23 @@
   - `corepack pnpm --filter @shopclip/web lint` passed.
   - `git diff --check` reported only existing CRLF normalization warnings for `AssetsPanel.tsx` and `ReferenceLibraryPanel.tsx`.
   - `git ls-files .agents/memory` returned no tracked files.
+
+## 2026-06-10 Final Video Only Preview Batch
+
+- Scope:
+  - Keeps the video preview and download area focused on the complete full-length export video.
+  - Removes per-scene short video previews from the final preview/export surface.
+- Fix:
+  - Removed the render panel scene clip preview grid from the preview/export area.
+  - Changed the preview box to show a playable video only when a full export URL exists.
+  - Updated render summary copy so scene clips are described as composition progress instead of clickable previews.
+  - Updated README render behavior notes to match the full-video-only preview surface.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "per-scene video previews|full export video"` passed.
+  - `corepack pnpm test` passed.
+  - `corepack pnpm typecheck` passed.
+  - `corepack pnpm lint` passed.
+  - `corepack pnpm build` passed with the existing Vite chunk-size warning.
+  - Playwright smoke test against `http://127.0.0.1:4174/` passed.
+  - `git diff --check` reported only the existing CRLF normalization warning for `AssetsPanel.tsx`.
+  - `git ls-files .agents/memory` returned no tracked files.

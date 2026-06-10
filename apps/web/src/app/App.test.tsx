@@ -755,7 +755,7 @@ describe("App", () => {
     expect(markup).toContain("Seed");
   });
 
-  it("renders per-scene video previews in the render panel", () => {
+  it("does not render per-scene video previews in the render panel", () => {
     const markup = renderToStaticMarkup(
       <RenderPanel
         copy={copy.en.render}
@@ -802,12 +802,12 @@ describe("App", () => {
       />,
     );
 
-    expect(markup).toContain("Scene clip previews");
-    expect(markup).toContain("<video");
-    expect(markup).toContain("https://cdn.example.test/scene-1.mp4");
+    expect(markup).not.toContain("Scene clip previews");
+    expect(markup).not.toContain("<video");
+    expect(markup).not.toContain("https://cdn.example.test/scene-1.mp4");
   });
 
-  it("keeps materialized scene clips visible below the final export preview", () => {
+  it("renders only the full export video below the final export preview", () => {
     const markup = renderToStaticMarkup(
       <RenderPanel
         copy={copy.en.render}
@@ -862,9 +862,9 @@ describe("App", () => {
     );
 
     expect(markup).toContain("Ready to download");
-    expect(markup).toContain("Scene clip previews");
     expect(markup).toContain("https://cos.example.test/export.mp4");
-    expect(markup).toContain("https://cos.example.test/render-1/scene-1-video-only.mp4");
+    expect(markup).not.toContain("Scene clip previews");
+    expect(markup).not.toContain("https://cos.example.test/render-1/scene-1-video-only.mp4");
     expect(markup).not.toContain("Signature=secret");
   });
 
@@ -6732,7 +6732,7 @@ Second imported caption`,
     expect(markup).toContain("/api/assets/asset-ready/content");
     expect(markup).toContain("Multi-select");
     expect(markup).not.toContain("Select Uploading packshot");
-    expect(markup).toContain("Delete Ready packshot");
+    expect(markup).not.toContain("Delete Ready packshot");
     expect(markup).not.toContain("Delete selected");
     expect(markup).not.toContain("status-pill");
   });
@@ -6745,9 +6745,8 @@ Second imported caption`,
       /\.asset-library-tabs-row\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*space-between;/s,
     );
     expect(styles).toMatch(/\.asset-card-actions\s*\{[^}]*gap:\s*6px;/s);
-    expect(styles).toMatch(
-      /\.asset-selection-control,\s*\.asset-card-delete\s*\{[^}]*width:\s*26px;[^}]*height:\s*26px;/s,
-    );
+    expect(styles).toMatch(/\.asset-selection-control\s*\{[^}]*width:\s*26px;[^}]*height:\s*26px;/s);
+    expect(styles).not.toContain(".asset-card-delete");
   });
 
   it("keeps asset preview details scrollable when metadata is long", () => {
@@ -6773,13 +6772,16 @@ Second imported caption`,
     );
   });
 
-  it("keeps asset preview card actions limited to opening the file", () => {
+  it("keeps asset preview card actions limited to file and delete actions", () => {
     const source = readFileSync(
       new URL("../features/assets/AssetsPanel.tsx", import.meta.url),
       "utf8",
     );
 
     expect(source).toContain("Open file");
+    expect(source).toContain("Delete asset");
+    expect(source).toContain("Cancel");
+    expect(source).not.toContain("asset-card-delete");
     expect(source).not.toContain("用于当前分镜");
     expect(source).not.toContain("Use in selected scene");
     expect(source).not.toContain("多颗粒度结构化");

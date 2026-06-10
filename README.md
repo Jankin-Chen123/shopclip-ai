@@ -180,7 +180,7 @@ flowchart TD
 - Editing Agent 建议是可解释的确定性建议。
 - TTS 和看板仍未接真实业务数据；看板原需求就是 Mock 数据看板，TTS 真实 provider 是下一步需要补齐的缺口。
 - 只有显式设置 `VIDEO_RENDER_PROVIDER_MODE=seedance` 且配置服务端视频密钥/模型后，才调用 Seedance。TTS 声线不会控制 Seedance 画面效果。
-- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会按分镜逐段提交 Seedance 任务，并从每个分镜的绑定素材中选公网图片，以 `role=first_frame` 一并提交；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。每段视频完成后会在步骤 04 展示可点击预览；配置 `FFMPEG_PATH` 后，后端会尝试用 ffmpeg 拼接所有分镜片段为最终导出 MP4，并上传到 COS 的 `projects/<projectId>/exports/<exportId>/export.mp4` 后返回 COS 访问地址。Seedance 的 `duration` 是目标视频秒数；默认按每个分镜时长分别计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
+- Seedance 的画幅、清晰度、是否生成音频、水印和随机种子由前端“视频生成设置”提交到 render request，不需要写入 `.env`。默认会按分镜逐段提交 Seedance 任务，并从每个分镜的绑定素材中选公网图片，以 `role=first_frame` 一并提交；只能文生视频的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=none`，支持多参考图的 endpoint 可设置 `AI_VIDEO_IMAGE_INPUT_MODE=reference_image`。步骤 04 的预览与下载区只展示拼接后的完整成片；配置 `FFMPEG_PATH` 后，后端会尝试用 ffmpeg 拼接所有分镜片段为最终导出 MP4，并上传到 COS 的 `projects/<projectId>/exports/<exportId>/export.mp4` 后返回 COS 访问地址。Seedance 的 `duration` 是目标视频秒数；默认按每个分镜时长分别计算，并向上规整到 `AI_VIDEO_ALLOWED_DURATIONS` 中最近的可用值，必要时可用 `AI_VIDEO_DURATION` 强制覆盖。
 - UI 支持失败渲染模拟和重试，不会丢失项目数据。
 - 真实 provider 密钥只能放在服务端环境变量中，浏览器不会直接调用模型或 TTS provider。
 - 自动化 e2e 为离线可复现会显式设置 memory store 与 mock COS/vision/reference/render provider；真实 COS/Ark 路径需要使用服务端 `.env` 和 smoke 脚本验证。

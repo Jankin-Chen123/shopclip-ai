@@ -1083,29 +1083,32 @@ export const AssetsPanel = ({
                 {language === "zh" ? "提炼模板" : "Extract template"}
               </Button>
             ) : null}
-            <Button
-              disabled={
-                disabled ||
-                !onDeleteAssets ||
-                (isAssetMultiSelectMode && selectedAssetCount === 0)
-              }
-              icon={isAssetMultiSelectMode ? <Trash2 size={18} /> : <Check size={18} />}
-              onClick={() => {
-                if (!isAssetMultiSelectMode) {
-                  setIsAssetMultiSelectMode(true);
-                  return;
-                }
-                handleDeleteSelectedAssets();
-              }}
-            >
-              {isAssetMultiSelectMode
-                ? language === "zh"
-                  ? "删除选中"
-                  : "Delete selected"
-                : language === "zh"
-                  ? "多选"
-                  : "Multi-select"}
-            </Button>
+            {isAssetMultiSelectMode ? (
+              <>
+                <Button
+                  icon={<X size={18} />}
+                  onClick={() => {
+                    setSelectedAssetIds(new Set());
+                    setIsAssetMultiSelectMode(false);
+                  }}
+                  variant="secondary"
+                >
+                  {language === "zh" ? "取消" : "Cancel"}
+                </Button>
+                <Button
+                  disabled={disabled || !onDeleteAssets || selectedAssetCount === 0}
+                  icon={<Trash2 size={18} />}
+                  onClick={() => handleDeleteSelectedAssets()}
+                  variant="danger"
+                >
+                  {language === "zh" ? "删除选中" : "Delete selected"}
+                </Button>
+              </>
+            ) : (
+              <Button icon={<Check size={18} />} onClick={() => setIsAssetMultiSelectMode(true)}>
+                {language === "zh" ? "多选" : "Multi-select"}
+              </Button>
+            )}
           </div>
         ) : null}
       </div>
@@ -1245,8 +1248,8 @@ export const AssetsPanel = ({
 
               return (
                 <article className={`asset-card ${isSelected ? "is-selected" : ""}`} key={asset.id}>
-                  <div className="asset-card-actions">
-                    {isAssetMultiSelectMode ? (
+                  {isAssetMultiSelectMode ? (
+                    <div className="asset-card-actions">
                       <button
                         aria-label={
                           language === "zh"
@@ -1260,17 +1263,8 @@ export const AssetsPanel = ({
                       >
                         {isSelected ? <Check size={13} aria-hidden="true" /> : null}
                       </button>
-                    ) : null}
-                    <button
-                      aria-label={language === "zh" ? `删除 ${asset.name}` : `Delete ${asset.name}`}
-                      className="asset-card-delete"
-                      disabled={disabled || !onDeleteAssets}
-                      onClick={() => handleDeleteAsset(asset.id)}
-                      type="button"
-                    >
-                      <Trash2 size={13} aria-hidden="true" />
-                    </button>
-                  </div>
+                    </div>
+                  ) : null}
                   <button
                     aria-label={
                       language === "zh"
@@ -1617,6 +1611,14 @@ export const AssetsPanel = ({
                 </dl>
 
                 <div className="external-preview-actions">
+                  <Button
+                    disabled={disabled || !onDeleteAssets}
+                    icon={<Trash2 size={18} />}
+                    onClick={() => handleDeleteAsset(previewAsset.id)}
+                    variant="danger"
+                  >
+                    {language === "zh" ? "删除素材" : "Delete asset"}
+                  </Button>
                   {previewAssetReady ? (
                     <a
                       className="external-open-link"

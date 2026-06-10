@@ -60,48 +60,6 @@ const seedFromInput = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
-const playableSceneClips = (renderTask: RenderTask | undefined) =>
-  renderTask?.sceneClips?.filter((clip) => clip.material?.videoOnlyUrl ?? clip.videoUrl) ?? [];
-
-const sceneClipPreviewUrl = (clip: NonNullable<RenderTask["sceneClips"]>[number]) =>
-  clip.material?.videoOnlyUrl ?? clip.videoUrl;
-
-const SceneClipPreviewGrid = ({
-  copy,
-  sceneClips,
-}: {
-  copy: AppCopy["render"];
-  sceneClips: NonNullable<RenderTask["sceneClips"]>;
-}) => (
-  <>
-    <strong>{copy.clipPreviewTitle}</strong>
-    <div className="scene-clip-grid">
-      {sceneClips.map((clip) => {
-        const previewUrl = sceneClipPreviewUrl(clip);
-        return (
-          <article className="scene-clip-card" key={clip.sceneId}>
-            <video
-              controls
-              playsInline
-              preload="metadata"
-              poster={clip.coverUrl && clip.coverUrl !== previewUrl ? clip.coverUrl : undefined}
-              src={previewUrl}
-            >
-              {previewUrl ? <a href={previewUrl}>{previewUrl}</a> : null}
-            </video>
-            <div>
-              <strong>
-                {clip.order}. {clip.subtitle}
-              </strong>
-              <span>{clip.status === "completed" ? copy.clipReady : copy.clipPreviewFallback}</span>
-            </div>
-          </article>
-        );
-      })}
-    </div>
-  </>
-);
-
 const isActiveRenderStatus = (status: RenderTask["status"] | undefined): boolean =>
   status === "queued" || status === "running" || status === "retrying";
 
@@ -148,12 +106,7 @@ export const RenderPanel = ({
   const sceneClipCount = renderTask?.sceneClips?.length ?? 0;
   const readySceneClipCount = completedSceneClipCount(renderTask);
   const finalExportUrl = renderTask?.exportUrl ?? exportResult?.exportUrl;
-  const finalPreviewUrl = finalExportUrl ?? renderTask?.previewUrl;
   const renderMediaSettings = renderTask?.mediaSettings;
-  const sceneClips = playableSceneClips(renderTask);
-  const finalSceneClips = finalExportUrl
-    ? sceneClips.filter((clip) => Boolean(clip.material?.videoOnlyUrl))
-    : sceneClips;
 
   return (
     <section className="panel render-panel" id="trace" aria-labelledby="trace-title">
@@ -227,28 +180,6 @@ export const RenderPanel = ({
             <video controls playsInline preload="metadata" src={finalExportUrl}>
               <a href={finalExportUrl}>{finalExportUrl}</a>
             </video>
-            {renderMediaSettings ? (
-              <small className="media-summary">
-                <Volume2 size={14} aria-hidden="true" />
-                {copy.mediaSummary(
-                  renderMediaSettings.ttsVoice,
-                  renderMediaSettings.subtitlesEnabled
-                    ? renderMediaSettings.subtitleStyle
-                    : "off",
-                  renderMediaSettings.bgmTrack,
-                )}
-              </small>
-            ) : null}
-            {finalSceneClips.length > 0 ? (
-              <SceneClipPreviewGrid copy={copy} sceneClips={finalSceneClips} />
-            ) : null}
-          </>
-        ) : sceneClips.length > 0 ? (
-          <SceneClipPreviewGrid copy={copy} sceneClips={sceneClips} />
-        ) : finalPreviewUrl ? (
-          <>
-            <strong>{copy.previewArtifact}</strong>
-            <span>{finalPreviewUrl}</span>
             {renderMediaSettings ? (
               <small className="media-summary">
                 <Volume2 size={14} aria-hidden="true" />

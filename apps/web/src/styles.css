@@ -2146,8 +2146,7 @@ textarea {
   gap: 6px;
 }
 
-.asset-selection-control,
-.asset-card-delete {
+.asset-selection-control {
   display: inline-grid;
   width: 26px;
   height: 26px;
@@ -2163,16 +2162,6 @@ textarea {
   border-color: rgba(236, 72, 153, 0.58);
   color: #fff;
   background: rgba(236, 72, 153, 0.22);
-}
-
-.asset-card-delete {
-  margin-left: auto;
-  color: #fecdd3;
-}
-
-.asset-card-delete:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
 }
 
 .asset-bulk-actions {
