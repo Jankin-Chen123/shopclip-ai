@@ -4063,6 +4063,110 @@ textarea {
   background: #101010;
 }
 
+.linked-asset-preview {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 88px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.linked-asset-preview > div {
+  min-width: 0;
+}
+
+.linked-asset-preview span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.linked-asset-preview strong,
+.linked-asset-preview p {
+  overflow-wrap: anywhere;
+}
+
+.linked-asset-preview strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.linked-asset-preview p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.empty-linked-asset {
+  grid-template-columns: auto minmax(0, 1fr);
+  color: var(--muted);
+}
+
+.linked-asset-thumb,
+.asset-recall-thumb {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #162235;
+}
+
+.linked-asset-thumb {
+  height: 72px;
+}
+
+.asset-recall-row {
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+
+.asset-recall-preview-button {
+  display: block;
+  width: 96px;
+  min-height: 96px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.asset-recall-preview-button:hover .asset-recall-thumb,
+.asset-recall-preview-button:focus-visible .asset-recall-thumb {
+  border-color: rgba(244, 114, 182, 0.7);
+}
+
+.asset-recall-thumb {
+  height: 96px;
+}
+
+.asset-visual-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--trace);
+}
+
+.asset-recall-meta {
+  margin-bottom: 2px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.asset-recall-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
 .search-result-row h3,
 .asset-recall-row h4,
 .suggestion-row h4 {
@@ -4076,6 +4180,78 @@ textarea {
   margin: 4px 0 8px;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.studio-asset-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.studio-asset-preview-dialog {
+  display: grid;
+  width: min(760px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  gap: 16px;
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #101010;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.studio-asset-preview-dialog .asset-prep-library-heading span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.studio-asset-preview-media {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: #05070a;
+}
+
+.studio-asset-preview-media img,
+.studio-asset-preview-media video {
+  display: block;
+  width: 100%;
+  max-height: min(620px, calc(100vh - 190px));
+  object-fit: contain;
+}
+
+@media (max-width: 760px) {
+  .linked-asset-preview,
+  .asset-recall-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .asset-recall-preview-button {
+    width: 72px;
+    min-height: 72px;
+  }
+
+  .asset-recall-thumb {
+    height: 72px;
+  }
+
+  .linked-asset-preview > .button,
+  .asset-recall-actions {
+    grid-column: 1 / -1;
+  }
+
+  .asset-recall-actions {
+    flex-direction: row;
+    justify-content: flex-start;
+  }
 }
 
 .reference-row-actions {
