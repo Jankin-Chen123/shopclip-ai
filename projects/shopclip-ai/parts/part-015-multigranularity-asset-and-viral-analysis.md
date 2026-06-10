@@ -569,6 +569,8 @@ corepack pnpm --filter @shopclip/web test:e2e -- part-015-structure-and-referenc
 
 2026-06-09 asset preview modal UI follow-up: asset-library preview dialogs now keep only the file/source open action in the detail action area; the previous scene recall and multi-granularity structure actions were removed from the preview modal UI. Script/reference-script and viral-template preview dialogs now use a detail-focused single-column layout instead of rendering an empty document placeholder panel, giving breakdown and template guidance content the full dialog width. Verification: `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx` passed with 162 tests, `corepack pnpm --filter @shopclip/web typecheck` passed, `corepack pnpm --filter @shopclip/web build` passed, and `git diff --check` passed.
 
+2026-06-10 script library cover follow-up: reference-script assets now persist the linked breakdown video's `sourceAssetId`, and the script asset card cover falls back to matching the source video by `sourceUrl` for existing records. This makes script-library cards use the corresponding breakdown video's extracted first-frame thumbnail instead of the generic document placeholder. Verification: `corepack pnpm --filter @shopclip/api test src/part015-processing-flow.test.ts` passed with 2 tests, `corepack pnpm --filter @shopclip/api typecheck` passed, `corepack pnpm --filter @shopclip/web typecheck` passed, `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx` passed with 164 tests, and `git diff --check` passed.
+
 人工验收：
 
 - [x] 上传商品主图后，素材详情展示外观锚点、素材角色、检索文本和质量信号。

@@ -95,6 +95,7 @@ export const ensureReferenceScriptAsset = async ({
     metadata: {
       kind: "reference_script_asset",
       referenceId: reference.id,
+      sourceAssetId: reference.sourceAssetId,
       sourceUrl: reference.sourceUrl,
       sourcePlatform: reference.sourcePlatform,
       sourceDeclaration: reference.sourceDeclaration,

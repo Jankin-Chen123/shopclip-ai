@@ -220,7 +220,8 @@ const findScriptCoverSourceAsset = (
   }
 
   const referenceId = getStringMetadata(metadata, "referenceId");
-  return candidateAssets.find((candidate) => {
+  const sourceUrl = getStringMetadata(metadata, "sourceUrl") ?? scriptAsset.url;
+  const sourceAssetByReferenceId = candidateAssets.find((candidate) => {
     const candidateMetadata = getAssetMetadataRecord(candidate);
     return (
       Boolean(candidate.thumbnailKey) &&
@@ -228,6 +229,14 @@ const findScriptCoverSourceAsset = (
       getStringMetadata(candidateMetadata, "referenceId") === referenceId
     );
   });
+  if (sourceAssetByReferenceId) {
+    return sourceAssetByReferenceId;
+  }
+
+  return candidateAssets.find(
+    (candidate) =>
+      Boolean(candidate.thumbnailKey) && isVideoAsset(candidate) && candidate.url === sourceUrl,
+  );
 };
 
 interface ReferenceScriptStoryboardPreview {

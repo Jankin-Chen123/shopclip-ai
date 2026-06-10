@@ -209,7 +209,12 @@ describe("Part 015 structured asset and reference flow", () => {
     const scriptAsset = (await scriptAssetResponse.json()) as {
       asset: {
         id: string;
-        metadata?: { kind?: string; referenceId?: string; searchText?: string };
+        metadata?: {
+          kind?: string;
+          referenceId?: string;
+          searchText?: string;
+          sourceAssetId?: string;
+        };
         mimeType?: string;
         projectId?: string;
         tags: string[];
@@ -221,6 +226,7 @@ describe("Part 015 structured asset and reference flow", () => {
     expect(scriptAsset.asset.tags).toContain("copy");
     expect(scriptAsset.asset.metadata?.kind).toBe("reference_script_asset");
     expect(scriptAsset.asset.metadata?.referenceId).toBe(readyReference.id);
+    expect(scriptAsset.asset.metadata?.sourceAssetId).toBe(readyReference.sourceAssetId);
     expect(scriptAsset.asset.metadata?.searchText).toContain("Reusable storyboard");
 
     const scriptLibraryResponse = await fetch(`${baseUrl}/api/assets?category=script`);
