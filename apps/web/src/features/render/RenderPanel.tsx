@@ -11,8 +11,10 @@ import { StatusPill } from "../../components/ui/StatusPill";
 import type { AppCopy } from "../../app/i18n";
 import type { ExportResult } from "../../lib/api";
 
+type RenderPanelCopy = Omit<AppCopy["render"], "step"> & { step: string };
+
 interface RenderPanelProps {
-  copy: AppCopy["render"];
+  copy: RenderPanelCopy;
   disabled: boolean;
   error?: string;
   exportResult?: ExportResult;
@@ -66,7 +68,7 @@ const isActiveRenderStatus = (status: RenderTask["status"] | undefined): boolean
 const completedSceneClipCount = (renderTask: RenderTask | undefined): number =>
   renderTask?.sceneClips?.filter((clip) => clip.status === "completed").length ?? 0;
 
-const renderStatusLabel = (copy: AppCopy["render"], status: RenderTask["status"] | undefined) => {
+const renderStatusLabel = (copy: RenderPanelCopy, status: RenderTask["status"] | undefined) => {
   if (status === "queued") {
     return copy.statusLabels.queued;
   }

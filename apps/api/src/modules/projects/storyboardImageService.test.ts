@@ -86,4 +86,26 @@ describe("generateStoryboardSceneImageUrl", () => {
       generateStoryboardSceneImageUrl(project(), scene(), request, [], noopFrameExtractor),
     ).rejects.toThrow("Ark image generation failed");
   });
+
+  it("falls back when the image provider reports model capacity limits", async () => {
+    process.env.AI_PROVIDER_MODE = "ark";
+    process.env.STORYBOARD_IMAGE_PROVIDER_TIMEOUT_MS = "1000";
+    mockedGenerateInspiration.mockRejectedValue(
+      new Error(
+        "Ark request failed with HTTP 429. {\"error\":{\"code\":\"SetLimitExceeded\",\"message\":\"model service has been paused\"}}",
+      ),
+    );
+
+    const imageUrl = await generateStoryboardSceneImageUrl(
+      project(),
+      scene(),
+      request,
+      [],
+      noopFrameExtractor,
+    );
+
+    expect(mockedGenerateInspiration).toHaveBeenCalledTimes(1);
+    expect(imageUrl).toMatch(/^data:image\/svg\+xml,/);
+    expect(decodeURIComponent(imageUrl)).toContain("SCENE 1");
+  });
 });

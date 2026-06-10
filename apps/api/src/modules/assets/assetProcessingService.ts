@@ -114,7 +114,7 @@ const publishStructuredArtifacts = async ({
       }
       await storageProvider.uploadObject({
         body,
-        contentType: "image/jpeg",
+        contentType: frame.contentType ?? "image/jpeg",
         objectKey,
       });
       return {
@@ -133,6 +133,29 @@ const publishStructuredArtifacts = async ({
 const shouldExtractAudio = () => {
   const mode = process.env.ASR_PROVIDER_MODE?.trim().toLowerCase() ?? "none";
   return ["http", "real"].includes(mode);
+};
+
+const assetWithStorageReadUrl = (
+  asset: AssetMetadata,
+  storageProvider: StorageProvider | undefined,
+): AssetMetadata => {
+  if (!storageProvider || !asset.objectKey) {
+    return asset;
+  }
+
+  try {
+    return {
+      ...asset,
+      url: storageProvider.createReadUrl({ objectKey: asset.objectKey }).url,
+    };
+  } catch (error) {
+    console.warn("[asset-structure] failed to create storage read URL for vision input.", {
+      assetId: asset.id,
+      error: error instanceof Error ? error.message : String(error),
+      objectKey: asset.objectKey,
+    });
+    return asset;
+  }
 };
 
 const ocrFirstTextSummary = (): ExtractedAudioSummary => ({
@@ -222,7 +245,13 @@ export const processAssetStructure = async ({
     ),
   );
 
-  const structuredMetadata = await visionProvider.understandAsset({ asset, audio, frames, probe });
+  const visionAsset = assetWithStorageReadUrl(asset, storageProvider);
+  const structuredMetadata = await visionProvider.understandAsset({
+    asset: visionAsset,
+    audio,
+    frames,
+    probe,
+  });
   const sliceDrafts = createSliceDrafts(asset, probe.durationSeconds);
   const slicesToCreate = await Promise.all(
     sliceDrafts.map(async (draft, index) => {
@@ -234,7 +263,7 @@ export const processAssetStructure = async ({
         (frame) => frame.second >= draft.startSecond && frame.second <= draft.endSecond,
       );
       const metadata = await visionProvider.understandSlice({
-        asset,
+        asset: visionAsset,
         audio,
         endSecond: draft.endSecond,
         frameKeys: frameKeys.length ? frameKeys : frames.slice(0, 1).map((frame) => frame.key),

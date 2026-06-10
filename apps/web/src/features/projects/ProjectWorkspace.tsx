@@ -478,7 +478,6 @@ export const ProjectWorkspace = ({
           )}
           <div>
             <h2>{project.productName}</h2>
-            <p>{project.title}</p>
           </div>
         </div>
         <dl className="project-detail-metrics">

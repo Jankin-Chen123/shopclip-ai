@@ -7,6 +7,7 @@ import type { MediaProbeResult } from "./mediaProbe.js";
 import { resolveFfmpegCommand, runMediaCommand } from "./mediaTooling.js";
 
 export interface SampledFrame {
+  contentType?: string;
   key: string;
   localPath?: string;
   second: number;
@@ -39,7 +40,14 @@ export const sampleAssetFrames = async (
   options: FrameSamplingOptions = {},
 ): Promise<SampledFrame[]> => {
   if (asset.type === "image") {
-    return [{ key: `${baseKeyForAsset(asset)}#image-frame`, second: 0 }];
+    return [
+      {
+        contentType: asset.mimeType,
+        key: `${baseKeyForAsset(asset)}#image-frame`,
+        localPath: probe.sourcePath,
+        second: 0,
+      },
+    ];
   }
 
   if (!probe.sourcePath) {
@@ -69,6 +77,7 @@ export const sampleAssetFrames = async (
       localPath,
     ]);
     frames.push({
+      contentType: "image/jpeg",
       key: `${publicBaseUrl}/${encodeURIComponent(basename(localPath))}`,
       localPath,
       second,

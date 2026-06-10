@@ -258,6 +258,15 @@ interface AppProps {
   initialProjectHistory?: ProjectSummary[];
 }
 
+export const projectStudioStepLabel = (flow: ProjectStudioFlow, language: Language): string => {
+  const stepByFlow: Record<ProjectStudioFlow, string> = {
+    script: "01",
+    storyboard: "02",
+    render: "03",
+  };
+  return language === "zh" ? `步骤 ${stepByFlow[flow]}` : `Step ${stepByFlow[flow]}`;
+};
+
 export const App = ({
   initialLanguage,
   initialPage,
@@ -440,7 +449,6 @@ export const App = ({
   const seedSmartEditFromSourceRender = (
     sourceRenderTask: RenderTask,
     sourceTraceEvents: TraceEvent[],
-    options: { navigateToEdit?: boolean } = {},
   ): boolean => {
     const seededResult = createSmartEditResultFromCompletedSourceRender({
       language,
@@ -457,10 +465,6 @@ export const App = ({
       setSmartEditResult(seededResult);
       setSelectedSmartEditSegmentId(seededResult.plan.segments[0]?.id);
       setExportResult(undefined);
-      if (options.navigateToEdit) {
-        exitProjectStudioMode();
-        handlePageChange("edit");
-      }
     return true;
   };
 
@@ -692,9 +696,7 @@ export const App = ({
           setSelectedSmartEditSegmentId(smartEdit.plan.segments[0]?.id);
           setExportResult(undefined);
         } else if (render.renderTask.status === "completed") {
-          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
-            navigateToEdit: isProjectStudioMode || activePage === "delivery",
-          });
+          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents);
         }
         if (
           render.renderTask.status === "failed" &&
@@ -731,8 +733,6 @@ export const App = ({
       window.clearInterval(interval);
     };
   }, [
-    activePage,
-    isProjectStudioMode,
     language,
     mediaSettings,
     renderTask?.id,
@@ -1815,9 +1815,7 @@ export const App = ({
         setRenderTask(render.renderTask);
         setTraceEvents(render.traceEvents);
         if (render.renderTask.status === "completed") {
-          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
-            navigateToEdit: isProjectStudioMode,
-          });
+          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents);
         }
         setProject((current) => appendProjectRenderTask(current, render.renderTask));
       },
@@ -1853,9 +1851,7 @@ export const App = ({
         setRenderTask(render.renderTask);
         setTraceEvents(render.traceEvents);
         if (render.renderTask.status === "completed") {
-          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
-            navigateToEdit: isProjectStudioMode,
-          });
+          seedSmartEditFromSourceRender(render.renderTask, render.traceEvents);
         }
         setProject((current) => appendProjectRenderTask(current, render.renderTask));
       },
@@ -1876,9 +1872,7 @@ export const App = ({
       setRenderTask(render.renderTask);
       setTraceEvents(render.traceEvents);
       if (render.renderTask.status === "completed") {
-        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents, {
-          navigateToEdit: isProjectStudioMode || activePage === "delivery",
-        });
+        seedSmartEditFromSourceRender(render.renderTask, render.traceEvents);
       }
     });
   };
@@ -2052,6 +2046,18 @@ export const App = ({
   const projectStudioPreviewScript = project?.scripts.find(
     (candidate) => candidate.id === projectStudioPreviewScriptId,
   );
+  const projectStudioStoryboardCopy = isProjectStudioMode
+    ? {
+        ...text.studio,
+        step: projectStudioStepLabel("storyboard", language),
+      }
+    : text.studio;
+  const projectStudioRenderCopy = isProjectStudioMode
+    ? {
+        ...text.render,
+        step: projectStudioStepLabel("render", language),
+      }
+    : text.render;
   const handleOpenBackgroundTask = (task: BackgroundTaskItem) => {
     const trackedTask = backgroundTasks.find((candidate) => candidate.id === task.id);
     if (!trackedTask) {
@@ -2362,10 +2368,12 @@ export const App = ({
 
               {activePage === "studio" ? (
                 isProjectStudioMode && projectStudioFlow === "script" && project ? (
-                  <section className="project-script-selector-panel" aria-label={projectScriptStudioFlow.label}>
+                  <section className="panel project-script-selector-panel" aria-label={projectScriptStudioFlow.label}>
                     <div className="project-script-selector-heading">
                       <div>
-                        <span>{language === "zh" ? "\u7b2c\u4e00\u6b65" : "Step 1"}</span>
+                        <p className="eyebrow project-studio-step-label">
+                          {projectStudioStepLabel("script", language)}
+                        </p>
                         <h3>{projectScriptStudioFlow.label}</h3>
                         <p>
                           {language === "zh"
@@ -2445,7 +2453,7 @@ export const App = ({
                     <StudioWorkspace
                       assetCandidates={assetRecallCandidates}
                       assets={studioAssets}
-                      copy={text.studio}
+                      copy={projectStudioStoryboardCopy}
                       dirtySceneIds={dirtySceneIds}
                       isBusy={busyState === "scene"}
                       onApplyAssetCandidate={handleApplyAssetCandidate}
@@ -2469,7 +2477,7 @@ export const App = ({
 
               {activePage === "delivery" ? (
                 <RenderPanel
-                  copy={text.render}
+                  copy={projectStudioRenderCopy}
                   disabled={
                     !project || scenes.length === 0 || busyState !== "idle" || isSmartEditTaskRunning
                   }

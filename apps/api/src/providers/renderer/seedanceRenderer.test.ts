@@ -20,12 +20,14 @@ const touchedKeys = [
   "AI_VIDEO_MAX_DURATION",
   "AI_VIDEO_MIN_DURATION",
   "AI_VIDEO_MODEL_ID",
+  "AI_VIDEO_PROVIDER_TIMEOUT_MS",
   "AI_VIDEO_REFERENCE_IMAGES",
   "AI_VIDEO_REFERENCE_IMAGE_MODE",
   "AI_VIDEO_RATIO",
   "AI_VIDEO_RESOLUTION",
   "AI_VIDEO_SEED",
   "AI_VIDEO_WATERMARK",
+  "SEEDANCE_PROVIDER_TIMEOUT_MS",
   "VIDEO_RENDER_PROVIDER_MODE",
 ];
 
@@ -135,6 +137,7 @@ describe("Seedance renderer provider", () => {
           authorization: "Bearer video-key",
           "content-type": "application/json",
         }),
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -541,6 +544,7 @@ describe("Seedance renderer provider", () => {
         headers: expect.objectContaining({
           authorization: "Bearer video-key",
         }),
+        signal: expect.any(AbortSignal),
       }),
     );
   });

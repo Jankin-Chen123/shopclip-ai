@@ -66,6 +66,11 @@ const parseNumberEnv = (key: string) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+const seedanceRequestTimeoutMs = () =>
+  parseNumberEnv("AI_VIDEO_PROVIDER_TIMEOUT_MS") ??
+  parseNumberEnv("SEEDANCE_PROVIDER_TIMEOUT_MS") ??
+  120_000;
+
 const parseImageInputMode = (): SeedanceImageInputMode => {
   const configuredMode = firstEnv("AI_VIDEO_IMAGE_INPUT_MODE", "AI_VIDEO_REFERENCE_IMAGE_MODE")
     ?.toLowerCase()
@@ -174,14 +179,33 @@ const requestArkJson = async (
   path: string,
   body?: Record<string, unknown>,
 ) => {
-  const response = await fetch(`${config.baseUrl}${path}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${config.apiKey}`,
-      ...(method === "POST" ? { "content-type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const timeoutMs = seedanceRequestTimeoutMs();
+  const startedAt = Date.now();
+  const abortController = new AbortController();
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    abortController.abort();
+  }, timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        ...(method === "POST" ? { "content-type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: abortController.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`Seedance request timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const responseBody = await parseJson(response);
 
   if (!response.ok) {
@@ -189,6 +213,11 @@ const requestArkJson = async (
     throw new Error(`Seedance request failed with HTTP ${response.status}.${summary}`);
   }
 
+  console.info("[seedance] provider request completed.", {
+    durationMs: Date.now() - startedAt,
+    method,
+    path,
+  });
   return responseBody;
 };
 

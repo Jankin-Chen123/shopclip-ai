@@ -103,6 +103,7 @@ describe("buildStructuredScriptFromTextProvider", () => {
 
   it("uses fallback script generation when the text provider times out", async () => {
     const preparedAsset = asset();
+    let timeoutCount = 0;
 
     const result = await buildStructuredScriptFromTextProvider({
       project: project(),
@@ -110,6 +111,9 @@ describe("buildStructuredScriptFromTextProvider", () => {
       assets: [preparedAsset],
       promptContext: {},
       textProviderTimeoutMs: 1,
+      onTextProviderTimeout: () => {
+        timeoutCount += 1;
+      },
       rewriteScript: async () =>
         new Promise(() => {
           // Simulate an upstream provider call that outlives the reverse proxy timeout.
@@ -133,5 +137,6 @@ describe("buildStructuredScriptFromTextProvider", () => {
       },
       script: providerScript("timeout fallback structured script"),
     });
+    expect(timeoutCount).toBe(1);
   });
 });

@@ -116,6 +116,7 @@ import {
   isRenderTaskPollingActive,
   mergeReferences,
   pruneAssetPrepSnapshotDeletedAssets,
+  projectStudioStepLabel,
   selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
 } from "./App";
@@ -324,6 +325,7 @@ describe("App", () => {
     expect(markup).toContain("Script library");
     expect(markup).toContain("Video library");
     expect(markup).toContain("Generate video");
+    expect(markup).not.toContain("<p>Headphone launch</p>");
   });
 
   it("starts new projects from a blank editable brief instead of the last loaded project brief", () => {
@@ -610,6 +612,15 @@ describe("App", () => {
     expect(storyboardMarkup).toContain("分镜重编辑");
   });
 
+  it("labels project studio cards as a three-step project flow", () => {
+    expect(projectStudioStepLabel("script", "zh")).toBe("步骤 01");
+    expect(projectStudioStepLabel("storyboard", "zh")).toBe("步骤 02");
+    expect(projectStudioStepLabel("render", "zh")).toBe("步骤 03");
+    expect(projectStudioStepLabel("script", "en")).toBe("Step 01");
+    expect(projectStudioStepLabel("storyboard", "en")).toBe("Step 02");
+    expect(projectStudioStepLabel("render", "en")).toBe("Step 03");
+  });
+
   it("renders script generation controls inside step 02 asset prep", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="create" />);
 
@@ -651,6 +662,7 @@ describe("App", () => {
     expect(markup).toContain("No reference");
     expect(markup).toContain("Viral remix");
     expect(markup).toContain("Inspiration template");
+    expect(markup).not.toContain("Step 02");
     expect(markup).not.toContain("Reference video");
     expect(markup).not.toContain("Viral template");
     expect(markup).not.toContain("Agentic");
@@ -754,6 +766,12 @@ describe("App", () => {
     expect(markup).toContain("Generate audio");
     expect(markup).toContain("Watermark");
     expect(markup).toContain("Seed");
+  });
+
+  it("keeps completed video generation on the render page instead of auto-opening smart edit", () => {
+    const source = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
+    expect(source).not.toContain("navigateToEdit");
   });
 
   it("does not render per-scene video previews in the render panel", () => {
@@ -6808,6 +6826,24 @@ Second imported caption`,
     );
     expect(styles).toMatch(
       /\.asset-import-dialog\s*\{[^}]*width:\s*min\(540px,\s*calc\(100vw - 40px\)\);[^}]*max-height:\s*min\(680px,\s*calc\(100dvh - 40px\)\);[^}]*margin:\s*auto;[^}]*overflow:\s*auto;/s,
+    );
+  });
+
+  it("keeps the external stock search dialog centered in the viewport", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    const source = readFileSync(
+      new URL("../features/assets/AssetsPanel.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(styles).toMatch(
+      /\.external-search-backdrop\s*\{[^}]*top:\s*0;[^}]*left:\s*0;[^}]*display:\s*flex;[^}]*width:\s*100vw;[^}]*height:\s*100dvh;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s,
+    );
+    expect(styles).toMatch(
+      /\.external-search-dialog\s*\{[^}]*width:\s*min\(1120px,\s*calc\(100vw - 40px\)\);[^}]*height:\s*min\(780px,\s*calc\(100dvh - 40px\)\);[^}]*margin:\s*auto;/s,
+    );
+    expect(source).toMatch(
+      /isExternalSearchOpen\s*\?\s*renderPreviewOverlay\(\s*<div className="asset-import-backdrop external-search-backdrop"/s,
     );
   });
 

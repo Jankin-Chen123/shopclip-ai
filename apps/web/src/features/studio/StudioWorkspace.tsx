@@ -19,9 +19,11 @@ import { StatusPill } from "../../components/ui/StatusPill";
 import type { AppCopy } from "../../app/i18n";
 import type { AssetRecallCandidate } from "../../lib/api";
 
+type StudioWorkspaceCopy = Omit<AppCopy["studio"], "step"> & { step: string };
+
 interface StudioWorkspaceProps {
   assets: AssetMetadata[];
-  copy: AppCopy["studio"];
+  copy: StudioWorkspaceCopy;
   dirtySceneIds: Set<string>;
   isBusy: boolean;
   onApplySuggestion: (suggestionId: string) => void;

@@ -22,11 +22,26 @@ const shouldForceMockProviders = (): boolean => process.env.SHOPCLIP_FORCE_MOCK_
 
 const storyboardImageProviderTimeoutMs = (): number => {
   const configured = Number.parseInt(process.env.STORYBOARD_IMAGE_PROVIDER_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(configured) && configured > 0 ? configured : 10_000;
+  return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
 };
 
 const createStoryboardImageTimeoutError = (timeoutMs: number): Error =>
   new Error(`Storyboard image provider timed out after ${timeoutMs}ms.`);
+
+const providerErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+const isRecoverableStoryboardImageProviderError = (error: unknown): boolean => {
+  const message = providerErrorMessage(error).toLowerCase();
+  return (
+    message.includes("http 429") ||
+    message.includes("setlimitexceeded") ||
+    message.includes("rate limit") ||
+    message.includes("quota") ||
+    message.includes("inference limit") ||
+    message.includes("model service has been paused")
+  );
+};
 
 const withStoryboardImageTimeout = async (
   imageUrlPromise: Promise<string>,
@@ -124,6 +139,8 @@ export const generateStoryboardSceneImageUrl = async (
     return createStoryboardFallbackImageUrl(project, scene);
   }
 
+  const timeoutMs = storyboardImageProviderTimeoutMs();
+  const startedAt = Date.now();
   const timedResult = await withStoryboardImageTimeout(
     generateStoryboardSceneImageUrlWithoutTimeout(
       project,
@@ -132,16 +149,21 @@ export const generateStoryboardSceneImageUrl = async (
       assets,
       videoFrameExtractor,
     ),
-    storyboardImageProviderTimeoutMs(),
+    timeoutMs,
   );
 
   if (timedResult.kind === "ready") {
+    console.info("[storyboard] image provider completed.", {
+      durationMs: Date.now() - startedAt,
+      sceneId: scene.id,
+    });
     return timedResult.imageUrl;
   }
 
   console.warn("[storyboard] image generation timed out; using deterministic fallback.", {
     error: timedResult.error.message,
     sceneId: scene.id,
+    timeoutMs,
   });
   return createStoryboardFallbackImageUrl(project, scene);
 };
@@ -216,6 +238,13 @@ const generateStoryboardSceneImageUrlWithoutTimeout = async (
       }
     }
   } catch (error) {
+    if (isRecoverableStoryboardImageProviderError(error)) {
+      console.warn("[storyboard] image provider capacity error; using deterministic fallback.", {
+        error: providerErrorMessage(error),
+        sceneId: scene.id,
+      });
+      return createStoryboardFallbackImageUrl(project, scene);
+    }
     if (referenceImageUrls.length > 0 && !canUseStoryboardFallbackImage()) {
       const retried = await generateInspiration({
         assetType: "image",

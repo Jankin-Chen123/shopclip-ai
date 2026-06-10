@@ -34,6 +34,7 @@ const textProviderTimeoutFallback = (timeoutMs: number): ScriptTextProviderResul
 const withTextProviderTimeout = async (
   providerResult: MaybePromise<ScriptTextProviderResult>,
   timeoutMs: number | undefined,
+  onTimeout?: () => void,
 ): Promise<ScriptTextProviderResult> => {
   if (!timeoutMs || timeoutMs <= 0) {
     return providerResult;
@@ -50,6 +51,7 @@ const withTextProviderTimeout = async (
   const timeoutResult = new Promise<ScriptTextProviderResult>((resolve) => {
     timeoutId = setTimeout(() => {
       timedOut = true;
+      onTimeout?.();
       resolve(textProviderTimeoutFallback(timeoutMs));
     }, timeoutMs);
   });
@@ -72,12 +74,14 @@ export const buildStructuredScriptFromTextProvider = async ({
   generateFallbackScriptForProject,
   structureModelScriptForProject,
   textProviderTimeoutMs,
+  onTextProviderTimeout,
 }: {
   project: ProjectSnapshot;
   request: ScriptGenerationRequest;
   assets: AssetMetadata[];
   promptContext: ScriptPromptContext;
   textProviderTimeoutMs?: number;
+  onTextProviderTimeout?: () => void;
   rewriteScript: (
     project: ProjectSnapshot,
     request: ScriptGenerationRequest,
@@ -97,6 +101,7 @@ export const buildStructuredScriptFromTextProvider = async ({
   const textProviderResult = await withTextProviderTimeout(
     rewriteScript(project, request, assets, promptContext),
     textProviderTimeoutMs,
+    onTextProviderTimeout,
   );
   if (textProviderResult.fallback.used) {
     return {

@@ -176,6 +176,74 @@ describe("createArkVisionUnderstandingProvider", () => {
     });
   });
 
+  it("uses image frames instead of video input for image slice understanding", async () => {
+    process.env.VISION_PROVIDER_MODE = "ark";
+    process.env.ARK_API_KEY = "test-key";
+    process.env.ARK_API_BASE_URL = "https://ark.test/api/v3";
+    process.env.AI_VISION_MODEL_ID = "ep-vision-test";
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            output_text: JSON.stringify({
+              summary: "Close-up image slice shows the product clearly.",
+              ocrText: "",
+              shotType: "close_up",
+              cameraMovement: "static",
+              composition: "Product centered.",
+              transition: "hard_cut",
+              mood: "practical",
+              action: "static product detail",
+              keyElements: ["product"],
+              productVisibility: "clear",
+              visibleProductParts: ["main body"],
+              suitableSceneRoles: ["demo"],
+              qualitySignals: {
+                sharpness: 0.9,
+                stability: 1,
+                productVisibility: "clear",
+                usableForAd: true,
+              },
+            }),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createArkVisionUnderstandingProvider();
+    await provider.understandSlice({
+      asset: {
+        ...baseAsset,
+        id: "asset_image_slice",
+        mimeType: "image/jpeg",
+        name: "Cat packshot.jpg",
+        type: "image",
+        url: "https://storage.example.test/cat-packshot.jpg?sign=read",
+      },
+      audio: { asrSummary: "OCR-first text extraction; ASR disabled.", transcript: "" },
+      endSecond: 1,
+      frameKeys: ["https://storage.example.test/cat-packshot.jpg?sign=read"],
+      frames: [
+        {
+          key: "https://storage.example.test/cat-packshot.jpg?sign=read",
+          second: 0,
+        },
+      ],
+      index: 0,
+      sliceId: "slice_image_1",
+      startSecond: 0,
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      input: Array<{ content: Array<{ image_url?: string; type?: string; video_url?: string }> }>;
+    };
+    const content = body.input[1]?.content ?? [];
+    expect(content.some((item) => item.type === "input_video")).toBe(false);
+    expect(content.some((item) => item.type === "input_image")).toBe(true);
+  });
+
   it("enriches slice roles from OCR subtitles and time-position cues", async () => {
     process.env.VISION_PROVIDER_MODE = "ark";
     process.env.ARK_API_KEY = "test-key";
