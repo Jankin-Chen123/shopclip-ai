@@ -38,6 +38,17 @@
   - `corepack pnpm --filter @shopclip/web lint`: passed.
   - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-DykKICBL.js` at 607.73 kB minified.
 
+## 2026-06-10 Project Portfolio Card Layout Fix
+
+- Removed the unused project portfolio search field from `apps/web/src/features/projects/ProjectWorkspace.tsx`.
+- Wrapped the project card grid and empty state in the existing `.project-portfolio-card` shell so the project section matches the large-card treatment used by the asset library.
+- Updated the project-page render test to assert the card shell exists and the search placeholder is no longer rendered.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx`: passed, 20 files and 318 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck`: passed.
+  - `corepack pnpm --filter @shopclip/web lint`: passed.
+  - `corepack pnpm build`: passed; Vite still reports the existing large client chunk warning for `assets/index-scIBsRYi.js` at 607.62 kB minified.
+
 ## Current Source-Of-Truth Snapshot
 
 - Latest deployed optimization branch: `codex/shopclip-optimization-cleanup`.

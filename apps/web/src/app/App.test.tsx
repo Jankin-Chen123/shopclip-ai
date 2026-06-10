@@ -447,7 +447,8 @@ describe("App", () => {
     expect(markup).not.toContain("concept-wave");
     expect(markup).not.toContain("creation-assistant");
     expect(markup).toContain("Project portfolio");
-    expect(markup).toContain("Search product name or brand");
+    expect(markup).toContain("project-portfolio-card");
+    expect(markup).not.toContain("Search product name or brand");
   });
 
   it("omits standalone section title bars from asset and inspiration workspaces", () => {

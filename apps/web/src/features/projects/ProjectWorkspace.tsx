@@ -389,69 +389,67 @@ export const ProjectWorkspace = ({
             {error}
           </p>
         ) : null}
-        <label className="project-search">
-          <span>{text.searchPlaceholder}</span>
-          <input placeholder={text.searchPlaceholder} type="search" />
-        </label>
-        {projectHistory.length > 0 ? (
-          <div className="project-card-grid">
-            {projectHistory.map((historyProject, index) => {
-              const coverUrl = getProjectCoverUrl(historyProject);
-              const deleteLabel =
-                language === "zh"
-                  ? `\u5220\u9664\u9879\u76ee ${historyProject.title}`
-                  : `Delete project ${historyProject.title}`;
-              return (
-                <article className="project-card-shell" key={historyProject.id}>
-                  <button
-                    aria-label={historyProject.title}
-                    className="project-card"
-                    disabled={disabled || isHistoryLoading}
-                    onClick={() => onLoadProject(historyProject.id)}
-                    type="button"
-                  >
-                    <span
-                      className={getProjectImageClass(index)}
-                      aria-hidden={coverUrl ? undefined : "true"}
+        <div className="project-portfolio-card">
+          {projectHistory.length > 0 ? (
+            <div className="project-card-grid">
+              {projectHistory.map((historyProject, index) => {
+                const coverUrl = getProjectCoverUrl(historyProject);
+                const deleteLabel =
+                  language === "zh"
+                    ? `\u5220\u9664\u9879\u76ee ${historyProject.title}`
+                    : `Delete project ${historyProject.title}`;
+                return (
+                  <article className="project-card-shell" key={historyProject.id}>
+                    <button
+                      aria-label={historyProject.title}
+                      className="project-card"
+                      disabled={disabled || isHistoryLoading}
+                      onClick={() => onLoadProject(historyProject.id)}
+                      type="button"
                     >
-                      {coverUrl ? <img alt="" src={coverUrl} /> : null}
-                    </span>
-                    <span className="project-card-body">
-                      <span className="project-card-title">
-                        <strong>{historyProject.title}</strong>
-                        <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
-                          {historyProject.status}
-                        </StatusPill>
+                      <span
+                        className={getProjectImageClass(index)}
+                        aria-hidden={coverUrl ? undefined : "true"}
+                      >
+                        {coverUrl ? <img alt="" src={coverUrl} /> : null}
                       </span>
-                      <span className="project-card-product">{historyProject.productName}</span>
-                      <span className="project-card-divider" />
-                      <span className="project-card-stats">
-                        <span>{plural(historyProject.assetCount, "assets")}</span>
-                        <span>{historyProject.sceneCount > 0 ? "1 script" : "0 scripts"}</span>
-                        <span>{historyProject.status === "completed" ? "1 video" : "0 videos"}</span>
+                      <span className="project-card-body">
+                        <span className="project-card-title">
+                          <strong>{historyProject.title}</strong>
+                          <StatusPill tone={historyProject.status === "completed" ? "success" : "info"}>
+                            {historyProject.status}
+                          </StatusPill>
+                        </span>
+                        <span className="project-card-product">{historyProject.productName}</span>
+                        <span className="project-card-divider" />
+                        <span className="project-card-stats">
+                          <span>{plural(historyProject.assetCount, "assets")}</span>
+                          <span>{historyProject.sceneCount > 0 ? "1 script" : "0 scripts"}</span>
+                          <span>{historyProject.status === "completed" ? "1 video" : "0 videos"}</span>
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                  <Button
-                    aria-label={deleteLabel}
-                    className="project-card-delete project-card-delete-project"
-                    disabled={disabled || isHistoryLoading}
-                    icon={<Trash2 size={16} />}
-                    onClick={() => onDeleteProject(historyProject.id)}
-                    variant="danger"
-                  >
-                    <span className="sr-only">{language === "zh" ? "\u5220\u9664\u9879\u76ee" : "Delete project"}</span>
-                  </Button>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="project-empty-state">
-            <strong>{isHistoryLoading ? text.loading : text.emptyTitle}</strong>
-            <p>{text.emptyBody}</p>
-          </div>
-        )}
+                    </button>
+                    <Button
+                      aria-label={deleteLabel}
+                      className="project-card-delete project-card-delete-project"
+                      disabled={disabled || isHistoryLoading}
+                      icon={<Trash2 size={16} />}
+                      onClick={() => onDeleteProject(historyProject.id)}
+                      variant="danger"
+                    >
+                      <span className="sr-only">{language === "zh" ? "\u5220\u9664\u9879\u76ee" : "Delete project"}</span>
+                    </Button>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="project-empty-state">
+              <strong>{isHistoryLoading ? text.loading : text.emptyTitle}</strong>
+              <p>{text.emptyBody}</p>
+            </div>
+          )}
+        </div>
       </section>
     );
   }
