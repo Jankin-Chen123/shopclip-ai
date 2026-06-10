@@ -106,3 +106,17 @@
   - `corepack pnpm --filter @shopclip/web typecheck` passed.
   - `corepack pnpm --filter @shopclip/web build` passed with the existing Vite chunk-size warning.
   - Playwright local browser check on `http://localhost:5175` dragged the trigger to left/top and right/bottom viewport edges and confirmed the popover stayed visible.
+
+## 2026-06-10 Project Card Intro And Delete Cleanup
+
+- Scope:
+  - Removes the project portfolio introduction copy under the section title.
+  - Removes the delete button from project list cards.
+- Fix:
+  - Stopped rendering the portfolio subtitle in `ProjectWorkspace`.
+  - Removed the per-card project delete button and its dedicated card-delete CSS.
+  - Kept the project detail delete action unchanged.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx` passed with 167 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web build` passed with the existing Vite chunk-size warning.

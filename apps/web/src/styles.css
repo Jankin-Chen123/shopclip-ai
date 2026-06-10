@@ -7766,46 +7766,6 @@ textarea {
   transform: translateY(-2px);
 }
 
-.project-card-delete.project-card-delete-project {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-  width: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  height: 40px;
-  aspect-ratio: 1;
-  padding: 0;
-  border-color: rgba(248, 113, 113, 0.68);
-  background: #be123c;
-  opacity: 1;
-  transform: translateY(0);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36);
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    transform 160ms ease;
-}
-
-.project-card-shell:hover .project-card-delete-project,
-.project-card-shell:focus-within .project-card-delete-project {
-  opacity: 1;
-}
-
-.project-card-delete-project:hover,
-.project-card-delete-project:focus-visible {
-  border-color: rgba(248, 113, 113, 0.86);
-  background: #e11d48;
-  transform: translateY(-1px);
-}
-
-@media (hover: none), (pointer: coarse) {
-  .project-card-delete-project {
-    opacity: 1;
-  }
-}
-
 .project-card-media {
   display: block;
   min-height: 132px;

@@ -56,7 +56,6 @@ const getText = (language: Language) =>
   language === "zh"
     ? {
         portfolioTitle: "项目",
-        portfolioSubtitle: "每张卡片代表一个商品项目，进入后管理素材、剧本和视频。",
         openProject: "打开项目工作区",
         createProject: "新建项目",
         searchPlaceholder: "搜索产品名称或品牌",
@@ -85,8 +84,6 @@ const getText = (language: Language) =>
       }
     : {
         portfolioTitle: "Project portfolio",
-        portfolioSubtitle:
-          "Each card represents one product project with its materials, scripts, and videos.",
         openProject: "Open project workspace",
         createProject: "Create project",
         searchPlaceholder: "Search product name or brand",
@@ -374,7 +371,6 @@ export const ProjectWorkspace = ({
           <div className="project-portfolio-heading">
             <div>
               <h1 id="project-portfolio-title">{text.portfolioTitle}</h1>
-              <p>{text.portfolioSubtitle}</p>
             </div>
             <Button
               disabled={disabled}
@@ -394,10 +390,6 @@ export const ProjectWorkspace = ({
             <div className="project-card-grid">
               {projectHistory.map((historyProject, index) => {
                 const coverUrl = getProjectCoverUrl(historyProject);
-                const deleteLabel =
-                  language === "zh"
-                    ? `\u5220\u9664\u9879\u76ee ${historyProject.title}`
-                    : `Delete project ${historyProject.title}`;
                 return (
                   <article className="project-card-shell" key={historyProject.id}>
                     <button
@@ -429,16 +421,6 @@ export const ProjectWorkspace = ({
                         </span>
                       </span>
                     </button>
-                    <Button
-                      aria-label={deleteLabel}
-                      className="project-card-delete project-card-delete-project"
-                      disabled={disabled || isHistoryLoading}
-                      icon={<Trash2 size={16} />}
-                      onClick={() => onDeleteProject(historyProject.id)}
-                      variant="danger"
-                    >
-                      <span className="sr-only">{language === "zh" ? "\u5220\u9664\u9879\u76ee" : "Delete project"}</span>
-                    </Button>
                   </article>
                 );
               })}

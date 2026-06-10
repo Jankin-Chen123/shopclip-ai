@@ -261,6 +261,10 @@ describe("App", () => {
     expect(markup).toContain("Inspiration");
     expect(markup).toContain("Project");
     expect(markup).toContain("Project portfolio");
+    expect(markup).not.toContain(
+      "Each card represents one product project with its materials, scripts, and videos.",
+    );
+    expect(markup).not.toContain("project-card-delete-project");
     expect(markup).not.toContain("Open project workspace");
     expect(markup).not.toContain("page-card");
     expect(markup).not.toContain("page-hero");
@@ -456,6 +460,10 @@ describe("App", () => {
     expect(markup).not.toContain("creation-assistant");
     expect(markup).toContain("Project portfolio");
     expect(markup).toContain("project-portfolio-card");
+    expect(markup).not.toContain(
+      "Each card represents one product project with its materials, scripts, and videos.",
+    );
+    expect(markup).not.toContain("project-card-delete-project");
     expect(markup).not.toContain("Search product name or brand");
   });
 
