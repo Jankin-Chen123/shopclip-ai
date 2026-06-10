@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectSnapshot } from "../../modules/projects/projectStore.js";
 import {
+  createQueuedSeedanceRenderTask,
   createSeedanceRenderProvider,
   renderWithConfiguredVideoProvider,
 } from "./seedanceRenderer.js";
@@ -170,6 +171,23 @@ describe("Seedance renderer provider", () => {
       },
     });
     expect(requestBody.content).toHaveLength(2);
+  });
+
+  it("keeps the selected script title on queued Seedance render tasks", () => {
+    process.env.VIDEO_RENDER_PROVIDER_MODE = "seedance";
+    process.env.AI_VIDEO_API_KEY = "video-key";
+
+    const result = createQueuedSeedanceRenderTask(project, {
+      displayName: "高转化水杯短视频脚本",
+      mediaSettings: {
+        ttsVoice: "clear-host",
+        subtitleStyle: "clean-lower-third",
+        subtitlesEnabled: true,
+        bgmTrack: "creator-pop",
+      },
+    });
+
+    expect(result.renderTask.displayName).toBe("高转化水杯短视频脚本");
   });
 
   it("can submit reference-image role content when explicitly configured", async () => {

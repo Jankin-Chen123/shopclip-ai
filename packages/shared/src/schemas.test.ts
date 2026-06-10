@@ -175,6 +175,14 @@ describe("shared contract schemas", () => {
     expect(smartEditRefreshRequest.data?.videoSettings.generateAudio).toBe(true);
   });
 
+  it("accepts generated video display names on render requests", () => {
+    const renderRequest = RenderRequestSchema.parse({
+      displayName: "高转化水杯短视频脚本",
+    });
+
+    expect(renderRequest.displayName).toBe("高转化水杯短视频脚本");
+  });
+
   it("validates real smart edit requests, plans, and results", () => {
     const request = SmartEditRequestSchema.safeParse({
       locale: "zh-CN",

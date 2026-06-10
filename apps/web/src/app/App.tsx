@@ -94,6 +94,7 @@ import {
   type MediaSettings,
   type ProjectSummary,
   type ProjectSnapshot,
+  type RenderRequest,
   type RenderSnapshot,
   type VideoGenerationSettings,
 } from "../lib/api";
@@ -234,6 +235,33 @@ export {
 } from "./AppSetupUtils";
 
 export const hasUsableStockProviderCredential = hasSearchableStockProviderCredential;
+
+const resolveScriptDisplayName = (
+  selectedScript?: Pick<ScriptResult, "displayName" | "hook">,
+): string | undefined => {
+  const displayName = selectedScript?.displayName?.trim();
+  if (displayName) {
+    return displayName;
+  }
+  const hook = selectedScript?.hook?.trim();
+  return hook || undefined;
+};
+
+export const createRenderRequestPayload = (
+  mediaSettings: MediaSettings,
+  videoSettings: VideoGenerationSettings,
+  simulateFailure: boolean,
+  selectedScript?: Pick<ScriptResult, "displayName" | "hook">,
+  existingDisplayName?: string,
+): RenderRequest => {
+  const displayName = existingDisplayName?.trim() || resolveScriptDisplayName(selectedScript);
+  return {
+    mediaSettings,
+    videoSettings,
+    simulateFailure,
+    ...(displayName ? { displayName } : {}),
+  };
+};
 
 type BusyState =
   | "idle"
@@ -1805,11 +1833,10 @@ export const App = ({
       "render",
       async () => {
         await persistDirtyScenesForRender();
-        const render = await startRender(project.id, {
-          mediaSettings,
-          videoSettings,
-          simulateFailure: forceRenderFailure,
-        });
+        const render = await startRender(
+          project.id,
+          createRenderRequestPayload(mediaSettings, videoSettings, forceRenderFailure, script),
+        );
         setDashboard(undefined);
         setExportResult(undefined);
         setRenderTask(render.renderTask);
@@ -1840,11 +1867,16 @@ export const App = ({
       "render",
       async () => {
         await persistDirtyScenesForRender();
-        const render = await retryRenderTask(renderTask.id, {
-          mediaSettings,
-          videoSettings,
-          simulateFailure: false,
-        });
+        const render = await retryRenderTask(
+          renderTask.id,
+          createRenderRequestPayload(
+            mediaSettings,
+            videoSettings,
+            false,
+            script,
+            renderTask.displayName,
+          ),
+        );
         setDashboard(undefined);
         setExportResult(undefined);
         setForceRenderFailure(false);
@@ -2393,49 +2425,53 @@ export const App = ({
                     </div>
                     {project.scripts.length > 0 ? (
                       <div className="project-studio-script-grid">
-                        {project.scripts.map((projectScript, index) => (
-                          <article
-                            aria-label={
-                              language === "zh"
-                                ? `\u9884\u89c8\u5267\u672c ${index + 1}: ${projectScript.hook}`
-                                : `Preview script ${index + 1}: ${projectScript.hook}`
-                            }
-                            className={`project-studio-script-card ${
-                              projectStudioPreviewScriptId === projectScript.id ? "active" : ""
-                            }`.trim()}
-                            key={projectScript.id}
-                            onClick={() => setProjectStudioPreviewScriptId(projectScript.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                setProjectStudioPreviewScriptId(projectScript.id);
+                        {project.scripts.map((projectScript, index) => {
+                          const projectScriptTitle =
+                            projectScript.displayName ?? projectScript.hook;
+                          return (
+                            <article
+                              aria-label={
+                                language === "zh"
+                                  ? `\u9884\u89c8\u5267\u672c ${index + 1}: ${projectScriptTitle}`
+                                  : `Preview script ${index + 1}: ${projectScriptTitle}`
                               }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                          >
-                            <div>
-                              <span>
-                                {language === "zh"
-                                  ? `\u5267\u672c ${index + 1}`
-                                  : `Script ${index + 1}`}
-                              </span>
-                              <h4>{projectScript.hook}</h4>
-                              <p>{projectScript.scenes.length} {language === "zh" ? "\u4e2a\u5206\u955c" : "scenes"}</p>
-                            </div>
-                            <Button
-                              disabled={busyState !== "idle"}
-                              icon={<ListVideo size={18} />}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleSelectProjectScriptForStudio(projectScript);
+                              className={`project-studio-script-card ${
+                                projectStudioPreviewScriptId === projectScript.id ? "active" : ""
+                              }`.trim()}
+                              key={projectScript.id}
+                              onClick={() => setProjectStudioPreviewScriptId(projectScript.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setProjectStudioPreviewScriptId(projectScript.id);
+                                }
                               }}
-                              variant="primary"
+                              role="button"
+                              tabIndex={0}
                             >
-                              {language === "zh" ? "\u751f\u6210\u5206\u955c" : "Generate storyboard"}
-                            </Button>
-                          </article>
-                        ))}
+                              <div>
+                                <span>
+                                  {language === "zh"
+                                    ? `\u5267\u672c ${index + 1}`
+                                    : `Script ${index + 1}`}
+                                </span>
+                                <h4>{projectScriptTitle}</h4>
+                                <p>{projectScript.scenes.length} {language === "zh" ? "\u4e2a\u5206\u955c" : "scenes"}</p>
+                              </div>
+                              <Button
+                                disabled={busyState !== "idle"}
+                                icon={<ListVideo size={18} />}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleSelectProjectScriptForStudio(projectScript);
+                                }}
+                                variant="primary"
+                              >
+                                {language === "zh" ? "\u751f\u6210\u5206\u955c" : "Generate storyboard"}
+                              </Button>
+                            </article>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="project-studio-empty">

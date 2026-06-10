@@ -8,6 +8,7 @@ export interface RenderProviderResult {
 }
 
 export interface RenderFallbackOptions {
+  displayName?: string;
   mediaSettings: MediaSettings;
   videoSettings?: VideoGenerationSettings;
   retryOfRenderTaskId?: string;
@@ -79,6 +80,7 @@ export const renderFallbackPreview = (
     return {
       renderTask: {
         status: "failed",
+        displayName: options.displayName,
         progress: 72,
         errorMessage:
           "Simulated renderer failure after media layers were prepared. Retry is available.",
@@ -103,6 +105,7 @@ export const renderFallbackPreview = (
   return {
     renderTask: {
       status: "completed",
+      displayName: options.displayName,
       progress: 100,
       previewUrl: `/demo-exports/${project.id}/preview.mp4?${query}`,
       exportUrl: `/demo-exports/${project.id}/export.mp4?${query}`,

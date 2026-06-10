@@ -902,6 +902,7 @@ export const createQueuedSeedanceRenderTask = (
   return {
     renderTask: {
       status: "queued",
+      displayName: options.displayName,
       progress: 0,
       provider: "volcengine-seedance",
       sceneClips: queuedSceneClips(project),

@@ -102,6 +102,7 @@ import {
 } from "../features/settings/SettingsPanel";
 import {
   App,
+  createRenderRequestPayload,
   createScriptGenerationRequestPayload,
   createAssetPrepSnapshotFromProjectAssets,
   createAssetInputFromFile,
@@ -120,7 +121,7 @@ import {
   selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
 } from "./App";
-import { createNewProjectBrief } from "./AppSetupUtils";
+import { createNewProjectBrief, defaultMediaSettings } from "./AppSetupUtils";
 import { copy } from "./i18n";
 import { listReferenceVideos, regenerateScene, resolveApiDownloadUrl } from "../lib/api";
 import { createExportDownloadFilename, triggerBrowserDownload } from "../lib/download";
@@ -510,6 +511,33 @@ describe("App", () => {
 
   it("generates audio by default for model-rendered videos", () => {
     expect(defaultVideoSettings.generateAudio).toBe(true);
+  });
+
+  it("uses the selected script title as the generated video title", () => {
+    const request = createRenderRequestPayload(
+      defaultMediaSettings,
+      defaultVideoSettings,
+      false,
+      {
+        hook: "Hook title",
+        displayName: "高转化水杯短视频脚本",
+      },
+    );
+
+    expect(request.displayName).toBe("高转化水杯短视频脚本");
+  });
+
+  it("falls back to the selected script hook when no custom script title exists", () => {
+    const request = createRenderRequestPayload(
+      defaultMediaSettings,
+      defaultVideoSettings,
+      false,
+      {
+        hook: "Hook title",
+      },
+    );
+
+    expect(request.displayName).toBe("Hook title");
   });
 
   it("renders concept-inspired creation workspace chrome", () => {

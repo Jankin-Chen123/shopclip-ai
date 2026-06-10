@@ -603,6 +603,7 @@ export const VideoGenerationSettingsSchema = z.object({
 });
 
 export const RenderRequestSchema = z.object({
+  displayName: z.string().trim().min(1).max(80).optional(),
   mediaSettings: MediaSettingsSchema.default({
     bgmTrack: "creator-pop",
     subtitleStyle: "clean-lower-third",
