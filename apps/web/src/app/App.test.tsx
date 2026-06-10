@@ -234,9 +234,17 @@ describe("App", () => {
     expect(App).toBeTypeOf("function");
   });
 
+  it("defaults the workspace interface to Chinese", () => {
+    const markup = renderToStaticMarkup(<App />);
+
+    expect(markup).toContain("项目指挥中心");
+    expect(markup).not.toContain("Project portfolio");
+  });
+
   it("renders the P1 workspace flow landmarks", () => {
     const markup = renderToStaticMarkup(
       <App
+        initialLanguage="en"
         initialProjectHistory={[
           makeProjectSummary({
             id: "project-history-2",
@@ -449,6 +457,13 @@ describe("App", () => {
     expect(markup).toContain("Project portfolio");
     expect(markup).toContain("project-portfolio-card");
     expect(markup).not.toContain("Search product name or brand");
+  });
+
+  it("keeps the project section outer gap aligned with other workspace sections", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(/\.workspace-main\s*\{[^}]*padding:\s*24px;/s);
+    expect(styles).toMatch(/\.creation-shell-project\s*\{[^}]*padding:\s*0;/s);
   });
 
   it("omits standalone section title bars from asset and inspiration workspaces", () => {
@@ -6711,6 +6726,22 @@ Second imported caption`,
     );
   });
 
+  it("uses the whole import dropzone for file picker clicks and dropped files", () => {
+    const source = readFileSync(
+      new URL("../features/assets/AssetsPanel.tsx", import.meta.url),
+      "utf8",
+    );
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(source).toContain('className="asset-file-picker"');
+    expect(source).toContain("onDragOver={handleFilePickerDragOver}");
+    expect(source).toContain("onDrop={handleFilePickerDrop}");
+    expect(source).toContain('className="asset-file-input"');
+    expect(styles).toMatch(
+      /\.asset-file-input\s*\{[^}]*position:\s*absolute;[^}]*width:\s*1px;[^}]*height:\s*1px;[^}]*clip:\s*rect\(0 0 0 0\);/s,
+    );
+  });
+
   it("uses one import entry for every asset category", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="zh" initialPage="assets" />);
 
@@ -6951,14 +6982,14 @@ Second imported caption`,
     expect(markup).toMatch(
       /<button class="button button-primary" type="button"><span class="button-icon">[\s\S]*?<span>Analyze reference<\/span><\/button>/,
     );
-    expect(markup).toContain("Add to script library");
-    expect(markup).toContain("Delete");
-    expect(markup).toContain("Select Reference clip");
-    expect(markup).toContain("Delete selected");
+    expect(markup).toContain("Ready to submit");
+    expect(markup).toContain("Breakdown history");
+    expect(markup).not.toContain("Add to script library");
+    expect(markup).not.toContain("Delete selected");
     expect(markup).not.toContain("Create template");
   });
 
-  it("renders reference breakdown history with batch selection controls", () => {
+  it("keeps reference breakdown history behind a dedicated page entry point", () => {
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
         disabled={false}
@@ -6977,9 +7008,10 @@ Second imported caption`,
       />,
     );
 
-    expect(markup).toContain("Select Cup hook reference");
-    expect(markup).toContain("Select Bottle demo reference");
-    expect(markup).toContain("Delete selected");
+    expect(markup).toContain("Breakdown history");
+    expect(markup).not.toContain("Select Cup hook reference");
+    expect(markup).not.toContain("Select Bottle demo reference");
+    expect(markup).not.toContain("Delete selected");
     expect(markup).not.toContain("Create template");
   });
 
@@ -6987,6 +7019,7 @@ Second imported caption`,
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
         disabled={false}
+        initialHistoryPageOpen
         isLoading={false}
         language="en"
         onAnalyzeReference={() => undefined}
@@ -7060,6 +7093,7 @@ Second imported caption`,
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
         disabled={false}
+        initialHistoryPageOpen
         isLoading={false}
         language="en"
         onAnalyzeReference={() => undefined}
@@ -7109,7 +7143,7 @@ Second imported caption`,
     expect(markup).toContain("Progress");
     expect(markup).toContain("Reading video");
     expect(markup).toContain("1 processing");
-    expect(markup).toContain("Processing");
+    expect(markup).not.toContain("Processing</span>");
     expect(markup).not.toContain("Download &amp; store");
     expect(markup).not.toContain("analyzing");
   });
@@ -7118,6 +7152,7 @@ Second imported caption`,
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
         disabled={false}
+        initialHistoryPageOpen
         isLoading={false}
         language="en"
         onAnalyzeReference={() => undefined}
@@ -7135,14 +7170,13 @@ Second imported caption`,
     );
 
     expect(markup).not.toContain("Reference breakdown is running");
-    expect(markup).toContain("Some videos stopped updating");
-    expect(markup).toContain("1 need retry");
+    expect(markup).toContain("These videos have not updated for more than 10 minutes");
     expect(markup).toContain("Needs retry");
     expect(markup).toContain("Retry breakdown");
     expect(markup).not.toContain("stalled");
   });
 
-  it("explains why reference breakdown submit is disabled before required fields are complete", () => {
+  it("does not show missing reference breakdown fields before the user submits", () => {
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
         disabled={false}
@@ -7164,17 +7198,16 @@ Second imported caption`,
       />,
     );
 
-    expect(markup).toContain("Complete required fields");
-    expect(markup).toContain("source video");
-    expect(markup).toContain("reference title");
-    expect(markup).toContain("category");
-    expect(markup).toContain("disabled");
+    expect(markup).not.toContain("Complete required fields");
+    expect(markup).not.toContain("Add source video");
+    expect(markup).not.toContain("disabled");
   });
 
   it("surfaces failed reference breakdowns with retry guidance", () => {
     const markup = renderToStaticMarkup(
       <ReferenceLibraryPanel
         disabled={false}
+        initialHistoryPageOpen
         isLoading={false}
         language="en"
         onAnalyzeReference={() => undefined}
@@ -7191,10 +7224,7 @@ Second imported caption`,
       />,
     );
 
-    expect(markup).toContain("Some videos need a new link");
-    expect(markup).toContain("Use a direct link that still plays");
     expect(markup).toContain("This video link cannot be read now");
-    expect(markup).toContain("1 need attention");
     expect(markup).toContain("Needs new link");
     expect(markup).toContain("Retry breakdown");
     expect(markup).not.toContain("HTTP 403");

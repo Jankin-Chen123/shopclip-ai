@@ -3120,6 +3120,7 @@ textarea {
 }
 
 .asset-file-picker {
+  position: relative;
   display: grid;
   gap: 10px;
   place-items: center;
@@ -3132,8 +3133,19 @@ textarea {
   cursor: pointer;
 }
 
-.asset-file-picker input {
-  width: min(100%, 320px);
+.asset-file-picker:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.72);
+  outline-offset: 3px;
+}
+
+.asset-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .asset-selected-files {
@@ -4148,6 +4160,33 @@ textarea {
 .reference-history-accordion {
   display: grid;
   gap: 10px;
+}
+
+.reference-history-page {
+  display: grid;
+  gap: 10px;
+}
+
+.reference-history-page-heading {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.reference-history-page-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.reference-history-page-heading p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .reference-history-toggle {
@@ -7368,7 +7407,6 @@ textarea {
     top: auto;
     right: 12px;
     bottom: 12px;
-    width: min(340px, calc(100vw - 24px));
   }
 
   .background-task-trigger {
@@ -7632,7 +7670,7 @@ textarea {
 }
 
 .creation-shell-project {
-  padding: 24px 28px 40px;
+  padding: 0;
 }
 
 .creation-shell-project .creation-main {
@@ -7728,19 +7766,25 @@ textarea {
   transform: translateY(-2px);
 }
 
-.project-card-delete-project {
+.project-card-delete.project-card-delete-project {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 2;
   width: 40px;
   min-width: 40px;
+  min-height: 40px;
   height: 40px;
+  aspect-ratio: 1;
   padding: 0;
-  opacity: 0;
+  border-color: rgba(248, 113, 113, 0.68);
+  background: #be123c;
+  opacity: 1;
+  transform: translateY(0);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36);
   transition:
-    opacity 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
     transform 160ms ease;
 }
 
@@ -7751,6 +7795,8 @@ textarea {
 
 .project-card-delete-project:hover,
 .project-card-delete-project:focus-visible {
+  border-color: rgba(248, 113, 113, 0.86);
+  background: #e11d48;
   transform: translateY(-1px);
 }
 

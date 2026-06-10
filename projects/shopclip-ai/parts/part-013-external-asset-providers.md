@@ -128,6 +128,11 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - Rewrote the `AssetsPanel` and Settings localized copy to avoid mojibake and keep the search flow readable.
 - Added server-only provider configuration, including `FREESOUND_API_KEY`, to `.env.example`.
 - Wrote verification evidence in `projects/shopclip-ai/evidence/part-013-verification.md`.
+- 2026-06-10 local import UX update:
+  - The import dialog's blue upload zone now accepts dragged files directly.
+  - The native file input is visually hidden so the browser "Choose file" button no longer appears.
+  - Clicking anywhere in the upload zone, or focusing it and pressing Enter/Space, opens the file picker.
+  - Added regression coverage in `apps/web/src/app/App.test.tsx`.
 
 ## Verification Evidence
 
@@ -162,6 +167,8 @@ Add a safe third-party asset source layer so ShopClip AI can search external sto
 - Chinese screenshot: `projects/shopclip-ai/evidence/p1-13-external-search-modal-zh.png`
 - Chinese screenshot: `projects/shopclip-ai/evidence/p1-13-external-asset-import-zh.png`
 - Screenshot: `projects/shopclip-ai/evidence/p1-13-external-asset-import.png`
+- `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx` on 2026-06-10: 20 files / 320 tests passed.
+- `corepack pnpm --filter @shopclip/web typecheck` on 2026-06-10: passed.
 
 ## Verification Plan
 

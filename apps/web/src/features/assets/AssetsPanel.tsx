@@ -1,4 +1,12 @@
-import type { ChangeEvent, FormEvent, KeyboardEvent, MouseEvent, ReactElement, UIEvent } from "react";
+import type {
+  ChangeEvent,
+  DragEvent,
+  FormEvent,
+  KeyboardEvent,
+  MouseEvent,
+  ReactElement,
+  UIEvent,
+} from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AssetMetadata, ViralTemplate } from "@shopclip/shared";
@@ -717,6 +725,25 @@ export const AssetsPanel = ({
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(Array.from(event.target.files ?? []));
+  };
+
+  const handleFilePickerDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+  };
+
+  const handleFilePickerDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    if (droppedFiles.length > 0) {
+      setSelectedFiles(droppedFiles);
+    }
+  };
+
+  const handleFilePickerKeyDown = (event: KeyboardEvent<HTMLLabelElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInputRef.current?.click();
+    }
   };
 
   const closeImportDialog = () => {
@@ -2047,11 +2074,20 @@ export const AssetsPanel = ({
               </button>
             </div>
 
-            <label className="asset-file-picker" htmlFor={fileInputId}>
+            <label
+              className="asset-file-picker"
+              htmlFor={fileInputId}
+              onDragOver={handleFilePickerDragOver}
+              onDrop={handleFilePickerDrop}
+              onKeyDown={handleFilePickerKeyDown}
+              role="button"
+              tabIndex={0}
+            >
               <UploadCloud size={24} aria-hidden="true" />
               <span>{importUi.fileLabel}</span>
               <input
                 accept={supportedUploadAccept}
+                className="asset-file-input"
                 id={fileInputId}
                 multiple
                 onChange={handleFileChange}

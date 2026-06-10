@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { AssetMetadata, ReferenceVideo, ViralTemplate } from "@shopclip/shared";
 import {
+  ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   Clock3,
   Loader2,
   Plus,
@@ -28,6 +28,7 @@ interface ReferenceLibraryPanelProps {
   disabled: boolean;
   error?: string;
   initialDraft?: ReferenceDraft;
+  initialHistoryPageOpen?: boolean;
   isLoading: boolean;
   language: Language;
   onAnalyzeReference: (draft: ReferenceDraft) => void;
@@ -103,6 +104,9 @@ const text = {
     deleteSelected: "Delete selected",
     selectedCount: (count: number) => `${count} selected`,
     selectReference: (title: string) => `Select ${title}`,
+    historyTitle: "Breakdown history",
+    historyButton: "Breakdown history",
+    returnButton: "Back",
     createTemplate: "Create template",
     useReference: "Add to script library",
     selectedReference: "Added to script library",
@@ -160,6 +164,9 @@ const text = {
     deleteSelected: "删除已选",
     selectedCount: (count: number) => `已选 ${count} 条`,
     selectReference: (title: string) => `选择 ${title}`,
+    historyTitle: "历史拆解任务",
+    historyButton: "历史拆解任务",
+    returnButton: "返回",
     createTemplate: "提炼模板",
     useReference: "加入剧本素材库",
     selectedReference: "已加入剧本素材库",
@@ -300,6 +307,7 @@ export const ReferenceLibraryPanel = ({
   disabled,
   error,
   initialDraft,
+  initialHistoryPageOpen = false,
   isLoading,
   language,
   onAnalyzeReference,
@@ -323,7 +331,8 @@ export const ReferenceLibraryPanel = ({
     },
   );
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(new Set());
-  const [isHistoryOpen, setIsHistoryOpen] = useState(true);
+  const [isHistoryPageOpen, setIsHistoryPageOpen] = useState(initialHistoryPageOpen);
+  const [hasAttemptedIncompleteSubmit, setHasAttemptedIncompleteSubmit] = useState(false);
 
   const updateDraft = (field: keyof ReferenceDraft, value: string | undefined) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -342,6 +351,7 @@ export const ReferenceLibraryPanel = ({
     draft.sourceDeclaration.trim() &&
     draft.title.trim() &&
     draft.category.trim();
+  const showMissingSubmitHint = hasAttemptedIncompleteSubmit && !canAnalyze;
   const missingSubmitFields = [
     draft.sourceAssetId || draft.sourceUrl?.trim() ? undefined : copy.missingSource,
     draft.title.trim() ? undefined : copy.missingTitle,
@@ -377,6 +387,118 @@ export const ReferenceLibraryPanel = ({
       return next;
     });
   };
+  const handleSubmitDraft = () => {
+    if (!canAnalyze) {
+      setHasAttemptedIncompleteSubmit(true);
+      return;
+    }
+    setHasAttemptedIncompleteSubmit(false);
+    submitDraft();
+  };
+  const renderHistoryPage = () => (
+    <div className="reference-breakdown-list reference-history-page">
+      <div className="reference-history-page-heading">
+        <div>
+          <h3>{copy.historyTitle}</h3>
+          <p>{copy.status(references.length)}</p>
+        </div>
+      </div>
+      {references.length === 0 ? (
+        <div className="empty-state compact-empty">
+          <strong>{copy.empty}</strong>
+        </div>
+      ) : (
+        <>
+          <div className="reference-bulk-actions">
+            <strong>{copy.selectedCount(selectedCount)}</strong>
+            <Button
+              disabled={disabled || selectedCount === 0}
+              icon={<Trash2 size={18} />}
+              onClick={() => deleteReferences([...selectedReferenceIds])}
+              variant="danger"
+            >
+              {copy.deleteSelected}
+            </Button>
+          </div>
+          {references.map((reference) => {
+            const displayTitle = getReferenceDisplayTitle(reference, copy);
+            const isSelected = selectedReferenceIds.has(reference.id);
+            return (
+              <article className="suggestion-row reference-history-row" key={reference.id}>
+                <button
+                  aria-label={copy.selectReference(displayTitle)}
+                  aria-pressed={isSelected}
+                  className="asset-selection-control reference-selection-control"
+                  disabled={disabled}
+                  onClick={() => toggleReferenceSelection(reference.id)}
+                  type="button"
+                >
+                  {isSelected ? <CheckCircle2 size={16} /> : null}
+                </button>
+                <div>
+                  <h4>{displayTitle}</h4>
+                  <p>{getReferenceSummary(reference, copy)}</p>
+                  <div className="constraint-list">
+                    <StatusPill
+                      tone={
+                        reference.status === "failed" || isStalledReference(reference)
+                          ? "danger"
+                          : "info"
+                      }
+                    >
+                      {getReferenceStatusLabel(reference, copy)}
+                    </StatusPill>
+                    {getReferenceIdeaTags(reference, language, copy).map((tag) => (
+                      <StatusPill key={tag} tone="info">
+                        {tag}
+                      </StatusPill>
+                    ))}
+                  </div>
+                </div>
+                <div className="reference-row-actions">
+                  <Button
+                    disabled={
+                      disabled ||
+                      (reference.status !== "ready" &&
+                        reference.status !== "failed" &&
+                        !isStalledReference(reference))
+                    }
+                    icon={
+                      reference.status === "failed" || isStalledReference(reference) ? (
+                        <RefreshCw size={18} />
+                      ) : (
+                        <Plus size={18} />
+                      )
+                    }
+                    onClick={() =>
+                      reference.status === "failed" || isStalledReference(reference)
+                        ? onAnalyzeReference(createReferenceDraft(reference))
+                        : onUseReference(reference.id)
+                    }
+                  >
+                    {reference.status === "failed" || isStalledReference(reference)
+                      ? copy.retryReference
+                      : selectedReferenceId === reference.id
+                        ? copy.selectedReference
+                        : copy.useReference}
+                  </Button>
+                  <Button
+                    aria-label={`${copy.deleteReference} ${displayTitle}`}
+                    disabled={disabled}
+                    icon={<Trash2 size={18} />}
+                    onClick={() => deleteReferences([reference.id])}
+                    variant="danger"
+                  >
+                    {copy.deleteReference}
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
 
   return (
     <section className="panel reference-library-panel" aria-labelledby="reference-library-title">
@@ -392,8 +514,18 @@ export const ReferenceLibraryPanel = ({
         <StatusPill tone={templates.length ? "success" : "neutral"}>
           {copy.templateStatus(templates.length)}
         </StatusPill>
+        <Button
+          icon={isHistoryPageOpen ? <ArrowLeft size={18} /> : <Clock3 size={18} />}
+          onClick={() => setIsHistoryPageOpen((current) => !current)}
+        >
+          {isHistoryPageOpen ? copy.returnButton : copy.historyButton}
+        </Button>
       </div>
 
+      {isHistoryPageOpen ? (
+        renderHistoryPage()
+      ) : (
+        <>
       <div className="reference-form-grid">
         <label>
           {copy.sourceAsset}
@@ -449,24 +581,24 @@ export const ReferenceLibraryPanel = ({
         />
       </label>
       <Button
-        disabled={disabled || isLoading || !canAnalyze}
+        disabled={disabled || isLoading}
         icon={isLoading ? <Loader2 className="spin" size={18} /> : <WandSparkles size={18} />}
-        onClick={submitDraft}
+        onClick={handleSubmitDraft}
         variant="primary"
       >
         {isLoading ? copy.analyzing : copy.analyze}
       </Button>
-      {!canAnalyze ? (
+      {showMissingSubmitHint ? (
         <div className="reference-submit-hint" role="note">
           <strong>{copy.blockedSubmitTitle}</strong>
           <span>{copy.missingFields(missingSubmitFields.join(", "))}</span>
         </div>
-      ) : (
+      ) : canAnalyze ? (
         <div className="reference-submit-hint ready" role="note">
           <strong>{copy.readyToSubmitTitle}</strong>
           <span>{copy.readyToSubmitBody}</span>
         </div>
-      )}
+      ) : null}
       {error ? (
         <p className="inline-error" role="alert">
           {error}
@@ -538,118 +670,9 @@ export const ReferenceLibraryPanel = ({
         </div>
       ) : null}
 
-      <div className="reference-breakdown-list reference-history-accordion">
-        <button
-          aria-expanded={isHistoryOpen}
-          className="reference-history-toggle"
-          onClick={() => setIsHistoryOpen((current) => !current)}
-          type="button"
-        >
-          <span>
-            <strong>{language === "zh" ? "历史拆解任务" : "Breakdown history"}</strong>
-            <small>{copy.status(references.length)}</small>
-          </span>
-          <ChevronDown
-            aria-hidden="true"
-            className={isHistoryOpen ? "is-open" : undefined}
-            size={18}
-          />
-        </button>
-        {isHistoryOpen && references.length === 0 ? (
-          <div className="empty-state compact-empty">
-            <strong>{copy.empty}</strong>
-          </div>
-        ) : isHistoryOpen ? (
-          <>
-            <div className="reference-bulk-actions">
-              <strong>{copy.selectedCount(selectedCount)}</strong>
-              <Button
-                disabled={disabled || selectedCount === 0}
-                icon={<Trash2 size={18} />}
-                onClick={() => deleteReferences([...selectedReferenceIds])}
-                variant="danger"
-              >
-                {copy.deleteSelected}
-              </Button>
-            </div>
-            {references.map((reference) => {
-              const displayTitle = getReferenceDisplayTitle(reference, copy);
-              const isSelected = selectedReferenceIds.has(reference.id);
-              return (
-                <article className="suggestion-row reference-history-row" key={reference.id}>
-                  <button
-                    aria-label={copy.selectReference(displayTitle)}
-                    aria-pressed={isSelected}
-                    className="asset-selection-control reference-selection-control"
-                    disabled={disabled}
-                    onClick={() => toggleReferenceSelection(reference.id)}
-                    type="button"
-                  >
-                    {isSelected ? <CheckCircle2 size={16} /> : null}
-                  </button>
-                  <div>
-                    <h4>{displayTitle}</h4>
-                    <p>{getReferenceSummary(reference, copy)}</p>
-                    <div className="constraint-list">
-                      <StatusPill
-                        tone={
-                          reference.status === "failed" || isStalledReference(reference)
-                            ? "danger"
-                            : "info"
-                        }
-                      >
-                        {getReferenceStatusLabel(reference, copy)}
-                      </StatusPill>
-                      {getReferenceIdeaTags(reference, language, copy).map((tag) => (
-                        <StatusPill key={tag} tone="info">
-                          {tag}
-                        </StatusPill>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="reference-row-actions">
-                    <Button
-                      disabled={
-                        disabled ||
-                        (reference.status !== "ready" &&
-                          reference.status !== "failed" &&
-                          !isStalledReference(reference))
-                      }
-                      icon={
-                        reference.status === "failed" || isStalledReference(reference) ? (
-                          <RefreshCw size={18} />
-                        ) : (
-                          <Plus size={18} />
-                        )
-                      }
-                      onClick={() =>
-                        reference.status === "failed" || isStalledReference(reference)
-                          ? onAnalyzeReference(createReferenceDraft(reference))
-                          : onUseReference(reference.id)
-                      }
-                    >
-                      {reference.status === "failed" || isStalledReference(reference)
-                        ? copy.retryReference
-                        : selectedReferenceId === reference.id
-                          ? copy.selectedReference
-                          : copy.useReference}
-                    </Button>
-                    <Button
-                      aria-label={`${copy.deleteReference} ${displayTitle}`}
-                      disabled={disabled}
-                      icon={<Trash2 size={18} />}
-                      onClick={() => deleteReferences([reference.id])}
-                      variant="danger"
-                    >
-                      {copy.deleteReference}
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
-          </>
-        ) : null}
-      </div>
+
+        </>
+      )}
     </section>
   );
 };

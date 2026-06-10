@@ -7,12 +7,14 @@ import type {
 import { getPageTransitionDirection, pageFromHash, type PageTransitionDirection } from "./AppSetupUtils";
 import { isLanguage, type Language } from "./i18n";
 
+const defaultLanguage: Language = "zh";
+
 const getStoredLanguage = (): Language => {
   if (typeof window === "undefined") {
-    return "en";
+    return defaultLanguage;
   }
   const storedLanguage = window.localStorage.getItem("shopclip-language");
-  return isLanguage(storedLanguage) ? storedLanguage : "en";
+  return isLanguage(storedLanguage) ? storedLanguage : defaultLanguage;
 };
 
 interface WorkspaceNavigationStateInput {

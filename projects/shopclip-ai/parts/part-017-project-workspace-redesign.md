@@ -67,6 +67,31 @@
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
 
+## 2026-06-10 Default Chinese Language Batch
+
+- Scope:
+  - Changes the workspace default interface language from English to Chinese when no saved browser preference exists.
+  - Keeps explicit `initialLanguage` and saved `shopclip-language` values taking priority.
+- Fix:
+  - Updated `useWorkspaceNavigationState` to fall back to `zh` in browser and SSR/default render paths.
+  - Added an App regression test for the default Chinese workspace interface.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx`
+  - `corepack pnpm --filter @shopclip/web typecheck`
+
+## 2026-06-10 Project Section Spacing Batch
+
+- Scope:
+  - Aligns the project section large card outer gap with the asset library and inspiration sections.
+- Fix:
+  - Set `.creation-shell-project` padding to `0` so `.workspace-main` owns the shared 24px outer page spacing.
+  - Added a regression assertion that `.workspace-main` keeps `padding: 24px` while `.creation-shell-project` does not add a second inner page gap.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/app/App.test.tsx -t "keeps the project section outer gap aligned with other workspace sections"` passed.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web lint` passed.
+  - `corepack pnpm --filter @shopclip/web test src/app/App.test.tsx` still fails in unrelated reference library history page assertions from the existing in-progress `ReferenceLibraryPanel.tsx` changes.
+
 ## 2026-06-10 Background Task Free Drag Batch
 
 - Scope:
