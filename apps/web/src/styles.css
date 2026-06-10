@@ -587,10 +587,7 @@ a {
   z-index: 70;
   top: 18px;
   right: 18px;
-  display: grid;
-  justify-items: end;
-  gap: 8px;
-  width: min(360px, calc(100vw - 36px));
+  width: max-content;
   pointer-events: none;
   user-select: none;
 }
@@ -702,7 +699,11 @@ a {
 }
 
 .background-task-popover {
-  width: 100%;
+  position: absolute;
+  top: var(--background-task-popover-top, 60px);
+  bottom: var(--background-task-popover-bottom, auto);
+  left: var(--background-task-popover-left, 0);
+  width: var(--background-task-popover-width, min(360px, calc(100vw - 16px)));
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;

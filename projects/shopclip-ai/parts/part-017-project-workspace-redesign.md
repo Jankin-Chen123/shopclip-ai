@@ -66,3 +66,18 @@
   - `corepack pnpm --filter @shopclip/web typecheck`
   - `corepack pnpm --filter @shopclip/web build`
   - Note: the production build still emits the existing Vite chunk-size warning for `index-*.js`.
+
+## 2026-06-10 Background Task Free Drag Batch
+
+- Scope:
+  - Makes the background task floating trigger the positioning anchor instead of reserving room for the task popover.
+  - Lets the trigger reach the full viewport edge while the popover adapts around it.
+- Fix:
+  - Clamps drag movement by the trigger button's own dimensions.
+  - Computes popover offset independently so it stays inside the viewport, shifts horizontally near edges, and flips above the trigger near the bottom.
+  - Keeps the popover visually constrained while allowing the trigger itself to sit at `x=0` / `y=0`.
+- Verification:
+  - `corepack pnpm --filter @shopclip/web exec vitest run src/components/layout/AppShell.test.ts` passed with 3 tests.
+  - `corepack pnpm --filter @shopclip/web typecheck` passed.
+  - `corepack pnpm --filter @shopclip/web build` passed with the existing Vite chunk-size warning.
+  - Playwright local browser check on `http://localhost:5175` dragged the trigger to left/top and right/bottom viewport edges and confirmed the popover stayed visible.

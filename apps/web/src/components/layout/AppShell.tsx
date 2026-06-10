@@ -48,6 +48,72 @@ export interface BackgroundTaskItem {
   title: string;
 }
 
+const backgroundTaskAnchorViewportMargin = 0;
+const backgroundTaskPopoverViewportMargin = 8;
+const backgroundTaskPopoverGap = 8;
+const backgroundTaskPopoverWidth = 360;
+
+interface BackgroundTaskRectInput {
+  height: number;
+  width: number;
+}
+
+interface BackgroundTaskViewportInput {
+  viewportHeight: number;
+  viewportWidth: number;
+}
+
+export const clampBackgroundTaskAnchorPosition = ({
+  anchor,
+  margin = backgroundTaskAnchorViewportMargin,
+  position,
+  viewport,
+}: {
+  anchor: BackgroundTaskRectInput;
+  margin?: number;
+  position: { x: number; y: number };
+  viewport: BackgroundTaskViewportInput;
+}): { x: number; y: number } => ({
+  x: Math.max(margin, Math.min(viewport.viewportWidth - anchor.width - margin, position.x)),
+  y: Math.max(margin, Math.min(viewport.viewportHeight - anchor.height - margin, position.y)),
+});
+
+export const getBackgroundTaskPopoverStyle = ({
+  anchor,
+  gap = backgroundTaskPopoverGap,
+  margin = backgroundTaskPopoverViewportMargin,
+  position,
+  preferredWidth = backgroundTaskPopoverWidth,
+  viewport,
+}: {
+  anchor: BackgroundTaskRectInput;
+  gap?: number;
+  margin?: number;
+  position: { x: number; y: number };
+  preferredWidth?: number;
+  viewport: BackgroundTaskViewportInput;
+}): {
+  "--background-task-popover-bottom": string;
+  "--background-task-popover-left": string;
+  "--background-task-popover-top": string;
+  "--background-task-popover-width": string;
+} => {
+  const width = Math.min(preferredWidth, Math.max(0, viewport.viewportWidth - margin * 2));
+  const viewportLeft = Math.max(
+    margin,
+    Math.min(viewport.viewportWidth - width - margin, position.x),
+  );
+  const hasRoomBelow =
+    position.y + anchor.height + gap + 180 <= viewport.viewportHeight - margin;
+
+  return {
+    "--background-task-popover-bottom": hasRoomBelow ? "auto" : `${anchor.height + gap}px`,
+    "--background-task-popover-left": `${viewportLeft - position.x}px`,
+    "--background-task-popover-top": hasRoomBelow ? `${anchor.height + gap}px` : "auto",
+    "--background-task-popover-width": `${width}px`,
+  };
+};
+
 interface WorkspaceSection {
   id: WorkspaceSectionId;
   accent: string;
@@ -321,7 +387,12 @@ const BackgroundTaskBar = ({
   >(undefined);
   const didDragRef = useRef(false);
   const latestPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const taskBarRef = useRef<HTMLDivElement | null>(null);
+  const [anchorSize, setAnchorSize] = useState<BackgroundTaskRectInput>({
+    height: 52,
+    width: 174,
+  });
   const runningTasks = tasks.filter((task) => task.status === "running");
 
   const runningCount = runningTasks.length;
@@ -358,7 +429,7 @@ const BackgroundTaskBar = ({
       return;
     }
 
-    const fallbackWidth = Math.min(360, Math.max(260, window.innerWidth - 36));
+    const fallbackWidth = 174;
     const fallbackPosition = {
       x: Math.max(12, window.innerWidth - fallbackWidth - 18),
       y: 18,
@@ -370,8 +441,14 @@ const BackgroundTaskBar = ({
         const parsedPosition = JSON.parse(storedPosition) as { x?: unknown; y?: unknown };
         if (typeof parsedPosition.x === "number" && typeof parsedPosition.y === "number") {
           setPosition({
-            x: Math.max(8, Math.min(window.innerWidth - 80, parsedPosition.x)),
-            y: Math.max(8, Math.min(window.innerHeight - 52, parsedPosition.y)),
+            x: Math.max(
+              backgroundTaskAnchorViewportMargin,
+              Math.min(window.innerWidth - 80, parsedPosition.x),
+            ),
+            y: Math.max(
+              backgroundTaskAnchorViewportMargin,
+              Math.min(window.innerHeight - 52, parsedPosition.y),
+            ),
           });
           return;
         }
@@ -389,23 +466,30 @@ const BackgroundTaskBar = ({
     }
 
     const handleResize = () => {
-      const rect = taskBarRef.current?.getBoundingClientRect();
-      const width = rect?.width ?? 260;
-      const height = rect?.height ?? 60;
+      const rect = triggerRef.current?.getBoundingClientRect();
+      const nextAnchorSize = {
+        height: rect?.height ?? anchorSize.height,
+        width: rect?.width ?? anchorSize.width,
+      };
+      setAnchorSize(nextAnchorSize);
       setPosition((current) => {
         if (!current) {
           return current;
         }
-        return {
-          x: Math.max(8, Math.min(window.innerWidth - width - 8, current.x)),
-          y: Math.max(8, Math.min(window.innerHeight - height - 8, current.y)),
-        };
+        return clampBackgroundTaskAnchorPosition({
+          anchor: nextAnchorSize,
+          position: current,
+          viewport: {
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+          },
+        });
       });
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [position]);
+  }, [anchorSize.height, anchorSize.width, position]);
 
   const persistPosition = (nextPosition: { x: number; y: number }) => {
     if (typeof window === "undefined") {
@@ -419,11 +503,16 @@ const BackgroundTaskBar = ({
       return;
     }
 
-    const rect = taskBarRef.current?.getBoundingClientRect();
+    const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) {
       return;
     }
 
+    const nextAnchorSize = {
+      height: rect.height,
+      width: rect.width,
+    };
+    setAnchorSize(nextAnchorSize);
     dragStateRef.current = {
       height: rect.height,
       offsetX: event.clientX - rect.left,
@@ -442,10 +531,20 @@ const BackgroundTaskBar = ({
       return;
     }
 
-    const nextPosition = {
-      x: Math.max(8, Math.min(window.innerWidth - dragState.width - 8, event.clientX - dragState.offsetX)),
-      y: Math.max(8, Math.min(window.innerHeight - dragState.height - 8, event.clientY - dragState.offsetY)),
-    };
+    const nextPosition = clampBackgroundTaskAnchorPosition({
+      anchor: {
+        height: dragState.height,
+        width: dragState.width,
+      },
+      position: {
+        x: event.clientX - dragState.offsetX,
+        y: event.clientY - dragState.offsetY,
+      },
+      viewport: {
+        viewportHeight: window.innerHeight,
+        viewportWidth: window.innerWidth,
+      },
+    });
     didDragRef.current =
       didDragRef.current ||
       Math.abs(event.clientX - dragState.startX) > 8 ||
@@ -473,8 +572,16 @@ const BackgroundTaskBar = ({
       className={`background-task-bar ${isOpen ? "is-open" : ""} ${dragStateRef.current ? "is-dragging" : ""}`}
       ref={taskBarRef}
       style={
-        position
+        position && typeof window !== "undefined"
           ? {
+              ...getBackgroundTaskPopoverStyle({
+                anchor: anchorSize,
+                position,
+                viewport: {
+                  viewportHeight: window.innerHeight,
+                  viewportWidth: window.innerWidth,
+                },
+              }),
               bottom: "auto",
               left: `${position.x}px`,
               right: "auto",
@@ -487,6 +594,7 @@ const BackgroundTaskBar = ({
         aria-expanded={isOpen}
         aria-label={copyText.buttonLabel}
         className="background-task-trigger"
+        ref={triggerRef}
         onPointerCancel={handlePointerEnd}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
