@@ -1202,6 +1202,103 @@ describe("App", () => {
     expect(markup).toContain('alt="Scene 1 generated visual: Open with the desk problem"');
   });
 
+  it("renders storyboard asset search as visual selectable material cards", () => {
+    const scene = {
+      id: "scene-1",
+      projectId: "project-1",
+      order: 1,
+      durationSeconds: 4,
+      subtitle: "Show the cup detail",
+      voiceover: "Show the cup detail",
+      visualPrompt: "Close-up cup detail",
+      assetId: "asset-selected",
+      status: "generated",
+    } as StoryboardScene;
+    const selectedAsset = makeAsset({
+      id: "asset-selected",
+      name: "Current cup packshot",
+      type: "image",
+      mimeType: "image/png",
+      tags: ["packshot"],
+      url: "/uploads/current-cup.png",
+    });
+    const candidateAsset = makeAsset({
+      id: "asset-candidate",
+      name: "Cup handle detail",
+      type: "image",
+      mimeType: "image/png",
+      tags: ["detail", "handle"],
+      url: "/uploads/cup-handle.png",
+    });
+
+    const markup = renderToStaticMarkup(
+      <StudioWorkspace
+        assetCandidates={[
+          {
+            asset: candidateAsset,
+            reasons: ["scene-role:closure", "keyword:png", "source:merchant_upload"],
+            score: 93,
+            slice: {
+              id: "slice-1",
+              assetId: "asset-candidate",
+              label: "Handle close-up",
+              startSecond: 2,
+              endSecond: 5,
+              tags: ["detail"],
+              metadata: {
+                sliceId: "slice-1",
+                assetId: "asset-candidate",
+                startSecond: 2,
+                endSecond: 5,
+                summary: "Handle and lid detail with clear product visibility.",
+                shotType: "close_up",
+                cameraMovement: "static",
+                composition: "Centered cup detail",
+                transition: "",
+                mood: "clean",
+                action: "Product detail display",
+                productVisibility: "clear",
+                qualitySignals: { usableForAd: true },
+                searchText: "cup handle detail",
+                embeddingText: "cup handle detail",
+              },
+            },
+          },
+        ]}
+        assets={[selectedAsset, candidateAsset]}
+        copy={copy.en.studio}
+        dirtySceneIds={new Set()}
+        isBusy={false}
+        onApplyAssetCandidate={() => undefined}
+        onApplySuggestion={() => undefined}
+        onDeleteScene={() => undefined}
+        onDismissSuggestion={() => undefined}
+        onLoadAssetCandidates={() => undefined}
+        onLoadSuggestions={() => undefined}
+        onRegenerateScene={() => undefined}
+        onSceneChange={() => undefined}
+        onSceneMove={() => undefined}
+        onSceneSave={() => undefined}
+        onSelectedSceneChange={() => undefined}
+        scenes={[scene]}
+        selectedSceneId="scene-1"
+        suggestions={[]}
+      />,
+    );
+
+    expect(markup).toContain("Find other usable assets");
+    expect(markup).toContain("<span>Search</span>");
+    expect(markup).toContain('class="linked-asset-preview"');
+    expect(markup).toContain('src="/uploads/current-cup.png"');
+    expect(markup).toContain('class="asset-recall-thumb"');
+    expect(markup).toContain('src="/uploads/cup-handle.png"');
+    expect(markup).toContain("Handle and lid detail with clear product visibility.");
+    expect(markup).toContain("Preview");
+    expect(markup).not.toContain("scene-role:closure");
+    expect(markup).not.toContain("source:merchant_upload");
+    expect(markup).not.toContain("keyword:png");
+  });
+
   it("does not preload existing library assets into asset prep", () => {
     const markup = renderToStaticMarkup(
       <AssetPrepPanel

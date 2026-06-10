@@ -1,10 +1,15 @@
 import type { ChangeEvent } from "react";
-import type { AssetMetadata, EditingSuggestion, StoryboardScene } from "@shopclip/shared";
+import { useState } from "react";
+import type { AssetMetadata, AssetSlice, EditingSuggestion, StoryboardScene } from "@shopclip/shared";
 import {
   ArrowLeft,
   ArrowRight,
   Clock3,
+  Eye,
+  FileText,
+  Image as ImageIcon,
   Lightbulb,
+  Play,
   Replace,
   Save,
   Search,
@@ -17,9 +22,47 @@ import {
 import { Button } from "../../components/ui/Button";
 import { StatusPill } from "../../components/ui/StatusPill";
 import type { AppCopy } from "../../app/i18n";
+import { getAssetThumbnailUrl } from "../../lib/api";
 import type { AssetRecallCandidate } from "../../lib/api";
 
 type StudioWorkspaceCopy = Omit<AppCopy["studio"], "step"> & { step: string };
+
+interface PreviewMaterial {
+  asset: AssetMetadata;
+  slice?: AssetSlice;
+}
+
+interface AssetVisualProps {
+  asset: AssetMetadata;
+  className: string;
+  isImageAsset: (asset: AssetMetadata) => boolean;
+  isVideoAsset: (asset: AssetMetadata) => boolean;
+  visualUrl: string;
+}
+
+const AssetVisual = ({
+  asset,
+  className,
+  isImageAsset,
+  isVideoAsset,
+  visualUrl,
+}: AssetVisualProps) => {
+  if (visualUrl) {
+    return <img alt={asset.name} className={className} loading="lazy" src={visualUrl} />;
+  }
+
+  return (
+    <span className={`${className} asset-visual-fallback`}>
+      {isVideoAsset(asset) ? (
+        <Play size={22} aria-hidden="true" />
+      ) : isImageAsset(asset) ? (
+        <ImageIcon size={22} aria-hidden="true" />
+      ) : (
+        <FileText size={22} aria-hidden="true" />
+      )}
+    </span>
+  );
+};
 
 interface StudioWorkspaceProps {
   assets: AssetMetadata[];
@@ -64,10 +107,55 @@ export const StudioWorkspace = ({
   assetCandidates = [],
   suggestions,
 }: StudioWorkspaceProps) => {
+  const [previewMaterial, setPreviewMaterial] = useState<PreviewMaterial | undefined>();
   const selectedScene = scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0];
   const selectedSceneIndex = selectedScene
     ? scenes.findIndex((scene) => scene.id === selectedScene.id)
     : -1;
+  const selectedAsset = selectedScene?.assetId
+    ? assets.find((asset) => asset.id === selectedScene.assetId)
+    : undefined;
+
+  const isImageAsset = (asset: AssetMetadata) =>
+    asset.type === "image" || Boolean(asset.mimeType?.startsWith("image/"));
+
+  const isVideoAsset = (asset: AssetMetadata) =>
+    asset.type === "video" || Boolean(asset.mimeType?.startsWith("video/"));
+
+  const assetVisualUrl = (asset: AssetMetadata) => {
+    if (isImageAsset(asset)) {
+      return asset.url;
+    }
+    if (isVideoAsset(asset) && asset.thumbnailKey) {
+      return getAssetThumbnailUrl(asset.id);
+    }
+    return "";
+  };
+
+  const assetTypeLabel = (asset: AssetMetadata) => {
+    if (isImageAsset(asset)) {
+      return copy.assetTypeLabels.image;
+    }
+    if (isVideoAsset(asset)) {
+      return copy.assetTypeLabels.video;
+    }
+    return copy.assetTypeLabels.reference;
+  };
+
+  const candidateSummary = (candidate: AssetRecallCandidate) =>
+    candidate.slice?.metadata?.summary ||
+    candidate.asset.structuredMetadata?.overallSummary ||
+    candidate.asset.embeddingText ||
+    candidate.asset.tags.slice(0, 3).join(" / ") ||
+    copy.assetSummaryFallback;
+
+  const materialMeta = (material: PreviewMaterial) => {
+    const timeRange =
+      material.slice?.startSecond !== undefined && material.slice.endSecond !== undefined
+        ? copy.sliceTime(material.slice.startSecond, material.slice.endSecond)
+        : undefined;
+    return [assetTypeLabel(material.asset), timeRange].filter(Boolean).join(" / ");
+  };
 
   const updateSelected =
     (field: keyof StoryboardScene) =>
@@ -205,6 +293,35 @@ export const StudioWorkspace = ({
                   ))}
                 </select>
               </label>
+              {selectedAsset ? (
+                <div className="linked-asset-preview">
+                  <AssetVisual
+                    asset={selectedAsset}
+                    className="linked-asset-thumb"
+                    isImageAsset={isImageAsset}
+                    isVideoAsset={isVideoAsset}
+                    visualUrl={assetVisualUrl(selectedAsset)}
+                  />
+                  <div>
+                    <span>{copy.currentAsset}</span>
+                    <strong>{selectedAsset.name}</strong>
+                    <p>{assetTypeLabel(selectedAsset)}</p>
+                  </div>
+                  <Button
+                    disabled={isBusy}
+                    icon={<Eye size={18} />}
+                    onClick={() => setPreviewMaterial({ asset: selectedAsset })}
+                    variant="ghost"
+                  >
+                    {copy.previewAsset}
+                  </Button>
+                </div>
+              ) : (
+                <div className="linked-asset-preview empty-linked-asset">
+                  <ImageIcon size={22} aria-hidden="true" />
+                  <span>{copy.noCurrentAsset}</span>
+                </div>
+              )}
               <div className="asset-recall-panel">
                 <div className="inspector-heading">
                   <h3>{copy.assetCandidates}</h3>
@@ -223,25 +340,55 @@ export const StudioWorkspace = ({
                   </div>
                 ) : (
                   assetCandidates.map((candidate) => (
-                    <article className="asset-recall-row" key={`${candidate.asset.id}-${candidate.slice?.id ?? "asset"}`}>
+                    <article
+                      className="asset-recall-row"
+                      key={`${candidate.asset.id}-${candidate.slice?.id ?? "asset"}`}
+                    >
+                      <button
+                        aria-label={`${copy.previewAsset}: ${candidate.asset.name}`}
+                        className="asset-recall-preview-button"
+                        onClick={() =>
+                          setPreviewMaterial({ asset: candidate.asset, slice: candidate.slice })
+                        }
+                        type="button"
+                      >
+                        <AssetVisual
+                          asset={candidate.asset}
+                          className="asset-recall-thumb"
+                          isImageAsset={isImageAsset}
+                          isVideoAsset={isVideoAsset}
+                          visualUrl={assetVisualUrl(candidate.asset)}
+                        />
+                      </button>
                       <div>
                         <h4>{candidate.asset.name}</h4>
-                        <p>
+                        <p className="asset-recall-meta">
                           {candidate.slice?.startSecond !== undefined &&
                           candidate.slice.endSecond !== undefined
                             ? copy.sliceTime(candidate.slice.startSecond, candidate.slice.endSecond)
-                            : candidate.asset.type}
-                          {" · "}
-                          {candidate.reasons.slice(0, 3).join(" / ")}
+                            : assetTypeLabel(candidate.asset)}
                         </p>
+                        <p>{candidateSummary(candidate)}</p>
                       </div>
-                      <Button
-                        disabled={isBusy}
-                        icon={<Replace size={18} />}
-                        onClick={() => onApplyAssetCandidate(candidate.asset.id)}
-                      >
-                        {copy.useCandidate}
-                      </Button>
+                      <div className="asset-recall-actions">
+                        <Button
+                          disabled={isBusy}
+                          icon={<Eye size={18} />}
+                          onClick={() =>
+                            setPreviewMaterial({ asset: candidate.asset, slice: candidate.slice })
+                          }
+                          variant="ghost"
+                        >
+                          {copy.previewAsset}
+                        </Button>
+                        <Button
+                          disabled={isBusy}
+                          icon={<Replace size={18} />}
+                          onClick={() => onApplyAssetCandidate(candidate.asset.id)}
+                        >
+                          {copy.useCandidate}
+                        </Button>
+                      </div>
                     </article>
                   ))
                 )}
@@ -339,6 +486,49 @@ export const StudioWorkspace = ({
           )}
         </aside>
       </div>
+      {previewMaterial ? (
+        <div className="studio-asset-preview-backdrop" role="presentation">
+          <section
+            aria-labelledby="studio-asset-preview-title"
+            aria-modal="true"
+            className="studio-asset-preview-dialog"
+            role="dialog"
+          >
+            <div className="asset-prep-library-heading">
+              <div>
+                <p className="eyebrow">{copy.assetPreviewTitle}</p>
+                <h3 id="studio-asset-preview-title">{previewMaterial.asset.name}</h3>
+                <span>{materialMeta(previewMaterial)}</span>
+              </div>
+              <button
+                aria-label={copy.closePreview}
+                className="icon-button"
+                onClick={() => setPreviewMaterial(undefined)}
+                type="button"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="studio-asset-preview-media">
+              {isImageAsset(previewMaterial.asset) ? (
+                <img alt={previewMaterial.asset.name} src={previewMaterial.asset.url} />
+              ) : isVideoAsset(previewMaterial.asset) ? (
+                <video
+                  controls
+                  poster={assetVisualUrl(previewMaterial.asset) || undefined}
+                  src={previewMaterial.asset.url}
+                />
+              ) : (
+                <div className="asset-prep-document-preview">
+                  <FileText size={42} aria-hidden="true" />
+                  <strong>{previewMaterial.asset.name}</strong>
+                  <span>{previewMaterial.asset.mimeType ?? previewMaterial.asset.type}</span>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 };
