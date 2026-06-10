@@ -6811,6 +6811,24 @@ Second imported caption`,
     );
   });
 
+  it("keeps the external stock search dialog centered in the viewport", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    const source = readFileSync(
+      new URL("../features/assets/AssetsPanel.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(styles).toMatch(
+      /\.external-search-backdrop\s*\{[^}]*top:\s*0;[^}]*left:\s*0;[^}]*display:\s*flex;[^}]*width:\s*100vw;[^}]*height:\s*100dvh;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s,
+    );
+    expect(styles).toMatch(
+      /\.external-search-dialog\s*\{[^}]*width:\s*min\(1120px,\s*calc\(100vw - 40px\)\);[^}]*height:\s*min\(780px,\s*calc\(100dvh - 40px\)\);[^}]*margin:\s*auto;/s,
+    );
+    expect(source).toMatch(
+      /isExternalSearchOpen\s*\?\s*renderPreviewOverlay\(\s*<div className="asset-import-backdrop external-search-backdrop"/s,
+    );
+  });
+
   it("uses the whole import dropzone for file picker clicks and dropped files", () => {
     const source = readFileSync(
       new URL("../features/assets/AssetsPanel.tsx", import.meta.url),

@@ -1638,7 +1638,8 @@ export const AssetsPanel = ({
           )
         : null}
 
-      {isExternalSearchOpen ? (
+      {isExternalSearchOpen
+        ? renderPreviewOverlay(
         <div className="asset-import-backdrop external-search-backdrop" role="presentation">
           <section
             aria-labelledby="external-search-title"
@@ -1918,8 +1919,9 @@ export const AssetsPanel = ({
               </div>
             ) : null}
           </section>
-        </div>
-      ) : null}
+        </div>,
+          )
+        : null}
 
       {previewExternalAsset
         ? renderPreviewOverlay(
