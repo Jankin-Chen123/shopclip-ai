@@ -100,18 +100,37 @@ const runExternalAssetImportJob = async ({
       tags: buildExternalImportTags(externalAsset, contentType, uploaded.provider),
     });
 
+    let structureErrorMessage: string | undefined;
     if (assetType === "image" || assetType === "video") {
       await store.updateAssetProcessingJob(jobId, {
         status: "processing",
         steps: ["queued", "external-download", "cos-upload", "multigranularity-structure"],
         message: "Generating structured asset metadata and slice index from the imported asset.",
       });
-      await processAssetStructure({
-        assetId,
-        input: { forceRegenerate: true, mode: "full" },
-        store,
-        storageProvider,
-      });
+      try {
+        await processAssetStructure({
+          assetId,
+          input: { forceRegenerate: true, mode: "full" },
+          store,
+          storageProvider,
+        });
+      } catch (error) {
+        structureErrorMessage =
+          error instanceof Error ? error.message : "External asset structure generation failed.";
+        console.warn("[external-asset-import] structure generation failed after import.", {
+          assetId,
+          error: structureErrorMessage,
+          projectId,
+          source: externalAsset.source,
+        });
+        await store.updateAsset(assetId, {
+          metadata: {
+            externalStructureError: structureErrorMessage,
+            externalStructureFailedAt: new Date().toISOString(),
+            structuredAssetStatus: "failed",
+          },
+        });
+      }
     }
 
     await store.updateAssetProcessingJob(jobId, {
@@ -120,11 +139,19 @@ const runExternalAssetImportJob = async ({
         "queued",
         "external-download",
         "cos-upload",
-        ...(assetType === "image" || assetType === "video" ? ["multigranularity-structure"] : []),
+        ...(assetType === "image" || assetType === "video"
+          ? [
+              structureErrorMessage
+                ? "multigranularity-structure-failed"
+                : "multigranularity-structure",
+            ]
+          : []),
         "metadata-ready",
       ],
       message:
-        assetType === "image" || assetType === "video"
+        structureErrorMessage
+          ? `External asset imported into Tencent COS, but structured metadata generation failed: ${structureErrorMessage}`
+          : assetType === "image" || assetType === "video"
           ? "External asset imported into Tencent COS and structured metadata persisted."
           : "External asset imported into Tencent COS and metadata persisted.",
     });

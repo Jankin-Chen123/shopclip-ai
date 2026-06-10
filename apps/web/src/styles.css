@@ -8660,12 +8660,8 @@ button.project-video-link {
   justify-content: space-between;
 }
 
-.project-script-selector-heading span {
-  display: inline-flex;
-  margin-bottom: 8px;
-  color: #bae6fd;
-  font-size: 0.78rem;
-  font-weight: 800;
+.project-script-selector-heading .project-studio-step-label {
+  margin-bottom: 10px;
 }
 
 .project-script-selector-heading h3 {

@@ -86,7 +86,6 @@ export const ScriptPanel = ({
     <section className="panel script-generation-panel" id="script" aria-labelledby="script-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">{copy.step}</p>
           <h2 id="script-title">{copy.title}</h2>
           <p className="concept-panel-subtitle">{copy.body}</p>
         </div>

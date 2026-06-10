@@ -339,14 +339,16 @@ const resolvePublicUrl = (value: string | undefined) => {
 const getAssetMediaUrl = (asset: AssetMetadata) =>
   resolvePublicUrl(asset.url) ?? resolvePublicUrl(`/api/assets/${asset.id}/content`);
 
-const frameImageUrl = (frame: Pick<SampledFrame, "key" | "localPath">) => {
+const frameImageUrl = (frame: Pick<SampledFrame, "contentType" | "key" | "localPath">) => {
   if (frame.localPath && existsSync(frame.localPath)) {
-    return `data:image/jpeg;base64,${readFileSync(frame.localPath).toString("base64")}`;
+    return `data:${frame.contentType ?? "image/jpeg"};base64,${readFileSync(frame.localPath).toString("base64")}`;
   }
   return resolvePublicUrl(frame.key);
 };
 
-const frameUrlsFromFrames = (frames: Array<Pick<SampledFrame, "key" | "localPath">>) =>
+const frameUrlsFromFrames = (
+  frames: Array<Pick<SampledFrame, "contentType" | "key" | "localPath">>,
+) =>
   frames.map((frame) => frameImageUrl(frame)).filter((url): url is string => Boolean(url));
 
 const responseTextFromBody = (body: unknown): string | undefined => {
@@ -523,6 +525,7 @@ const mediaContentForSlice = (input: SliceUnderstandingInput, config: ArkVisionC
 
   const assetMediaUrl = getAssetMediaUrl(input.asset);
   if (
+    input.asset.type === "video" &&
     input.asset.source !== "public_reference" &&
     config.videoInputMode === "video_url" &&
     assetMediaUrl

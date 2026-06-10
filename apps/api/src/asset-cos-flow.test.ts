@@ -780,4 +780,152 @@ describe("COS-backed asset import contract", () => {
       objectKey: importedAsset?.objectKey,
     });
   });
+
+  it("keeps external imports ready when post-import structure generation fails", async () => {
+    const imageDownload = createDeferred<{
+      body: Buffer;
+      contentType: string;
+      sourceUrl: string;
+    }>();
+    const uploadedObjects: Array<{
+      body: Buffer;
+      contentType: string;
+      objectKey: string;
+    }> = [];
+    const app = createApp({
+      externalAssetDownloader: () => imageDownload.promise,
+      storageProvider: {
+        createReadUrl: ({ objectKey }) => ({ url: `https://cos.example.test/${objectKey}` }),
+        createUploadIntent: ({ asset, assetId, projectId }) => ({
+          provider: "tencent-cos",
+          bucket: "shopclip-assets",
+          region: "ap-guangzhou",
+          objectKey: projectId
+            ? `projects/${projectId}/raw/${assetId}/source.${asset.mimeType.split("/")[1]}`
+            : `library/raw/${assetId}/source.${asset.mimeType.split("/")[1]}`,
+          uploadUrl: "https://cos.example.test/upload",
+          publicUrl: "https://cos.example.test/pending",
+          method: "PUT",
+          headers: { "content-type": asset.mimeType },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        }),
+        deleteObject: async () => undefined,
+        uploadObject: async ({ body, contentType, objectKey }) => {
+          uploadedObjects.push({ body, contentType, objectKey });
+          if (contentType === "application/json") {
+            throw new Error("structured metadata upload failed");
+          }
+          return {
+            objectKey,
+            provider: "tencent-cos",
+            publicUrl: `https://cos.example.test/${objectKey}`,
+          };
+        },
+      },
+    });
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    ({ baseUrl, server } = await listenOnFetchSafePort(app));
+    const projectId = await createProject(baseUrl);
+
+    const queued = await request<{
+      asset: {
+        id: string;
+        status: string;
+        url: string;
+      };
+      processingJob: {
+        id: string;
+        assetId: string;
+        status: string;
+      };
+    }>(baseUrl, `/api/projects/${projectId}/assets/import-external`, {
+      method: "POST",
+      body: JSON.stringify({
+        id: "pexels:image:structure-fails",
+        source: "pexels",
+        externalId: "structure-fails",
+        type: "image",
+        title: "Cat packshot",
+        thumbnailUrl: "https://images.pexels.com/thumb.jpg",
+        previewUrl: "https://images.pexels.com/image/preview",
+        downloadUrl: "https://images.pexels.com/image/download",
+        externalUrl: "https://www.pexels.com/photo/structure-fails/",
+        authorName: "Pexels Creator",
+        authorUrl: "https://www.pexels.com/@creator",
+        licenseLabel: "Pexels License",
+        licenseUrl: "https://www.pexels.com/license/",
+        canUseCommercially: true,
+        requiresAttribution: false,
+        tags: ["cat"],
+      }),
+    });
+
+    expect(queued.status).toBe(202);
+    imageDownload.resolve({
+      body: Buffer.from("downloaded:image:structure-fails"),
+      contentType: "image/jpeg",
+      sourceUrl: "https://images.pexels.com/image/download",
+    });
+
+    const completedJob = await waitFor(
+      () =>
+        request<{
+          processingJob: {
+            message: string;
+            status: string;
+            steps: string[];
+          };
+        }>(baseUrl, `/api/asset-processing-jobs/${queued.body.processingJob.id}`),
+      (loaded) => loaded.body.processingJob.status === "ready",
+    );
+
+    expect(completedJob.body.processingJob.steps).toEqual(
+      expect.arrayContaining([
+        "external-download",
+        "cos-upload",
+        "multigranularity-structure-failed",
+        "metadata-ready",
+      ]),
+    );
+    expect(completedJob.body.processingJob.message).toContain(
+      "structured metadata generation failed",
+    );
+
+    const project = await request<{
+      project: {
+        assets: Array<{
+          id: string;
+          metadata: Record<string, unknown>;
+          mimeType: string;
+          objectKey?: string;
+          sizeBytes?: number;
+          status: string;
+          storageProvider?: string;
+          url: string;
+        }>;
+      };
+    }>(baseUrl, `/api/projects/${projectId}`);
+    const importedAsset = project.body.project.assets.find(
+      (asset) => asset.id === queued.body.asset.id,
+    );
+
+    expect(importedAsset).toMatchObject({
+      status: "ready",
+      mimeType: "image/jpeg",
+      sizeBytes: Buffer.byteLength("downloaded:image:structure-fails"),
+      storageProvider: "tencent-cos",
+      url: `https://cos.example.test/${importedAsset?.objectKey}`,
+    });
+    expect(importedAsset?.metadata).toMatchObject({
+      downloadedBytes: Buffer.byteLength("downloaded:image:structure-fails"),
+      externalStructureError: "structured metadata upload failed",
+      structuredAssetStatus: "failed",
+    });
+    expect(uploadedObjects[0]).toMatchObject({
+      body: Buffer.from("downloaded:image:structure-fails"),
+      contentType: "image/jpeg",
+      objectKey: importedAsset?.objectKey,
+    });
+  });
 });

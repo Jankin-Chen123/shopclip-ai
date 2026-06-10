@@ -116,6 +116,7 @@ import {
   isRenderTaskPollingActive,
   mergeReferences,
   pruneAssetPrepSnapshotDeletedAssets,
+  projectStudioStepLabel,
   selectLatestCompletedSmartEditTask,
   selectStudioBaseRenderTask,
 } from "./App";
@@ -324,6 +325,7 @@ describe("App", () => {
     expect(markup).toContain("Script library");
     expect(markup).toContain("Video library");
     expect(markup).toContain("Generate video");
+    expect(markup).not.toContain("<p>Headphone launch</p>");
   });
 
   it("starts new projects from a blank editable brief instead of the last loaded project brief", () => {
@@ -610,6 +612,15 @@ describe("App", () => {
     expect(storyboardMarkup).toContain("分镜重编辑");
   });
 
+  it("labels project studio cards as a three-step project flow", () => {
+    expect(projectStudioStepLabel("script", "zh")).toBe("步骤 01");
+    expect(projectStudioStepLabel("storyboard", "zh")).toBe("步骤 02");
+    expect(projectStudioStepLabel("render", "zh")).toBe("步骤 03");
+    expect(projectStudioStepLabel("script", "en")).toBe("Step 01");
+    expect(projectStudioStepLabel("storyboard", "en")).toBe("Step 02");
+    expect(projectStudioStepLabel("render", "en")).toBe("Step 03");
+  });
+
   it("renders script generation controls inside step 02 asset prep", () => {
     const markup = renderToStaticMarkup(<App initialLanguage="en" initialPage="create" />);
 
@@ -651,6 +662,7 @@ describe("App", () => {
     expect(markup).toContain("No reference");
     expect(markup).toContain("Viral remix");
     expect(markup).toContain("Inspiration template");
+    expect(markup).not.toContain("Step 02");
     expect(markup).not.toContain("Reference video");
     expect(markup).not.toContain("Viral template");
     expect(markup).not.toContain("Agentic");
@@ -754,6 +766,12 @@ describe("App", () => {
     expect(markup).toContain("Generate audio");
     expect(markup).toContain("Watermark");
     expect(markup).toContain("Seed");
+  });
+
+  it("keeps completed video generation on the render page instead of auto-opening smart edit", () => {
+    const source = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
+    expect(source).not.toContain("navigateToEdit");
   });
 
   it("does not render per-scene video previews in the render panel", () => {
